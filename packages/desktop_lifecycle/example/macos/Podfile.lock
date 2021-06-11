@@ -1,0 +1,22 @@
+PODS:
+  - desktop_lifecycle (0.0.1):
+    - FlutterMacOS
+  - FlutterMacOS (1.0.0)
+
+DEPENDENCIES:
+  - desktop_lifecycle (from `Flutter/ephemeral/.symlinks/plugins/desktop_lifecycle/macos`)
+  - FlutterMacOS (from `Flutter/ephemeral`)
+
+EXTERNAL SOURCES:
+  desktop_lifecycle:
+    :path: Flutter/ephemeral/.symlinks/plugins/desktop_lifecycle/macos
+  FlutterMacOS:
+    :path: Flutter/ephemeral
+
+SPEC CHECKSUMS:
+  desktop_lifecycle: a600c10e12fe033c7be9078f2e929b8241f2c1e3
+  FlutterMacOS: 57701585bf7de1b3fc2bb61f6378d73bbdea8424
+
+PODFILE CHECKSUM: 6eac6b3292e5142cfc23bdeb71848a40ec51c14c
+
+COCOAPODS: 1.10.1
