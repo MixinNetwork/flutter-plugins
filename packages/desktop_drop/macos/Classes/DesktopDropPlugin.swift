@@ -12,11 +12,15 @@ public class DesktopDropPlugin: NSObject, FlutterPlugin {
     debugPrint("bounds: \(vc.view.bounds)")
     let d = DropTarget(frame: vc.view.bounds, channel: channel)
     d.autoresizingMask = [.width, .height]
+
+    if #available(macOS 10.12, *) {
+      d.registerForDraggedTypes(NSFilePromiseReceiver.readableDraggedTypes.map { NSPasteboard.PasteboardType($0) })
+    }
+
     if #available(macOS 10.13, *) {
       d.registerForDraggedTypes([.fileURL])
-    } else {
-      debugPrint("unsupport file URL")
     }
+    d.registerForDraggedTypes([.filePromise])
     vc.view.addSubview(d)
 
     registrar.addMethodCallDelegate(instance, channel: channel)
@@ -53,21 +57,56 @@ class DropTarget: NSView {
     channel.invokeMethod("exited", arguments: nil)
   }
 
+  /// Directory URL used for accepting file promises.
+  private lazy var destinationURL: URL = {
+    let destinationURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("Drops")
+    try? FileManager.default.createDirectory(at: destinationURL, withIntermediateDirectories: true, attributes: nil)
+    return destinationURL
+  }()
+
+  /// Queue used for reading and writing file promises.
+  private lazy var workQueue: OperationQueue = {
+    let providerQueue = OperationQueue()
+    providerQueue.qualityOfService = .userInitiated
+    return providerQueue
+  }()
+
   override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
     var urls = [String]()
 
-    if let items = sender.draggingPasteboard.pasteboardItems {
-      for item in items {
-        if #available(macOS 10.13, *) {
-          if let alias = item.string(forType: .fileURL) {
-            urls.append(URL(fileURLWithPath: alias).standardized.absoluteString)
+    let group = DispatchGroup()
+
+    var supportedClasses: [NSObject.Type] = [
+      NSURL.self,
+    ]
+    if #available(macOS 10.12, *) {
+      supportedClasses.append(NSFilePromiseReceiver.self)
+    }
+
+    sender.enumerateDraggingItems(options: [], for: nil, classes: supportedClasses, searchOptions: [:]) { draggingItem, _, _ in
+      if #available(macOS 10.12, *) {
+        if let filePromiseReceiver = draggingItem.item as? NSFilePromiseReceiver {
+          group.enter()
+          filePromiseReceiver.receivePromisedFiles(atDestination: self.destinationURL, options: [:], operationQueue: self.workQueue) { fileURL, error in
+            if let error = error {
+              debugPrint("error: \(error)")
+            } else {
+              urls.append(fileURL.standardized.absoluteString)
+            }
+            group.leave()
           }
-        } else {
+          return
         }
+      }
+      if let fileURL = draggingItem.item as? URL {
+        urls.append(fileURL.standardized.absoluteString)
+        return
       }
     }
 
-    channel.invokeMethod("performOpeartion", arguments: urls)
+    group.notify(queue: .main) {
+      self.channel.invokeMethod("performOpeartion", arguments: urls)
+    }
     return true
   }
 
