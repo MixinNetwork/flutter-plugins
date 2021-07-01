@@ -83,7 +83,11 @@ class DropTarget: NSView {
       supportedClasses.append(NSFilePromiseReceiver.self)
     }
 
-    sender.enumerateDraggingItems(options: [], for: nil, classes: supportedClasses, searchOptions: [:]) { draggingItem, _, _ in
+    let searchOptions: [NSPasteboard.ReadingOptionKey: Any] = [
+      .urlReadingFileURLsOnly: true,
+    ]
+
+    sender.enumerateDraggingItems(options: [], for: nil, classes: supportedClasses, searchOptions: searchOptions) { draggingItem, _, _ in
       if #available(macOS 10.12, *) {
         if let filePromiseReceiver = draggingItem.item as? NSFilePromiseReceiver {
           group.enter()
