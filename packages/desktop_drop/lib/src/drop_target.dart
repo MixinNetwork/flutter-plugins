@@ -13,6 +13,7 @@ class DropTarget extends StatefulWidget {
     this.onDragExited,
     this.onDragDone,
     this.onDragUpdated,
+    this.enable = true,
   }) : super(key: key);
 
   final Widget child;
@@ -23,6 +24,8 @@ class DropTarget extends StatefulWidget {
   final VoidCallback? onDragUpdated;
 
   final OnDragDoneCallback? onDragDone;
+
+  final bool enable;
 
   @override
   State<DropTarget> createState() => _DropTargetState();
@@ -41,7 +44,20 @@ class _DropTargetState extends State<DropTarget> {
   void initState() {
     super.initState();
     DesktopDrop.instance.init();
-    DesktopDrop.instance.addRawDropEventListener(_onDropEvent);
+    if (widget.enable) {
+      DesktopDrop.instance.addRawDropEventListener(_onDropEvent);
+    }
+  }
+
+  void didUpdateWidget(DropTarget oldWidget) {
+    if (widget.enable && !oldWidget.enable) {
+      DesktopDrop.instance.addRawDropEventListener(_onDropEvent);
+    } else if (!widget.enable && oldWidget.enable) {
+      DesktopDrop.instance.removeRawDropEventListener(_onDropEvent);
+      if (_status != _DragTargetStatus.idle) {
+        _updateStatus(_DragTargetStatus.idle);
+      }
+    }
   }
 
   void _onDropEvent(DropEvent event) {
@@ -93,7 +109,9 @@ class _DropTargetState extends State<DropTarget> {
 
   @override
   void dispose() {
-    DesktopDrop.instance.removeRawDropEventListener(_onDropEvent);
+    if (widget.enable) {
+      DesktopDrop.instance.removeRawDropEventListener(_onDropEvent);
+    }
     super.dispose();
   }
 
