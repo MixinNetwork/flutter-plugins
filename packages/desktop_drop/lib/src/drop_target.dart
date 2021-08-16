@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/widgets.dart';
 
 import 'channel.dart';
@@ -49,7 +51,9 @@ class _DropTargetState extends State<DropTarget> {
     }
   }
 
+  @override
   void didUpdateWidget(DropTarget oldWidget) {
+    super.didUpdateWidget(oldWidget);
     if (widget.enable && !oldWidget.enable) {
       DesktopDrop.instance.addRawDropEventListener(_onDropEvent);
     } else if (!widget.enable && oldWidget.enable) {
@@ -84,15 +88,15 @@ class _DropTargetState extends State<DropTarget> {
     } else if (event is DropExitEvent && _status != _DragTargetStatus.idle) {
       _updateStatus(_DragTargetStatus.idle);
     } else if (event is DropDoneEvent &&
-        _status != _DragTargetStatus.idle &&
+        (_status != _DragTargetStatus.idle || Platform.isLinux) &&
         inBounds) {
-      _updateStatus(_DragTargetStatus.idle);
+      _updateStatus(_DragTargetStatus.idle, required: false);
       widget.onDragDone?.call(event.uris);
     }
   }
 
-  void _updateStatus(_DragTargetStatus status) {
-    assert(_status != status);
+  void _updateStatus(_DragTargetStatus status, {bool required = true}) {
+    assert(!required || _status != status);
     _status = status;
     switch (_status) {
       case _DragTargetStatus.enter:

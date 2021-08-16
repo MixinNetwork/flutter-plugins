@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'dart:io';
 import 'dart:ui';
 
 import 'package:flutter/services.dart';
@@ -43,6 +45,12 @@ class DesktopDrop {
         _notifyEvent(DropEnterEvent(location: _offset!));
         break;
       case "updated":
+        if (_offset == null && Platform.isLinux) {
+          final position = (call.arguments as List).cast<double>();
+          _offset = Offset(position[0], position[1]);
+          _notifyEvent(DropEnterEvent(location: _offset!));
+          return;
+        }
         assert(_offset != null);
         final position = (call.arguments as List).cast<double>();
         _offset = Offset(position[0], position[1]);
@@ -53,7 +61,7 @@ class DesktopDrop {
         _notifyEvent(DropExitEvent(location: _offset ?? Offset.zero));
         _offset = null;
         break;
-      case "performOpeartion":
+      case "performOperation":
         assert(_offset != null);
         final urls = (call.arguments as List).cast<String>();
         _notifyEvent(
@@ -66,6 +74,22 @@ class DesktopDrop {
                   .toList()),
         );
         _offset = null;
+        break;
+      case "performOperation_linux":
+        // gtk notify 'exit' before 'performOperation'.
+        assert(_offset == null);
+        final text = (call.arguments as List<dynamic>)[0] as String;
+        final offset = ((call.arguments as List<dynamic>)[1] as List<dynamic>)
+            .cast<double>();
+        final lines = const LineSplitter().convert(text);
+        _notifyEvent(DropDoneEvent(
+          location: Offset(offset[0], offset[1]),
+          uris: lines
+              .map((e) => Uri.tryParse(e))
+              .where((e) => e != null)
+              .cast<Uri>()
+              .toList(),
+        ));
         break;
       default:
         throw UnimplementedError('${call.method} not implement.');

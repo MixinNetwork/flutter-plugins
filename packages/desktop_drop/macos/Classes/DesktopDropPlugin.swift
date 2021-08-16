@@ -109,7 +109,7 @@ class DropTarget: NSView {
     }
 
     group.notify(queue: .main) {
-      self.channel.invokeMethod("performOpeartion", arguments: urls)
+      self.channel.invokeMethod("performOperation", arguments: urls)
     }
     return true
   }
