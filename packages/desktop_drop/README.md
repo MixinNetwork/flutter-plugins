@@ -1,18 +1,76 @@
 # desktop_drop
 
-A new flutter plugin project.
+[![Pub](https://img.shields.io/pub/v/desktop_drop.svg)](https://pub.dev/packages/desktop_drop)
+
+A plugin which allow user drag files to you flutter application on desktop platforms.
+
+|          |       |
+| -------- | ------- |
+| Windows  | ✅     |
+| Linux    | ✅    |
+| macOS    | ✅     |
 
 ## Getting Started
 
-This project is a starting point for a Flutter
-[plug-in package](https://flutter.dev/developing-packages/),
-a specialized package that includes platform-specific implementation code for
-Android and/or iOS.
+1. Add `desktop_drop` to your `pubspec.yaml`.
 
-For help getting started with Flutter, view our
-[online documentation](https://flutter.dev/docs), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+```yaml
+  desktop_drop: $latest_version
+```
 
-The plugin project was generated without specifying the `--platforms` flag, no platforms are currently supported.
-To add platforms, run `flutter create -t plugin --platforms <platforms> .` under the same
-directory. You can also find a detailed instruction on how to add platforms in the `pubspec.yaml` at https://flutter.dev/docs/development/packages-and-plugins/developing-packages#plugin-platforms.
+2. Then you can use `DropTarget` to receive file drop events.
+
+```dart
+
+class ExmapleDragTarget extends StatefulWidget {
+  const ExmapleDragTarget({Key? key}) : super(key: key);
+
+  @override
+  _ExmapleDragTargetState createState() => _ExmapleDragTargetState();
+}
+
+class _ExmapleDragTargetState extends State<ExmapleDragTarget> {
+  final List<Uri> _list = [];
+
+  bool _dragging = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return DropTarget(
+      onDragDone: (urls) {
+        setState(() {
+          for (final uri in urls) {
+            debugPrint("uri: ${uri.toFilePath()} "
+                "${File(uri.toFilePath()).existsSync()}");
+          }
+          _list.addAll(urls);
+        });
+      },
+      onDragEntered: () {
+        setState(() {
+          _dragging = true;
+        });
+      },
+      onDragExited: () {
+        setState(() {
+          _dragging = false;
+        });
+      },
+      child: Container(
+        height: 200,
+        width: 200,
+        color: _dragging ? Colors.blue.withOpacity(0.4) : Colors.black26,
+        child: _list.isEmpty
+            ? const Center(child: Text("Drop here"))
+            : Text(_list.join("\n")),
+      ),
+    );
+  }
+}
+
+```
+
+
+## LICENSE
+
+see LICENSE file

@@ -12,5 +12,55 @@ A few resources to get you started if this is your first Flutter project:
 - [Cookbook: Useful Flutter samples](https://flutter.dev/docs/cookbook)
 
 For help getting started with Flutter, view our
-[online documentation](https://flutter.dev/docs), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+[online documentation](https://flutter.dev/docs), which offers tutorials, samples, guidance on mobile development, and a
+full API reference.
+
+## Example
+
+```dart
+class ExmapleDragTarget extends StatefulWidget {
+  const ExmapleDragTarget({Key? key}) : super(key: key);
+
+  @override
+  _ExmapleDragTargetState createState() => _ExmapleDragTargetState();
+}
+
+class _ExmapleDragTargetState extends State<ExmapleDragTarget> {
+  final List<Uri> _list = [];
+
+  bool _dragging = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return DropTarget(
+      onDragDone: (urls) {
+        setState(() {
+          for (final uri in urls) {
+            debugPrint("uri: ${uri.toFilePath()} "
+                "${File(uri.toFilePath()).existsSync()}");
+          }
+          _list.addAll(urls);
+        });
+      },
+      onDragEntered: () {
+        setState(() {
+          _dragging = true;
+        });
+      },
+      onDragExited: () {
+        setState(() {
+          _dragging = false;
+        });
+      },
+      child: Container(
+        height: 200,
+        width: 200,
+        color: _dragging ? Colors.blue.withOpacity(0.4) : Colors.black26,
+        child: _list.isEmpty
+            ? const Center(child: Text("Drop here"))
+            : Text(_list.join("\n")),
+      ),
+    );
+  }
+}
+```
