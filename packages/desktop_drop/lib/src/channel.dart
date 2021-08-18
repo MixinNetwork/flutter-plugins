@@ -68,7 +68,8 @@ class DesktopDrop {
           DropDoneEvent(
               location: _offset ?? Offset.zero,
               uris: urls
-                  .map((e) => Uri.tryParse(e))
+                  .map(
+                      (e) => Platform.isWindows ? Uri.file(e) : Uri.tryParse(e))
                   .where((e) => e != null)
                   .cast<Uri>()
                   .toList()),

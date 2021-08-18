@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 
@@ -44,11 +46,16 @@ class _ExmapleDragTargetState extends State<ExmapleDragTarget> {
   final List<Uri> _list = [];
 
   bool _dragging = false;
+
   @override
   Widget build(BuildContext context) {
     return DropTarget(
       onDragDone: (urls) {
         setState(() {
+          for (final uri in urls) {
+            debugPrint("uri: ${uri.toFilePath()} "
+                "${File(uri.toFilePath()).existsSync()}");
+          }
           _list.addAll(urls);
         });
       },
