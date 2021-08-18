@@ -69,7 +69,12 @@ class _DropTargetState extends State<DropTarget> {
     if (renderBox == null) {
       return;
     }
-    final position = renderBox.globalToLocal(event.location);
+    final position = renderBox.globalToLocal(
+      event.location.scale(
+        1 / MediaQuery.of(context).devicePixelRatio,
+        1 / MediaQuery.of(context).devicePixelRatio,
+      ),
+    );
     bool inBounds = renderBox.paintBounds.contains(position);
     if (event is DropEnterEvent) {
       if (!inBounds) {
