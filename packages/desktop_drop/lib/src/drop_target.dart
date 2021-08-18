@@ -69,12 +69,8 @@ class _DropTargetState extends State<DropTarget> {
     if (renderBox == null) {
       return;
     }
-    final position = renderBox.globalToLocal(
-      event.location.scale(
-        1 / MediaQuery.of(context).devicePixelRatio,
-        1 / MediaQuery.of(context).devicePixelRatio,
-      ),
-    );
+    final position =
+        renderBox.globalToLocal(_scaleHoverPoint(context, event.location));
     bool inBounds = renderBox.paintBounds.contains(position);
     if (event is DropEnterEvent) {
       if (!inBounds) {
@@ -128,4 +124,14 @@ class _DropTargetState extends State<DropTarget> {
   Widget build(BuildContext context) {
     return widget.child;
   }
+}
+
+Offset _scaleHoverPoint(BuildContext context, Offset point) {
+  if (Platform.isWindows) {
+    return point.scale(
+      1 / MediaQuery.of(context).devicePixelRatio,
+      1 / MediaQuery.of(context).devicePixelRatio,
+    );
+  }
+  return point;
 }
