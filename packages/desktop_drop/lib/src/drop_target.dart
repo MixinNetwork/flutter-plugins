@@ -1,9 +1,8 @@
-import 'dart:io';
-
 import 'package:flutter/widgets.dart';
 
 import 'channel.dart';
 import 'events.dart';
+import 'utils/platform.dart' if (dart.library.html) 'utils/platform_web.dart';
 
 typedef OnDragDoneCallback = void Function(List<Uri> urls);
 
