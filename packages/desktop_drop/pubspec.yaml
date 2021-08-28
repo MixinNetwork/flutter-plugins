@@ -25,3 +25,6 @@ flutter:
         pluginClass: DesktopDropPlugin
       windows:
         pluginClass: DesktopDropPlugin
+      android:
+        package: one.mixin.desktop.drop
+        pluginClass: DesktopDropPlugin
