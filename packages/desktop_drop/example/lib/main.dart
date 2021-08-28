@@ -53,8 +53,12 @@ class _ExmapleDragTargetState extends State<ExmapleDragTarget> {
       onDragDone: (urls) {
         setState(() {
           for (final uri in urls) {
-            debugPrint("uri: ${uri.toFilePath()} "
-                "${File(uri.toFilePath()).existsSync()}");
+            try {
+              debugPrint("uri: ${uri.toFilePath()} "
+                  "${File(uri.toFilePath()).existsSync()}");
+            } catch (e, s) {
+              debugPrint('$e $s');
+            }
           }
           _list.addAll(urls);
         });

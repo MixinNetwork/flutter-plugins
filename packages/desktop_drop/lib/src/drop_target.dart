@@ -127,7 +127,7 @@ class _DropTargetState extends State<DropTarget> {
 }
 
 Offset _scaleHoverPoint(BuildContext context, Offset point) {
-  if (Platform.isWindows) {
+  if (Platform.isWindows || Platform.isAndroid) {
     return point.scale(
       1 / MediaQuery.of(context).devicePixelRatio,
       1 / MediaQuery.of(context).devicePixelRatio,
