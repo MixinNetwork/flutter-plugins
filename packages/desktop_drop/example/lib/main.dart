@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 
@@ -47,39 +45,53 @@ class _ExmapleDragTargetState extends State<ExmapleDragTarget> {
 
   bool _dragging = false;
 
+  Offset? offset;
+
   @override
   Widget build(BuildContext context) {
     return DropTarget(
-      onDragDone: (urls) {
+      onDragDone: (detail) {
         setState(() {
-          for (final uri in urls) {
-            try {
-              debugPrint("uri: ${uri.toFilePath()} "
-                  "${File(uri.toFilePath()).existsSync()}");
-            } catch (e, s) {
-              debugPrint('$e $s');
-            }
-          }
-          _list.addAll(urls);
+          _list.addAll(detail.urls);
         });
       },
-      onDragEntered: () {
+      onDragUpdated: (details) {
+        setState(() {
+          offset = details.localPosition;
+        });
+      },
+      onDragEntered: (detail) {
         setState(() {
           _dragging = true;
+          offset = detail.localPosition;
         });
       },
-      onDragExited: () {
+      onDragExited: (detail) {
         setState(() {
           _dragging = false;
+          offset = null;
         });
       },
       child: Container(
         height: 200,
         width: 200,
         color: _dragging ? Colors.blue.withOpacity(0.4) : Colors.black26,
-        child: _list.isEmpty
-            ? const Center(child: Text("Drop here"))
-            : Text(_list.join("\n")),
+        child: Stack(
+          children: [
+            if (_list.isEmpty)
+              const Center(child: Text("Drop here"))
+            else
+              Text(_list.join("\n")),
+            if (offset != null)
+              Align(
+                alignment: Alignment.topRight,
+                child: Text(
+                  '$offset',
+                  style: Theme.of(context).textTheme.caption,
+                ),
+              )
+          ],
+        ),
       ),
     );
   }

@@ -9,6 +9,7 @@ A plugin which allow user drag files to you flutter application on desktop platf
 | Windows  | ✅     |
 | Linux    | ✅    |
 | macOS    | ✅     |
+| Android  | ✅(preview) |
 
 ## Getting Started
 
@@ -21,7 +22,6 @@ A plugin which allow user drag files to you flutter application on desktop platf
 2. Then you can use `DropTarget` to receive file drop events.
 
 ```dart
-
 class ExmapleDragTarget extends StatefulWidget {
   const ExmapleDragTarget({Key? key}) : super(key: key);
 
@@ -37,21 +37,17 @@ class _ExmapleDragTargetState extends State<ExmapleDragTarget> {
   @override
   Widget build(BuildContext context) {
     return DropTarget(
-      onDragDone: (urls) {
+      onDragDone: (detail) {
         setState(() {
-          for (final uri in urls) {
-            debugPrint("uri: ${uri.toFilePath()} "
-                "${File(uri.toFilePath()).existsSync()}");
-          }
-          _list.addAll(urls);
+          _list.addAll(detail.urls);
         });
       },
-      onDragEntered: () {
+      onDragEntered: (detail) {
         setState(() {
           _dragging = true;
         });
       },
-      onDragExited: () {
+      onDragExited: (detail) {
         setState(() {
           _dragging = false;
         });
@@ -69,7 +65,6 @@ class _ExmapleDragTargetState extends State<ExmapleDragTarget> {
 }
 
 ```
-
 
 ## LICENSE
 
