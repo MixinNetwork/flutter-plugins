@@ -1,4 +1,4 @@
-## 0.2.0 (2021/9/2)
+## 0.1.0 (2021/9/2)
 
 1. add android support. (preview)
 2. expose pointer coordinates.
