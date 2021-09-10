@@ -9,7 +9,7 @@ import 'package:flutter_web_plugins/flutter_web_plugins.dart';
 import 'src/html5_qrcode.dart';
 
 /// A web implementation of the FlutterQrcode plugin.
-class FlutterQrcodeWeb {
+class WebQrcodePlugin {
   static void registerWith(Registrar registrar) {
     final MethodChannel channel = MethodChannel(
       'flutter_qrcode',
@@ -17,7 +17,7 @@ class FlutterQrcodeWeb {
       registrar,
     );
 
-    final pluginInstance = FlutterQrcodeWeb();
+    final pluginInstance = WebQrcodePlugin();
     channel.setMethodCallHandler((call) async {
       try {
         return await pluginInstance.handleMethodCall(call);

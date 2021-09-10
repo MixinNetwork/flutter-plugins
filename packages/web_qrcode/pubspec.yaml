@@ -1,5 +1,5 @@
-name: flutter_qrcode
-description: A new flutter plugin project.
+name: web_qrcode
+description: flutter web qrcode scanner.
 version: 0.0.1
 homepage:
 
@@ -23,8 +23,8 @@ flutter:
   plugin:
     platforms:
       web:
-        pluginClass: FlutterQrcodeWeb
-        fileName: flutter_qrcode_web.dart
+        pluginClass: WebQrcodePlugin
+        fileName: web_qrcode_plugin.dart
 
   assets:
-    - packages/flutter_qrcode/assets/html5-qrcode.min.js
+    - packages/web_qrcode/assets/html5-qrcode.min.js
