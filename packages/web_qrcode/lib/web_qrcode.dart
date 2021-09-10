@@ -3,32 +3,25 @@ import 'dart:js';
 import 'dart:js_util';
 
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/services.dart';
 
 import 'src/html5_qrcode.dart';
 
-class FlutterQrcode {
-  static const MethodChannel _channel = MethodChannel('flutter_qrcode');
-
-  static Future<List<String>> get cameras async {
-    final List<dynamic> cameras = await _channel.invokeMethod('getCameras');
-    return cameras.cast();
-  }
-
-  static Future<void> startScanner() async {
-    await _channel.invokeMethod('startScanner');
-  }
-}
+export 'src/html5_qrcode.dart' show getCameras;
 
 typedef QrCodeScanSuccessCallback = void Function(String data);
+
+/// [error] error message or anything else description.
+typedef CameraNotAvaliableCallback = void Function(dynamic error);
 
 class QrCodeReader extends StatefulWidget {
   const QrCodeReader({
     Key? key,
     this.successCallback,
+    this.cameraNotAvaliableCallback,
   }) : super(key: key);
 
   final QrCodeScanSuccessCallback? successCallback;
+  final CameraNotAvaliableCallback? cameraNotAvaliableCallback;
 
   @override
   State<QrCodeReader> createState() => QrCodeReaderState();
@@ -44,10 +37,13 @@ class QrCodeReaderState extends State<QrCodeReader> {
 
     try {
       final cameras = await getCameras();
-      debugPrint('cameras: $cameras');
+      if (cameras.isEmpty) {
+        widget.cameraNotAvaliableCallback
+            ?.call('devices didn not have cameras.');
+        return;
+      }
     } catch (e) {
-      // TODO no cameras available.
-      debugPrint('cameras: $e');
+      widget.cameraNotAvaliableCallback?.call(e);
       return;
     }
 

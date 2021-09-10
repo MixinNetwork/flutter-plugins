@@ -79,6 +79,9 @@ class _QrScannerDialogState extends State<QrScannerDialog> {
           await qrCodeReaderKey.currentState?.stopScanner();
           Navigator.pop(context, decoded);
         },
+        cameraNotAvaliableCallback: (e) {
+          Navigator.pop(context, e?.toString());
+        },
       ),
     );
   }
