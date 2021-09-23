@@ -1,6 +1,8 @@
 import Foundation
 import AVFoundation
 
+#if false
+
 fileprivate let millisecondsPerSecond: TimeInterval = 1000
 
 protocol OggOpusRecorderDelegate: AnyObject {
@@ -408,3 +410,5 @@ fileprivate func recordingCallback(
                         &bufferList)
     }
 }
+
+#endif

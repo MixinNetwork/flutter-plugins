@@ -1,5 +1,9 @@
-import Flutter
-import UIKit
+#if os(iOS)
+  import Flutter
+  import UIKit
+#elseif os(macOS)
+  import FlutterMacOS
+#endif
 
 // key -> playerId
 // value -> OggOpusPlayer
@@ -7,7 +11,11 @@ private var playerDictionary: [Int: OggOpusPlayer] = [:]
 
 public class SwiftOggOpusPlayerPlugin: NSObject, FlutterPlugin {
   public static func register(with registrar: FlutterPluginRegistrar) {
-    let channel = FlutterMethodChannel(name: "ogg_opus_player", binaryMessenger: registrar.messenger())
+    #if os(iOS)
+      let channel = FlutterMethodChannel(name: "ogg_opus_player", binaryMessenger: registrar.messenger())
+    #elseif os(macOS)
+      let channel = FlutterMethodChannel(name: "ogg_opus_player", binaryMessenger: registrar.messenger)
+    #endif
     let instance = SwiftOggOpusPlayerPlugin(channel: channel)
     registrar.addMethodCallDelegate(instance, channel: channel)
   }
