@@ -35,7 +35,6 @@ class OggOpusPlayer {
   static final Map<int, OggOpusPlayer> _players = {};
 
   static Future<dynamic> _handleMethodCall(MethodCall call) async {
-    debugPrint("_handleMethodCall: ${call.method} ${call.arguments}");
     switch (call.method) {
       case "onPlayerStateChanged":
         final state = call.arguments['state'] as int;
