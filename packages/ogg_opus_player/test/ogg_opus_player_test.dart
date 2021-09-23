@@ -18,6 +18,6 @@ void main() {
   });
 
   test('getPlatformVersion', () async {
-    expect(await OggOpusPlayer.platformVersion, '42');
+
   });
 }

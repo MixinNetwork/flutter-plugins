@@ -10,6 +10,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  system_clock: ^1.2.0-nullsafety.1
 
 dev_dependencies:
   flutter_test:

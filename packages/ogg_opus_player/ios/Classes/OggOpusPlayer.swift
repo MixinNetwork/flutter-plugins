@@ -13,8 +13,8 @@ final class OggOpusPlayer {
         case cancelled
     }
     
-    enum Status {
-        case stopped
+    enum Status: Int {
+        case stopped = 0
         case playing
         case paused
     }
