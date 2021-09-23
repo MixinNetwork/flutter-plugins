@@ -136,6 +136,7 @@ class _PlayerBodyState extends State<PlayerBody> {
                     if (state == PlayerState.ended) {
                       _player.dispose();
                       _player = OggOpusPlayer(widget.path);
+                      _player.play();
                     } else {
                       _player.play();
                     }
