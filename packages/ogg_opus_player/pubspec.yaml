@@ -1,7 +1,7 @@
 name: ogg_opus_player
-description: A new flutter plugin project.
+description: a ogg opus file player for flutter.
 version: 0.0.1
-homepage:
+homepage: https://github.com/MixinNetwork/flutter-plugins/tree/main/packages/ogg_opus_player
 
 environment:
   sdk: ">=2.13.0 <3.0.0"
