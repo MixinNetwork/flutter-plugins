@@ -1,15 +1,29 @@
 # desktop_lifecycle
+[![Pub](https://img.shields.io/pub/v/desktop_lifecycle.svg)](https://pub.dev/packages/desktop_lifecycle)
 
-A new flutter plugin project.
+Allow your flutter desktop application to perceive whether the window is activated.
 
 ## Getting Started
 
-This project is a starting point for a Flutter
-[plug-in package](https://flutter.dev/developing-packages/),
-a specialized package that includes platform-specific implementation code for
-Android and/or iOS.
+1. Add `desktop_lifecycle` to your `pubspec.yaml`.
 
-For help getting started with Flutter, view our
-[online documentation](https://flutter.dev/docs), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+```yaml
+  desktop_lifecycle: $latest_version
+```
 
+2. Then you can use `DesktopLifecycle.instance.isActive` to listen window active event.
+
+```dart
+final ValueListenable<bool> event = DesktopLifecycle.instance.isActive;
+
+final bool active = event.value;
+
+event.addListener(() {
+  debugPrint("window activate: ${event.value}");
+});
+
+```
+
+## LICENSE
+
+see LICENSE file

@@ -1,3 +1,3 @@
-## 0.0.1
+## 0.0.1 (2021/10/8)
 
-* TODO: Describe initial release.
+* add basic desktop platforms support.
