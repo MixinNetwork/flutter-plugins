@@ -1,3 +1,9 @@
+# Changelog
+
+## 0.1.1 (2021/11/8)
+
+update plugin description.
+
 ## 0.1.0 (2021/9/2)
 
 1. add android support. (preview)

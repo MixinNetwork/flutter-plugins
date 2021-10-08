@@ -2,7 +2,7 @@
 
 [![Pub](https://img.shields.io/pub/v/desktop_drop.svg)](https://pub.dev/packages/desktop_drop)
 
-A plugin which allow user drag files to you flutter application on desktop platforms.
+A plugin which allows user dragging files to your flutter desktop applications.
 
 |          |       |
 | -------- | ------- |
