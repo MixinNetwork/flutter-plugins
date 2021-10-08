@@ -10,3 +10,5 @@ build/
 .idea/
 
 example/.idea/
+
+.vscode
