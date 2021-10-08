@@ -1,7 +1,7 @@
 name: desktop_lifecycle
-description: A new flutter plugin project.
+description: Allow your flutter desktop application to perceive whether the window is activated.
 version: 0.0.1
-homepage:
+homepage: https://github.com/MixinNetwork/flutter-plugins/tree/main/packages/desktop_lifecycle
 
 environment:
   sdk: ">=2.12.0 <3.0.0"

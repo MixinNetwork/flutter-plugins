@@ -12,3 +12,5 @@ build/
 example/.idea/
 
 .vscode
+
+desktop_lifecycle.iml
