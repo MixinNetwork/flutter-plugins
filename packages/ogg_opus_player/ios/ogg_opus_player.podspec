@@ -15,7 +15,7 @@ A new flutter plugin project.
   s.source           = { :path => '.' }
   s.source_files = 'Classes/**/*', 'Headers/**/*'
   s.dependency 'Flutter'
-  s.platform = :ios, '10.0'
+  s.platform = :ios, '12.0'
   s.ios.vendored_libraries = 'Libs/libogg.a', 'Libs/libopus.a', 'Libs/libopusenc.a', 'Libs/libopusfile.a'
 
   # Flutter.framework does not contain a i386 slice.
