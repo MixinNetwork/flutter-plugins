@@ -1,0 +1,117 @@
+import Cocoa
+import FlutterMacOS
+
+private var viewId: Int64 = 0
+
+public class WebviewWindowPlugin: NSObject, FlutterPlugin {
+  private let methodChannel: FlutterMethodChannel
+
+  private var webviews: [Int64: WebviewWindowController] = [:]
+
+  public init(methodChannel: FlutterMethodChannel) {
+    self.methodChannel = methodChannel
+    super.init()
+  }
+
+  public static func register(with registrar: FlutterPluginRegistrar) {
+    let channel = FlutterMethodChannel(name: "webview_window", binaryMessenger: registrar.messenger)
+    let instance = WebviewWindowPlugin(methodChannel: channel)
+    registrar.addMethodCallDelegate(instance, channel: channel)
+  }
+
+  public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    switch call.method {
+    case "create":
+      guard let argument = call.arguments as? [String: Any?] else {
+        result(FlutterError(code: "0", message: "arg is not map", details: nil))
+        return
+      }
+      let width = argument["windowWidth"] as? Int ?? 1280
+      let height = argument["windowHeight"] as? Int ?? 720
+
+      let controller = WebviewWindowController(viewId: viewId, methodChannel: methodChannel,
+                                               width: width, height: height)
+      controller.webviewPlugin = self
+      webviews[viewId] = controller
+      controller.showWindow(self)
+      result(viewId)
+      viewId += 1
+      break
+    case "launch":
+      guard let argument = call.arguments as? [String: Any?] else {
+        result(FlutterError(code: "0", message: "arg is not map", details: nil))
+        return
+      }
+
+      guard let viewId = argument["viewId"] as? Int64 else {
+        result(FlutterError(code: "0", message: "param viewId not found", details: nil))
+        return
+      }
+
+      guard let url = argument["url"] as? String else {
+        result(FlutterError(code: "0", message: "param url not found", details: nil))
+        return
+      }
+
+      guard let url = URL(string: url) else {
+        result(FlutterError(code: "0", message: "failed to parse \(url)", details: nil))
+        return
+      }
+
+      guard let wc = webviews[viewId] else {
+        result(FlutterError(code: "0", message: "can not find webview for id: \(viewId)", details: nil))
+        return
+      }
+      wc.load(url: url)
+      result(nil)
+      break
+    case "registerJavaScripInterface":
+      guard let argument = call.arguments as? [String: Any?] else {
+        result(FlutterError(code: "0", message: "arg is not map", details: nil))
+        return
+      }
+      guard let viewId = argument["viewId"] as? Int64 else {
+        result(FlutterError(code: "0", message: "param viewId not found", details: nil))
+        return
+      }
+      guard let name = argument["name"] as? String else {
+        result(FlutterError(code: "0", message: "param name not found", details: nil))
+        return
+      }
+      guard let wc = webviews[viewId] else {
+        result(FlutterError(code: "0", message: "can not find webview for id: \(viewId)", details: nil))
+        return
+      }
+      wc.addJavascriptInterface(name: name)
+      result(nil)
+      break
+    case "unregisterJavaScripInterface":
+      guard let argument = call.arguments as? [String: Any?] else {
+        result(FlutterError(code: "0", message: "arg is not map", details: nil))
+        return
+      }
+      guard let viewId = argument["viewId"] as? Int64 else {
+        result(FlutterError(code: "0", message: "param viewId not found", details: nil))
+        return
+      }
+      guard let name = argument["name"] as? String else {
+        result(FlutterError(code: "0", message: "param name not found", details: nil))
+        return
+      }
+      guard let wc = webviews[viewId] else {
+        result(FlutterError(code: "0", message: "can not find webview for id: \(viewId)", details: nil))
+        return
+      }
+      wc.addJavascriptInterface(name: name)
+      result(nil)
+      break
+    default:
+      result(FlutterMethodNotImplemented)
+    }
+  }
+
+  func onWebviewWindowClose(viewId: Int64, wc: WebviewWindowController) {
+    wc.destroy()
+//    webviews.removeValue(forKey: viewId)
+  }
+}
