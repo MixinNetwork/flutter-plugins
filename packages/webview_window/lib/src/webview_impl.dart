@@ -73,4 +73,15 @@ class WebviewImpl extends Webview {
       "viewId": viewId,
     });
   }
+
+  @override
+  void setBrightness(Brightness? brightness) {
+    /// -1 : system default
+    /// 0 : dark
+    /// 1 : light
+    channel.invokeMethod("setBrightness", {
+      "viewId": viewId,
+      "brightness": brightness?.index ?? -1,
+    });
+  }
 }

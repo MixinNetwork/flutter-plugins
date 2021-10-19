@@ -39,6 +39,7 @@ class _MyAppState extends State<MyApp> {
                   configuration: const CreateConfiguration(
                     windowHeight: 1280,
                     windowWidth: 720,
+                    title: "ExampleTestWindow",
                   ),
                 );
                 webview.registerJavaScriptMessageHandler("test", (name, body) {
@@ -70,9 +71,18 @@ class _MyAppState extends State<MyApp> {
                 TextButton(
                   onPressed: () async {
                     final webview = await WebviewWindow.create();
+                    webview.setBrightness(Brightness.dark);
                     webview.launch(_controller.text);
                   },
                   child: const Text('Open'),
+                ),
+                const SizedBox(height: 20),
+                TextButton(
+                  onPressed: () async {
+                    await WebviewWindow.clearAll();
+                    debugPrint('clear complete');
+                  },
+                  child: const Text('Clear all'),
                 )
               ],
             ),

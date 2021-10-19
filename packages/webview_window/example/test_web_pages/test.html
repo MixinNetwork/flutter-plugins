@@ -6,6 +6,10 @@
 
     <script type="application/javascript">
 
+        function readCookie() {
+            document.getElementById("cookie_text").innerText = document.cookie;
+        }
+
         function postSimpleMessage() {
             if (window.webkit) {
                 window.webkit.messageHandlers.test.postMessage("Hello");
@@ -21,6 +25,10 @@
         function promptMessage() {
             let result = prompt("test", "hello");
             document.getElementById("prompt_result").innerText = result;
+        }
+
+        function updateCookie() {
+            document.cookie = "username=test; date=2021"
         }
 
     </script>
@@ -42,6 +50,11 @@ Hello World!
 <button type="button" onclick="promptMessage()">PromptMessage</button>
 <p id="prompt_result">
 </p>
+
+<br>
+
+<button type="button" onclick="updateCookie()">updateCookie</button>
+<p id="cookie_text"></p>
 
 <script type="application/javascript">
 
@@ -71,6 +84,10 @@ Hello World!
 
 <script type="application/javascript">
     document.getElementById("prompt_result").innerText = prompt("init");
+
+
+    readCookie()
+
 </script>
 
 </body>

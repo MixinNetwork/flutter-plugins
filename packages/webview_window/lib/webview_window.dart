@@ -11,8 +11,8 @@ import 'package:webview_window/src/create_configuration.dart';
 import 'package:webview_window/src/webview.dart';
 import 'package:webview_window/src/webview_impl.dart';
 
-export 'src/webview.dart';
 export 'src/create_configuration.dart';
+export 'src/webview.dart';
 
 final List<WebviewImpl> _webviews = [];
 
@@ -73,5 +73,10 @@ class WebviewWindow {
       default:
         return;
     }
+  }
+
+  /// clear all cookies and storage.
+  static Future<void> clearAll() {
+    return _channel.invokeMethod('clearAll');
   }
 }

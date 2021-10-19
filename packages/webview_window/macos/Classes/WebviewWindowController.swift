@@ -21,13 +21,18 @@ class WebviewWindowController: NSWindowController {
   private let width: Int
   private let height: Int
 
+  private let initialTitle: String
+
   weak var webviewPlugin: WebviewWindowPlugin?
 
-  init(viewId: Int64, methodChannel: FlutterMethodChannel, width: Int, height: Int) {
+  init(viewId: Int64, methodChannel: FlutterMethodChannel,
+       width: Int, height: Int,
+       title: String) {
     self.viewId = viewId
     self.methodChannel = methodChannel
     self.width = width
     self.height = height
+    self.initialTitle = title
     super.init(window: nil)
   }
 
@@ -43,6 +48,8 @@ class WebviewWindowController: NSWindowController {
 
     window?.setContentSize(NSSize(width: width, height: height))
     window?.center()
+    
+    window?.title = initialTitle
 
     webview.navigationDelegate = self
     webview.uiDelegate = self
@@ -78,10 +85,27 @@ class WebviewWindowController: NSWindowController {
     javaScriptHandlerNames.forEach { name in
       webview.configuration.userContentController.removeScriptMessageHandler(forName: name)
     }
-    
+
     webview.configuration.userContentController.removeAllUserScripts()
   }
-  
+
+  func setAppearance(brightness: Int) {
+    switch brightness {
+    case 0:
+      if #available(macOS 10.14, *) {
+        window?.appearance = NSAppearance(named: .darkAqua)
+      } else {
+        // Fallback on earlier versions
+      }
+      break
+    case 1:
+      window?.appearance = NSAppearance(named: .aqua)
+      break
+    default:
+      window?.appearance = nil
+      break
+    }
+  }
 
   deinit {
     #if DEBUG

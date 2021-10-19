@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 /// Handle custom message from JavaScript in your app.
 typedef JavaScriptMessageHandler = void Function(String name, dynamic body);
 
@@ -15,4 +17,8 @@ abstract class Webview {
 
   void launch(String url);
 
+  /// change webview theme.
+  ///
+  /// Brightness.dark only availabe on macOS 10.14+
+  void setBrightness(Brightness? brightness);
 }

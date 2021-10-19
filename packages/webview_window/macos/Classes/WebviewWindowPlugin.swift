@@ -1,5 +1,6 @@
 import Cocoa
 import FlutterMacOS
+import WebKit
 
 private var viewId: Int64 = 0
 
@@ -28,9 +29,10 @@ public class WebviewWindowPlugin: NSObject, FlutterPlugin {
       }
       let width = argument["windowWidth"] as? Int ?? 1280
       let height = argument["windowHeight"] as? Int ?? 720
+      let title = argument["title"] as? String ?? ""
 
       let controller = WebviewWindowController(viewId: viewId, methodChannel: methodChannel,
-                                               width: width, height: height)
+                                               width: width, height: height, title: title)
       controller.webviewPlugin = self
       webviews[viewId] = controller
       controller.showWindow(self)
@@ -103,6 +105,31 @@ public class WebviewWindowPlugin: NSObject, FlutterPlugin {
         return
       }
       wc.addJavascriptInterface(name: name)
+      result(nil)
+      break
+    case "clearAll":
+      WKWebsiteDataStore.default().removeData(
+        ofTypes: [WKWebsiteDataTypeCookies, WKWebsiteDataTypeLocalStorage],
+        modifiedSince: .distantPast,
+        completionHandler: {
+          result(nil)
+        })
+      break
+    case "setBrightness":
+      guard let argument = call.arguments as? [String: Any?] else {
+        result(FlutterError(code: "0", message: "arg is not map", details: nil))
+        return
+      }
+      guard let viewId = argument["viewId"] as? Int64 else {
+        result(FlutterError(code: "0", message: "param viewId not found", details: nil))
+        return
+      }
+      guard let wc = webviews[viewId] else {
+        result(FlutterError(code: "0", message: "can not find webview for id: \(viewId)", details: nil))
+        return
+      }
+      let brightness = argument["brightness"] as? Int ?? -1
+      wc.setAppearance(brightness: brightness)
       result(nil)
       break
     default:
