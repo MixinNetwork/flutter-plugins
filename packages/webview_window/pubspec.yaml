@@ -31,3 +31,5 @@ flutter:
         pluginClass: somePluginClass
       macos:
         pluginClass: WebviewWindowPlugin
+      windows:
+        pluginClass: WebviewWindowPlugin
