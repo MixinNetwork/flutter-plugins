@@ -11,6 +11,7 @@
 #include "strconv.h"
 
 #include "flutter/encodable_value.h"
+#include <flutter_windows.h>
 
 namespace {
 
@@ -43,6 +44,12 @@ void UnregisterWindowClass() {
   class_registered_ = false;
 }
 
+// Scale helper to convert logical scaler values to physical using passed in
+// scale factor
+int Scale(int source, double scale_factor) {
+  return static_cast<int>(source * scale_factor);
+}
+
 }
 
 using namespace Microsoft::WRL;
@@ -63,10 +70,19 @@ void WebviewWindow::CreateAndShow(const std::wstring &title, int height, int wid
 
   auto *window_class = GetWindowClass();
 
+  // the same as flutter default main.cpp
+  const POINT target_point = {static_cast<LONG>(10),
+                              static_cast<LONG>(10)};
+  HMONITOR monitor = MonitorFromPoint(target_point, MONITOR_DEFAULTTONEAREST);
+
+  UINT dpi = FlutterDesktopGetDpiForMonitor(monitor);
+  double scale_factor = dpi / 96.0;
+
+  // TODO centered the new window.
   HWND window = CreateWindow(
       window_class, title.c_str(), WS_OVERLAPPEDWINDOW | WS_VISIBLE,
       CW_USEDEFAULT, CW_USEDEFAULT,
-      width, height,
+      Scale(width, scale_factor), Scale(height, scale_factor),
       nullptr, nullptr, GetModuleHandle(nullptr), this);
 
   if (!window) {
@@ -88,21 +104,20 @@ void WebviewWindow::CreateAndShow(const std::wstring &title, int height, int wid
               callback(false);
               return S_OK;
             }
-            env->CreateCoreWebView2Controller(window,
-                                              Callback<
-                                                  ICoreWebView2CreateCoreWebView2ControllerCompletedHandler>(
-                                                  [this, callback](HRESULT result,
-                                                                   ICoreWebView2Controller *controller) -> HRESULT {
-                                                    if (SUCCEEDED(result)) {
-                                                      callback(true);
-                                                      webview_controller_ =
-                                                          controller;
-                                                      OnWebviewControllerCreated();
-                                                    } else {
-                                                      callback(false);
-                                                    }
-                                                    return S_OK;
-                                                  }).Get());
+            env->CreateCoreWebView2Controller(
+                window,
+                Callback<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler>(
+                    [this, callback](HRESULT result, ICoreWebView2Controller *controller) -> HRESULT {
+                      if (SUCCEEDED(result)) {
+                        callback(true);
+                        webview_controller_ =
+                            controller;
+                        OnWebviewControllerCreated();
+                      } else {
+                        callback(false);
+                      }
+                      return S_OK;
+                    }).Get());
             return S_OK;
           }).Get());
 }
