@@ -10,6 +10,8 @@ flutter/
 x64/
 x86/
 
+!libs/x64
+
 # Visual Studio cache files
 # files ending in .cache can be ignored
 *.[Cc]ache
