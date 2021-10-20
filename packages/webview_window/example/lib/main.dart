@@ -42,18 +42,33 @@ class _MyAppState extends State<MyApp> {
                     title: "ExampleTestWindow",
                   ),
                 );
-                webview.registerJavaScriptMessageHandler("test", (name, body) {
-                  debugPrint('on javaScipt message: $name $body');
-                });
-                webview.setPromptHandler((prompt, defaultText) {
-                  if (prompt == "test") {
-                    return "Hello World!";
-                  } else if (prompt == "init") {
-                    return "initial prompt";
-                  }
-                  return "";
-                });
-                webview.launch("http://localhost:3000/test.html");
+                webview
+                  ..registerJavaScriptMessageHandler("test", (name, body) {
+                    debugPrint('on javaScipt message: $name $body');
+                  })
+                  ..setPromptHandler((prompt, defaultText) {
+                    if (prompt == "test") {
+                      return "Hello World!";
+                    } else if (prompt == "init") {
+                      return "initial prompt";
+                    }
+                    return "";
+                  })
+                  ..addScriptToExecuteOnDocumentCreated("""
+  const mixinContext = {
+    platform: 'Desktop',
+    conversation_id: 'conversationId',
+    immersive: false,
+    app_version: '1.0.0',
+    appearance: 'dark',
+  }
+  window.MixinContext = {
+    getContext: function() {
+      return JSON.stringify(mixinContext)
+    }
+  }
+""")
+                  ..launch("http://localhost:3000/test.html");
               },
               icon: const Icon(Icons.bug_report),
             )

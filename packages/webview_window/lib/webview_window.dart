@@ -4,6 +4,7 @@
 // directory. You can also find a detailed instruction on how to add platforms in the `pubspec.yaml` at https://flutter.dev/docs/development/packages-and-plugins/developing-packages#plugin-platforms.
 
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
@@ -76,7 +77,26 @@ class WebviewWindow {
   }
 
   /// clear all cookies and storage.
-  static Future<void> clearAll() {
-    return _channel.invokeMethod('clearAll');
+  static Future<void> clearAll() async {
+    await _channel.invokeMethod('clearAll');
+
+    // FIXME(boyan01) Move the logic to windows platform if WebView2 provider a way to clean caches.
+    if (Platform.isWindows) {
+      final dir = File(Platform.resolvedExecutable).parent;
+      final webview2Dir = Directory(dir.path + "\\webview_window_WebView2");
+
+      if (await (webview2Dir.exists())) {
+        for (var i = 0; i <= 4; i++) {
+          try {
+            webview2Dir.delete(recursive: true);
+            break;
+          } catch (e) {
+            debugPrint("delete cache failed. retring.... $e");
+          }
+          // wait to ensure all web window has been closed and file handle has been release.
+          await Future.delayed(const Duration(seconds: 1));
+        }
+      }
+    }
   }
 }

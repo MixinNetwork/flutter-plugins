@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 
@@ -37,6 +39,9 @@ class WebviewImpl extends Webview {
   @override
   void registerJavaScriptMessageHandler(
       String name, JavaScriptMessageHandler handler) {
+    if (!Platform.isMacOS) {
+      return;
+    }
     assert(!_closed);
     if (_closed) {
       return;
@@ -52,6 +57,9 @@ class WebviewImpl extends Webview {
 
   @override
   void unregisterJavaScriptMessageHandler(String name) {
+    if (!Platform.isMacOS) {
+      return;
+    }
     if (_closed) {
       return;
     }
@@ -63,6 +71,9 @@ class WebviewImpl extends Webview {
 
   @override
   void setPromptHandler(PromptHandler? handler) {
+    if (!Platform.isMacOS) {
+      return;
+    }
     _promptHandler = handler;
   }
 
@@ -79,9 +90,24 @@ class WebviewImpl extends Webview {
     /// -1 : system default
     /// 0 : dark
     /// 1 : light
+    if (!Platform.isMacOS) {
+      return;
+    }
     channel.invokeMethod("setBrightness", {
       "viewId": viewId,
       "brightness": brightness?.index ?? -1,
+    });
+  }
+
+  @override
+  void addScriptToExecuteOnDocumentCreated(String javaScript) {
+    if (!Platform.isWindows) {
+      return;
+    }
+    assert(javaScript.trim().isNotEmpty);
+    channel.invokeMethod("addScriptToExecuteOnDocumentCreated", {
+      "viewId": viewId,
+      "javaScript": javaScript,
     });
   }
 }
