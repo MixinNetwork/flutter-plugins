@@ -101,7 +101,7 @@ class WebviewImpl extends Webview {
 
   @override
   void addScriptToExecuteOnDocumentCreated(String javaScript) {
-    if (!Platform.isWindows) {
+    if (!(Platform.isWindows || Platform.isLinux)) {
       return;
     }
     assert(javaScript.trim().isNotEmpty);
