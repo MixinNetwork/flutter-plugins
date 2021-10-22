@@ -4,7 +4,7 @@ project(${PROJECT_NAME} LANGUAGES CXX)
 
 # This value is used when generating builds using this plugin, so it must
 # not be changed
-set(PLUGIN_NAME "webview_window_plugin")
+set(PLUGIN_NAME "desktop_webview_window_plugin")
 
 add_library(${PLUGIN_NAME} SHARED
         "webview_window_plugin.cpp"

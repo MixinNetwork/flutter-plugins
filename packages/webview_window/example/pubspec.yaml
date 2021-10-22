@@ -18,7 +18,7 @@ dependencies:
   flutter:
     sdk: flutter
 
-  webview_window:
+  desktop_webview_window:
     # When depending on this package from a real application you should use:
     #   webview_window: ^x.y.z
     # See https://dart.dev/tools/pub/dependencies#version-constraints

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:webview_window/webview_window.dart';
+import 'package:desktop_webview_window/webview_window.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();

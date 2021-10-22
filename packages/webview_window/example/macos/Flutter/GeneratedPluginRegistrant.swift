@@ -5,8 +5,8 @@
 import FlutterMacOS
 import Foundation
 
-import webview_window
+import desktop_webview_window
 
 func RegisterGeneratedPlugins(registry: FlutterPluginRegistry) {
-  WebviewWindowPlugin.register(with: registry.registrar(forPlugin: "WebviewWindowPlugin"))
+  DesktopWebviewWindowPlugin.register(with: registry.registrar(forPlugin: "DesktopWebviewWindowPlugin"))
 }

@@ -8,9 +8,10 @@ import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
-import 'package:webview_window/src/create_configuration.dart';
-import 'package:webview_window/src/webview.dart';
-import 'package:webview_window/src/webview_impl.dart';
+
+import 'src/create_configuration.dart';
+import 'src/webview.dart';
+import 'src/webview_impl.dart';
 
 export 'src/create_configuration.dart';
 export 'src/webview.dart';

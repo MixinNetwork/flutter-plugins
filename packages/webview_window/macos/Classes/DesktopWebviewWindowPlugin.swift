@@ -4,7 +4,7 @@ import WebKit
 
 private var viewId: Int64 = 0
 
-public class WebviewWindowPlugin: NSObject, FlutterPlugin {
+public class DesktopWebviewWindowPlugin: NSObject, FlutterPlugin {
   private let methodChannel: FlutterMethodChannel
 
   private var webviews: [Int64: WebviewWindowController] = [:]
@@ -16,7 +16,7 @@ public class WebviewWindowPlugin: NSObject, FlutterPlugin {
 
   public static func register(with registrar: FlutterPluginRegistrar) {
     let channel = FlutterMethodChannel(name: "webview_window", binaryMessenger: registrar.messenger)
-    let instance = WebviewWindowPlugin(methodChannel: channel)
+    let instance = DesktopWebviewWindowPlugin(methodChannel: channel)
     registrar.addMethodCallDelegate(instance, channel: channel)
   }
 
