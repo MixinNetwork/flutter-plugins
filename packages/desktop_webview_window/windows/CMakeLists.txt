@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.14)
-set(PROJECT_NAME "webview_window")
+set(PROJECT_NAME "desktop_webview_window")
 project(${PROJECT_NAME} LANGUAGES CXX)
 
 # This value is used when generating builds using this plugin, so it must
@@ -28,7 +28,7 @@ SET_PROPERTY(TARGET Webview2 PROPERTY IMPORTED_IMPLIB ${CMAKE_CURRENT_SOURCE_DIR
 target_link_libraries(${PLUGIN_NAME} PRIVATE Webview2)
 
 # List of absolute paths to libraries that should be bundled with the plugin
-set(webview_window_bundled_libraries
+set(desktop_webview_window_bundled_libraries
         "$<TARGET_FILE:Webview2>"
         PARENT_SCOPE
         )
