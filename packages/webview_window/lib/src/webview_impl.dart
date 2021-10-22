@@ -1,6 +1,6 @@
+import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 
 import 'webview.dart';
@@ -16,11 +16,16 @@ class WebviewImpl extends Webview {
 
   PromptHandler? _promptHandler;
 
+  final _closeCompleter = Completer<void>();
+
   WebviewImpl(this.viewId, this.channel);
 
+  @override
+  Future<void> get onClose => _closeCompleter.future;
+
   void onClosed() {
-    debugPrint('onClosed');
     _closed = true;
+    _closeCompleter.complete();
   }
 
   void onJavaScriptMessage(String name, dynamic body) {

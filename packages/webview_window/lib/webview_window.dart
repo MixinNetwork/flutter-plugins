@@ -22,7 +22,7 @@ class WebviewWindow {
 
   static bool _inited = false;
 
-  static void init() {
+  static void _init() {
     if (_inited) {
       return;
     }
@@ -39,6 +39,7 @@ class WebviewWindow {
   static Future<Webview> create({
     CreateConfiguration configuration = const CreateConfiguration(),
   }) async {
+    _init();
     final viewId = await _channel.invokeMethod(
       "create",
       configuration.toMap(),
@@ -76,7 +77,7 @@ class WebviewWindow {
     }
   }
 
-  /// clear all cookies and storage.
+  /// Clear all cookies and storage.
   static Future<void> clearAll() async {
     await _channel.invokeMethod('clearAll');
 

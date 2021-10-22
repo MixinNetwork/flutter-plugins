@@ -6,6 +6,8 @@ typedef JavaScriptMessageHandler = void Function(String name, dynamic body);
 typedef PromptHandler = String Function(String prompt, String defaultText);
 
 abstract class Webview {
+  Future<void> get onClose;
+
   /// Install a message handler that you can call from your Javascript code.
   ///
   /// available: macOS (10.10+)

@@ -3,7 +3,6 @@ import 'package:webview_window/webview_window.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  WebviewWindow.init();
   runApp(const MyApp());
 }
 
@@ -88,6 +87,9 @@ class _MyAppState extends State<MyApp> {
                     final webview = await WebviewWindow.create();
                     webview.setBrightness(Brightness.dark);
                     webview.launch(_controller.text);
+                    webview.onClose.whenComplete(() {
+                      debugPrint("on close");
+                    });
                   },
                   child: const Text('Open'),
                 ),
