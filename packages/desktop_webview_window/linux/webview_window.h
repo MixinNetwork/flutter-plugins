@@ -9,6 +9,8 @@
 #include <gtk/gtk.h>
 #include "functional"
 
+#include <string>
+
 class WebviewWindow {
  public:
   WebviewWindow(
