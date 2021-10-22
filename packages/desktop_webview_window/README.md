@@ -1,6 +1,6 @@
-# webview_window
+# desktop_webview_window
 
-[![Pub](https://img.shields.io/pub/v/webview_window.svg)](https://pub.dev/packages/webview_window)
+[![Pub](https://img.shields.io/pub/v/desktop_webview_window.svg)](https://pub.dev/packages/desktop_webview_window)
 
 Show a webview window on your flutter deksktop application.
 
@@ -13,7 +13,7 @@ Show a webview window on your flutter deksktop application.
 ## Getting Started
 
 ```dart
-import 'package:webview_window/webview_window.dart';
+import 'package:desktop_webview_window/desktop_webview_window.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
