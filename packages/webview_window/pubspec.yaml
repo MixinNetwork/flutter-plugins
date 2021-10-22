@@ -1,7 +1,7 @@
 name: webview_window
-description: A new flutter plugin project.
+description: Show a webview window on your flutter deksktop application.
 version: 0.0.1
-homepage:
+homepage: https://github.com/MixinNetwork/flutter-plugins/tree/main/packages/webview_window
 
 environment:
   sdk: ">=2.14.0 <3.0.0"
