@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-set(PROJECT_NAME "webview_window")
+set(PROJECT_NAME "desktop_webview_window")
 project(${PROJECT_NAME} LANGUAGES CXX)
 
 # This value is used when generating builds using this plugin, so it must
@@ -10,7 +10,7 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(WebKit REQUIRED IMPORTED_TARGET webkit2gtk-4.0)
 
 add_library(${PLUGIN_NAME} SHARED
-  "webview_window_plugin.cc"
+  "desktop_webview_window_plugin.cc"
         webview_window.cc webview_window.h)
 apply_standard_settings(${PLUGIN_NAME})
 set_target_properties(${PLUGIN_NAME} PROPERTIES
@@ -23,7 +23,7 @@ target_link_libraries(${PLUGIN_NAME} PRIVATE PkgConfig::GTK)
 target_link_libraries(${PLUGIN_NAME} PRIVATE PkgConfig::WebKit)
 
 # List of absolute paths to libraries that should be bundled with the plugin
-set(webview_window_bundled_libraries
+set(desktop_webview_window_bundled_libraries
   ""
   PARENT_SCOPE
 )

@@ -1,4 +1,4 @@
-#include "include/webview_window/webview_window_plugin.h"
+#include "include/desktop_webview_window/desktop_webview_window_plugin.h"
 
 #include <flutter_linux/flutter_linux.h>
 #include <gtk/gtk.h>
@@ -123,7 +123,7 @@ static void method_call_cb(FlMethodChannel *channel, FlMethodCall *method_call,
   webview_window_plugin_handle_method_call(plugin, method_call);
 }
 
-void webview_window_plugin_register_with_registrar(FlPluginRegistrar *registrar) {
+void desktop_webview_window_plugin_register_with_registrar(FlPluginRegistrar *registrar) {
   WebviewWindowPlugin *plugin = WEBVIEW_WINDOW_PLUGIN(
       g_object_new(webview_window_plugin_get_type(), nullptr));
 
