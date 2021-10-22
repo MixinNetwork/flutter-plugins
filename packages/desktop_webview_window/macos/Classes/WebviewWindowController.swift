@@ -61,6 +61,12 @@ class WebviewWindowController: NSWindowController {
     webview.configuration.allowsAirPlayForMediaPlayback = true
     webview.configuration.mediaTypesRequiringUserActionForPlayback = .video
   }
+  
+  override func keyDown(with event: NSEvent) {
+    if event.charactersIgnoringModifiers == "w" && event.modifierFlags.contains(.command) {
+      close()
+    }
+  }
 
   func load(url: URL) {
     webview.load(URLRequest(url: url))
@@ -80,7 +86,7 @@ class WebviewWindowController: NSWindowController {
 
   func destroy() {
     window?.delegate = nil
-    
+
     webview.removeFromSuperview()
     webview.uiDelegate = nil
     webview.navigationDelegate = nil
@@ -89,7 +95,7 @@ class WebviewWindowController: NSWindowController {
     }
 
     webview.configuration.userContentController.removeAllUserScripts()
-    
+
     webview = nil
   }
 
