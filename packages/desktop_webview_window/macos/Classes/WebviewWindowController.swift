@@ -48,7 +48,7 @@ class WebviewWindowController: NSWindowController {
 
     window?.setContentSize(NSSize(width: width, height: height))
     window?.center()
-    
+
     window?.title = initialTitle
 
     webview.navigationDelegate = self
@@ -60,6 +60,12 @@ class WebviewWindowController: NSWindowController {
     webview.configuration.preferences.javaScriptCanOpenWindowsAutomatically = true
     webview.configuration.allowsAirPlayForMediaPlayback = true
     webview.configuration.mediaTypesRequiringUserActionForPlayback = .video
+  }
+  
+  override func keyDown(with event: NSEvent) {
+    if event.charactersIgnoringModifiers == "w" && event.modifierFlags.contains(.command) {
+      close()
+    }
   }
 
   func load(url: URL) {
@@ -79,6 +85,8 @@ class WebviewWindowController: NSWindowController {
   }
 
   func destroy() {
+    window?.delegate = nil
+
     webview.removeFromSuperview()
     webview.uiDelegate = nil
     webview.navigationDelegate = nil
@@ -87,6 +95,8 @@ class WebviewWindowController: NSWindowController {
     }
 
     webview.configuration.userContentController.removeAllUserScripts()
+
+    webview = nil
   }
 
   func setAppearance(brightness: Int) {
@@ -105,6 +115,11 @@ class WebviewWindowController: NSWindowController {
       window?.appearance = nil
       break
     }
+  }
+
+  func addScriptToExecuteOnDocumentCreated(javaScript: String) {
+    webview.configuration.userContentController.addUserScript(
+      WKUserScript(source: javaScript, injectionTime: .atDocumentStart, forMainFrameOnly: true))
   }
 
   deinit {

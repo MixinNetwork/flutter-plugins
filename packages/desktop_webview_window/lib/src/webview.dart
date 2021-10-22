@@ -28,6 +28,6 @@ abstract class Webview {
   /// available: macOS (Brightness.dark only 10.14+)
   void setBrightness(Brightness? brightness);
 
-  /// available: Windows, Linux
+  /// available: Windows, Linux, macOS
   void addScriptToExecuteOnDocumentCreated(String javaScript);
 }
