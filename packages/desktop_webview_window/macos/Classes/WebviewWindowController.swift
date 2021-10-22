@@ -79,6 +79,8 @@ class WebviewWindowController: NSWindowController {
   }
 
   func destroy() {
+    window?.delegate = nil
+    
     webview.removeFromSuperview()
     webview.uiDelegate = nil
     webview.navigationDelegate = nil
@@ -87,6 +89,8 @@ class WebviewWindowController: NSWindowController {
     }
 
     webview.configuration.userContentController.removeAllUserScripts()
+    
+    webview = nil
   }
 
   func setAppearance(brightness: Int) {

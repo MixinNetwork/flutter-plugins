@@ -151,7 +151,7 @@ public class DesktopWebviewWindowPlugin: NSObject, FlutterPlugin {
       }
       wc.addScriptToExecuteOnDocumentCreated(javaScript: javaScript)
       result(nil)
-      break;
+      break
     default:
       result(FlutterMethodNotImplemented)
     }
