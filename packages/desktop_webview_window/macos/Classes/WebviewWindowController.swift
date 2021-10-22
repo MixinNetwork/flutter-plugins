@@ -48,7 +48,7 @@ class WebviewWindowController: NSWindowController {
 
     window?.setContentSize(NSSize(width: width, height: height))
     window?.center()
-    
+
     window?.title = initialTitle
 
     webview.navigationDelegate = self
@@ -105,6 +105,11 @@ class WebviewWindowController: NSWindowController {
       window?.appearance = nil
       break
     }
+  }
+
+  func addScriptToExecuteOnDocumentCreated(javaScript: String) {
+    webview.configuration.userContentController.addUserScript(
+      WKUserScript(source: javaScript, injectionTime: .atDocumentStart, forMainFrameOnly: true))
   }
 
   deinit {
