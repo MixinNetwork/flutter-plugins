@@ -3,7 +3,7 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
-  webview_window
+  desktop_webview_window
 )
 
 set(PLUGIN_BUNDLED_LIBRARIES)

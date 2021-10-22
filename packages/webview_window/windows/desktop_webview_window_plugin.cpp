@@ -1,4 +1,4 @@
-#include "include/webview_window/webview_window_plugin.h"
+#include "include/desktop_webview_window/desktop_webview_window_plugin.h"
 
 // This must be included before many other Windows headers.
 #include <windows.h>
@@ -135,7 +135,7 @@ void WebviewWindowPlugin::HandleMethodCall(
 
 }  // namespace
 
-void WebviewWindowPluginRegisterWithRegistrar(
+void DesktopWebviewWindowPluginRegisterWithRegistrar(
     FlutterDesktopPluginRegistrarRef registrar) {
   WebviewWindowPlugin::RegisterWithRegistrar(
       flutter::PluginRegistrarManager::GetInstance()

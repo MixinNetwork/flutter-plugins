@@ -6,9 +6,9 @@
 
 #include "generated_plugin_registrant.h"
 
-#include <webview_window/webview_window_plugin.h>
+#include <desktop_webview_window/desktop_webview_window_plugin.h>
 
 void RegisterPlugins(flutter::PluginRegistry* registry) {
-  WebviewWindowPluginRegisterWithRegistrar(
-      registry->GetRegistrarForPlugin("WebviewWindowPlugin"));
+  DesktopWebviewWindowPluginRegisterWithRegistrar(
+      registry->GetRegistrarForPlugin("DesktopWebviewWindowPlugin"));
 }

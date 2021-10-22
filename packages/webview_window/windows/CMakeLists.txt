@@ -7,7 +7,7 @@ project(${PROJECT_NAME} LANGUAGES CXX)
 set(PLUGIN_NAME "desktop_webview_window_plugin")
 
 add_library(${PLUGIN_NAME} SHARED
-        "webview_window_plugin.cpp"
+        "desktop_webview_window_plugin.cpp"
         "webview_window.h"
         "webview_window.cc"
         "strconv.h"
