@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:pasteboard/pasteboard.dart';
@@ -16,6 +17,8 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
+  String _console = "";
+
   Uint8List? bytes;
   String? fileUrl;
 
@@ -43,26 +46,29 @@ class _MyAppState extends State<MyApp> {
               ),
               MaterialButton(
                 onPressed: () async {
-                  final url = await Pasteboard.absoluteUrlString;
-                  if (url?.startsWith('file') ?? false) {
-                    var tryParse = Uri.tryParse(url!);
-                    return setState(() {
-                      fileUrl = tryParse!.toFilePath();
-                      this.bytes = null;
-                    });
-                  }
-
                   final bytes = await Pasteboard.image;
 
                   setState(() {
                     fileUrl = null;
                     this.bytes = bytes;
+                    _console = "bytes: ${bytes?.length}";
                   });
                 },
                 child: const Text('paste image'),
               ),
-              Text('bytes: $bytes', maxLines: 1),
-              Text('fileUrl: $fileUrl', maxLines: 1),
+              TextButton(
+                onPressed: () async {
+                  final files = await Pasteboard.files();
+                  setState(() {
+                    _console = 'files: \n ${files.isEmpty ? 'empty' : ''}';
+                    for (final file in files) {
+                      _console += '$file ${File(file).existsSync()}\n';
+                    }
+                  });
+                },
+                child: const Text("Get files"),
+              ),
+              Text(' $_console'),
               if (bytes != null) Image.memory(bytes!),
               if (fileUrl != null) Image.file(File(fileUrl!))
             ],
