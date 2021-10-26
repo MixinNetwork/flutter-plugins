@@ -52,9 +52,13 @@ STGMEDIUM CreateStorageForFileNames(const std::vector<std::string> &filenames) {
 
   size_t next_filename_offset = 0;
   for (const auto &filename: filenames) {
-    wcscpy(data + next_filename_offset, utf8_to_wide(filename).c_str());
+    auto wide_filename = utf8_to_wide(filename);
+    wcsncpy_s(data + next_filename_offset,
+              wide_filename.length() + 1,
+              wide_filename.c_str(),
+              wide_filename.length() + 1);
     // Skip the terminating null character of the filename.
-    next_filename_offset += filename.length() + 1;
+    next_filename_offset += wide_filename.length() + 1;
   }
 
   STGMEDIUM storage;
