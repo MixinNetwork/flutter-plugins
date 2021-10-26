@@ -1,19 +1,70 @@
 #include "include/pasteboard/pasteboard_plugin.h"
 
-// This must be included before many other Windows headers.
-#include <windows.h>
-
-#include <atlimage.h>
-
 #include <flutter/method_channel.h>
 #include <flutter/plugin_registrar_windows.h>
 #include <flutter/standard_method_codec.h>
 
+#include <windows.h>
+#include <atlimage.h>
+#include <shlobj.h>
+
 #include <map>
 #include <memory>
+
 #include "strconv.h"
 
 namespace {
+
+constexpr STGMEDIUM kNullStorageMedium = {TYMED_NULL, nullptr, nullptr};
+
+STGMEDIUM CreateStorageForFileNames(const std::vector<std::string> &filenames) {
+  // CF_HDROP clipboard format consists of DROPFILES structure, a series of file
+  // names including the terminating null character and the additional null
+  // character at the tail to terminate the array.
+  // For example,
+  //| DROPFILES | FILENAME 1 | NULL | ... | FILENAME n | NULL | NULL |
+  // For more details, please refer to
+  // https://docs.microsoft.com/en-us/windows/desktop/shell/clipboard#cf_hdrop
+
+  if (filenames.empty())
+    return kNullStorageMedium;
+
+  const size_t kDropFilesHeaderSizeInBytes = sizeof(DROPFILES);
+  size_t total_bytes = kDropFilesHeaderSizeInBytes;
+  for (const auto &filename: filenames) {
+    // Allocate memory of the filename's length including the null
+    // character.
+    total_bytes += (filename.length() + 1) * sizeof(wchar_t);
+  }
+  // |data| needs to be terminated by an additional null character.
+  total_bytes += sizeof(wchar_t);
+
+  // GHND combines GMEM_MOVEABLE and GMEM_ZEROINIT, and GMEM_ZEROINIT
+  // initializes memory contents to zero.
+  HANDLE hdata = GlobalAlloc(GHND, total_bytes);
+
+  auto *drop_files = (DROPFILES *) GlobalLock(hdata);
+  drop_files->pFiles = sizeof(DROPFILES);
+  drop_files->fWide = TRUE;
+
+  auto *data = reinterpret_cast<wchar_t *>(
+      reinterpret_cast<BYTE *>(drop_files) + kDropFilesHeaderSizeInBytes);
+
+  size_t next_filename_offset = 0;
+  for (const auto &filename: filenames) {
+    wcscpy(data + next_filename_offset, utf8_to_wide(filename).c_str());
+    // Skip the terminating null character of the filename.
+    next_filename_offset += filename.length() + 1;
+  }
+
+  STGMEDIUM storage;
+  storage.tymed = TYMED_HGLOBAL;
+  storage.hGlobal = hdata;
+  storage.pUnkForRelease = nullptr;
+
+  GlobalUnlock(hdata);
+  return storage;
+}
 
 PBITMAPINFO CreateBitmapInfoStruct(HBITMAP hBmp) {
   BITMAP bmp;
@@ -35,22 +86,22 @@ PBITMAPINFO CreateBitmapInfoStruct(HBITMAP hBmp) {
     cClrBits = 16;
   else if (cClrBits <= 24)
     cClrBits = 24;
-  else cClrBits = 32;
+  else
+    cClrBits = 32;
 
   // Allocate memory for the BITMAPINFO structure. (This structure
   // contains a BITMAPINFOHEADER structure and an array of RGBQUAD
   // data structures.)
 
   if (cClrBits < 24)
-    pbmi = (PBITMAPINFO) LocalAlloc(LPTR,
-                                    sizeof(BITMAPINFOHEADER) +
-                                        sizeof(RGBQUAD) * int(1 << cClrBits));
+    pbmi = (PBITMAPINFO) LocalAlloc(
+        LPTR, sizeof(BITMAPINFOHEADER) + sizeof(RGBQUAD) * int(1 << cClrBits));
 
-    // There is no RGBQUAD array for these formats: 24-bit-per-pixel or 32-bit-per-pixel
+    // There is no RGBQUAD array for these formats: 24-bit-per-pixel or
+    // 32-bit-per-pixel
 
   else
-    pbmi = (PBITMAPINFO) LocalAlloc(LPTR,
-                                    sizeof(BITMAPINFOHEADER));
+    pbmi = (PBITMAPINFO) LocalAlloc(LPTR, sizeof(BITMAPINFOHEADER));
 
   // Initialize the fields in the BITMAPINFO structure.
 
@@ -59,8 +110,7 @@ PBITMAPINFO CreateBitmapInfoStruct(HBITMAP hBmp) {
   pbmi->bmiHeader.biHeight = bmp.bmHeight;
   pbmi->bmiHeader.biPlanes = bmp.bmPlanes;
   pbmi->bmiHeader.biBitCount = bmp.bmBitsPixel;
-  if (cClrBits < 24)
-    pbmi->bmiHeader.biClrUsed = (1 << cClrBits);
+  if (cClrBits < 24) pbmi->bmiHeader.biClrUsed = (1 << cClrBits);
 
   // If the bitmap is not compressed, set the BI_RGB flag.
   pbmi->bmiHeader.biCompression = BI_RGB;
@@ -69,8 +119,9 @@ PBITMAPINFO CreateBitmapInfoStruct(HBITMAP hBmp) {
   // indices and store the result in biSizeImage.
   // The width must be DWORD aligned unless the bitmap is RLE
   // compressed.
-  pbmi->bmiHeader.biSizeImage = ((pbmi->bmiHeader.biWidth * cClrBits + 31) & ~31) / 8
-      * pbmi->bmiHeader.biHeight;
+  pbmi->bmiHeader.biSizeImage =
+      ((pbmi->bmiHeader.biWidth * cClrBits + 31) & ~31) / 8 *
+          pbmi->bmiHeader.biHeight;
   // Set biClrImportant to 0, indicating that all of the
   // device colors are important.
   pbmi->bmiHeader.biClrImportant = 0;
@@ -78,13 +129,13 @@ PBITMAPINFO CreateBitmapInfoStruct(HBITMAP hBmp) {
 }
 
 void CreateBMPFile(LPCTSTR pszFile, HBITMAP hBMP) {
-  HANDLE hf;                 // file handle
-  BITMAPFILEHEADER hdr;       // bitmap file-header
-  PBITMAPINFOHEADER pbih;     // bitmap info-header
-  LPBYTE lpBits;              // memory pointer
-  DWORD dwTotal;              // total count of bytes
-  DWORD cb;                   // incremental count of bytes
-  BYTE *hp;                   // byte pointer
+  HANDLE hf;               // file handle
+  BITMAPFILEHEADER hdr;    // bitmap file-header
+  PBITMAPINFOHEADER pbih;  // bitmap info-header
+  LPBYTE lpBits;           // memory pointer
+  DWORD dwTotal;           // total count of bytes
+  DWORD cb;                // incremental count of bytes
+  BYTE *hp;                // byte pointer
   DWORD dwTmp;
   PBITMAPINFO pbi;
   HDC hDC;
@@ -105,35 +156,28 @@ void CreateBMPFile(LPCTSTR pszFile, HBITMAP hBMP) {
                    DIB_RGB_COLORS));
 
   // Create the .BMP file.
-  hf = CreateFile(pszFile,
-                  GENERIC_READ | GENERIC_WRITE,
-                  (DWORD) 0,
-                  NULL,
-                  CREATE_ALWAYS,
-                  FILE_ATTRIBUTE_NORMAL,
-                  (HANDLE) NULL);
+  hf = CreateFile(pszFile, GENERIC_READ | GENERIC_WRITE, (DWORD) 0, NULL,
+                  CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, (HANDLE) NULL);
   assert(hf != INVALID_HANDLE_VALUE);
 
-  hdr.bfType = 0x4d42;        // 0x42 = "B" 0x4d = "M"
+  hdr.bfType = 0x4d42;  // 0x42 = "B" 0x4d = "M"
   // Compute the size of the entire file.
-  hdr.bfSize = (DWORD) (sizeof(BITMAPFILEHEADER) +
-      pbih->biSize + pbih->biClrUsed
-      * sizeof(RGBQUAD) + pbih->biSizeImage);
+  hdr.bfSize = (DWORD) (sizeof(BITMAPFILEHEADER) + pbih->biSize +
+      pbih->biClrUsed * sizeof(RGBQUAD) + pbih->biSizeImage);
   hdr.bfReserved1 = 0;
   hdr.bfReserved2 = 0;
 
   // Compute the offset to the array of color indices.
-  hdr.bfOffBits = (DWORD) sizeof(BITMAPFILEHEADER) +
-      pbih->biSize + pbih->biClrUsed
-      * sizeof(RGBQUAD);
+  hdr.bfOffBits = (DWORD) sizeof(BITMAPFILEHEADER) + pbih->biSize +
+      pbih->biClrUsed * sizeof(RGBQUAD);
 
   // Copy the BITMAPFILEHEADER into the .BMP file.
-  assert(WriteFile(hf, (LPVOID) &hdr, sizeof(BITMAPFILEHEADER),
-                   (LPDWORD) &dwTmp, NULL));
+  assert(WriteFile(hf, (LPVOID) &hdr, sizeof(BITMAPFILEHEADER), (LPDWORD) &dwTmp,
+                   NULL));
 
   // Copy the BITMAPINFOHEADER and RGBQUAD array into the file.
-  assert(WriteFile(hf, (LPVOID) pbih, sizeof(BITMAPINFOHEADER)
-                       + pbih->biClrUsed * sizeof(RGBQUAD),
+  assert(WriteFile(hf, (LPVOID) pbih,
+                   sizeof(BITMAPINFOHEADER) + pbih->biClrUsed * sizeof(RGBQUAD),
                    (LPDWORD) &dwTmp, (NULL)));
 
   // Copy the array of color indices into the .BMP file.
@@ -148,9 +192,7 @@ void CreateBMPFile(LPCTSTR pszFile, HBITMAP hBMP) {
   GlobalFree((HGLOBAL) lpBits);
 }
 
-void CreateBitmapHeaderWithColorDepth(LONG width,
-                                      LONG height,
-                                      WORD color_depth,
+void CreateBitmapHeaderWithColorDepth(LONG width, LONG height, WORD color_depth,
                                       BITMAPINFOHEADER *hdr) {
   // These values are shared with gfx::PlatformDevice.
   hdr->biSize = sizeof(BITMAPINFOHEADER);
@@ -166,14 +208,17 @@ void CreateBitmapHeaderWithColorDepth(LONG width,
   hdr->biClrImportant = 0;
 }
 
-HBITMAP CreateHBitmapXRGB8888(int width, int height, HANDLE shared_section, void **data) {
+HBITMAP CreateHBitmapXRGB8888(int width, int height, HANDLE shared_section,
+                              void **data) {
   if (width == 0 || height == 0) {
     width = 1;
     height = 1;
   }
   BITMAPINFOHEADER hdr = {0};
   CreateBitmapHeaderWithColorDepth(width, height, 32, &hdr);
-  HBITMAP hbitmap = CreateDIBSection(nullptr, reinterpret_cast<const BITMAPINFO *>(&hdr), 0, data, shared_section, 0);
+  HBITMAP hbitmap =
+      CreateDIBSection(nullptr, reinterpret_cast<const BITMAPINFO *>(&hdr), 0,
+                       data, shared_section, 0);
   return hbitmap;
 }
 
@@ -183,8 +228,7 @@ class ScopedClipboard {
   ScopedClipboard() : opened_(false) {}
 
   ~ScopedClipboard() {
-    if (opened_)
-      Release();
+    if (opened_) Release();
   }
 
   bool Acquire(HWND owner) {
@@ -267,12 +311,12 @@ void PasteboardPlugin::HandleMethodCall(
     ScopedClipboard clipboard;
 
     if (!clipboard.Acquire(nullptr)) {
-      result->Success();
+      result->Error("0", "open clipboard failed");
       return;
     }
     // We use a DIB rather than a DDB here since ::GetObject() with the
-    // HBITMAP returned from ::GetClipboardData(CF_BITMAP) always reports a color
-    // depth of 32bpp.
+    // HBITMAP returned from ::GetClipboardData(CF_BITMAP) always reports a
+    // color depth of 32bpp.
     auto *bitmap = static_cast<BITMAPINFO *>(::GetClipboardData(CF_DIB));
     if (!bitmap) {
       result->Success();
@@ -306,15 +350,15 @@ void PasteboardPlugin::HandleMethodCall(
         color_table_length * sizeof(RGBQUAD);
 
     void *dst_bits;
-    auto dst_hbitmap = CreateHBitmapXRGB8888(bitmap->bmiHeader.biWidth, bitmap->bmiHeader.biHeight,
-                                             nullptr, &dst_bits);
+    auto dst_hbitmap =
+        CreateHBitmapXRGB8888(bitmap->bmiHeader.biWidth,
+                              bitmap->bmiHeader.biHeight, nullptr, &dst_bits);
 
     auto hdc = CreateCompatibleDC(nullptr);
     auto old_hbitmap = static_cast<HBITMAP>(SelectObject(hdc, dst_hbitmap));
-    ::SetDIBitsToDevice(hdc, 0, 0, bitmap->bmiHeader.biWidth,
-                        bitmap->bmiHeader.biHeight, 0, 0, 0,
-                        bitmap->bmiHeader.biHeight, bitmap_bits, bitmap,
-                        DIB_RGB_COLORS);
+    ::SetDIBitsToDevice(
+        hdc, 0, 0, bitmap->bmiHeader.biWidth, bitmap->bmiHeader.biHeight, 0, 0,
+        0, bitmap->bmiHeader.biHeight, bitmap_bits, bitmap, DIB_RGB_COLORS);
     SelectObject(hdc, old_hbitmap);
     DeleteDC(hdc);
 
@@ -352,6 +396,38 @@ void PasteboardPlugin::HandleMethodCall(
     }
     CloseClipboard();
     result->Success(flutter::EncodableValue(file_list));
+  } else if (method_call.method_name() == "writeFiles") {
+    auto *arguments = method_call.arguments();
+    auto files = std::get_if<std::vector<flutter::EncodableValue>>(arguments);
+    if (!files) {
+      result->Error("0", "files is empty");
+      return;
+    }
+    std::vector<std::string> paths;
+    for (const auto &item: *files) {
+      if (std::holds_alternative<std::string>(item)) {
+        paths.push_back(std::get<std::string>(item));
+      }
+    }
+
+    if (paths.empty()) {
+      result->Error("0", "files is empty");
+      return;
+    }
+
+    ScopedClipboard clipboard;
+    if (!clipboard.Acquire(nullptr)) {
+      result->Error("0", "failed to open clipboard");
+      return;
+    }
+
+    auto storage = CreateStorageForFileNames(paths);
+    if (storage.tymed == TYMED_NULL) {
+      result->Error("0", "create storage failed");
+      return;
+    }
+    SetClipboardData(CF_HDROP, storage.hGlobal);
+    result->Success();
   } else {
     result->NotImplemented();
   }

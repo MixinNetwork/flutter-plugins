@@ -1,6 +1,6 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:pasteboard/pasteboard.dart';
@@ -22,6 +22,8 @@ class _MyAppState extends State<MyApp> {
   Uint8List? bytes;
   String? fileUrl;
 
+  final textController = TextEditingController();
+
   @override
   void initState() {
     super.initState();
@@ -37,10 +39,15 @@ class _MyAppState extends State<MyApp> {
         body: Center(
           child: Column(
             children: [
+              TextField(
+                controller: textController,
+                maxLines: 10,
+              ),
               MaterialButton(
                 onPressed: () async {
-                  await Pasteboard.writeUrl(
-                      'file:///Users/YeungKC/Desktop/foo.png');
+                  final lines =
+                      const LineSplitter().convert(textController.text);
+                  await Pasteboard.writeFiles(lines);
                 },
                 child: const Text('copy'),
               ),
