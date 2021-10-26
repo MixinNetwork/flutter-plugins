@@ -75,7 +75,7 @@ class _MyAppState extends State<MyApp> {
                 },
                 child: const Text("Get files"),
               ),
-              Text(' $_console'),
+              SelectableText(' $_console'),
               if (bytes != null) Image.memory(bytes!),
               if (fileUrl != null) Image.file(File(fileUrl!))
             ],

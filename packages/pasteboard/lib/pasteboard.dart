@@ -25,18 +25,6 @@ class Pasteboard {
     return null;
   }
 
-  static Future<String?> get absoluteUrlString =>
-      _channel.invokeMethod<String?>('absoluteUrlString');
-
-  static Future<Uri?> get uri async {
-    final urlString = await absoluteUrlString;
-    if (urlString == null) return null;
-    return Uri.tryParse(urlString);
-  }
-
-  static Future<bool> writeUrl(String url) async =>
-      await _channel.invokeMethod<bool>('writeUrl', [url]) ?? false;
-
   static Future<List<String>> files() async {
     final files = await _channel.invokeMethod<List>('files');
     return files?.cast<String>() ?? const [];
