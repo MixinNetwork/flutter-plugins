@@ -14,7 +14,7 @@ class Pasteboard {
     if (image == null) {
       return null;
     }
-    if (Platform.isMacOS) {
+    if (Platform.isMacOS || Platform.isLinux) {
       return image as Uint8List;
     } else if (Platform.isWindows) {
       final file = File(image as String);
