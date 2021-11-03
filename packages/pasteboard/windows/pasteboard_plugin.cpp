@@ -76,7 +76,7 @@ PBITMAPINFO CreateBitmapInfoStruct(HBITMAP hBmp) {
   WORD cClrBits;
 
   // Retrieve the bitmap color format, width, and height.
-  assert(GetObject(hBmp, sizeof(BITMAP), (LPSTR) &bmp));
+  GetObject(hBmp, sizeof(BITMAP), (LPSTR) &bmp);
 
   // Convert the color format to a count of bits.
   cClrBits = (WORD) (bmp.bmPlanes * bmp.bmBitsPixel);
@@ -137,7 +137,6 @@ void CreateBMPFile(LPCTSTR pszFile, HBITMAP hBMP) {
   BITMAPFILEHEADER hdr;    // bitmap file-header
   PBITMAPINFOHEADER pbih;  // bitmap info-header
   LPBYTE lpBits;           // memory pointer
-  DWORD dwTotal;           // total count of bytes
   DWORD cb;                // incremental count of bytes
   BYTE *hp;                // byte pointer
   DWORD dwTmp;
@@ -156,12 +155,12 @@ void CreateBMPFile(LPCTSTR pszFile, HBITMAP hBMP) {
 
   // Retrieve the color table (RGBQUAD array) and the bits
   // (array of palette indices) from the DIB.
-  assert(GetDIBits(hDC, hBMP, 0, (WORD) pbih->biHeight, lpBits, pbi,
-                   DIB_RGB_COLORS));
+  GetDIBits(hDC, hBMP, 0, (WORD) pbih->biHeight, lpBits, pbi,
+            DIB_RGB_COLORS);
 
   // Create the .BMP file.
-  hf = CreateFile(pszFile, GENERIC_READ | GENERIC_WRITE, (DWORD) 0, NULL,
-                  CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, (HANDLE) NULL);
+  hf = CreateFile(pszFile, GENERIC_READ | GENERIC_WRITE, (DWORD) 0, nullptr,
+                  CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
   assert(hf != INVALID_HANDLE_VALUE);
 
   hdr.bfType = 0x4d42;  // 0x42 = "B" 0x4d = "M"
@@ -176,21 +175,21 @@ void CreateBMPFile(LPCTSTR pszFile, HBITMAP hBMP) {
       pbih->biClrUsed * sizeof(RGBQUAD);
 
   // Copy the BITMAPFILEHEADER into the .BMP file.
-  assert(WriteFile(hf, (LPVOID) &hdr, sizeof(BITMAPFILEHEADER), (LPDWORD) &dwTmp,
-                   NULL));
+  WriteFile(hf, (LPVOID) &hdr, sizeof(BITMAPFILEHEADER), (LPDWORD) &dwTmp,
+            nullptr);
 
   // Copy the BITMAPINFOHEADER and RGBQUAD array into the file.
-  assert(WriteFile(hf, (LPVOID) pbih,
-                   sizeof(BITMAPINFOHEADER) + pbih->biClrUsed * sizeof(RGBQUAD),
-                   (LPDWORD) &dwTmp, (NULL)));
+  WriteFile(hf, (LPVOID) pbih,
+            sizeof(BITMAPINFOHEADER) + pbih->biClrUsed * sizeof(RGBQUAD),
+            (LPDWORD) &dwTmp, (nullptr));
 
   // Copy the array of color indices into the .BMP file.
-  dwTotal = cb = pbih->biSizeImage;
+  cb = pbih->biSizeImage;
   hp = lpBits;
-  assert(WriteFile(hf, (LPSTR) hp, (int) cb, (LPDWORD) &dwTmp, NULL));
+  WriteFile(hf, (LPSTR) hp, (int) cb, (LPDWORD) &dwTmp, nullptr);
 
   // Close the .BMP file.
-  assert(CloseHandle(hf));
+  CloseHandle(hf);
 
   // Free memory.
   GlobalFree((HGLOBAL) lpBits);
