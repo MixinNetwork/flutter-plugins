@@ -47,6 +47,8 @@ class WebviewWindow {
 
   void SetBrightness(int brightness);
 
+  void SetApplicationNameForUserAgent(const std::wstring& application_name);
+
  private:
 
   // Retrieves a class instance pointer for |window|
@@ -65,6 +67,8 @@ class WebviewWindow {
 
   // Pointer to WebView
   wil::com_ptr<ICoreWebView2> webview_;
+
+  std::wstring default_user_agent_;
 
   // Processes and route salient window messages for mouse handling,
   // size change and DPI. Delegates handling of these to member overloads that

@@ -118,7 +118,10 @@ class WebviewImpl extends Webview {
 
   @override
   Future<void> setApplicationNameForUserAgent(String applicationName) async {
-    if (applicationName.isEmpty || !Platform.isMacOS) {
+    if (!(Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+      return;
+    }
+    if (applicationName.isEmpty) {
       return;
     }
     await channel.invokeMethod("setApplicationNameForUserAgent", {

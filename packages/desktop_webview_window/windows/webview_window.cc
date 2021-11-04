@@ -61,7 +61,8 @@ WebviewWindow::WebviewWindow(
 ) : method_channel_(std::move(method_channel)),
     window_id_(window_id),
     hwnd_(nullptr),
-    on_close_callback_(std::move(on_close_callback)) {
+    on_close_callback_(std::move(on_close_callback)),
+    default_user_agent_() {
 }
 
 WebviewWindow::~WebviewWindow() = default;
@@ -140,6 +141,14 @@ void WebviewWindow::OnWebviewControllerCreated() {
   settings->put_AreDefaultContextMenusEnabled(false);
   settings->put_IsStatusBarEnabled(false);
 
+  ICoreWebView2Settings2 *settings2;
+  auto hr = settings->QueryInterface(IID_PPV_ARGS(&settings2));
+  if (SUCCEEDED(hr)) {
+    LPWSTR user_agent[256];
+    settings2->get_UserAgent(user_agent);
+    default_user_agent_ = std::wstring(*user_agent);
+  }
+
   // Resize WebView to fit the bounds of the parent window
   RECT bounds;
   GetClientRect(hwnd_, &bounds);
@@ -187,6 +196,18 @@ void WebviewWindow::Close() {
 }
 
 void WebviewWindow::SetBrightness(int brightness) {
+}
+
+void WebviewWindow::SetApplicationNameForUserAgent(const std::wstring &name) {
+  if (webview_) {
+    ICoreWebView2Settings *settings;
+    webview_->get_Settings(&settings);
+    ICoreWebView2Settings2 *settings2;
+    auto hr = settings->QueryInterface(IID_PPV_ARGS(&settings2));
+    if (SUCCEEDED(hr)) {
+      settings2->put_UserAgent((default_user_agent_ + name).c_str());
+    }
+  }
 }
 
 // static

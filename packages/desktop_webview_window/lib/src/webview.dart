@@ -33,6 +33,6 @@ abstract class Webview {
 
   /// Append a string to the webview's user-agent.
   ///
-  /// available: macOS
+  /// available: macOS, Windows, Linux
   Future<void> setApplicationNameForUserAgent(String applicationName);
 }
