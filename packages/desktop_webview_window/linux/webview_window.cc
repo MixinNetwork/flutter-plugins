@@ -95,6 +95,10 @@ void WebviewWindow::RunJavaScript(const char *java_script) {
                              nullptr));
 }
 
+void WebviewWindow::SetApplicationNameForUserAgent(const std::string &app_name) {
+  webkit_web_context_set_application_name(webkit_web_view_get_context(WEBKIT_WEB_VIEW(webview_)), name.c_str());
+}
+
 void WebviewWindow::Close() {
   gtk_window_close(GTK_WINDOW(window_));
 }

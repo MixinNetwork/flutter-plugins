@@ -28,6 +28,8 @@ class WebviewWindow {
 
   void Close();
 
+  void SetApplicationNameForUserAgent(const std::string& app_name);
+
  private:
   FlMethodChannel *method_channel_;
   int64_t window_id_;
