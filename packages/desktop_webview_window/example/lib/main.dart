@@ -45,6 +45,7 @@ class _MyAppState extends State<MyApp> {
                   ..registerJavaScriptMessageHandler("test", (name, body) {
                     debugPrint('on javaScipt message: $name $body');
                   })
+                  ..setApplicationNameForUserAgent(" WebviewExample/1.0.0")
                   ..setPromptHandler((prompt, defaultText) {
                     if (prompt == "test") {
                       return "Hello World!";
@@ -85,11 +86,13 @@ class _MyAppState extends State<MyApp> {
                 TextButton(
                   onPressed: () async {
                     final webview = await WebviewWindow.create();
-                    webview.setBrightness(Brightness.dark);
-                    webview.launch(_controller.text);
-                    webview.onClose.whenComplete(() {
-                      debugPrint("on close");
-                    });
+                    webview
+                      ..setBrightness(Brightness.dark)
+                      ..setApplicationNameForUserAgent("WebviewExample/1.0.0")
+                      ..launch(_controller.text)
+                      ..onClose.whenComplete(() {
+                        debugPrint("on close");
+                      });
                   },
                   child: const Text('Open'),
                 ),

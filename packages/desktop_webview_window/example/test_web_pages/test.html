@@ -56,6 +56,10 @@ Hello World!
 <button type="button" onclick="updateCookie()">updateCookie</button>
 <p id="cookie_text"></p>
 
+<br>
+<p id="user_agent_text"></p>
+
+
 <script type="application/javascript">
 
 
@@ -85,6 +89,9 @@ Hello World!
 <script type="application/javascript">
     // document.getElementById("prompt_result").innerText = prompt("init");
     readCookie()
+
+    document.getElementById("user_agent_text").innerText = navigator.userAgent;
+
 
 </script>
 

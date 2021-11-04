@@ -115,4 +115,15 @@ class WebviewImpl extends Webview {
       "javaScript": javaScript,
     });
   }
+
+  @override
+  Future<void> setApplicationNameForUserAgent(String applicationName) async {
+    if (!(Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+      return;
+    }
+    await channel.invokeMethod("setApplicationNameForUserAgent", {
+      "viewId": viewId,
+      "applicationName": applicationName,
+    });
+  }
 }

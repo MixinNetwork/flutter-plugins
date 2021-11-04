@@ -128,6 +128,18 @@ void WebviewWindowPlugin::HandleMethodCall(
     }
     local.clear();
     result->Success();
+  } else if (method_call.method_name() == "setApplicationNameForUserAgent") {
+    auto *arguments = std::get_if<flutter::EncodableMap>(method_call.arguments());
+
+    auto window_id = arguments->at(flutter::EncodableValue("viewId")).LongValue();
+    auto applicationName = std::get<std::string>(arguments->at(flutter::EncodableValue("applicationName")));
+
+    if (!windows_.count(window_id)) {
+      result->Error("0", "can not find webview window for id");
+      return;
+    }
+    windows_[window_id]->SetApplicationNameForUserAgent(utf8_to_wide(applicationName));
+    result->Success();
   } else {
     result->NotImplemented();
   }

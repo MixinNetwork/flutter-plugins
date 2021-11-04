@@ -28,10 +28,14 @@ class WebviewWindow {
 
   void Close();
 
+  void SetApplicationNameForUserAgent(const std::string& app_name);
+
  private:
   FlMethodChannel *method_channel_;
   int64_t window_id_;
   std::function<void()> on_close_callback_;
+
+  std::string default_user_agent_;
 
   GtkWidget *window_ = nullptr;
   GtkWidget *webview_ = nullptr;

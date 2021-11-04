@@ -97,6 +97,21 @@ static void webview_window_plugin_handle_method_call(
     webkit_website_data_manager_clear(website_data_manager, WEBKIT_WEBSITE_DATA_ALL, 0,
                                       nullptr, nullptr, nullptr);
     fl_method_call_respond_success(method_call, nullptr, nullptr);
+  } else if (strcmp(method, "setApplicationNameForUserAgent") == 0) {
+    auto *args = fl_method_call_get_args(method_call);
+    if (fl_value_get_type(args) != FL_VALUE_TYPE_MAP) {
+      fl_method_call_respond_error(method_call, "0", "create args is not map", nullptr, nullptr);
+      return;
+    }
+    auto window_id = fl_value_get_int(fl_value_lookup_string(args, "viewId"));
+    auto application_name = fl_value_get_string(fl_value_lookup_string(args, "applicationName"));
+
+    if (!self->windows->count(window_id)) {
+      fl_method_call_respond_error(method_call, "0", "can not found webview for viewId", nullptr, nullptr);
+      return;
+    }
+    self->windows->at(window_id)->SetApplicationNameForUserAgent(application_name);
+    fl_method_call_respond_success(method_call, nullptr, nullptr);
   } else {
     fl_method_call_respond_not_implemented(method_call, nullptr);
   }

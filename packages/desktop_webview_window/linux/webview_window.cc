@@ -40,7 +40,10 @@ WebviewWindow::WebviewWindow(
     const std::string &title,
     int width,
     int height
-) : method_channel_(method_channel), window_id_(window_id), on_close_callback_(std::move(on_close_callback)) {
+) : method_channel_(method_channel),
+    window_id_(window_id),
+    on_close_callback_(std::move(on_close_callback)),
+    default_user_agent_() {
   g_object_ref(method_channel_);
 
   window_ = gtk_window_new(GTK_WINDOW_TOPLEVEL);
@@ -67,6 +70,7 @@ WebviewWindow::WebviewWindow(
                    G_CALLBACK(on_create), this);
   auto settings = webkit_web_view_get_settings(WEBKIT_WEB_VIEW(webview_));
   webkit_settings_set_javascript_can_open_windows_automatically(settings, true);
+  default_user_agent_ = webkit_settings_get_user_agent(settings);
 
   gtk_container_add(GTK_CONTAINER(window_), GTK_WIDGET(webview_));
   gtk_widget_grab_focus(GTK_WIDGET(webview_));
@@ -93,6 +97,11 @@ void WebviewWindow::RunJavaScript(const char *java_script) {
                              WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
                              nullptr,
                              nullptr));
+}
+
+void WebviewWindow::SetApplicationNameForUserAgent(const std::string &app_name) {
+  auto *setting = webkit_web_view_get_settings(WEBKIT_WEB_VIEW(webview_));
+  webkit_settings_set_user_agent(setting, (default_user_agent_ + app_name).c_str());
 }
 
 void WebviewWindow::Close() {
