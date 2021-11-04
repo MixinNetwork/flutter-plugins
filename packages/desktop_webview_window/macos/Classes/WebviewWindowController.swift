@@ -24,6 +24,8 @@ class WebviewWindowController: NSWindowController {
   private let initialTitle: String
 
   weak var webviewPlugin: DesktopWebviewWindowPlugin?
+  
+  private var defaultUserAgent: String?
 
   init(viewId: Int64, methodChannel: FlutterMethodChannel,
        width: Int, height: Int,
@@ -60,6 +62,9 @@ class WebviewWindowController: NSWindowController {
     webview.configuration.preferences.javaScriptCanOpenWindowsAutomatically = true
     webview.configuration.allowsAirPlayForMediaPlayback = true
     webview.configuration.mediaTypesRequiringUserActionForPlayback = .video
+    
+    defaultUserAgent = webview.value(forKey: "userAgent") as? String
+    
   }
   
   override func keyDown(with event: NSEvent) {
@@ -120,6 +125,10 @@ class WebviewWindowController: NSWindowController {
   func addScriptToExecuteOnDocumentCreated(javaScript: String) {
     webview.configuration.userContentController.addUserScript(
       WKUserScript(source: javaScript, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+  }
+
+  func setApplicationNameForUserAgent(applicationName: String) {
+    webview.customUserAgent = (defaultUserAgent ?? "") + applicationName
   }
 
   deinit {

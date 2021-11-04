@@ -30,4 +30,9 @@ abstract class Webview {
 
   /// available: Windows, Linux, macOS
   void addScriptToExecuteOnDocumentCreated(String javaScript);
+
+  /// Append a string to the webview's user-agent.
+  ///
+  /// available: macOS
+  Future<void> setApplicationNameForUserAgent(String applicationName);
 }

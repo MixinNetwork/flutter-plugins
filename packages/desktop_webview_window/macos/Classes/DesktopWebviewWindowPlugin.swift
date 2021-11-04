@@ -152,6 +152,26 @@ public class DesktopWebviewWindowPlugin: NSObject, FlutterPlugin {
       wc.addScriptToExecuteOnDocumentCreated(javaScript: javaScript)
       result(nil)
       break
+    case "setApplicationNameForUserAgent":
+      guard let argument = call.arguments as? [String: Any?] else {
+        result(FlutterError(code: "0", message: "arg is not map", details: nil))
+        return
+      }
+      guard let viewId = argument["viewId"] as? Int64 else {
+        result(FlutterError(code: "0", message: "param viewId not found", details: nil))
+        return
+      }
+      guard let wc = webviews[viewId] else {
+        result(FlutterError(code: "0", message: "can not find webview for id: \(viewId)", details: nil))
+        return
+      }
+      guard let applicationName = argument["applicationName"] as? String else {
+        result(FlutterError(code: "0", message: "param applicationName not found", details: nil))
+        return
+      }
+      wc.setApplicationNameForUserAgent(applicationName: applicationName)
+      result(nil)
+      break
     default:
       result(FlutterMethodNotImplemented)
     }
