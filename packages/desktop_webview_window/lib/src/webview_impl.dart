@@ -121,9 +121,6 @@ class WebviewImpl extends Webview {
     if (!(Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
       return;
     }
-    if (applicationName.isEmpty) {
-      return;
-    }
     await channel.invokeMethod("setApplicationNameForUserAgent", {
       "viewId": viewId,
       "applicationName": applicationName,
