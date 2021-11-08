@@ -55,7 +55,7 @@ public class DesktopWebviewWindowPlugin: NSObject, FlutterPlugin {
         return
       }
 
-      guard let url = URL(string: url) else {
+      guard let parsedUrl = URL(string: url) else {
         result(FlutterError(code: "0", message: "failed to parse \(url)", details: nil))
         return
       }
@@ -64,7 +64,7 @@ public class DesktopWebviewWindowPlugin: NSObject, FlutterPlugin {
         result(FlutterError(code: "0", message: "can not find webview for id: \(viewId)", details: nil))
         return
       }
-      wc.load(url: url)
+      wc.load(url: parsedUrl)
       result(nil)
       break
     case "registerJavaScripInterface":
