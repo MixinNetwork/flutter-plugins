@@ -17,45 +17,17 @@ struct _DesktopDropPlugin {
 
 G_DEFINE_TYPE(DesktopDropPlugin, desktop_drop_plugin, g_object_get_type())
 
-static void on_drag_data_received(GtkWidget *widget, GdkDragContext *drag_context,
-                                  gint x, gint y, GtkSelectionData *sdata, guint info,
-                                  guint time, gpointer user_data) {
+void on_drag_data_received(GtkWidget *widget, GdkDragContext *drag_context,
+                           gint x, gint y, GtkSelectionData *sdata, guint info,
+                           guint time, gpointer user_data) {
   auto *channel = static_cast<FlMethodChannel *>(user_data);
-
+  auto *data = gtk_selection_data_get_data(sdata);
   double point[] = {double(x), double(y)};
-
-  if (gtk_selection_data_targets_include_uri(sdata)) {
-    auto uris = gtk_selection_data_get_uris(sdata);
-
-    g_autoptr(FlValue) uri_list = fl_value_new_list();
-    for (auto uri = uris; uri != nullptr && *uri != nullptr; uri++) {
-      g_critical("uri: %s", *uri);
-      g_autoptr(GFile) file = g_file_new_for_uri(*uri);
-      auto *file_path = g_file_get_path(file);
-      if (file_path) {
-        fl_value_append(uri_list, fl_value_new_string(file_path));
-      }
-    }
-    g_strfreev(uris);
-
-    auto args = fl_value_new_list();
-    fl_value_append(args, uri_list);
-    fl_value_append(args, fl_value_new_float_list(point, 2));
-    fl_method_channel_invoke_method(channel, "performOperation", args,
-                                    nullptr, nullptr, nullptr);
-  } else {
-    // gtk_selection_data_get_uris do not work on Ubuntu 20.04.
-    // so we attempt to parse the raw string.
-
-    auto *data = gtk_selection_data_get_data(sdata);
-
-    auto args = fl_value_new_list();
-    fl_value_append(args, fl_value_new_string((gchar *) data));
-    fl_value_append(args, fl_value_new_float_list(point, 2));
-    fl_method_channel_invoke_method(channel, "performOperation_linux", args,
-                                    nullptr, nullptr, nullptr);
-  }
-  gtk_drag_finish(drag_context, true, false, time);
+  auto args = fl_value_new_list();
+  fl_value_append(args, fl_value_new_string((gchar *) data));
+  fl_value_append(args, fl_value_new_float_list(point, 2));
+  fl_method_channel_invoke_method(channel, "performOperation_linux", args,
+                                  nullptr, nullptr, nullptr);
 }
 
 void on_drag_motion(GtkWidget *widget, GdkDragContext *drag_context,
