@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.2 (2021/11/10)
+
+[Linux] Fix do not work on Wayland.
+
 ## 0.1.1 (2021/11/8)
 
 update plugin description.
