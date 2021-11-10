@@ -9,3 +9,5 @@ build/
 .idea
 
 *.iml
+
+pubspec.lock

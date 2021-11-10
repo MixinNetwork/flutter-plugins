@@ -17,17 +17,45 @@ struct _DesktopDropPlugin {
 
 G_DEFINE_TYPE(DesktopDropPlugin, desktop_drop_plugin, g_object_get_type())
 
-void on_drag_data_received(GtkWidget *widget, GdkDragContext *drag_context,
-                           gint x, gint y, GtkSelectionData *sdata, guint info,
-                           guint time, gpointer user_data) {
+static void on_drag_data_received(GtkWidget *widget, GdkDragContext *drag_context,
+                                  gint x, gint y, GtkSelectionData *sdata, guint info,
+                                  guint time, gpointer user_data) {
   auto *channel = static_cast<FlMethodChannel *>(user_data);
-  auto *data = gtk_selection_data_get_data(sdata);
+
   double point[] = {double(x), double(y)};
-  auto args = fl_value_new_list();
-  fl_value_append(args, fl_value_new_string((gchar *) data));
-  fl_value_append(args, fl_value_new_float_list(point, 2));
-  fl_method_channel_invoke_method(channel, "performOperation_linux", args,
-                                  nullptr, nullptr, nullptr);
+
+  if (gtk_selection_data_targets_include_uri(sdata)) {
+    auto uris = gtk_selection_data_get_uris(sdata);
+
+    g_autoptr(FlValue) uri_list = fl_value_new_list();
+    for (auto uri = uris; uri != nullptr && *uri != nullptr; uri++) {
+      g_critical("uri: %s", *uri);
+      g_autoptr(GFile) file = g_file_new_for_uri(*uri);
+      auto *file_path = g_file_get_path(file);
+      if (file_path) {
+        fl_value_append(uri_list, fl_value_new_string(file_path));
+      }
+    }
+    g_strfreev(uris);
+
+    auto args = fl_value_new_list();
+    fl_value_append(args, uri_list);
+    fl_value_append(args, fl_value_new_float_list(point, 2));
+    fl_method_channel_invoke_method(channel, "performOperation", args,
+                                    nullptr, nullptr, nullptr);
+  } else {
+    // gtk_selection_data_get_uris do not work on Ubuntu 20.04.
+    // so we attempt to parse the raw string.
+
+    auto *data = gtk_selection_data_get_data(sdata);
+
+    auto args = fl_value_new_list();
+    fl_value_append(args, fl_value_new_string((gchar *) data));
+    fl_value_append(args, fl_value_new_float_list(point, 2));
+    fl_method_channel_invoke_method(channel, "performOperation_linux", args,
+                                    nullptr, nullptr, nullptr);
+  }
+  gtk_drag_finish(drag_context, true, false, time);
 }
 
 void on_drag_motion(GtkWidget *widget, GdkDragContext *drag_context,
@@ -49,21 +77,7 @@ void on_drag_leave(GtkWidget *widget, GdkDragContext *drag_context, guint time, 
 static void desktop_drop_plugin_handle_method_call(
     DesktopDropPlugin *self,
     FlMethodCall *method_call) {
-  g_autoptr(FlMethodResponse) response = nullptr;
-
-  const gchar *method = fl_method_call_get_name(method_call);
-
-  if (strcmp(method, "getPlatformVersion") == 0) {
-    struct utsname uname_data = {};
-    uname(&uname_data);
-    g_autofree gchar *version = g_strdup_printf("Linux %s", uname_data.version);
-    g_autoptr(FlValue) result = fl_value_new_string(version);
-    response = FL_METHOD_RESPONSE(fl_method_success_response_new(result));
-  } else {
-    response = FL_METHOD_RESPONSE(fl_method_not_implemented_response_new());
-  }
-
-  fl_method_call_respond(method_call, response, nullptr);
+  fl_method_call_respond_not_implemented(method_call, nullptr);
 }
 
 static void desktop_drop_plugin_dispose(GObject *object) {
@@ -91,7 +105,7 @@ void desktop_drop_plugin_register_with_registrar(FlPluginRegistrar *registrar) {
       {strdup("STRING"), GTK_TARGET_OTHER_APP, 0}
   };
   gtk_drag_dest_set(GTK_WIDGET(fl_view), GTK_DEST_DEFAULT_ALL, entries, 1, GDK_ACTION_COPY);
-  gtk_drag_dest_add_text_targets(GTK_WIDGET(fl_view));
+  gtk_drag_dest_add_uri_targets(GTK_WIDGET(fl_view));
 
   g_autoptr(FlStandardMethodCodec) codec = fl_standard_method_codec_new();
   FlMethodChannel *channel =
@@ -108,8 +122,6 @@ void desktop_drop_plugin_register_with_registrar(FlPluginRegistrar *registrar) {
                    G_CALLBACK(on_drag_data_received), channel);
   g_signal_connect(GTK_WIDGET(fl_view), "drag-leave",
                    G_CALLBACK(on_drag_leave), channel);
-
-  std::cout << "channel: " << (void *) channel << std::endl;
 
   g_object_unref(plugin);
 }
