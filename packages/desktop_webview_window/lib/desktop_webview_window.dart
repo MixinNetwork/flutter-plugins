@@ -37,6 +37,14 @@ class WebviewWindow {
     });
   }
 
+  static Future<bool> isWebviewAvailable() async {
+    if (Platform.isWindows) {
+      final ret = await _channel.invokeMethod<bool>('isWebviewAvailable');
+      return ret == true;
+    }
+    return true;
+  }
+
   static Future<Webview> create({
     CreateConfiguration configuration = const CreateConfiguration(),
   }) async {

@@ -140,6 +140,10 @@ void WebviewWindowPlugin::HandleMethodCall(
     }
     windows_[window_id]->SetApplicationNameForUserAgent(utf8_to_wide(applicationName));
     result->Success();
+  } else if (method_call.method_name() == "isWebviewAvailable") {
+    LPWSTR version_info;
+    GetAvailableCoreWebView2BrowserVersionString(nullptr, &version_info);
+    result->Success(flutter::EncodableValue(version_info != nullptr));
   } else {
     result->NotImplemented();
   }

@@ -18,6 +18,18 @@ class _MyAppState extends State<MyApp> {
     text: 'https://example.com',
   );
 
+  bool? _webviewAvailable;
+
+  @override
+  void initState() {
+    super.initState();
+    WebviewWindow.isWebviewAvailable().then((value) {
+      setState(() {
+        _webviewAvailable = value;
+      });
+    });
+  }
+
   @override
   void dispose() {
     _controller.dispose();
@@ -84,16 +96,19 @@ class _MyAppState extends State<MyApp> {
                 TextField(controller: _controller),
                 const SizedBox(height: 16),
                 TextButton(
-                  onPressed: () async {
-                    final webview = await WebviewWindow.create();
-                    webview
-                      ..setBrightness(Brightness.dark)
-                      ..setApplicationNameForUserAgent("WebviewExample/1.0.0")
-                      ..launch(_controller.text)
-                      ..onClose.whenComplete(() {
-                        debugPrint("on close");
-                      });
-                  },
+                  onPressed: _webviewAvailable != true
+                      ? null
+                      : () async {
+                          final webview = await WebviewWindow.create();
+                          webview
+                            ..setBrightness(Brightness.dark)
+                            ..setApplicationNameForUserAgent(
+                                "WebviewExample/1.0.0")
+                            ..launch(_controller.text)
+                            ..onClose.whenComplete(() {
+                              debugPrint("on close");
+                            });
+                        },
                   child: const Text('Open'),
                 ),
                 const SizedBox(height: 20),
