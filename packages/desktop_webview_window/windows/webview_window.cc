@@ -9,11 +9,14 @@
 
 #include <utility>
 #include "strconv.h"
+#include "utils.h"
 
 #include "flutter/encodable_value.h"
 #include <flutter_windows.h>
 
 namespace {
+
+using namespace webview_window;
 
 TCHAR kWindowClassName[] = _T("WebviewWindow");
 
@@ -79,12 +82,17 @@ void WebviewWindow::CreateAndShow(const std::wstring &title, int height, int wid
   UINT dpi = FlutterDesktopGetDpiForMonitor(monitor);
   double scale_factor = dpi / 96.0;
 
-  // TODO centered the new window.
   HWND window = CreateWindow(
       window_class, title.c_str(), WS_OVERLAPPEDWINDOW | WS_VISIBLE,
       CW_USEDEFAULT, CW_USEDEFAULT,
       Scale(width, scale_factor), Scale(height, scale_factor),
       nullptr, nullptr, GetModuleHandle(nullptr), this);
+
+  // Centered window on screen.
+  RECT rc;
+  GetWindowRect(window, &rc);
+  ClipOrCenterRectToMonitor(&rc, MONITOR_CENTER);
+  SetWindowPos(window, nullptr, rc.left, rc.top, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
 
   if (!window) {
     callback(false);

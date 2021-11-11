@@ -13,13 +13,15 @@
 #include <map>
 #include <memory>
 
-#include "wrl.h"
-#include "wil/wrl.h"
-#include "WebView2.h"
-
 namespace {
 
 int64_t next_window_id_ = 0;
+
+bool IsWebViewRuntimeAvailable() {
+  LPWSTR version_info;
+  GetAvailableCoreWebView2BrowserVersionString(nullptr, &version_info);
+  return version_info != nullptr;
+}
 
 class WebviewWindowPlugin : public flutter::Plugin {
  public:
@@ -71,6 +73,10 @@ void WebviewWindowPlugin::HandleMethodCall(
     const flutter::MethodCall<flutter::EncodableValue> &method_call,
     std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
   if (method_call.method_name() == "create") {
+    if (!IsWebViewRuntimeAvailable()) {
+      result->Error("0", "WebView runtime not available");
+      return;
+    }
     auto *arguments = std::get_if<flutter::EncodableMap>(method_call.arguments());
     auto width = arguments->at(flutter::EncodableValue("windowWidth")).LongValue();
     auto height = arguments->at(flutter::EncodableValue("windowHeight")).LongValue();
@@ -141,9 +147,7 @@ void WebviewWindowPlugin::HandleMethodCall(
     windows_[window_id]->SetApplicationNameForUserAgent(utf8_to_wide(applicationName));
     result->Success();
   } else if (method_call.method_name() == "isWebviewAvailable") {
-    LPWSTR version_info;
-    GetAvailableCoreWebView2BrowserVersionString(nullptr, &version_info);
-    result->Success(flutter::EncodableValue(version_info != nullptr));
+    result->Success(flutter::EncodableValue(IsWebViewRuntimeAvailable()));
   } else {
     result->NotImplemented();
   }

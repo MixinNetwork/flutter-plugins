@@ -11,6 +11,8 @@ add_library(${PLUGIN_NAME} SHARED
         "webview_window.h"
         "webview_window.cc"
         "strconv.h"
+        "utils.h"
+        "utils.cc"
         )
 
 apply_standard_settings(${PLUGIN_NAME})
