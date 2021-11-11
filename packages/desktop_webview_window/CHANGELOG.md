@@ -1,3 +1,8 @@
+## 0.0.7 (2021/11/11)
+
+1. support `isWebviewAvailable` check.
+2. fix `clearAll` crash on Linux if no webview created.
+
 ## 0.0.6 (2021/11/8)
 
 fix swift definition conflict on macOS.  [flutter-plugins#17](https://github.com/MixinNetwork/flutter-plugins/issues/17)
