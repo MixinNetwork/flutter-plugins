@@ -92,8 +92,11 @@ static void webview_window_plugin_handle_method_call(
     for (const auto &item: *self->windows) {
       item.second->Close();
     }
-    auto* web_context = webkit_web_context_get_default();
-    auto* website_data_manager = webkit_web_context_get_website_data_manager(web_context);
+    // If application didn't create a webview, but we called webkit_website_data_manager_clear, there will be a segment fault.
+    // To avoid crash, we create a fake webview first and then clear all data.
+    auto *web_view = webkit_web_view_new();
+    auto *context = webkit_web_view_get_context(WEBKIT_WEB_VIEW(web_view));
+    auto *website_data_manager = webkit_web_context_get_website_data_manager(context);
     webkit_website_data_manager_clear(website_data_manager, WEBKIT_WEBSITE_DATA_ALL, 0,
                                       nullptr, nullptr, nullptr);
     fl_method_call_respond_success(method_call, nullptr, nullptr);
