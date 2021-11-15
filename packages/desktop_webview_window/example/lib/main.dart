@@ -1,7 +1,11 @@
-import 'package:flutter/material.dart';
 import 'package:desktop_webview_window/desktop_webview_window.dart';
+import 'package:flutter/material.dart';
 
-void main() {
+void main(List<String> args) {
+  debugPrint('args: $args');
+  if (runWebViewTitleBarWidget(args)) {
+    return;
+  }
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
 }

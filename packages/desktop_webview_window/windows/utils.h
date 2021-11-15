@@ -31,6 +31,12 @@ void ClipOrCenterRectToMonitor(LPRECT prc, UINT flags);
 
 void ClipOrCenterWindowToMonitor(HWND hwnd, UINT flags);
 
-}
+bool SetWindowBackgroundTransparent(HWND hwnd);
+
+const wchar_t *RegisterWindowClass(LPCWSTR class_name, WNDPROC wnd_proc);
+
+void UnregisterWindowClass(LPCWSTR class_name);
+
+}  // namespace webview_window
 
 #endif //DESKTOP_WEBVIEW_WINDOW_WINDOWS_UTILS_H_

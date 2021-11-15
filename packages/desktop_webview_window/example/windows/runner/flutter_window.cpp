@@ -3,8 +3,40 @@
 #include <optional>
 
 #include "flutter/generated_plugin_registrant.h"
+#include "desktop_webview_window/desktop_webview_window_plugin.h"
 
-FlutterWindow::FlutterWindow(const flutter::DartProject& project)
+namespace {
+
+class WebviewWindowAdapterImpl : public WebviewWindowAdapter {
+
+ public:
+
+  std::unique_ptr<flutter::FlutterViewController> CreateViewController(
+      int width,
+      int height,
+      const flutter::DartProject &project) override {
+    return std::make_unique<flutter::FlutterViewController>(width, height, project);
+  }
+
+  std::optional<LRESULT> HandleTopLevelWindowProc(
+      const std::unique_ptr<flutter::FlutterViewController> &flutter_view_controller,
+      HWND hwnd,
+      UINT message,
+      WPARAM wparam,
+      LPARAM lparam) override {
+    return flutter_view_controller->HandleTopLevelWindowProc(hwnd, message, wparam, lparam);
+  }
+
+  void ReloadSystemFonts(const std::unique_ptr<flutter::FlutterViewController> &flutter_view_controller) override {
+    flutter_view_controller->engine()->ReloadSystemFonts();
+  }
+
+};
+
+}
+
+
+FlutterWindow::FlutterWindow(const flutter::DartProject &project)
     : project_(project) {}
 
 FlutterWindow::~FlutterWindow() {}
@@ -26,6 +58,7 @@ bool FlutterWindow::OnCreate() {
   }
   RegisterPlugins(flutter_controller_->engine());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
+  SetFlutterViewControllerFactory(std::make_unique<WebviewWindowAdapterImpl>());
   return true;
 }
 

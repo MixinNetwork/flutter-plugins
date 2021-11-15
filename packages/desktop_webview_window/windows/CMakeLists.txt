@@ -13,6 +13,14 @@ add_library(${PLUGIN_NAME} SHARED
         "strconv.h"
         "utils.h"
         "utils.cc"
+        "flutter_view.h"
+        "flutter_view.cc"
+        "web_view.h"
+        "web_view.cc"
+        "message_channel_plugin.h"
+        "message_channel_plugin.cc"
+        "web_view_window_plugin.h"
+        "web_view_window_plugin.cc"
         )
 
 apply_standard_settings(${PLUGIN_NAME})

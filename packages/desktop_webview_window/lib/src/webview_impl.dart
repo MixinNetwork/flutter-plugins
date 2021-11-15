@@ -18,6 +18,8 @@ class WebviewImpl extends Webview {
 
   final _closeCompleter = Completer<void>();
 
+  OnHistoryChangedCallback? _onHistoryChanged;
+
   WebviewImpl(this.viewId, this.channel);
 
   @override
@@ -39,6 +41,11 @@ class WebviewImpl extends Webview {
       String prompt, String defaultText) {
     assert(!_closed);
     return _promptHandler?.call(prompt, defaultText) ?? defaultText;
+  }
+
+  void onHistoryChanged(bool canGoBack, bool canGoForward) {
+    assert(!_closed);
+    _onHistoryChanged?.call(canGoBack, canGoForward);
   }
 
   @override
@@ -83,8 +90,8 @@ class WebviewImpl extends Webview {
   }
 
   @override
-  void launch(String url) {
-    channel.invokeMethod("launch", {
+  void launch(String url) async {
+    await channel.invokeMethod("launch", {
       "url": url,
       "viewId": viewId,
     });
@@ -125,5 +132,25 @@ class WebviewImpl extends Webview {
       "viewId": viewId,
       "applicationName": applicationName,
     });
+  }
+
+  @override
+  Future<void> forward() {
+    return channel.invokeMethod("forward", {"viewId": viewId});
+  }
+
+  @override
+  Future<void> back() {
+    return channel.invokeMethod("back", {"viewId": viewId});
+  }
+
+  @override
+  Future<void> reload() {
+    return channel.invokeMethod("reload", {"viewId": viewId});
+  }
+
+  @override
+  void setOnHistoryChangedCallback(OnHistoryChangedCallback? callback) {
+    _onHistoryChanged = callback;
   }
 }

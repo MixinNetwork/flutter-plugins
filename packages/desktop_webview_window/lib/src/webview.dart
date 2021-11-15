@@ -5,6 +5,9 @@ typedef JavaScriptMessageHandler = void Function(String name, dynamic body);
 
 typedef PromptHandler = String Function(String prompt, String defaultText);
 
+typedef OnHistoryChangedCallback = void Function(
+    bool canGoBack, bool canGoForward);
+
 abstract class Webview {
   Future<void> get onClose;
 
@@ -35,4 +38,20 @@ abstract class Webview {
   ///
   /// available: macOS, Windows, Linux
   Future<void> setApplicationNameForUserAgent(String applicationName);
+
+  /// Navigate to the previous page in the history.
+  /// available: Windows
+  Future<void> back();
+
+  /// Navigate to the next page in the history.
+  /// available: Windows
+  Future<void> forward();
+
+  /// Reload the current page.
+  /// available: Windows
+  Future<void> reload();
+
+  /// Register a callback that will be invoked when the webview history changes.
+  /// available: Windows.
+  void setOnHistoryChangedCallback(OnHistoryChangedCallback? callback);
 }
