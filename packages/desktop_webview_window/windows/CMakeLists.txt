@@ -35,7 +35,7 @@ add_library(Webview2 SHARED IMPORTED GLOBAL)
 SET_PROPERTY(TARGET Webview2 PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/libs/x64/Webview2Loader.dll)
 SET_PROPERTY(TARGET Webview2 PROPERTY IMPORTED_IMPLIB ${CMAKE_CURRENT_SOURCE_DIR}/libs/x64/Webview2Loader.dll.lib)
 
-target_link_libraries(${PLUGIN_NAME} PRIVATE Webview2)
+target_link_libraries(${PLUGIN_NAME} PRIVATE Webview2 uxtheme)
 
 # List of absolute paths to libraries that should be bundled with the plugin
 set(desktop_webview_window_bundled_libraries

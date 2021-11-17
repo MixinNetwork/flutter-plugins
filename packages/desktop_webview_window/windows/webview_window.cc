@@ -16,8 +16,6 @@
 
 namespace {
 
-const int kActionBarHeight = 50;
-
 TCHAR kWebViewWindowClassName[] = _T("WebviewWindow");
 
 using namespace webview_window;
@@ -35,11 +33,13 @@ using namespace Microsoft::WRL;
 WebviewWindow::WebviewWindow(
     MethodChannelPtr method_channel,
     int64_t window_id,
+    int title_bar_height,
     std::function<void()> on_close_callback
 ) : method_channel_(std::move(method_channel)),
     window_id_(window_id),
     on_close_callback_(std::move(on_close_callback)),
-    hwnd_() {
+    hwnd_(),
+    title_bar_height_(title_bar_height) {
 
 }
 
@@ -62,7 +62,8 @@ void WebviewWindow::CreateAndShow(const std::wstring &title, int height, int wid
   double scale_factor = dpi / 96.0;
 
   hwnd_ = wil::unique_hwnd(::CreateWindow(
-      kWebViewWindowClassName, title.c_str(), WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+      kWebViewWindowClassName, title.c_str(),
+      WS_OVERLAPPEDWINDOW | WS_VISIBLE,
       CW_USEDEFAULT, CW_USEDEFAULT,
       Scale(width, scale_factor), Scale(height, scale_factor),
       nullptr, nullptr, GetModuleHandle(nullptr), this));
@@ -70,13 +71,14 @@ void WebviewWindow::CreateAndShow(const std::wstring &title, int height, int wid
     callback(false);
     return;
   }
+
   // Centered window on screen.
   RECT rc;
   GetWindowRect(hwnd_.get(), &rc);
   ClipOrCenterRectToMonitor(&rc, MONITOR_CENTER);
   SetWindowPos(hwnd_.get(), nullptr, rc.left, rc.top, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
 
-  auto title_bar_height = Scale(kActionBarHeight, scale_factor);
+  auto title_bar_height = Scale(title_bar_height_, scale_factor);
 
   // Create the browser view.
   web_view_ = std::make_unique<webview_window::WebView>(method_channel_, window_id_, [callback](HRESULT hr) {
@@ -104,6 +106,7 @@ void WebviewWindow::CreateAndShow(const std::wstring &title, int height, int wid
   ShowWindow(title_bar_handle, SW_SHOW);
 
   assert(hwnd_ != nullptr);
+
   ShowWindow(hwnd_.get(), SW_SHOW);
   UpdateWindow(hwnd_.get());
 
@@ -185,11 +188,11 @@ WebviewWindow::MessageHandler(
       UINT dpi = FlutterDesktopGetDpiForMonitor(monitor);
       double scale_factor = dpi / 96.0;
 
-      auto title_bar_height = Scale(kActionBarHeight, scale_factor);
+      auto title_bar_height = Scale(title_bar_height_, scale_factor);
 
       if (web_view_ != nullptr) {
         MoveWindow(web_view_->NativeWindow().get(), 0, title_bar_height,
-                   rect.right - rect.left, rect.bottom - rect.top - kActionBarHeight,
+                   rect.right - rect.left, rect.bottom - rect.top - title_bar_height,
                    true);
         web_view_->UpdateBounds();
       }
@@ -219,8 +222,9 @@ WebviewWindow::MessageHandler(
       }
       break;
     }
-
-    case WM_ACTIVATE:return 0;
+    case WM_ACTIVATE: {
+      return 0;
+    }
   }
 
   return DefWindowProc(hwnd, message, wparam, lparam);

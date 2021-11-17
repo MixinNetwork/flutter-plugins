@@ -54,11 +54,14 @@ void WebviewWindowPlugin::HandleMethodCall(
     auto width = arguments->at(flutter::EncodableValue("windowWidth")).LongValue();
     auto height = arguments->at(flutter::EncodableValue("windowHeight")).LongValue();
     auto title = std::get<std::string>(arguments->at(flutter::EncodableValue("title")));
+    auto titleBarHeight = arguments->at(flutter::EncodableValue("titleBarHeight")).LongValue();
 
     auto window_id = next_window_id_;
-    auto window = std::make_unique<WebviewWindow>(method_channel_, window_id, [this, window_id]() {
-      windows_.erase(window_id);
-    });
+    auto window = std::make_unique<WebviewWindow>(
+        method_channel_, window_id, titleBarHeight,
+        [this, window_id]() {
+          windows_.erase(window_id);
+        });
     std::shared_ptr<flutter::MethodResult<flutter::EncodableValue>> result2(std::move(result));
     window->CreateAndShow(
         utf8_to_wide(title), int(height), int(width),
