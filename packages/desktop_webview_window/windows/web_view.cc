@@ -130,9 +130,7 @@ void WebView::OnWebviewControllerCreated() {
                                           std::make_unique<flutter::EncodableValue>(method_args));
             return S_OK;
           }
-      ).
-          Get(),
-      nullptr);
+      ).Get(), nullptr);
 
 //  webview_->add_WebMessageReceived(
 //      Callback<ICoreWebView2WebMessageReceivedEventHandler>(
