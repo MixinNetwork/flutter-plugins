@@ -105,7 +105,10 @@ void WebView::OnWebviewControllerCreated() {
   webview_->add_NewWindowRequested(
       Callback<ICoreWebView2NewWindowRequestedEventHandler>(
           [](ICoreWebView2 *sender, ICoreWebView2NewWindowRequestedEventArgs *args) {
-            args->put_NewWindow(sender);
+            LPWSTR url;
+            args->get_Uri(&url);
+            sender->Navigate(url);
+            args->put_Handled(true);
             return S_OK;
           }).Get(), nullptr);
 
