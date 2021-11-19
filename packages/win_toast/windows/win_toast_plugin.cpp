@@ -39,7 +39,7 @@ class Toast {
     if (image.size() != 0) {
       toastTemplate_.setImagePath(string2wString(image));
     }
-    for (auto action : actions) {
+    for (auto action: actions) {
       toastTemplate_.addAction(string2wString(action));
     }
   }
@@ -170,6 +170,7 @@ void WinToastPlugin::HandleMethodCall(
     std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
   if (!WinToast::isCompatible()) {
     result->Error("1", "Error, your system in not supported!");
+    return;
   }
   if (method_call.method_name().compare("initialize") == 0) {
     auto *arguments = std::get_if<flutter::EncodableMap>(method_call.arguments());
@@ -189,7 +190,7 @@ void WinToastPlugin::HandleMethodCall(
     auto type = std::get<int>(arguments->at(flutter::EncodableValue("type")));
     auto actions = std::get<flutter::EncodableList>(arguments->at(flutter::EncodableValue("actions")));
     std::vector<std::string> action_strs;
-    for (auto const &action : actions) {
+    for (auto const &action: actions) {
       action_strs.push_back(std::get<std::string>(action));
     }
     auto toast = std::make_shared<Toast>(type, title, subtitle, imagePath, std::move(action_strs));
