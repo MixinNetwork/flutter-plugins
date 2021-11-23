@@ -1,10 +1,11 @@
 import 'dart:convert';
-import 'dart:io';
+import 'dart:ui';
 
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import 'events.dart';
+import 'utils/platform.dart' if (dart.library.html) 'utils/platform_web.dart';
 
 typedef RawDropListener = void Function(DropEvent);
 
@@ -90,6 +91,14 @@ class DesktopDrop {
               .cast<Uri>()
               .toList(),
         ));
+        break;
+      case "performOperation_web":
+        debugPrint('call.arguments: ${call.arguments}');
+        assert(_offset != null);
+        _notifyEvent(
+          DropDoneEvent(location: _offset ?? Offset.zero, uris: []),
+        );
+        _offset = null;
         break;
       default:
         throw UnimplementedError('${call.method} not implement.');
