@@ -1,6 +1,6 @@
 name: desktop_drop
-description: A plugin which allow user drag files to you flutter application on desktop platforms.
-version: 0.0.1
+description: A plugin which allows user dragging files to your flutter desktop applications.
+version: 0.1.2
 homepage: https://github.com/MixinNetwork/flutter-plugins/tree/main/packages/desktop_drop
 
 environment:
@@ -9,8 +9,6 @@ environment:
 
 dependencies:
   flutter:
-    sdk: flutter
-  flutter_web_plugins:
     sdk: flutter
 
 dev_dependencies:
@@ -27,6 +25,6 @@ flutter:
         pluginClass: DesktopDropPlugin
       windows:
         pluginClass: DesktopDropPlugin
-      web:
-        pluginClass: DesktopDropWeb
-        fileName: desktop_drop_web.dart
+      android:
+        package: one.mixin.desktop.drop
+        pluginClass: DesktopDropPlugin

@@ -49,21 +49,7 @@ void on_drag_leave(GtkWidget *widget, GdkDragContext *drag_context, guint time, 
 static void desktop_drop_plugin_handle_method_call(
     DesktopDropPlugin *self,
     FlMethodCall *method_call) {
-  g_autoptr(FlMethodResponse) response = nullptr;
-
-  const gchar *method = fl_method_call_get_name(method_call);
-
-  if (strcmp(method, "getPlatformVersion") == 0) {
-    struct utsname uname_data = {};
-    uname(&uname_data);
-    g_autofree gchar *version = g_strdup_printf("Linux %s", uname_data.version);
-    g_autoptr(FlValue) result = fl_value_new_string(version);
-    response = FL_METHOD_RESPONSE(fl_method_success_response_new(result));
-  } else {
-    response = FL_METHOD_RESPONSE(fl_method_not_implemented_response_new());
-  }
-
-  fl_method_call_respond(method_call, response, nullptr);
+  fl_method_call_respond_not_implemented(method_call, nullptr);
 }
 
 static void desktop_drop_plugin_dispose(GObject *object) {
@@ -91,7 +77,7 @@ void desktop_drop_plugin_register_with_registrar(FlPluginRegistrar *registrar) {
       {strdup("STRING"), GTK_TARGET_OTHER_APP, 0}
   };
   gtk_drag_dest_set(GTK_WIDGET(fl_view), GTK_DEST_DEFAULT_ALL, entries, 1, GDK_ACTION_COPY);
-  gtk_drag_dest_add_text_targets(GTK_WIDGET(fl_view));
+  gtk_drag_dest_add_uri_targets(GTK_WIDGET(fl_view));
 
   g_autoptr(FlStandardMethodCodec) codec = fl_standard_method_codec_new();
   FlMethodChannel *channel =
@@ -108,8 +94,6 @@ void desktop_drop_plugin_register_with_registrar(FlPluginRegistrar *registrar) {
                    G_CALLBACK(on_drag_data_received), channel);
   g_signal_connect(GTK_WIDGET(fl_view), "drag-leave",
                    G_CALLBACK(on_drag_leave), channel);
-
-  std::cout << "channel: " << (void *) channel << std::endl;
 
   g_object_unref(plugin);
 }

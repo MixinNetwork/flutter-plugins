@@ -1,0 +1,23 @@
+name: win_toast
+description: a plugin help flutter app show toast on windows platform.
+version: 0.0.2
+homepage: https://github.com/MixinNetwork/flutter-plugins/tree/main/packages/win_toast
+
+environment:
+  sdk: ">=2.14.0 <3.0.0"
+  flutter: ">=2.5.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^1.0.0
+
+flutter:
+  plugin:
+    platforms:
+      windows:
+        pluginClass: WinToastPlugin

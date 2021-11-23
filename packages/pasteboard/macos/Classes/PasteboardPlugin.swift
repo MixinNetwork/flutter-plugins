@@ -8,56 +8,70 @@ public class PasteboardPlugin: NSObject, FlutterPlugin {
     registrar.addMethodCallDelegate(instance, channel: channel)
   }
 
-    public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
-        switch call.method {
-        case "image":
-            image(result: result)
-        case "absoluteUrlString":
-            absoluteUrlString(result: result)
-        case "writeUrl":
-            if let arguments = call.arguments as? [Any?], let urlString = arguments.first as? String {
-                writeUrl(urlString, result: result)
-            } else {
-                result(false)
-            }
-        default:
-            result(FlutterMethodNotImplemented)
-        }
+  public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    switch call.method {
+    case "image":
+      image(result: result)
+    case "files":
+      files(result: result)
+    case "writeFiles":
+      if let arguments = call.arguments as? [String] {
+        writeFiles(arguments, result: result)
+      } else {
+        result(FlutterError(code: "0", message: "arguments is not String list.", details: nil))
+      }
+    default:
+      result(FlutterMethodNotImplemented)
+    }
+  }
+
+  private func image(result: FlutterResult) {
+    guard let image = NSPasteboard.general.readObjects(forClasses: [NSImage.self], options: nil)?.first as? NSImage else {
+      result(nil)
+      return
+    }
+    result(image.png)
+  }
+
+  private func files(result: FlutterResult) {
+    guard let urlList = NSPasteboard.general.readObjects(forClasses: [NSURL.self], options: nil) else {
+      result(nil)
+      return
     }
 
-    private func image(result: FlutterResult){
-        guard let image = NSPasteboard.general.readObjects(forClasses: [NSImage.self], options: nil)?.first as? NSImage else {
-            result(nil)
-            return
-        }
-        result(image.png)
-    }
+    var resultFiles: [String] = []
 
-    private func absoluteUrlString(result: FlutterResult) {
-        guard let url = NSPasteboard.general.readObjects(forClasses: [NSURL.self], options: nil)?.first as? NSURL else {
-            result(nil)
-            return
-        }
-        result(url.absoluteString)
+    urlList.forEach { url in
+      if let path = (url as? NSURL)?.path {
+        resultFiles.append(path)
+      }
     }
+    result(resultFiles)
+  }
 
-    private func writeUrl(_ urlString: String, result: FlutterResult){
-        guard let url = NSURL(string: urlString) else {
-            result(false)
-            return
-        }
-        NSPasteboard.general.clearContents()
-        result(NSPasteboard.general.writeObjects([url]))
+  private func writeFiles(_ files: [String], result: FlutterResult) {
+    var urls: [NSURL] = []
+
+    files.forEach { file in
+      urls.append(NSURL(fileURLWithPath: file))
     }
+    NSPasteboard.general.clearContents()
+    if NSPasteboard.general.writeObjects(urls) {
+      result(nil)
+    } else {
+      result(FlutterError(code: "0", message: "failed to write pasteboard objects", details: nil))
+    }
+  }
 }
-
 
 extension NSBitmapImageRep {
-    var png: Data? { representation(using: .png, properties: [:]) }
+  var png: Data? { representation(using: .png, properties: [:]) }
 }
+
 extension Data {
-    var bitmap: NSBitmapImageRep? { NSBitmapImageRep(data: self) }
+  var bitmap: NSBitmapImageRep? { NSBitmapImageRep(data: self) }
 }
+
 extension NSImage {
-    var png: Data? { tiffRepresentation?.bitmap?.png }
+  var png: Data? { tiffRepresentation?.bitmap?.png }
 }

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -16,8 +17,12 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
+  String _console = "";
+
   Uint8List? bytes;
   String? fileUrl;
+
+  final textController = TextEditingController();
 
   @override
   void initState() {
@@ -34,35 +39,43 @@ class _MyAppState extends State<MyApp> {
         body: Center(
           child: Column(
             children: [
+              TextField(
+                controller: textController,
+                maxLines: 10,
+              ),
               MaterialButton(
                 onPressed: () async {
-                  await Pasteboard.writeUrl(
-                      'file:///Users/YeungKC/Desktop/foo.png');
+                  final lines =
+                      const LineSplitter().convert(textController.text);
+                  await Pasteboard.writeFiles(lines);
                 },
                 child: const Text('copy'),
               ),
               MaterialButton(
                 onPressed: () async {
-                  final url = await Pasteboard.absoluteUrlString;
-                  if (url?.startsWith('file') ?? false) {
-                    var tryParse = Uri.tryParse(url!);
-                    return setState(() {
-                      fileUrl = tryParse!.toFilePath();
-                      this.bytes = null;
-                    });
-                  }
-
                   final bytes = await Pasteboard.image;
 
                   setState(() {
                     fileUrl = null;
                     this.bytes = bytes;
+                    _console = "bytes: ${bytes?.length}";
                   });
                 },
                 child: const Text('paste image'),
               ),
-              Text('bytes: $bytes', maxLines: 1),
-              Text('fileUrl: $fileUrl', maxLines: 1),
+              TextButton(
+                onPressed: () async {
+                  final files = await Pasteboard.files();
+                  setState(() {
+                    _console = 'files: \n ${files.isEmpty ? 'empty' : ''}';
+                    for (final file in files) {
+                      _console += '$file ${File(file).existsSync()}\n';
+                    }
+                  });
+                },
+                child: const Text("Get files"),
+              ),
+              SelectableText(' $_console'),
               if (bytes != null) Image.memory(bytes!),
               if (fileUrl != null) Image.file(File(fileUrl!))
             ],

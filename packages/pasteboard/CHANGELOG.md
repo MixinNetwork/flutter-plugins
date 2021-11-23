@@ -1,3 +1,4 @@
-## 0.0.1
+## 0.0.1 (2021/11/04)
 
-* TODO: Describe initial release.
+* add Linux,Windows,macOS support.
+* suport basic functions.
