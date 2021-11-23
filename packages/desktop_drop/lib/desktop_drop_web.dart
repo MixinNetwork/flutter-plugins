@@ -4,7 +4,7 @@ import 'dart:async';
 // of your plugin as a separate package, instead of inlining it in the same
 // package as the core of your plugin.
 // ignore: avoid_web_libraries_in_flutter
-import 'dart:html' as html show window;
+import 'dart:html' as html show window, Url;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
@@ -38,20 +38,14 @@ class DesktopDropWeb {
         final items = event.dataTransfer.files;
         if (items != null) {
           for (var index = 0; index < items.length; index++) {
-            final file = items[index];
-            final path = file.relativePath;
-            if (path != null) {
-              urls.add(path);
-            }
+            final path = html.Url.createObjectUrl(items[index]);
+            urls.add(path);
           }
         }
-        channel.invokeMethod("performOperation_web", items ?? []);
-        debugPrint('items: ${items?.map((e) => e.type)}');
       } catch (e, s) {
         debugPrint('desktop_drop_web: $e $s');
       } finally {
-        debugPrint('urls: $urls');
-        // channel.invokeMethod("performOperation_web", urls);
+        channel.invokeMethod("performOperation", urls);
       }
     });
 

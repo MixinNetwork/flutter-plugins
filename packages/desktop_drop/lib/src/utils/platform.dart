@@ -6,4 +6,6 @@ class Platform {
   static bool get isWindows => io.Platform.isWindows;
 
   static bool get isWeb => false;
+
+  static bool get isAndroid => io.Platform.isAndroid;
 }

@@ -1,5 +1,6 @@
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
+import 'package:cross_file/cross_file.dart';
 
 void main() {
   runApp(const MyApp());
@@ -41,7 +42,7 @@ class ExmapleDragTarget extends StatefulWidget {
 }
 
 class _ExmapleDragTargetState extends State<ExmapleDragTarget> {
-  final List<Uri> _list = [];
+  final List<XFile> _list = [];
 
   bool _dragging = false;
 
@@ -52,7 +53,7 @@ class _ExmapleDragTargetState extends State<ExmapleDragTarget> {
     return DropTarget(
       onDragDone: (detail) {
         setState(() {
-          _list.addAll(detail.urls);
+          _list.addAll(detail.urls.map((e) => XFile(e.path)));
         });
       },
       onDragUpdated: (details) {
@@ -81,7 +82,7 @@ class _ExmapleDragTargetState extends State<ExmapleDragTarget> {
             if (_list.isEmpty)
               const Center(child: Text("Drop here"))
             else
-              Text(_list.join("\n")),
+              Text(_list.map((e) => e.path).join("\n")),
             if (offset != null)
               Align(
                 alignment: Alignment.topRight,
