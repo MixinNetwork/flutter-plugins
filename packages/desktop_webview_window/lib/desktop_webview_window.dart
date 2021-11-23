@@ -58,8 +58,9 @@ class WebviewWindow {
   }
 
   static Future<Webview> create({
-    CreateConfiguration configuration = const CreateConfiguration(),
+    CreateConfiguration? configuration,
   }) async {
+    configuration ??= CreateConfiguration.platform();
     _init();
     final viewId = await _channel.invokeMethod(
       "create",

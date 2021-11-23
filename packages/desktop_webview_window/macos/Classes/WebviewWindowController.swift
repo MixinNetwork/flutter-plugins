@@ -10,31 +10,28 @@ import FlutterMacOS
 import WebKit
 
 class WebviewWindowController: NSWindowController {
-  @IBOutlet var webview: WKWebView!
+  private let methodChannel: FlutterMethodChannel
 
   private let viewId: Int64
 
-  private let methodChannel: FlutterMethodChannel
+  private let width, height: Int
 
-  private var javaScriptHandlerNames: [String] = []
-
-  private let width: Int
-  private let height: Int
-
-  private let initialTitle: String
-
-  weak var webviewPlugin: DesktopWebviewWindowPlugin?
+  private let titleBarHeight: Int
   
-  private var defaultUserAgent: String?
+  private let titleBarTopPadding: Int
+  
+  public weak var webviewPlugin: DesktopWebviewWindowPlugin?
 
   init(viewId: Int64, methodChannel: FlutterMethodChannel,
        width: Int, height: Int,
-       title: String) {
+       title: String, titleBarHeight: Int,
+       titleBarTopPadding: Int) {
     self.viewId = viewId
     self.methodChannel = methodChannel
     self.width = width
     self.height = height
-    self.initialTitle = title
+    self.titleBarHeight = titleBarHeight
+    self.titleBarTopPadding = titleBarTopPadding
     super.init(window: nil)
   }
 
@@ -42,66 +39,34 @@ class WebviewWindowController: NSWindowController {
     fatalError("init(coder:) has not been implemented")
   }
 
+  public var webViewController: WebViewLayoutController {
+    contentViewController as! WebViewLayoutController
+  }
+
   override func windowDidLoad() {
     super.windowDidLoad()
 
-    window?.isReleasedWhenClosed = true
-    window?.delegate = self
+    contentViewController = WebViewLayoutController(
+      methodChannel: methodChannel,
+      viewId: viewId, titleBarHeight: titleBarHeight,
+      titleBarTopPadding: titleBarTopPadding)
 
     window?.setContentSize(NSSize(width: width, height: height))
     window?.center()
 
-    window?.title = initialTitle
-
-    webview.navigationDelegate = self
-    webview.uiDelegate = self
-
-    // TODO(boyan01) Make it configuable from flutter.
-    webview.configuration.preferences.javaEnabled = true
-    webview.configuration.preferences.minimumFontSize = 12
-    webview.configuration.preferences.javaScriptCanOpenWindowsAutomatically = true
-    webview.configuration.allowsAirPlayForMediaPlayback = true
-    webview.configuration.mediaTypesRequiringUserActionForPlayback = .video
-    
-    defaultUserAgent = webview.value(forKey: "userAgent") as? String
-    
+    window?.isReleasedWhenClosed = false
+    window?.delegate = self
   }
-  
+
   override func keyDown(with event: NSEvent) {
     if event.charactersIgnoringModifiers == "w" && event.modifierFlags.contains(.command) {
       close()
     }
   }
 
-  func load(url: URL) {
-    webview.load(URLRequest(url: url))
-  }
-
-  func addJavascriptInterface(name: String) {
-    javaScriptHandlerNames.append(name)
-    webview.configuration.userContentController.add(self, name: name)
-  }
-
-  func removeJavascriptInterface(name: String) {
-    if let index = javaScriptHandlerNames.firstIndex(of: name) {
-      javaScriptHandlerNames.remove(at: index)
-    }
-    webview.configuration.userContentController.removeScriptMessageHandler(forName: name)
-  }
-
   func destroy() {
     window?.delegate = nil
-
-    webview.removeFromSuperview()
-    webview.uiDelegate = nil
-    webview.navigationDelegate = nil
-    javaScriptHandlerNames.forEach { name in
-      webview.configuration.userContentController.removeScriptMessageHandler(forName: name)
-    }
-
-    webview.configuration.userContentController.removeAllUserScripts()
-
-    webview = nil
+    contentViewController = nil
   }
 
   func setAppearance(brightness: Int) {
@@ -122,15 +87,6 @@ class WebviewWindowController: NSWindowController {
     }
   }
 
-  func addScriptToExecuteOnDocumentCreated(javaScript: String) {
-    webview.configuration.userContentController.addUserScript(
-      WKUserScript(source: javaScript, injectionTime: .atDocumentStart, forMainFrameOnly: true))
-  }
-
-  func setApplicationNameForUserAgent(applicationName: String) {
-    webview.customUserAgent = (defaultUserAgent ?? "") + applicationName
-  }
-
   deinit {
     #if DEBUG
       print("\(self) deinited")
@@ -148,58 +104,5 @@ extension WebviewWindowController: NSWindowDelegate {
     DispatchQueue.main.async {
       self.webviewPlugin?.onWebviewWindowClose(viewId: self.viewId, wc: self)
     }
-  }
-}
-
-extension WebviewWindowController: WKScriptMessageHandler {
-  func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-    methodChannel.invokeMethod(
-      "onJavaScriptMessage",
-      arguments: [
-        "id": viewId,
-        "name": message.name,
-        "body": message.body,
-      ])
-  }
-}
-
-extension WebviewWindowController: WKNavigationDelegate {
-  func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-    guard let url = navigationAction.request.url else {
-      decisionHandler(.cancel)
-      return
-    }
-
-    guard ["http", "https", "file"].contains(url.scheme?.lowercased() ?? "") else {
-      decisionHandler(.cancel)
-      return
-    }
-
-    decisionHandler(.allow)
-  }
-
-  func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse, decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
-    decisionHandler(.allow)
-  }
-}
-
-extension WebviewWindowController: WKUIDelegate {
-  func webView(_ webView: WKWebView, runJavaScriptTextInputPanelWithPrompt prompt: String, defaultText: String?, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (String?) -> Void) {
-    methodChannel.invokeMethod(
-      "runJavaScriptTextInputPanelWithPrompt",
-      arguments: [
-        "id": viewId,
-        "prompt": prompt,
-        "defaultText": defaultText ?? "",
-      ]) { result in
-      completionHandler((result as? String) ?? "")
-    }
-  }
-
-  func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
-    if !(navigationAction.targetFrame?.isMainFrame ?? false) {
-      webView.load(navigationAction.request)
-    }
-    return nil
   }
 }

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:desktop_webview_window/desktop_webview_window.dart';
 import 'package:flutter/material.dart';
 
@@ -51,10 +53,11 @@ class _MyAppState extends State<MyApp> {
             IconButton(
               onPressed: () async {
                 final webview = await WebviewWindow.create(
-                  configuration: const CreateConfiguration(
+                  configuration: CreateConfiguration(
                     windowHeight: 1280,
                     windowWidth: 720,
                     title: "ExampleTestWindow",
+                    titleBarTopPadding: Platform.isMacOS ? 20 : 0,
                   ),
                 );
                 webview

@@ -12,9 +12,14 @@ bool runWebViewTitleBarWidget(List<String> args) {
   if (webViewId == null) {
     return false;
   }
+  final titleBarTopPadding = int.tryParse(args.length > 2 ? args[2] : '0') ?? 0;
+  debugPrint('runWebViewTitleBarWidget: $webViewId, $titleBarTopPadding');
   runApp(MaterialApp(
     debugShowCheckedModeBanner: false,
-    home: _TitleBar(webViewId: webViewId),
+    home: _TitleBar(
+      webViewId: webViewId,
+      titleBarTopPadding: titleBarTopPadding,
+    ),
   ));
   return true;
 }
@@ -23,9 +28,12 @@ class _TitleBar extends StatefulWidget {
   const _TitleBar({
     Key? key,
     required this.webViewId,
+    required this.titleBarTopPadding,
   }) : super(key: key);
 
   final int webViewId;
+
+  final int titleBarTopPadding;
 
   @override
   State<_TitleBar> createState() => _TitleBarState();
@@ -59,48 +67,51 @@ class _TitleBarState extends State<_TitleBar> {
   Widget build(BuildContext context) {
     return Material(
       color: Theme.of(context).scaffoldBackgroundColor,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          IconButton(
-            padding: EdgeInsets.zero,
-            splashRadius: 16,
-            iconSize: 16,
-            onPressed: !_canGoBack
-                ? null
-                : () {
-                    _channel.invokeMethod('onBackPressed', {
-                      'webViewId': widget.webViewId,
-                    });
-                  },
-            icon: const Icon(Icons.arrow_back),
-          ),
-          IconButton(
-            padding: EdgeInsets.zero,
-            splashRadius: 16,
-            iconSize: 16,
-            onPressed: !_canGoForward
-                ? null
-                : () {
-                    _channel.invokeMethod('onForwardPressed', {
-                      'webViewId': widget.webViewId,
-                    });
-                  },
-            icon: const Icon(Icons.arrow_forward),
-          ),
-          IconButton(
-            padding: EdgeInsets.zero,
-            splashRadius: 16,
-            iconSize: 16,
-            onPressed: () {
-              _channel.invokeMethod('onRefreshPressed', {
-                'webViewId': widget.webViewId,
-              });
-            },
-            icon: const Icon(Icons.refresh),
-          ),
-          const Spacer()
-        ],
+      child: Padding(
+        padding: EdgeInsets.only(top: widget.titleBarTopPadding.toDouble()),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            IconButton(
+              padding: EdgeInsets.zero,
+              splashRadius: 16,
+              iconSize: 16,
+              onPressed: !_canGoBack
+                  ? null
+                  : () {
+                      _channel.invokeMethod('onBackPressed', {
+                        'webViewId': widget.webViewId,
+                      });
+                    },
+              icon: const Icon(Icons.arrow_back),
+            ),
+            IconButton(
+              padding: EdgeInsets.zero,
+              splashRadius: 16,
+              iconSize: 16,
+              onPressed: !_canGoForward
+                  ? null
+                  : () {
+                      _channel.invokeMethod('onForwardPressed', {
+                        'webViewId': widget.webViewId,
+                      });
+                    },
+              icon: const Icon(Icons.arrow_forward),
+            ),
+            IconButton(
+              padding: EdgeInsets.zero,
+              splashRadius: 16,
+              iconSize: 16,
+              onPressed: () {
+                _channel.invokeMethod('onRefreshPressed', {
+                  'webViewId': widget.webViewId,
+                });
+              },
+              icon: const Icon(Icons.refresh),
+            ),
+            const Spacer()
+          ],
+        ),
       ),
     );
   }

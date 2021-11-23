@@ -91,6 +91,7 @@ ClientMessageChannelPlugin::ClientMessageChannelPlugin(
 ) : channel_(std::move(channel)) {
   channel_->SetMethodCallHandler([this](const auto &call, auto result) {
     if (g_server_channel_plugin) {
+      // FIXME: complete the result in here.
       g_server_channel_plugin->DispatchMethodCall(call, std::move(result), this);
     }
   });
