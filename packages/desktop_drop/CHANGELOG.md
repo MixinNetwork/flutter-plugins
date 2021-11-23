@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.0 (2021/11/23)
+
+Add web support
+
 ## 0.1.2 (2021/11/10)
 
 [Linux] Fix do not work on Wayland.
