@@ -24,14 +24,14 @@ FLUTTER_PLUGIN_EXPORT void DesktopWebviewWindowPluginRegisterWithRegistrar(
 #endif
 
 class WebviewWindowAdapter {
-
  public:
-
   virtual std::unique_ptr<flutter::FlutterViewController> CreateViewController(
       int width,
       int height,
       const flutter::DartProject &project
-  ) = 0;
+  ) {
+    return std::make_unique<flutter::FlutterViewController>(width, height, project);
+  }
 
   virtual std::optional<LRESULT> HandleTopLevelWindowProc(
       const std::unique_ptr<flutter::FlutterViewController> &flutter_view_controller,
@@ -39,9 +39,13 @@ class WebviewWindowAdapter {
       UINT message,
       WPARAM wparam,
       LPARAM lparam
-  ) = 0;
+  ) {
+    return flutter_view_controller->HandleTopLevelWindowProc(hwnd, message, wparam, lparam);
+  }
 
-  virtual void ReloadSystemFonts(const std::unique_ptr<flutter::FlutterViewController> &flutter_view_controller) = 0;
+  virtual void ReloadSystemFonts(const std::unique_ptr<flutter::FlutterViewController> &flutter_view_controller) {
+    flutter_view_controller->engine()->ReloadSystemFonts();
+  }
 
 };
 
