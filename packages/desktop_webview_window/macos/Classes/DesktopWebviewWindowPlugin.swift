@@ -223,6 +223,21 @@ public class DesktopWebviewWindowPlugin: NSObject, FlutterPlugin {
       }
       wc.webViewController.reload()
       break
+    case "stop":
+      guard let argument = call.arguments as? [String: Any?] else {
+        result(FlutterError(code: "0", message: "arg is not map", details: nil))
+        return
+      }
+      guard let viewId = argument["viewId"] as? Int64 else {
+        result(FlutterError(code: "0", message: "param viewId not found", details: nil))
+        return
+      }
+      guard let wc = webviews[viewId] else {
+        result(FlutterError(code: "0", message: "can not find webview for id: \(viewId)", details: nil))
+        return
+      }
+      wc.webViewController.stopLoading()
+      break
     default:
       result(FlutterMethodNotImplemented)
     }

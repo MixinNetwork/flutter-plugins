@@ -95,6 +95,7 @@ class WebViewLayoutController: NSViewController {
 
     webView.addObserver(self, forKeyPath: "canGoBack", options: .new, context: nil)
     webView.addObserver(self, forKeyPath: "canGoForward", options: .new, context: nil)
+    webView.addObserver(self, forKeyPath: "loading", options: .new, context: nil)
 
     defaultUserAgent = webView.value(forKey: "userAgent") as? String
   }
@@ -106,6 +107,16 @@ class WebViewLayoutController: NSViewController {
         "canGoBack": webView.canGoBack,
         "canGoForward": webView.canGoForward,
       ])
+    } else if keyPath == "loading" {
+      if webView.isLoading {
+        methodChannel.invokeMethod("onNavigationStarted", arguments: [
+          "id": viewId,
+        ])
+      } else {
+        methodChannel.invokeMethod("onNavigationCompleted", arguments: [
+          "id": viewId,
+        ])
+      }
     }
   }
 
@@ -138,7 +149,8 @@ class WebViewLayoutController: NSViewController {
   func destroy() {
     webView.removeObserver(self, forKeyPath: "canGoBack")
     webView.removeObserver(self, forKeyPath: "canGoForward")
-    
+    webView.removeObserver(self, forKeyPath: "loading")
+
     webView.uiDelegate = nil
     webView.navigationDelegate = nil
     javaScriptHandlerNames.forEach { name in
@@ -162,6 +174,10 @@ class WebViewLayoutController: NSViewController {
       webView.goForward()
     }
   }
+
+  func stopLoading() {
+    webView.stopLoading()
+  }
 }
 
 extension WebViewLayoutController: WKNavigationDelegate {
@@ -182,7 +198,6 @@ extension WebViewLayoutController: WKNavigationDelegate {
   func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse, decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
     decisionHandler(.allow)
   }
-
 }
 
 extension WebViewLayoutController: WKUIDelegate {
@@ -204,7 +219,6 @@ extension WebViewLayoutController: WKUIDelegate {
     }
     return nil
   }
-  
 }
 
 extension WebViewLayoutController: WKScriptMessageHandler {
