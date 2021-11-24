@@ -156,7 +156,7 @@ void WebviewWindow::OnLoadChanged(WebKitLoadEvent load_event) {
       auto *args = fl_value_new_map();
       fl_value_set(args, fl_value_new_string("id"), fl_value_new_int(window_id_));
       fl_method_channel_invoke_method(
-          FL_METHOD_CHANNEL(method_channel_), "onNavigateStarted", args,
+          FL_METHOD_CHANNEL(method_channel_), "onNavigationStarted", args,
           nullptr, nullptr, nullptr);
       break;
     }
@@ -164,7 +164,7 @@ void WebviewWindow::OnLoadChanged(WebKitLoadEvent load_event) {
       auto *args = fl_value_new_map();
       fl_value_set(args, fl_value_new_string("id"), fl_value_new_int(window_id_));
       fl_method_channel_invoke_method(
-          FL_METHOD_CHANNEL(method_channel_), "onNavigateCompleted", args,
+          FL_METHOD_CHANNEL(method_channel_), "onNavigationCompleted", args,
           nullptr, nullptr, nullptr);
       break;
     }
@@ -183,4 +183,8 @@ void WebviewWindow::GoBack() {
 
 void WebviewWindow::Reload() {
   webkit_web_view_reload(WEBKIT_WEB_VIEW(webview_));
+}
+
+void WebviewWindow::StopLoading() {
+  webkit_web_view_stop_loading(WEBKIT_WEB_VIEW(webview_));
 }

@@ -40,6 +40,8 @@ class WebviewWindow {
 
   void Reload();
 
+  void StopLoading();
+
  private:
   FlMethodChannel *method_channel_;
   int64_t window_id_;

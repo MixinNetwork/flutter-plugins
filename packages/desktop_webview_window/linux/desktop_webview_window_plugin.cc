@@ -160,6 +160,18 @@ static void webview_window_plugin_handle_method_call(
     }
     self->windows->at(window_id)->Reload();
     fl_method_call_respond_success(method_call, nullptr, nullptr);
+  } else if (strcmp(method, "stop") == 0) {
+    auto *args = fl_method_call_get_args(method_call);
+    if (fl_value_get_type(args) != FL_VALUE_TYPE_MAP) {
+      fl_method_call_respond_error(method_call, "0", "stop args is not map", nullptr, nullptr);
+      return;
+    }
+    auto window_id = fl_value_get_int(fl_value_lookup_string(args, "viewId"));
+    if (!self->windows->count(window_id)) {
+      fl_method_call_respond_error(method_call, "0", "can not found webview for viewId", nullptr, nullptr);
+      return;
+    }
+    self->windows->at(window_id)->StopLoading();
   } else {
     fl_method_call_respond_not_implemented(method_call, nullptr);
   }
