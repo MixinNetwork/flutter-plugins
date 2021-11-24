@@ -21,15 +21,13 @@ class ClientMessageChannelPlugin {
 
   void InvokeMethod(
       const std::string &method,
-      std::unique_ptr<flutter::EncodableValue> arguments,
-      std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result = nullptr) {
-    channel_->InvokeMethod(method, std::move(arguments), std::move(result));
+      std::unique_ptr<flutter::EncodableValue> arguments) {
+    channel_->InvokeMethod(method, std::move(arguments), nullptr);
   }
 
  private:
   FlutterMethodChannel channel_;
 };
-
 
 class ServerMessageChannelPlugin {
  public:
@@ -44,7 +42,6 @@ class ServerMessageChannelPlugin {
 
   void DispatchMethodCall(
       const flutter::MethodCall<flutter::EncodableValue> &call,
-      std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result,
       ClientMessageChannelPlugin *client_from);
 
  private:
@@ -91,21 +88,20 @@ ClientMessageChannelPlugin::ClientMessageChannelPlugin(
 ) : channel_(std::move(channel)) {
   channel_->SetMethodCallHandler([this](const auto &call, auto result) {
     if (g_server_channel_plugin) {
-      // FIXME: complete the result in here.
-      g_server_channel_plugin->DispatchMethodCall(call, std::move(result), this);
+      g_server_channel_plugin->DispatchMethodCall(call, this);
+      result->Success();
     }
   });
 }
 
 void ServerMessageChannelPlugin::DispatchMethodCall(
     const flutter::MethodCall<> &call,
-    std::unique_ptr<flutter::MethodResult<>> result,
     ClientMessageChannelPlugin *client_from) {
   for (const auto &item: client_set_) {
     if (item.get() != client_from) {
-      item->InvokeMethod(call.method_name(),
-                         std::make_unique<flutter::EncodableValue>(*call.arguments()),
-                         std::move(result));
+      item->InvokeMethod(
+          call.method_name(),
+          std::make_unique<flutter::EncodableValue>(*call.arguments()));
     }
   }
 }

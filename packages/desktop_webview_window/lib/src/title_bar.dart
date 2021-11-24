@@ -43,6 +43,8 @@ class _TitleBarState extends State<_TitleBar> {
   bool _canGoBack = false;
   bool _canGoForward = false;
 
+  bool _isLoading = false;
+
   @override
   void initState() {
     super.initState();
@@ -57,6 +59,16 @@ class _TitleBarState extends State<_TitleBar> {
           setState(() {
             _canGoBack = args['canGoBack'] as bool;
             _canGoForward = args['canGoForward'] as bool;
+          });
+          break;
+        case "onNavigationStarted":
+          setState(() {
+            _isLoading = true;
+          });
+          break;
+        case "onNavigationCompleted":
+          setState(() {
+            _isLoading = false;
           });
           break;
       }
@@ -98,17 +110,30 @@ class _TitleBarState extends State<_TitleBar> {
                     },
               icon: const Icon(Icons.arrow_forward),
             ),
-            IconButton(
-              padding: EdgeInsets.zero,
-              splashRadius: 16,
-              iconSize: 16,
-              onPressed: () {
-                _channel.invokeMethod('onRefreshPressed', {
-                  'webViewId': widget.webViewId,
-                });
-              },
-              icon: const Icon(Icons.refresh),
-            ),
+            if (_isLoading)
+              IconButton(
+                padding: EdgeInsets.zero,
+                splashRadius: 16,
+                iconSize: 16,
+                onPressed: () {
+                  _channel.invokeMethod('onStopPressed', {
+                    'webViewId': widget.webViewId,
+                  });
+                },
+                icon: const Icon(Icons.close),
+              )
+            else
+              IconButton(
+                padding: EdgeInsets.zero,
+                splashRadius: 16,
+                iconSize: 16,
+                onPressed: () {
+                  _channel.invokeMethod('onRefreshPressed', {
+                    'webViewId': widget.webViewId,
+                  });
+                },
+                icon: const Icon(Icons.refresh),
+              ),
             const Spacer()
           ],
         ),

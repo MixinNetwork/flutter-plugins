@@ -46,6 +46,8 @@ class WebView {
 
   void Reload();
 
+  void Stop();
+
  private:
   wil::unique_hwnd view_window_;
 

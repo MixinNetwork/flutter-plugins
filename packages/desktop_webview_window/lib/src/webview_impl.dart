@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import 'webview.dart';
@@ -19,6 +20,8 @@ class WebviewImpl extends Webview {
   final _closeCompleter = Completer<void>();
 
   OnHistoryChangedCallback? _onHistoryChanged;
+
+  final ValueNotifier<bool> _isNaivgating = ValueNotifier<bool>(false);
 
   WebviewImpl(this.viewId, this.channel);
 
@@ -47,6 +50,17 @@ class WebviewImpl extends Webview {
     assert(!_closed);
     _onHistoryChanged?.call(canGoBack, canGoForward);
   }
+
+  void onNavigationStarted() {
+    _isNaivgating.value = true;
+  }
+
+  void onNavigationCompleted() {
+    _isNaivgating.value = false;
+  }
+
+  @override
+  ValueListenable<bool> get isNavigating => _isNaivgating;
 
   @override
   void registerJavaScriptMessageHandler(
@@ -147,6 +161,11 @@ class WebviewImpl extends Webview {
   @override
   Future<void> reload() {
     return channel.invokeMethod("reload", {"viewId": viewId});
+  }
+
+  @override
+  Future<void> stop() {
+    return channel.invokeMethod("stop", {"viewId": viewId});
   }
 
   @override

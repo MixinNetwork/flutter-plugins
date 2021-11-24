@@ -89,6 +89,9 @@ class WebviewWindow {
       case 'onRefreshPressed':
         await webView.reload();
         break;
+      case 'onStopPressed':
+        await webView.stop();
+        break;
     }
   }
 
@@ -123,6 +126,19 @@ class WebviewWindow {
           'canGoForward': args['canGoForward'] as bool,
         });
         debugPrint('onHistoryChanged: $args');
+        break;
+      case "onNavigationStarted":
+        webview.onNavigationStarted();
+        await _otherIsolateMessageHandler.invokeMethod('onNavigationStarted', {
+          'webViewId': viewId,
+        });
+        break;
+      case "onNavigationCompleted":
+        webview.onNavigationCompleted();
+        await _otherIsolateMessageHandler
+            .invokeMethod('onNavigationCompleted', {
+          'webViewId': viewId,
+        });
         break;
       default:
         return;

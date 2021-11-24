@@ -132,6 +132,29 @@ void WebView::OnWebviewControllerCreated() {
           }
       ).Get(), nullptr);
 
+  webview_->add_NavigationStarting(
+      Callback<ICoreWebView2NavigationStartingEventHandler>(
+          [this](ICoreWebView2 *sender, ICoreWebView2NavigationStartingEventArgs *args) {
+            auto method_args = flutter::EncodableMap{
+                {flutter::EncodableValue("id"), flutter::EncodableValue(web_view_id_)},
+            };
+            method_channel_->InvokeMethod("onNavigationStarted",
+                                          std::make_unique<flutter::EncodableValue>(method_args));
+            return S_OK;
+          }
+      ).Get(), nullptr);
+  webview_->add_NavigationCompleted(
+      Callback<ICoreWebView2NavigationCompletedEventHandler>(
+          [this](ICoreWebView2 *sender, ICoreWebView2NavigationCompletedEventArgs *args) {
+            auto method_args = flutter::EncodableMap{
+                {flutter::EncodableValue("id"), flutter::EncodableValue(web_view_id_)},
+            };
+            method_channel_->InvokeMethod("onNavigationCompleted",
+                                          std::make_unique<flutter::EncodableValue>(method_args));
+            return S_OK;
+          }
+      ).Get(), nullptr);
+
 //  webview_->add_WebMessageReceived(
 //      Callback<ICoreWebView2WebMessageReceivedEventHandler>(
 //          [](ICoreWebView2 *webview, ICoreWebView2WebMessageReceivedEventArgs *args) {
@@ -144,9 +167,6 @@ void WebView::OnWebviewControllerCreated() {
 //            return S_OK;
 //          }
 //      ).Get(), nullptr);
-
-  std::cout << "webview created" <<
-            std::endl;
 
 }
 
@@ -198,6 +218,13 @@ void WebView::GoForward() {
 void WebView::Reload() {
   if (webview_) {
     webview_->Reload();
+  }
+
+}
+
+void WebView::Stop() {
+  if (webview_) {
+    webview_->Stop();
   }
 }
 
