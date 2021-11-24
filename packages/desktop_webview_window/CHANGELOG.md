@@ -1,3 +1,7 @@
+## 0.1.2 (2021/11/24)
+
+fix TitleBar reload do not work.
+
 ## 0.1.1 (2021/11/24)
 
 fix window title not show on macOS

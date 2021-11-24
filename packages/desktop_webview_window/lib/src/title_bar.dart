@@ -73,7 +73,7 @@ mixin TitleBarWebViewController {
 
   /// reload the webview
   void reload() {
-    _channel.invokeMethod('onReloadPressed', {
+    _channel.invokeMethod('onRefreshPressed', {
       'webViewId': _webViewId,
     });
   }
