@@ -12,17 +12,45 @@ Show a webview window on your flutter deksktop application.
 
 ## Getting Started
 
-```dart
-import 'package:desktop_webview_window/desktop_webview_window.dart';
+1. modify your `main` method.
+   ```dart
+   import 'package:desktop_webview_window/desktop_webview_window.dart';
+   
+   void main() async {
+     WidgetsFlutterBinding.ensureInitialized();
+     
+     // Add this your main method.
+     // used to show a webview title bar.
+     if (runWebViewTitleBarWidget(args)) {
+       return;
+     }
+   
+     runApp(MyApp());
+   }
+   
+   ```
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+2. platform Windows.
 
-  final webview = await WebviewWindow.create();
-  webview.launch("https://example.com");
-}
+  * add this include to your  `windows/runner/flutter_window.cpp`
+    ```cpp
+    #include "desktop_webview_window/desktop_webview_window_plugin.h"
+    ```
+  * append this statement to your `flutter_window.cpp` `FlutterWindow::OnCreate()` method
+    ```cpp
+    bool FlutterWindow::OnCreate() {
+      ...
+      // Add this line
+      SetFlutterViewControllerFactory(std::make_unique<WebviewWindowAdapter>());
+    }
+    ```
 
-```
+3. launch WebViewWindow
+
+   ```dart
+     final webview = await WebviewWindow.create();
+     webview.launch("https://example.com");
+   ```
 
 ### **linux requirement**
 

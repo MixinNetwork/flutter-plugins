@@ -5,44 +5,20 @@
 #include <windows.h>
 
 #include "webview_window.h"
+
 #include <tchar.h>
-
 #include <utility>
-#include "strconv.h"
 
-#include "flutter/encodable_value.h"
-#include <flutter_windows.h>
+#include "strconv.h"
+#include "utils.h"
+
+#include "include/desktop_webview_window/desktop_webview_window_plugin.h"
 
 namespace {
 
-TCHAR kWindowClassName[] = _T("WebviewWindow");
+TCHAR kWebViewWindowClassName[] = _T("WebviewWindow");
 
-bool class_registered_;
-
-const wchar_t *GetWindowClass() {
-  if (!class_registered_) {
-    WNDCLASS window_class{};
-    window_class.hCursor = LoadCursor(nullptr, IDC_ARROW);
-    window_class.lpszClassName = kWindowClassName;
-    window_class.style = CS_HREDRAW | CS_VREDRAW;
-    window_class.cbClsExtra = 0;
-    window_class.cbWndExtra = 0;
-    window_class.hInstance = GetModuleHandle(nullptr);
-    window_class.hIcon =
-        LoadIcon(window_class.hInstance, IDI_APPLICATION);
-    window_class.hbrBackground = (HBRUSH) (COLOR_WINDOW + 1);
-    window_class.lpszMenuName = nullptr;
-    window_class.lpfnWndProc = WebviewWindow::WndProc;
-    RegisterClass(&window_class);
-    class_registered_ = true;
-  }
-  return kWindowClassName;
-}
-
-void UnregisterWindowClass() {
-  UnregisterClass(kWindowClassName, nullptr);
-  class_registered_ = false;
-}
+using namespace webview_window;
 
 // Scale helper to convert logical scaler values to physical using passed in
 // scale factor
@@ -57,19 +33,25 @@ using namespace Microsoft::WRL;
 WebviewWindow::WebviewWindow(
     MethodChannelPtr method_channel,
     int64_t window_id,
+    int title_bar_height,
     std::function<void()> on_close_callback
 ) : method_channel_(std::move(method_channel)),
     window_id_(window_id),
-    hwnd_(nullptr),
     on_close_callback_(std::move(on_close_callback)),
-    default_user_agent_() {
+    hwnd_(),
+    title_bar_height_(title_bar_height) {
+
 }
 
-WebviewWindow::~WebviewWindow() = default;
+WebviewWindow::~WebviewWindow() {
+  flutter_action_bar_.reset();
+  web_view_.reset();
+  hwnd_.reset();
+}
 
 void WebviewWindow::CreateAndShow(const std::wstring &title, int height, int width, CreateCallback callback) {
 
-  auto *window_class = GetWindowClass();
+  RegisterWindowClass(kWebViewWindowClassName, WebviewWindow::WndProc);
 
   // the same as flutter default main.cpp
   const POINT target_point = {static_cast<LONG>(10),
@@ -79,135 +61,58 @@ void WebviewWindow::CreateAndShow(const std::wstring &title, int height, int wid
   UINT dpi = FlutterDesktopGetDpiForMonitor(monitor);
   double scale_factor = dpi / 96.0;
 
-  // TODO centered the new window.
-  HWND window = CreateWindow(
-      window_class, title.c_str(), WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+  hwnd_ = wil::unique_hwnd(::CreateWindow(
+      kWebViewWindowClassName, title.c_str(),
+      WS_OVERLAPPEDWINDOW | WS_VISIBLE,
       CW_USEDEFAULT, CW_USEDEFAULT,
       Scale(width, scale_factor), Scale(height, scale_factor),
-      nullptr, nullptr, GetModuleHandle(nullptr), this);
-
-  if (!window) {
+      nullptr, nullptr, GetModuleHandle(nullptr), this));
+  if (!hwnd_) {
     callback(false);
     return;
   }
 
-  hwnd_ = window;
+  // Centered window on screen.
+  RECT rc;
+  GetWindowRect(hwnd_.get(), &rc);
+  ClipOrCenterRectToMonitor(&rc, MONITOR_CENTER);
+  SetWindowPos(hwnd_.get(), nullptr, rc.left, rc.top, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
 
-  ShowWindow(window, SW_SHOW);
-  UpdateWindow(window);
+  auto title_bar_height = Scale(title_bar_height_, scale_factor);
 
-  CreateCoreWebView2EnvironmentWithOptions(
-      nullptr, L"webview_window_WebView2", nullptr,
-      Callback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler>(
-          [this, window, callback(std::move(callback))](HRESULT result,
-                                                        ICoreWebView2Environment *env) -> HRESULT {
-            if (!SUCCEEDED(result)) {
-              callback(false);
-              return S_OK;
-            }
-            env->CreateCoreWebView2Controller(
-                window,
-                Callback<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler>(
-                    [this, callback](HRESULT result, ICoreWebView2Controller *controller) -> HRESULT {
-                      if (SUCCEEDED(result)) {
-                        callback(true);
-                        webview_controller_ =
-                            controller;
-                        OnWebviewControllerCreated();
-                      } else {
-                        callback(false);
-                      }
-                      return S_OK;
-                    }).Get());
-            return S_OK;
-          }).Get());
-}
+  // Create the browser view.
+  web_view_ = std::make_unique<webview_window::WebView>(method_channel_, window_id_, [callback](HRESULT hr) {
+    if (SUCCEEDED(hr)) {
+      callback(true);
+    } else {
+      callback(false);
+    }
+  });
 
-void WebviewWindow::OnWebviewControllerCreated() {
-  if (!webview_controller_) {
-    return;
-  }
-  webview_controller_->get_CoreWebView2(&webview_);
+  auto web_view_handle = web_view_->NativeWindow().get();
+  SetParent(web_view_handle, hwnd_.get());
+  MoveWindow(web_view_handle, 0, title_bar_height,
+             rc.right - rc.left,
+             rc.bottom - rc.top - title_bar_height,
+             true);
+  ShowWindow(web_view_handle, SW_SHOW);
 
-  if (!webview_) {
-    std::cerr << "failed to get core webview" << std::endl;
-    return;
-  }
+  // Create the title bar view.
+  std::vector<std::string> args = {"web_view_title_bar", std::to_string(window_id_)};
+  flutter_action_bar_ = std::make_unique<webview_window::FlutterView>(std::move(args));
+  auto title_bar_handle = flutter_action_bar_->GetWindow();
+  SetParent(title_bar_handle, hwnd_.get());
+  MoveWindow(title_bar_handle, 0, 0, rc.right - rc.left, title_bar_height, true);
+  ShowWindow(title_bar_handle, SW_SHOW);
 
-  ICoreWebView2Settings *settings;
-  webview_->get_Settings(&settings);
-  settings->put_IsScriptEnabled(true);
-  settings->put_IsZoomControlEnabled(false);
-  settings->put_AreDefaultContextMenusEnabled(false);
-  settings->put_IsStatusBarEnabled(false);
+  assert(hwnd_ != nullptr);
 
-  ICoreWebView2Settings2 *settings2;
-  auto hr = settings->QueryInterface(IID_PPV_ARGS(&settings2));
-  if (SUCCEEDED(hr)) {
-    LPWSTR user_agent[256];
-    settings2->get_UserAgent(user_agent);
-    default_user_agent_ = std::wstring(*user_agent);
-  }
+  ShowWindow(hwnd_.get(), SW_SHOW);
+  UpdateWindow(hwnd_.get());
 
-  // Resize WebView to fit the bounds of the parent window
-  RECT bounds;
-  GetClientRect(hwnd_, &bounds);
-  webview_controller_->put_Bounds(bounds);
-
-  // Always use single window to load web page.
-  webview_->add_NewWindowRequested(
-      Callback<ICoreWebView2NewWindowRequestedEventHandler>(
-          [](ICoreWebView2 *sender, ICoreWebView2NewWindowRequestedEventArgs *args) {
-            args->put_NewWindow(sender);
-            return S_OK;
-          }).Get(), nullptr);
-
-//  webview_->add_WebMessageReceived(
-//      Callback<ICoreWebView2WebMessageReceivedEventHandler>(
-//          [](ICoreWebView2 *webview, ICoreWebView2WebMessageReceivedEventArgs *args) {
-//            PWSTR message;
-//
-//            args->TryGetWebMessageAsString(&message);
-//            std::wstring str(message);
-//            std::cout << "message: " << wide_to_utf8(str) << std::endl;
-//            CoTaskMemFree(message);
-//            return S_OK;
-//          }
-//      ).Get(), nullptr);
-
-}
-
-void WebviewWindow::Navigate(const std::wstring &url) {
-  if (webview_) {
-    webview_->Navigate(url.c_str());
-  }
-}
-
-void WebviewWindow::AddScriptToExecuteOnDocumentCreated(const std::wstring &javaScript) {
-  if (webview_) {
-    webview_->AddScriptToExecuteOnDocumentCreated(javaScript.c_str(), nullptr);
-  }
-}
-
-void WebviewWindow::Close() {
-  if (hwnd_) {
-    DestroyWindow(hwnd_);
-  }
 }
 
 void WebviewWindow::SetBrightness(int brightness) {
-}
-
-void WebviewWindow::SetApplicationNameForUserAgent(const std::wstring &name) {
-  if (webview_) {
-    ICoreWebView2Settings *settings;
-    webview_->get_Settings(&settings);
-    ICoreWebView2Settings2 *settings2;
-    auto hr = settings->QueryInterface(IID_PPV_ARGS(&settings2));
-    if (SUCCEEDED(hr)) {
-      settings2->put_UserAgent((default_user_agent_ + name).c_str());
-    }
-  }
 }
 
 // static
@@ -222,11 +127,10 @@ WebviewWindow::WndProc(
     auto window_struct = reinterpret_cast<CREATESTRUCT *>(lparam);
     SetWindowLongPtr(window, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(window_struct->lpCreateParams));
 
-    auto that = static_cast<WebviewWindow *>(window_struct->lpCreateParams);
-    that->hwnd_ = window;
+//    auto that = static_cast<WebviewWindow *>(window_struct->lpCreateParams);
+//    that->hwnd_ = window;
   } else if (WebviewWindow *that = GetThisFromHandle(window)) {
-    return that->MessageHandler(window, message, wparam, lparam
-    );
+    return that->MessageHandler(window, message, wparam, lparam);
   }
 
   return DefWindowProc(window, message, wparam, lparam);
@@ -239,20 +143,34 @@ WebviewWindow::MessageHandler(
     WPARAM wparam,
     LPARAM lparam
 ) noexcept {
+  // Give Flutter, including plugins, an opportunity to handle window messages.
+  if (flutter_action_bar_) {
+    std::optional<LRESULT> result = flutter_action_bar_->HandleTopLevelWindowProc(hwnd, message, wparam, lparam);
+    if (result) {
+      return *result;
+    }
+  }
+
   switch (message) {
     case WM_DESTROY: {
-      hwnd_ = nullptr;
-      auto args = flutter::EncodableMap{
-          {flutter::EncodableValue("id"), flutter::EncodableValue(window_id_)}
-      };
-      method_channel_->InvokeMethod(
-          "onWindowClose",
-          std::make_unique<flutter::EncodableValue>(args)
-      );
-      if (on_close_callback_) {
-        on_close_callback_();
+      flutter_action_bar_.reset();
+      web_view_.reset();
+
+      // might receive multiple WM_DESTROY messages.
+      if (!destroyed_) {
+        destroyed_ = true;
+        auto args = flutter::EncodableMap{
+            {flutter::EncodableValue("id"), flutter::EncodableValue(window_id_)}
+        };
+        method_channel_->InvokeMethod(
+            "onWindowClose",
+            std::make_unique<flutter::EncodableValue>(args)
+        );
+        if (on_close_callback_) {
+          on_close_callback_();
+        }
       }
-      break;
+      return 0;
     }
     case WM_DPICHANGED: {
       auto newRectSize = reinterpret_cast<RECT *>(lparam);
@@ -261,24 +179,55 @@ WebviewWindow::MessageHandler(
 
       SetWindowPos(hwnd, nullptr, newRectSize->left, newRectSize->top, newWidth,
                    newHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-
       return 0;
     }
     case WM_SIZE: {
-      if (webview_controller_ != nullptr) {
-        RECT bounds;
-        GetClientRect(hwnd, &bounds);
-        webview_controller_->put_Bounds(bounds);
-      };
+      RECT rect;
+      GetWindowRect(hwnd, &rect);
+      HMONITOR monitor = MonitorFromRect(&rect, MONITOR_DEFAULTTONEAREST);
+      UINT dpi = FlutterDesktopGetDpiForMonitor(monitor);
+      double scale_factor = dpi / 96.0;
+
+      auto title_bar_height = Scale(title_bar_height_, scale_factor);
+
+      if (web_view_ != nullptr) {
+        MoveWindow(web_view_->NativeWindow().get(), 0, title_bar_height,
+                   rect.right - rect.left, rect.bottom - rect.top - title_bar_height,
+                   true);
+        web_view_->UpdateBounds();
+      }
+
+      if (flutter_action_bar_) {
+        // FIXME(BOYAN) remove this trick if flutter provide a properly way to force redraw the flutter view.
+        // When user only change the height of window, flutter title bar height will not change, because the title_bar_height
+        // is a fixed value. In this situation, the flutter view will not perform draw since no size changed. So we need
+        // perform a force redraw to flutter view. Although flutter provide a function FlutterDesktopViewControllerForceRedraw.
+        // https://github.com/flutter/engine/pull/24186 But we can not use this because it not provided on wrapper.
+        if (last_title_bar_width_ != rect.right - rect.left) {
+          // Size and position the flutter window.
+          last_title_bar_width_ = rect.right - rect.left;
+          MoveWindow(flutter_action_bar_->GetWindow(), 0, 0,
+                     last_title_bar_width_, title_bar_height, true);
+        } else {
+          last_title_bar_width_ = rect.right - rect.left + 1;
+          MoveWindow(flutter_action_bar_->GetWindow(), 0, 0,
+                     last_title_bar_width_, title_bar_height, true);
+        }
+      }
       return 0;
     }
-
-    case WM_ACTIVATE:return 0;
+    case WM_FONTCHANGE: {
+      if (flutter_action_bar_) {
+        flutter_action_bar_->ReloadSystemFonts();
+      }
+      break;
+    }
+    case WM_ACTIVATE: {
+      return 0;
+    }
   }
 
-  return
-      DefWindowProc(hwnd, message, wparam, lparam
-      );
+  return DefWindowProc(hwnd, message, wparam, lparam);
 }
 
 // static
@@ -286,3 +235,4 @@ WebviewWindow *WebviewWindow::GetThisFromHandle(HWND const window) noexcept {
   return reinterpret_cast<WebviewWindow *>(
       GetWindowLongPtr(window, GWLP_USERDATA));
 }
+

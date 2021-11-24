@@ -10,16 +10,20 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 
 import 'src/create_configuration.dart';
+import 'src/message_channel.dart';
 import 'src/webview.dart';
 import 'src/webview_impl.dart';
 
 export 'src/create_configuration.dart';
+export 'src/title_bar.dart';
 export 'src/webview.dart';
 
 final List<WebviewImpl> _webviews = [];
 
 class WebviewWindow {
   static const MethodChannel _channel = MethodChannel('webview_window');
+
+  static const _otherIsolateMessageHandler = ClientMessageChannel();
 
   static bool _inited = false;
 
@@ -30,9 +34,17 @@ class WebviewWindow {
     _inited = true;
     _channel.setMethodCallHandler((call) async {
       try {
-        return await handleMethodCall(call);
+        return await _handleMethodCall(call);
       } catch (e, s) {
+        debugPrint("method: ${call.method} args: ${call.arguments}");
         debugPrint('handleMethodCall error: $e $s');
+      }
+    });
+    _otherIsolateMessageHandler.setMessageHandler((call) async {
+      try {
+        return await _handleOtherIsolateMethodCall(call);
+      } catch (e, s) {
+        debugPrint('_handleOtherIsolateMethodCall error: $e $s');
       }
     });
   }
@@ -46,8 +58,9 @@ class WebviewWindow {
   }
 
   static Future<Webview> create({
-    CreateConfiguration configuration = const CreateConfiguration(),
+    CreateConfiguration? configuration,
   }) async {
+    configuration ??= CreateConfiguration.platform();
     _init();
     final viewId = await _channel.invokeMethod(
       "create",
@@ -58,7 +71,31 @@ class WebviewWindow {
     return webview;
   }
 
-  static Future<dynamic> handleMethodCall(MethodCall call) async {
+  static Future<dynamic> _handleOtherIsolateMethodCall(MethodCall call) async {
+    final webViewId = call.arguments['webViewId'] as int;
+    final webView = _webviews
+        .cast<WebviewImpl?>()
+        .firstWhere((w) => w?.viewId == webViewId, orElse: () => null);
+    if (webView == null) {
+      return;
+    }
+    switch (call.method) {
+      case 'onBackPressed':
+        await webView.back();
+        break;
+      case 'onForwardPressed':
+        await webView.forward();
+        break;
+      case 'onRefreshPressed':
+        await webView.reload();
+        break;
+      case 'onStopPressed':
+        await webView.stop();
+        break;
+    }
+  }
+
+  static Future<dynamic> _handleMethodCall(MethodCall call) async {
     final args = call.arguments as Map;
     final viewId = args['id'] as int;
     final webview = _webviews
@@ -81,6 +118,28 @@ class WebviewWindow {
           args['prompt'],
           args['defaultText'],
         );
+      case "onHistoryChanged":
+        webview.onHistoryChanged(args['canGoBack'], args['canGoForward']);
+        await _otherIsolateMessageHandler.invokeMethod('onHistoryChanged', {
+          'webViewId': viewId,
+          'canGoBack': args['canGoBack'] as bool,
+          'canGoForward': args['canGoForward'] as bool,
+        });
+        debugPrint('onHistoryChanged: $args');
+        break;
+      case "onNavigationStarted":
+        webview.onNavigationStarted();
+        await _otherIsolateMessageHandler.invokeMethod('onNavigationStarted', {
+          'webViewId': viewId,
+        });
+        break;
+      case "onNavigationCompleted":
+        webview.onNavigationCompleted();
+        await _otherIsolateMessageHandler
+            .invokeMethod('onNavigationCompleted', {
+          'webViewId': viewId,
+        });
+        break;
       default:
         return;
     }
@@ -91,6 +150,7 @@ class WebviewWindow {
     await _channel.invokeMethod('clearAll');
 
     // FIXME(boyan01) Move the logic to windows platform if WebView2 provider a way to clean caches.
+    // https://docs.microsoft.com/en-us/microsoft-edge/webview2/concepts/user-data-folder#create-user-data-folders
     if (Platform.isWindows) {
       final dir = File(Platform.resolvedExecutable).parent;
       final webview2Dir = Directory(dir.path + "\\webview_window_WebView2");
@@ -98,7 +158,7 @@ class WebviewWindow {
       if (await (webview2Dir.exists())) {
         for (var i = 0; i <= 4; i++) {
           try {
-            webview2Dir.delete(recursive: true);
+            await webview2Dir.delete(recursive: true);
             break;
           } catch (e) {
             debugPrint("delete cache failed. retring.... $e");

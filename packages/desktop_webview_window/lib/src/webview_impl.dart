@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import 'webview.dart';
@@ -17,6 +18,10 @@ class WebviewImpl extends Webview {
   PromptHandler? _promptHandler;
 
   final _closeCompleter = Completer<void>();
+
+  OnHistoryChangedCallback? _onHistoryChanged;
+
+  final ValueNotifier<bool> _isNaivgating = ValueNotifier<bool>(false);
 
   WebviewImpl(this.viewId, this.channel);
 
@@ -40,6 +45,22 @@ class WebviewImpl extends Webview {
     assert(!_closed);
     return _promptHandler?.call(prompt, defaultText) ?? defaultText;
   }
+
+  void onHistoryChanged(bool canGoBack, bool canGoForward) {
+    assert(!_closed);
+    _onHistoryChanged?.call(canGoBack, canGoForward);
+  }
+
+  void onNavigationStarted() {
+    _isNaivgating.value = true;
+  }
+
+  void onNavigationCompleted() {
+    _isNaivgating.value = false;
+  }
+
+  @override
+  ValueListenable<bool> get isNavigating => _isNaivgating;
 
   @override
   void registerJavaScriptMessageHandler(
@@ -83,8 +104,8 @@ class WebviewImpl extends Webview {
   }
 
   @override
-  void launch(String url) {
-    channel.invokeMethod("launch", {
+  void launch(String url) async {
+    await channel.invokeMethod("launch", {
       "url": url,
       "viewId": viewId,
     });
@@ -125,5 +146,30 @@ class WebviewImpl extends Webview {
       "viewId": viewId,
       "applicationName": applicationName,
     });
+  }
+
+  @override
+  Future<void> forward() {
+    return channel.invokeMethod("forward", {"viewId": viewId});
+  }
+
+  @override
+  Future<void> back() {
+    return channel.invokeMethod("back", {"viewId": viewId});
+  }
+
+  @override
+  Future<void> reload() {
+    return channel.invokeMethod("reload", {"viewId": viewId});
+  }
+
+  @override
+  Future<void> stop() {
+    return channel.invokeMethod("stop", {"viewId": viewId});
+  }
+
+  @override
+  void setOnHistoryChangedCallback(OnHistoryChangedCallback? callback) {
+    _onHistoryChanged = callback;
   }
 }

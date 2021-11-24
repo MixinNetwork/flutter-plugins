@@ -18,6 +18,7 @@ public class DesktopWebviewWindowPlugin: NSObject, FlutterPlugin {
     let channel = FlutterMethodChannel(name: "webview_window", binaryMessenger: registrar.messenger)
     let instance = DesktopWebviewWindowPlugin(methodChannel: channel)
     registrar.addMethodCallDelegate(instance, channel: channel)
+    ClientMessageChannelPlugin.register(with: registrar)
   }
 
   public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
@@ -30,12 +31,17 @@ public class DesktopWebviewWindowPlugin: NSObject, FlutterPlugin {
       let width = argument["windowWidth"] as? Int ?? 1280
       let height = argument["windowHeight"] as? Int ?? 720
       let title = argument["title"] as? String ?? ""
+      let titleBarHeight = argument["titleBarHeight"] as? Int ?? 50
+      let titleBarTopPadding = argument["titleBarTopPadding"] as? Int ?? 0
 
-      let controller = WebviewWindowController(viewId: viewId, methodChannel: methodChannel,
-                                               width: width, height: height, title: title)
+      let controller = WebviewWindowController(
+        viewId: viewId, methodChannel: methodChannel,
+        width: width, height: height, title: title,
+        titleBarHeight: titleBarHeight, titleBarTopPadding: titleBarTopPadding
+      )
       controller.webviewPlugin = self
       webviews[viewId] = controller
-      controller.showWindow(self)
+      controller.showWindow(nil)
       result(viewId)
       viewId += 1
       break
@@ -64,7 +70,7 @@ public class DesktopWebviewWindowPlugin: NSObject, FlutterPlugin {
         result(FlutterError(code: "0", message: "can not find webview for id: \(viewId)", details: nil))
         return
       }
-      wc.load(url: parsedUrl)
+      wc.webViewController.load(url: parsedUrl)
       result(nil)
       break
     case "registerJavaScripInterface":
@@ -84,7 +90,7 @@ public class DesktopWebviewWindowPlugin: NSObject, FlutterPlugin {
         result(FlutterError(code: "0", message: "can not find webview for id: \(viewId)", details: nil))
         return
       }
-      wc.addJavascriptInterface(name: name)
+      wc.webViewController.addJavascriptInterface(name: name)
       result(nil)
       break
     case "unregisterJavaScripInterface":
@@ -104,7 +110,7 @@ public class DesktopWebviewWindowPlugin: NSObject, FlutterPlugin {
         result(FlutterError(code: "0", message: "can not find webview for id: \(viewId)", details: nil))
         return
       }
-      wc.addJavascriptInterface(name: name)
+      wc.webViewController.addJavascriptInterface(name: name)
       result(nil)
       break
     case "clearAll":
@@ -149,7 +155,7 @@ public class DesktopWebviewWindowPlugin: NSObject, FlutterPlugin {
         result(FlutterError(code: "0", message: "param javaScript not found", details: nil))
         return
       }
-      wc.addScriptToExecuteOnDocumentCreated(javaScript: javaScript)
+      wc.webViewController.addScriptToExecuteOnDocumentCreated(javaScript: javaScript)
       result(nil)
       break
     case "setApplicationNameForUserAgent":
@@ -169,8 +175,68 @@ public class DesktopWebviewWindowPlugin: NSObject, FlutterPlugin {
         result(FlutterError(code: "0", message: "param applicationName not found", details: nil))
         return
       }
-      wc.setApplicationNameForUserAgent(applicationName: applicationName)
+      wc.webViewController.setApplicationNameForUserAgent(applicationName: applicationName)
       result(nil)
+      break
+    case "back":
+      guard let argument = call.arguments as? [String: Any?] else {
+        result(FlutterError(code: "0", message: "arg is not map", details: nil))
+        return
+      }
+      guard let viewId = argument["viewId"] as? Int64 else {
+        result(FlutterError(code: "0", message: "param viewId not found", details: nil))
+        return
+      }
+      guard let wc = webviews[viewId] else {
+        result(FlutterError(code: "0", message: "can not find webview for id: \(viewId)", details: nil))
+        return
+      }
+      wc.webViewController.goBack()
+      break
+    case "forward":
+      guard let argument = call.arguments as? [String: Any?] else {
+        result(FlutterError(code: "0", message: "arg is not map", details: nil))
+        return
+      }
+      guard let viewId = argument["viewId"] as? Int64 else {
+        result(FlutterError(code: "0", message: "param viewId not found", details: nil))
+        return
+      }
+      guard let wc = webviews[viewId] else {
+        result(FlutterError(code: "0", message: "can not find webview for id: \(viewId)", details: nil))
+        return
+      }
+      wc.webViewController.goForward()
+      break
+    case "reload":
+      guard let argument = call.arguments as? [String: Any?] else {
+        result(FlutterError(code: "0", message: "arg is not map", details: nil))
+        return
+      }
+      guard let viewId = argument["viewId"] as? Int64 else {
+        result(FlutterError(code: "0", message: "param viewId not found", details: nil))
+        return
+      }
+      guard let wc = webviews[viewId] else {
+        result(FlutterError(code: "0", message: "can not find webview for id: \(viewId)", details: nil))
+        return
+      }
+      wc.webViewController.reload()
+      break
+    case "stop":
+      guard let argument = call.arguments as? [String: Any?] else {
+        result(FlutterError(code: "0", message: "arg is not map", details: nil))
+        return
+      }
+      guard let viewId = argument["viewId"] as? Int64 else {
+        result(FlutterError(code: "0", message: "param viewId not found", details: nil))
+        return
+      }
+      guard let wc = webviews[viewId] else {
+        result(FlutterError(code: "0", message: "can not find webview for id: \(viewId)", details: nil))
+        return
+      }
+      wc.webViewController.stopLoading()
       break
     default:
       result(FlutterMethodNotImplemented)
@@ -179,6 +245,8 @@ public class DesktopWebviewWindowPlugin: NSObject, FlutterPlugin {
 
   func onWebviewWindowClose(viewId: Int64, wc: WebviewWindowController) {
     wc.destroy()
-//    webviews.removeValue(forKey: viewId)
+    let wc = webviews.removeValue(forKey: viewId)
+    wc?.window?.windowController = nil
+    wc?.window = nil
   }
 }
