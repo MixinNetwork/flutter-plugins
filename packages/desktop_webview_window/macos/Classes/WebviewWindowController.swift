@@ -20,6 +20,8 @@ class WebviewWindowController: NSWindowController {
   
   private let titleBarTopPadding: Int
   
+  private let title: String
+  
   public weak var webviewPlugin: DesktopWebviewWindowPlugin?
 
   init(viewId: Int64, methodChannel: FlutterMethodChannel,
@@ -32,6 +34,7 @@ class WebviewWindowController: NSWindowController {
     self.height = height
     self.titleBarHeight = titleBarHeight
     self.titleBarTopPadding = titleBarTopPadding
+    self.title = title
     super.init(window: nil)
   }
 
@@ -53,6 +56,7 @@ class WebviewWindowController: NSWindowController {
 
     window?.setContentSize(NSSize(width: width, height: height))
     window?.center()
+    window?.title = title
 
     window?.isReleasedWhenClosed = false
     window?.delegate = self

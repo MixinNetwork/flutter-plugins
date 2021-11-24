@@ -1,6 +1,12 @@
+## 0.1.1 (2021/11/24)
+
+fix window title not show on macOS
+
 ## 0.1.0 (2021/11/24)
 
 support custom titlebar.
+
+NOTE: contains break change. more details see readme.
 
 ## 0.0.7 (2021/11/11)
 
