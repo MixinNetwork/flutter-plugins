@@ -58,7 +58,7 @@ void WebviewWindowPlugin::HandleMethodCall(
 
     auto window_id = next_window_id_;
     auto window = std::make_unique<WebviewWindow>(
-        method_channel_, window_id, titleBarHeight,
+        method_channel_, window_id, int(titleBarHeight),
         [this, window_id]() {
           windows_.erase(window_id);
         });

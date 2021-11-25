@@ -1,3 +1,7 @@
+## 0.1.3 (2021/11/25)
+
+Remove windows addition import requirements.
+
 ## 0.1.2 (2021/11/24)
 
 fix TitleBar reload do not work.

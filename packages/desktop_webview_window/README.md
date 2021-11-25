@@ -30,22 +30,7 @@ Show a webview window on your flutter deksktop application.
    
    ```
 
-2. platform Windows.
-
-  * add this include to your  `windows/runner/flutter_window.cpp`
-    ```cpp
-    #include "desktop_webview_window/desktop_webview_window_plugin.h"
-    ```
-  * append this statement to your `flutter_window.cpp` `FlutterWindow::OnCreate()` method
-    ```cpp
-    bool FlutterWindow::OnCreate() {
-      ...
-      // Add this line
-      SetFlutterViewControllerFactory(std::make_unique<WebviewWindowAdapter>());
-    }
-    ```
-
-3. launch WebViewWindow
+2. launch WebViewWindow
 
    ```dart
      final webview = await WebviewWindow.create();
