@@ -1,3 +1,3 @@
-## 0.0.1
+## 0.0.1 (2021/12/07)
 
-* TODO: Describe initial release.
+* Initial release. support Windows/Linux/macOS

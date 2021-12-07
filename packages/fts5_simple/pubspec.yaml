@@ -1,7 +1,7 @@
 name: fts5_simple
-description: A new flutter plugin project.
+description: A flutter plugin wrapper for Simple tokenizer (https://github.com/wangfenjin/simple), improve your fts5 search for Chinese.
 version: 0.0.1
-homepage:
+homepage: https://github.com/MixinNetwork/flutter-plugins/tree/master/packages/fts5_simple
 
 environment:
   sdk: ">=2.16.0-42.0.dev <3.0.0"

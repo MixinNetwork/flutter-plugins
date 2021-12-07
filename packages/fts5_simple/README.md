@@ -1,16 +1,19 @@
 # fts5_simple
 
-A dart plugin wrapper for [Simple tokenizer](https://github.com/wangfenjin/simple)
+[![pub package](https://img.shields.io/pub/v/fts5_simple.svg)](https://pub.dev/packages/fts5_simple)
 
-|     |     |
-| --- | --- |
-| Windows | ✔️ |
-| MacOS | ✔️ |
+A flutter plugin wrapper for [Simple tokenizer](https://github.com/wangfenjin/simple), which supports Chinese and Pinyin search very simply and efficiently
 
-## Getting Started
+|         |     |
+|---------|-----|
+| Windows | ✔️  |
+| MacOS   | ✔️  |
+| Linux   | ✔️  |
 
-TODO
+## Example
+
+Checkout the [example](./example/lib/main.dart) for more details.
 
 ## License
 
-see [LICENSE](./LICENSE) file.
+See [LICENSE](./LICENSE) file.

@@ -51,14 +51,19 @@ extension Sqlite3FtsExtension on Database {
       dictPath = p.join(
           dir, 'data', 'flutter_assets', 'packages', 'fts5_simple', 'dicts');
     } else {
-      throw UnimplementedError('Not implemented');
+      assert(false, 'Unsupported platform');
+      return;
     }
 
     debugPrint('simpleLibPath: $simpleLibPath');
     debugPrint('dictPath: $dictPath');
 
-    loadExtesnion(simpleLibPath);
-
+    try {
+      loadExtesnion(simpleLibPath);
+    } catch (e, s) {
+      debugPrint('Error loading simple extension: $e $s');
+      return;
+    }
     final exist = Directory(dictPath).existsSync();
     assert(exist, 'dictPath($dictPath) does not exist');
     if (!exist) {
