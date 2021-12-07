@@ -10,6 +10,17 @@ typedef PromptHandler = String Function(String prompt, String defaultText);
 typedef OnHistoryChangedCallback = void Function(
     bool canGoBack, bool canGoForward);
 
+/// Callback when WebView start to load a URL.
+/// [url] is the URL string.
+/// [isUserInitiated] TRUE when the navigation was initiated through a user
+/// gesture as opposed to programmatic navigation by page script.
+/// [isRedirect] TRUE when the navigation was a redirect.
+typedef OnNavigationStartCallback = void Function(
+  String url,
+  bool isUserInitiated,
+  bool isRedirect,
+);
+
 abstract class Webview {
   Future<void> get onClose;
 
@@ -55,4 +66,11 @@ abstract class Webview {
 
   /// Register a callback that will be invoked when the webview history changes.
   void setOnHistoryChangedCallback(OnHistoryChangedCallback? callback);
+
+  void addOnNavigationStartCallback(OnNavigationStartCallback callback);
+
+  void removeOnNavigationStartCallback(OnNavigationStartCallback callback);
+
+  /// Close the web view window.
+  void close();
 }

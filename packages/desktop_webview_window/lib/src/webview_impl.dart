@@ -23,6 +23,8 @@ class WebviewImpl extends Webview {
 
   final ValueNotifier<bool> _isNaivgating = ValueNotifier<bool>(false);
 
+  final Set<OnNavigationStartCallback> _onNavigationStartCallbacks = {};
+
   WebviewImpl(this.viewId, this.channel);
 
   @override
@@ -51,8 +53,11 @@ class WebviewImpl extends Webview {
     _onHistoryChanged?.call(canGoBack, canGoForward);
   }
 
-  void onNavigationStarted() {
+  void onNavigationStarted(String url, bool isUserInitiated, bool isRedirect) {
     _isNaivgating.value = true;
+    for (final callback in _onNavigationStartCallbacks) {
+      callback(url, isUserInitiated, isRedirect);
+    }
   }
 
   void onNavigationCompleted() {
@@ -171,5 +176,23 @@ class WebviewImpl extends Webview {
   @override
   void setOnHistoryChangedCallback(OnHistoryChangedCallback? callback) {
     _onHistoryChanged = callback;
+  }
+
+  @override
+  void addOnNavigationStartCallback(OnNavigationStartCallback callback) {
+    _onNavigationStartCallbacks.add(callback);
+  }
+
+  @override
+  void removeOnNavigationStartCallback(OnNavigationStartCallback callback) {
+    _onNavigationStartCallbacks.remove(callback);
+  }
+
+  @override
+  void close() {
+    if (_closed) {
+      return;
+    }
+    channel.invokeMethod("close", {"viewId": viewId});
   }
 }

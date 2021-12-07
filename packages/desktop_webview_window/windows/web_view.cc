@@ -6,9 +6,11 @@
 #include <tchar.h>
 #include <cassert>
 #include <iostream>
+#include <thread>
 
 #include "web_view.h"
 #include "utils.h"
+#include "strconv.h"
 
 namespace webview_window {
 
@@ -135,12 +137,21 @@ void WebView::OnWebviewControllerCreated() {
   webview_->add_NavigationStarting(
       Callback<ICoreWebView2NavigationStartingEventHandler>(
           [this](ICoreWebView2 *sender, ICoreWebView2NavigationStartingEventArgs *args) {
+            LPWSTR uri;
+            args->get_Uri(&uri);
+            BOOL is_user_initiated;
+            args->get_IsUserInitiated(&is_user_initiated);
+            BOOL is_redirect;
+            args->get_IsRedirected(&is_redirect);
             auto method_args = flutter::EncodableMap{
                 {flutter::EncodableValue("id"), flutter::EncodableValue(web_view_id_)},
+                {flutter::EncodableValue("url"), flutter::EncodableValue(wide_to_utf8(std::wstring(uri)))},
+                {flutter::EncodableValue("isUserInitiated"), flutter::EncodableValue(is_user_initiated == TRUE)},
+                {flutter::EncodableValue("isRedirect"), flutter::EncodableValue(is_redirect == TRUE)},
             };
             method_channel_->InvokeMethod("onNavigationStarted",
                                           std::make_unique<flutter::EncodableValue>(method_args));
-            return S_OK;
+            return 0;
           }
       ).Get(), nullptr);
   webview_->add_NavigationCompleted(
@@ -154,6 +165,8 @@ void WebView::OnWebviewControllerCreated() {
             return S_OK;
           }
       ).Get(), nullptr);
+
+
 
 //  webview_->add_WebMessageReceived(
 //      Callback<ICoreWebView2WebMessageReceivedEventHandler>(
@@ -245,6 +258,7 @@ bool WebView::CanGoForward() const {
   }
   return false;
 }
+
 
 WebView::~WebView() {
   if (webview_) {

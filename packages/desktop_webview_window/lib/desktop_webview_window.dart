@@ -125,10 +125,13 @@ class WebviewWindow {
           'canGoBack': args['canGoBack'] as bool,
           'canGoForward': args['canGoForward'] as bool,
         });
-        debugPrint('onHistoryChanged: $args');
         break;
       case "onNavigationStarted":
-        webview.onNavigationStarted();
+        webview.onNavigationStarted(
+          args['url'] as String,
+          args['isUserInitiated'] as bool,
+          args['isRedirect'] as bool,
+        );
         await _otherIsolateMessageHandler.invokeMethod('onNavigationStarted', {
           'webViewId': viewId,
         });

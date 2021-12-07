@@ -28,7 +28,6 @@ bool runWebViewTitleBarWidget(
     return false;
   }
   final titleBarTopPadding = int.tryParse(args.length > 2 ? args[2] : '0') ?? 0;
-  debugPrint('runWebViewTitleBarWidget: $webViewId, $titleBarTopPadding');
   runZonedGuarded(
     () {
       runApp(_TitleBarApp(
