@@ -45,6 +45,11 @@ extension Sqlite3FtsExtension on Database {
       dictPath = p.join(dir, '..', 'Frameworks', 'App.framework', 'Resources',
           'flutter_assets', 'packages', 'fts5_simple');
       dictPath = p.join(dictPath, 'dicts');
+    } else if (Platform.isLinux) {
+      simpleLibPath = p.join(dir, 'lib', 'libsimple.so');
+      // data/flutter_assets/packages/fts5_simple/dicts
+      dictPath = p.join(
+          dir, 'data', 'flutter_assets', 'packages', 'fts5_simple', 'dicts');
     } else {
       throw UnimplementedError('Not implemented');
     }

@@ -33,6 +33,8 @@ flutter:
         pluginClass: Fts5SimplePlugin
       macos:
         pluginClass: Fts5SimplePlugin
+      linux:
+        pluginClass: Fts5SimplePlugin
 
   assets:
     - dicts/
