@@ -128,7 +128,8 @@ class _MyAppState extends State<MyApp> {
       ..setBrightness(Brightness.dark)
       ..setApplicationNameForUserAgent("WebviewExample/1.0.0")
       ..launch(_controller.text)
-      ..addOnNavigationStartCallback((url, isUserInitiated, isRedirect) {
+      ..addOnNavigationStartCallback((url) {
+        debugPrint('url: $url');
         final uri = Uri.parse(url);
         if (uri.path == '/login_success') {
           debugPrint('login success. token: ${uri.queryParameters['token']}');

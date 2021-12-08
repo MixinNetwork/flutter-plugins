@@ -39,6 +39,14 @@ void on_load_changed(WebKitWebView *web_view,
   window->OnLoadChanged(load_event);
 }
 
+gboolean decide_policy_cb(WebKitWebView *web_view,
+                          WebKitPolicyDecision *decision,
+                          WebKitPolicyDecisionType type,
+                          gpointer user_data) {
+  auto *window = static_cast<WebviewWindow *>(user_data);
+  return window->DecidePolicy(decision, type);
+}
+
 }
 
 WebviewWindow::WebviewWindow(
@@ -96,6 +104,9 @@ WebviewWindow::WebviewWindow(
                    G_CALLBACK(on_create), this);
   g_signal_connect(G_OBJECT(webview_), "load-changed",
                    G_CALLBACK(on_load_changed), this);
+  g_signal_connect(G_OBJECT(webview_), "decide-policy",
+                   G_CALLBACK(decide_policy_cb), this);
+
   auto settings = webkit_web_view_get_settings(WEBKIT_WEB_VIEW(webview_));
   webkit_settings_set_javascript_can_open_windows_automatically(settings, true);
   default_user_agent_ = webkit_settings_get_user_agent(settings);
@@ -187,4 +198,20 @@ void WebviewWindow::Reload() {
 
 void WebviewWindow::StopLoading() {
   webkit_web_view_stop_loading(WEBKIT_WEB_VIEW(webview_));
+}
+
+gboolean WebviewWindow::DecidePolicy(WebKitPolicyDecision *decision, WebKitPolicyDecisionType type) {
+  if (type == WEBKIT_POLICY_DECISION_TYPE_NAVIGATION_ACTION) {
+    auto *navigation_decision = WEBKIT_NAVIGATION_POLICY_DECISION (decision);
+    auto *navigation_action = webkit_navigation_policy_decision_get_navigation_action(navigation_decision);
+    auto *request = webkit_navigation_action_get_request(navigation_action);
+    auto *uri = webkit_uri_request_get_uri(request);
+    auto *args = fl_value_new_map();
+    fl_value_set(args, fl_value_new_string("id"), fl_value_new_int(window_id_));
+    fl_value_set(args, fl_value_new_string("url"), fl_value_new_string(uri));
+    fl_method_channel_invoke_method(
+        FL_METHOD_CHANNEL(method_channel_), "onUrlRequested", args,
+        nullptr, nullptr, nullptr);
+  }
+  return false;
 }

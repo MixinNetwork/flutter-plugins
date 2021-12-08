@@ -12,14 +12,7 @@ typedef OnHistoryChangedCallback = void Function(
 
 /// Callback when WebView start to load a URL.
 /// [url] is the URL string.
-/// [isUserInitiated] TRUE when the navigation was initiated through a user
-/// gesture as opposed to programmatic navigation by page script.
-/// [isRedirect] TRUE when the navigation was a redirect.
-typedef OnNavigationStartCallback = void Function(
-  String url,
-  bool isUserInitiated,
-  bool isRedirect,
-);
+typedef OnNavigationStartCallback = void Function(String url);
 
 abstract class Webview {
   Future<void> get onClose;

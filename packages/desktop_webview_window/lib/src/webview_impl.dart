@@ -53,10 +53,13 @@ class WebviewImpl extends Webview {
     _onHistoryChanged?.call(canGoBack, canGoForward);
   }
 
-  void onNavigationStarted(String url, bool isUserInitiated, bool isRedirect) {
+  void onNavigationStarted() {
     _isNaivgating.value = true;
+  }
+
+  void notifyUrlChanged(String url) {
     for (final callback in _onNavigationStartCallbacks) {
-      callback(url, isUserInitiated, isRedirect);
+      callback(url);
     }
   }
 
