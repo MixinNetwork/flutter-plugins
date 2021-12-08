@@ -1,3 +1,8 @@
+## 0.1.4
+
+* add `close` method for WebView.
+* add `onUrlRequest` event for WebView.
+
 ## 0.1.3 (2021/11/25)
 
 Remove windows addition import requirements.

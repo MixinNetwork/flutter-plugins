@@ -92,6 +92,9 @@ class WebviewWindow {
       case 'onStopPressed':
         await webView.stop();
         break;
+      case 'onClosePressed':
+        webView.close();
+        break;
     }
   }
 
@@ -135,6 +138,10 @@ class WebviewWindow {
       case "onUrlRequested":
         final url = args['url'] as String;
         webview.notifyUrlChanged(url);
+        await _otherIsolateMessageHandler.invokeMethod('onUrlRequested', {
+          'webViewId': viewId,
+          'url': url,
+        });
         break;
       case "onNavigationCompleted":
         webview.onNavigationCompleted();

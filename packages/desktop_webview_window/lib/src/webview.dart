@@ -12,7 +12,7 @@ typedef OnHistoryChangedCallback = void Function(
 
 /// Callback when WebView start to load a URL.
 /// [url] is the URL string.
-typedef OnNavigationStartCallback = void Function(String url);
+typedef OnUrlRequestCallback = void Function(String url);
 
 abstract class Webview {
   Future<void> get onClose;
@@ -60,9 +60,9 @@ abstract class Webview {
   /// Register a callback that will be invoked when the webview history changes.
   void setOnHistoryChangedCallback(OnHistoryChangedCallback? callback);
 
-  void addOnNavigationStartCallback(OnNavigationStartCallback callback);
+  void addOnUrlRequestCallback(OnUrlRequestCallback callback);
 
-  void removeOnNavigationStartCallback(OnNavigationStartCallback callback);
+  void removeOnUrlRequestCallback(OnUrlRequestCallback callback);
 
   /// Close the web view window.
   void close();

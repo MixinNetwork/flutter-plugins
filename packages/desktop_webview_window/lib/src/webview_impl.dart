@@ -23,7 +23,7 @@ class WebviewImpl extends Webview {
 
   final ValueNotifier<bool> _isNaivgating = ValueNotifier<bool>(false);
 
-  final Set<OnNavigationStartCallback> _onNavigationStartCallbacks = {};
+  final Set<OnUrlRequestCallback> _onUrlRequestCallbacks = {};
 
   WebviewImpl(this.viewId, this.channel);
 
@@ -58,7 +58,7 @@ class WebviewImpl extends Webview {
   }
 
   void notifyUrlChanged(String url) {
-    for (final callback in _onNavigationStartCallbacks) {
+    for (final callback in _onUrlRequestCallbacks) {
       callback(url);
     }
   }
@@ -182,13 +182,13 @@ class WebviewImpl extends Webview {
   }
 
   @override
-  void addOnNavigationStartCallback(OnNavigationStartCallback callback) {
-    _onNavigationStartCallbacks.add(callback);
+  void addOnUrlRequestCallback(OnUrlRequestCallback callback) {
+    _onUrlRequestCallbacks.add(callback);
   }
 
   @override
-  void removeOnNavigationStartCallback(OnNavigationStartCallback callback) {
-    _onNavigationStartCallbacks.remove(callback);
+  void removeOnUrlRequestCallback(OnUrlRequestCallback callback) {
+    _onUrlRequestCallbacks.remove(callback);
   }
 
   @override
