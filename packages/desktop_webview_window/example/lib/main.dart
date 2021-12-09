@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:desktop_webview_window/desktop_webview_window.dart';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
 
 void main(List<String> args) {
   debugPrint('args: $args');
@@ -52,12 +54,17 @@ class _MyAppState extends State<MyApp> {
           actions: [
             IconButton(
               onPressed: () async {
+                final document = await getApplicationDocumentsDirectory();
                 final webview = await WebviewWindow.create(
                   configuration: CreateConfiguration(
                     windowHeight: 1280,
                     windowWidth: 720,
                     title: "ExampleTestWindow",
                     titleBarTopPadding: Platform.isMacOS ? 20 : 0,
+                    userDataFolderWindows: p.join(
+                      document.path,
+                      'desktop_webview_window',
+                    ),
                   ),
                 );
                 webview

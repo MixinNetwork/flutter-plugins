@@ -6,6 +6,7 @@
 #include <tchar.h>
 #include <cassert>
 #include <iostream>
+#include <utility>
 
 #include "web_view.h"
 #include "utils.h"
@@ -25,10 +26,10 @@ using namespace Microsoft::WRL;
 
 WebView::WebView(
     std::shared_ptr<flutter::MethodChannel<flutter::EncodableValue>> method_channel,
-    int64_t web_view_id,
+    int64_t web_view_id, std::wstring userDataFolder,
     std::function<void(HRESULT)> on_web_view_created
 ) : method_channel_(std::move(method_channel)),
-    web_view_id_(web_view_id),
+    web_view_id_(web_view_id), user_data_folder_(std::move(userDataFolder)),
     on_web_view_created_callback_(std::move(on_web_view_created)) {
   RegisterWindowClass(kWebViewClassName, WndProc);
   view_window_ = wil::unique_hwnd(::CreateWindowEx(
@@ -49,8 +50,9 @@ WebView::WebView(
     on_web_view_created_callback_(S_FALSE);
     return;
   }
+
   CreateCoreWebView2EnvironmentWithOptions(
-      nullptr, L"webview_window_WebView2", nullptr,
+      nullptr, user_data_folder_.c_str(), nullptr,
       Callback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler>(
           [this](HRESULT result, ICoreWebView2Environment *env) -> HRESULT {
             if (!SUCCEEDED(result)) {

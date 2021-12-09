@@ -8,6 +8,7 @@ import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
+import 'package:path/path.dart' as p;
 
 import 'src/create_configuration.dart';
 import 'src/message_channel.dart';
@@ -49,6 +50,7 @@ class WebviewWindow {
     });
   }
 
+  /// Check if WebView runtime is available on the current devices.
   static Future<bool> isWebviewAvailable() async {
     if (Platform.isWindows) {
       final ret = await _channel.invokeMethod<bool>('isWebviewAvailable');
@@ -146,14 +148,21 @@ class WebviewWindow {
   }
 
   /// Clear all cookies and storage.
-  static Future<void> clearAll() async {
+  static Future<void> clearAll({
+    String userDataFolderWindows = 'webview_window_WebView2',
+  }) async {
     await _channel.invokeMethod('clearAll');
 
     // FIXME(boyan01) Move the logic to windows platform if WebView2 provider a way to clean caches.
     // https://docs.microsoft.com/en-us/microsoft-edge/webview2/concepts/user-data-folder#create-user-data-folders
     if (Platform.isWindows) {
-      final dir = File(Platform.resolvedExecutable).parent;
-      final webview2Dir = Directory(dir.path + "\\webview_window_WebView2");
+      final Directory webview2Dir;
+      if (p.isAbsolute(userDataFolderWindows)) {
+        webview2Dir = Directory(userDataFolderWindows);
+      } else {
+        webview2Dir = Directory(p.join(
+            p.dirname(Platform.resolvedExecutable), userDataFolderWindows));
+      }
 
       if (await (webview2Dir.exists())) {
         for (var i = 0; i <= 4; i++) {

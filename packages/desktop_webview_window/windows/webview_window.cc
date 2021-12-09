@@ -49,7 +49,9 @@ WebviewWindow::~WebviewWindow() {
   hwnd_.reset();
 }
 
-void WebviewWindow::CreateAndShow(const std::wstring &title, int height, int width, CreateCallback callback) {
+void WebviewWindow::CreateAndShow(const std::wstring &title, int height, int width,
+                                  const std::wstring &userDataFolder,
+                                  CreateCallback callback) {
 
   RegisterWindowClass(kWebViewWindowClassName, WebviewWindow::WndProc);
 
@@ -81,13 +83,15 @@ void WebviewWindow::CreateAndShow(const std::wstring &title, int height, int wid
   auto title_bar_height = Scale(title_bar_height_, scale_factor);
 
   // Create the browser view.
-  web_view_ = std::make_unique<webview_window::WebView>(method_channel_, window_id_, [callback](HRESULT hr) {
-    if (SUCCEEDED(hr)) {
-      callback(true);
-    } else {
-      callback(false);
-    }
-  });
+  web_view_ = std::make_unique<webview_window::WebView>(
+      method_channel_, window_id_, userDataFolder,
+      [callback](HRESULT hr) {
+        if (SUCCEEDED(hr)) {
+          callback(true);
+        } else {
+          callback(false);
+        }
+      });
 
   auto web_view_handle = web_view_->NativeWindow().get();
   SetParent(web_view_handle, hwnd_.get());
