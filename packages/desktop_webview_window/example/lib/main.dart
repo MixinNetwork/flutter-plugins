@@ -2,8 +2,8 @@ import 'dart:io';
 
 import 'package:desktop_webview_window/desktop_webview_window.dart';
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
 void main(List<String> args) {
   debugPrint('args: $args');
@@ -54,17 +54,13 @@ class _MyAppState extends State<MyApp> {
           actions: [
             IconButton(
               onPressed: () async {
-                final document = await getApplicationDocumentsDirectory();
                 final webview = await WebviewWindow.create(
                   configuration: CreateConfiguration(
                     windowHeight: 1280,
                     windowWidth: 720,
                     title: "ExampleTestWindow",
                     titleBarTopPadding: Platform.isMacOS ? 20 : 0,
-                    userDataFolderWindows: p.join(
-                      document.path,
-                      'desktop_webview_window',
-                    ),
+                    userDataFolderWindows: await _getWebViewPath(),
                   ),
                 );
                 webview
@@ -113,7 +109,11 @@ class _MyAppState extends State<MyApp> {
                   onPressed: _webviewAvailable != true
                       ? null
                       : () async {
-                          final webview = await WebviewWindow.create();
+                          final webview = await WebviewWindow.create(
+                            configuration: CreateConfiguration(
+                              userDataFolderWindows: await _getWebViewPath(),
+                            ),
+                          );
                           webview
                             ..setBrightness(Brightness.dark)
                             ..setApplicationNameForUserAgent(
@@ -128,7 +128,9 @@ class _MyAppState extends State<MyApp> {
                 const SizedBox(height: 20),
                 TextButton(
                   onPressed: () async {
-                    await WebviewWindow.clearAll();
+                    await WebviewWindow.clearAll(
+                      userDataFolderWindows: await _getWebViewPath(),
+                    );
                     debugPrint('clear complete');
                   },
                   child: const Text('Clear all'),
@@ -140,4 +142,12 @@ class _MyAppState extends State<MyApp> {
       ),
     );
   }
+}
+
+Future<String> _getWebViewPath() async {
+  final document = await getApplicationDocumentsDirectory();
+  return p.join(
+    document.path,
+    'desktop_webview_window',
+  );
 }

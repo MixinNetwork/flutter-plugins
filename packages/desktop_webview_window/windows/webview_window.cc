@@ -46,6 +46,7 @@ WebviewWindow::WebviewWindow(
 WebviewWindow::~WebviewWindow() {
   flutter_action_bar_.reset();
   web_view_.reset();
+  SetWindowLongPtr(hwnd_.get(), GWLP_USERDATA, 0);
   hwnd_.reset();
 }
 

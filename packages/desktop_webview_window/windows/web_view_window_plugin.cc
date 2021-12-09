@@ -68,8 +68,8 @@ void WebviewWindowPlugin::HandleMethodCall(
         utf8_to_wide(title), int(height), int(width), utf8_to_wide(userDataFolder),
         [this, window_id, result(result2)](bool succeed) mutable {
           if (!succeed) {
-            windows_.erase(window_id);
             result->Error("0", "failed to show window");
+            windows_.erase(window_id);
             return;
           }
           result->Success(flutter::EncodableValue(window_id));
