@@ -1,3 +1,8 @@
+## 0.1.4 (2021/12/09)
+
+* support custom userDataFolder on Windows.
+* fix open web view failed cause crash on Windows.
+
 ## 0.1.3 (2021/11/25)
 
 Remove windows addition import requirements.
