@@ -11,12 +11,15 @@ class CreateConfiguration {
 
   final int titleBarTopPadding;
 
+  final String userDataFolderWindows;
+
   const CreateConfiguration({
     this.windowWidth = 1280,
     this.windowHeight = 720,
     this.title = "",
     this.titleBarHeight = 40,
     this.titleBarTopPadding = 0,
+    this.userDataFolderWindows = 'webview_window_WebView2',
   });
 
   factory CreateConfiguration.platform() {
@@ -31,5 +34,6 @@ class CreateConfiguration {
         "title": title,
         "titleBarHeight": titleBarHeight,
         "titleBarTopPadding": titleBarTopPadding,
+        "userDataFolderWindows": userDataFolderWindows,
       };
 }
