@@ -192,6 +192,19 @@ void WebviewWindowPlugin::HandleMethodCall(
     }
     windows_.erase(window_id);
     result->Success();
+  } else if (method_call.method_name() == "evaluateJavaScript") {
+    auto *arguments = std::get_if<flutter::EncodableMap>(method_call.arguments());
+    auto window_id = arguments->at(flutter::EncodableValue("viewId")).LongValue();
+    auto javascript = std::get<std::string>(arguments->at(flutter::EncodableValue("javaScriptString")));
+    if (!windows_.count(window_id)) {
+      result->Error("0", "can not find webview window for id");
+      return;
+    }
+    if (!windows_[window_id]->GetWebView()) {
+      result->Error("0", "webview window not ready");
+      return;
+    }
+    windows_[window_id]->GetWebView()->ExecuteJavaScript(utf8_to_wide(javascript), std::move(result));
   } else {
     result->NotImplemented();
   }
