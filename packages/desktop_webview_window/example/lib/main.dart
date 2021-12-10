@@ -149,6 +149,19 @@ class _MyAppState extends State<MyApp> {
       ..onClose.whenComplete(() {
         debugPrint("on close");
       });
+    await Future.delayed(const Duration(seconds: 2));
+    try {
+      const javaScript = """
+       function test() {
+         return {"name": "test", "user_agent": navigator.userAgent};
+       }
+       test();
+      """;
+      final ret = await webview.evaluateJavaScript(javaScript);
+      debugPrint('evaluateJavaScript: $ret');
+    } catch (e) {
+      debugPrint('evaluateJavaScript error: $e');
+    }
   }
 }
 

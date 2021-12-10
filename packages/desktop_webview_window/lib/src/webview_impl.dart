@@ -198,4 +198,13 @@ class WebviewImpl extends Webview {
     }
     channel.invokeMethod("close", {"viewId": viewId});
   }
+
+  @override
+  Future evaluateJavaScript(String javaScript) {
+    return channel.invokeMethod("evaluateJavaScript", {
+      "viewId": viewId,
+      "javaScriptString": javaScript,
+    });
+  }
+
 }
