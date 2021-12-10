@@ -192,6 +192,11 @@ extension WebViewLayoutController: WKNavigationDelegate {
       return
     }
 
+    methodChannel.invokeMethod("onUrlRequested", arguments: [
+      "id": viewId,
+      "url": url.absoluteString,
+    ])
+    
     decisionHandler(.allow)
   }
 

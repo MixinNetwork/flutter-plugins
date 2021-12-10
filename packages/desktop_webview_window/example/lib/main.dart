@@ -131,6 +131,7 @@ class _MyAppState extends State<MyApp> {
     final webview = await WebviewWindow.create(
       configuration: CreateConfiguration(
         userDataFolderWindows: await _getWebViewPath(),
+        titleBarTopPadding: Platform.isMacOS ? 20 : 0,
       ),
     );
     webview
