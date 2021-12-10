@@ -42,6 +42,9 @@ class WebviewWindow {
 
   void StopLoading();
 
+  gboolean DecidePolicy(WebKitPolicyDecision *decision,
+                        WebKitPolicyDecisionType type);
+
  private:
   FlMethodChannel *method_channel_;
   int64_t window_id_;

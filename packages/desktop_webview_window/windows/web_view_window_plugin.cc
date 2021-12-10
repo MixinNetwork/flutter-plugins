@@ -183,6 +183,15 @@ void WebviewWindowPlugin::HandleMethodCall(
     }
     windows_[window_id]->GetWebView()->Stop();
     result->Success();
+  } else if (method_call.method_name() == "close") {
+    auto *arguments = std::get_if<flutter::EncodableMap>(method_call.arguments());
+    auto window_id = arguments->at(flutter::EncodableValue("viewId")).LongValue();
+    if (!windows_.count(window_id)) {
+      result->Error("0", "can not find webview window for id");
+      return;
+    }
+    windows_.erase(window_id);
+    result->Success();
   } else {
     result->NotImplemented();
   }

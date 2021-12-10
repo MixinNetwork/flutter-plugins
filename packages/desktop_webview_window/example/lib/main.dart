@@ -106,23 +106,7 @@ class _MyAppState extends State<MyApp> {
                 TextField(controller: _controller),
                 const SizedBox(height: 16),
                 TextButton(
-                  onPressed: _webviewAvailable != true
-                      ? null
-                      : () async {
-                          final webview = await WebviewWindow.create(
-                            configuration: CreateConfiguration(
-                              userDataFolderWindows: await _getWebViewPath(),
-                            ),
-                          );
-                          webview
-                            ..setBrightness(Brightness.dark)
-                            ..setApplicationNameForUserAgent(
-                                "WebviewExample/1.0.0")
-                            ..launch(_controller.text)
-                            ..onClose.whenComplete(() {
-                              debugPrint("on close");
-                            });
-                        },
+                  onPressed: _webviewAvailable != true ? null : _onTap,
                   child: const Text('Open'),
                 ),
                 const SizedBox(height: 20),
@@ -141,6 +125,30 @@ class _MyAppState extends State<MyApp> {
         ),
       ),
     );
+  }
+
+  void _onTap() async {
+    final webview = await WebviewWindow.create(
+      configuration: CreateConfiguration(
+        userDataFolderWindows: await _getWebViewPath(),
+        titleBarTopPadding: Platform.isMacOS ? 20 : 0,
+      ),
+    );
+    webview
+      ..setBrightness(Brightness.dark)
+      ..setApplicationNameForUserAgent("WebviewExample/1.0.0")
+      ..launch(_controller.text)
+      ..addOnUrlRequestCallback((url) {
+        debugPrint('url: $url');
+        final uri = Uri.parse(url);
+        if (uri.path == '/login_success') {
+          debugPrint('login success. token: ${uri.queryParameters['token']}');
+          webview.close();
+        }
+      })
+      ..onClose.whenComplete(() {
+        debugPrint("on close");
+      });
   }
 }
 

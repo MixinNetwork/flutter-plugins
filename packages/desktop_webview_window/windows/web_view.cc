@@ -7,9 +7,11 @@
 #include <cassert>
 #include <iostream>
 #include <utility>
+#include <thread>
 
 #include "web_view.h"
 #include "utils.h"
+#include "strconv.h"
 
 namespace webview_window {
 
@@ -137,11 +139,19 @@ void WebView::OnWebviewControllerCreated() {
   webview_->add_NavigationStarting(
       Callback<ICoreWebView2NavigationStartingEventHandler>(
           [this](ICoreWebView2 *sender, ICoreWebView2NavigationStartingEventArgs *args) {
-            auto method_args = flutter::EncodableMap{
-                {flutter::EncodableValue("id"), flutter::EncodableValue(web_view_id_)},
-            };
-            method_channel_->InvokeMethod("onNavigationStarted",
-                                          std::make_unique<flutter::EncodableValue>(method_args));
+            method_channel_->InvokeMethod(
+                "onNavigationStarted",
+                std::make_unique<flutter::EncodableValue>(flutter::EncodableMap{
+                    {flutter::EncodableValue("id"), flutter::EncodableValue(web_view_id_)},
+                }));
+            LPWSTR uri;
+            args->get_Uri(&uri);
+            method_channel_->InvokeMethod(
+                "onUrlRequested",
+                std::make_unique<flutter::EncodableValue>(flutter::EncodableMap{
+                    {flutter::EncodableValue("id"), flutter::EncodableValue(web_view_id_)},
+                    {flutter::EncodableValue("url"), flutter::EncodableValue(wide_to_utf8(std::wstring(uri)))},
+                }));
             return S_OK;
           }
       ).Get(), nullptr);
@@ -156,6 +166,8 @@ void WebView::OnWebviewControllerCreated() {
             return S_OK;
           }
       ).Get(), nullptr);
+
+
 
 //  webview_->add_WebMessageReceived(
 //      Callback<ICoreWebView2WebMessageReceivedEventHandler>(

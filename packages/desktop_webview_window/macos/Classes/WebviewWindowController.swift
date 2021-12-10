@@ -104,6 +104,7 @@ class WebviewWindowController: NSWindowController {
 
 extension WebviewWindowController: NSWindowDelegate {
   func windowWillClose(_ notification: Notification) {
+    webViewController.destroy()
     methodChannel.invokeMethod("onWindowClose", arguments: ["id": viewId])
     DispatchQueue.main.async {
       self.webviewPlugin?.onWebviewWindowClose(viewId: self.viewId, wc: self)

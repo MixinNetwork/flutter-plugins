@@ -1,3 +1,9 @@
+## 0.1.5 (TODO)
+
+* add `close` method for WebView.
+* add `onUrlRequest` event for WebView.
+
+
 ## 0.1.4 (2021/12/09)
 
 * support custom userDataFolder on Windows.

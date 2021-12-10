@@ -28,7 +28,6 @@ bool runWebViewTitleBarWidget(
     return false;
   }
   final titleBarTopPadding = int.tryParse(args.length > 2 ? args[2] : '0') ?? 0;
-  debugPrint('runWebViewTitleBarWidget: $webViewId, $titleBarTopPadding');
   runZonedGuarded(
     () {
       runApp(_TitleBarApp(
@@ -84,6 +83,13 @@ mixin TitleBarWebViewController {
       'webViewId': _webViewId,
     });
   }
+
+  /// close the webview
+  void close() {
+    _channel.invokeMethod('onClosePressed', {
+      'webViewId': _webViewId,
+    });
+  }
 }
 
 class TitleBarWebViewState extends InheritedWidget {
@@ -93,11 +99,13 @@ class TitleBarWebViewState extends InheritedWidget {
     required this.isLoading,
     required this.canGoBack,
     required this.canGoForward,
+    required this.url,
   }) : super(key: key, child: child);
 
   final bool isLoading;
   final bool canGoBack;
   final bool canGoForward;
+  final String? url;
 
   static TitleBarWebViewState of(BuildContext context) {
     final TitleBarWebViewState? result =
@@ -142,6 +150,8 @@ class _TitleBarAppState extends State<_TitleBarApp>
 
   bool _isLoading = false;
 
+  String? _url;
+
   @override
   int get _webViewId => widget.webViewId;
 
@@ -171,6 +181,11 @@ class _TitleBarAppState extends State<_TitleBarApp>
             _isLoading = false;
           });
           break;
+        case "onUrlRequested":
+          setState(() {
+            _url = args['url'] as String;
+          });
+          break;
       }
     });
   }
@@ -188,6 +203,7 @@ class _TitleBarAppState extends State<_TitleBarApp>
             isLoading: _isLoading,
             canGoBack: _canGoBack,
             canGoForward: _canGoForward,
+            url: _url,
             child: Builder(builder: widget.builder),
           ),
         ),
