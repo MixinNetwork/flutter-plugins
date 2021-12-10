@@ -127,7 +127,7 @@ void WebviewWindow::Navigate(const char *url) {
   webkit_web_view_load_uri(WEBKIT_WEB_VIEW(webview_), url);
 }
 
-void WebviewWindow::RunJavaScript(const char *java_script) {
+void WebviewWindow::RunJavaScriptWhenContentReady(const char *java_script) {
   auto *manager = webkit_web_view_get_user_content_manager(WEBKIT_WEB_VIEW(webview_));
   webkit_user_content_manager_add_script(
       manager,
@@ -214,4 +214,23 @@ gboolean WebviewWindow::DecidePolicy(WebKitPolicyDecision *decision, WebKitPolic
         nullptr, nullptr, nullptr);
   }
   return false;
+}
+
+void WebviewWindow::EvaluateJavaScript(const char *java_script, FlMethodCall *call) {
+  webkit_web_view_run_javascript(
+      WEBKIT_WEB_VIEW(webview_), java_script, nullptr,
+      [](GObject *object, GAsyncResult *result, gpointer user_data) {
+        auto *call = static_cast<FlMethodCall *>(user_data);
+        GError *error = nullptr;
+        auto *js_result = webkit_web_view_run_javascript_finish(WEBKIT_WEB_VIEW(object), result, &error);
+        if (!js_result) {
+          fl_method_call_respond_error(call, "failed to evaluate javascript.", error->message, nullptr, nullptr);
+          g_error_free(error);
+        } else {
+          auto *js_value = jsc_value_to_json(webkit_javascript_result_get_js_value(js_result), 0);
+          fl_method_call_respond_success(call, js_value ? fl_value_new_string(js_value) : nullptr, nullptr);
+        }
+        g_object_unref(call);
+      },
+      g_object_ref(call));
 }
