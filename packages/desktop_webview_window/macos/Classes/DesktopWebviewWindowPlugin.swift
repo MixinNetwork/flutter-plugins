@@ -253,6 +253,25 @@ public class DesktopWebviewWindowPlugin: NSObject, FlutterPlugin {
       }
       wc.close()
       break
+    case "evaluateJavaScript":
+      guard let argument = call.arguments as? [String: Any?] else {
+        result(FlutterError(code: "0", message: "arg is not map", details: nil))
+        return
+      }
+      guard let viewId = argument["viewId"] as? Int64 else {
+        result(FlutterError(code: "0", message: "param viewId not found", details: nil))
+        return
+      }
+      guard let wc = webviews[viewId] else {
+        result(FlutterError(code: "0", message: "can not find webview for id: \(viewId)", details: nil))
+        return
+      }
+      guard let js = argument["javaScriptString"] as? String else {
+        result(FlutterError(code: "0", message: "param javaScriptString not found", details: nil))
+        return
+      }
+      wc.webViewController.evaluateJavaScript(javaScriptString: js, completer: result)
+      break
     default:
       result(FlutterMethodNotImplemented)
     }

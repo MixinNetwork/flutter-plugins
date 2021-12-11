@@ -260,6 +260,25 @@ bool WebView::CanGoForward() const {
   return false;
 }
 
+void WebView::ExecuteJavaScript(const std::wstring &javaScript,
+                                std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> completer) {
+  if (webview_) {
+    webview_->ExecuteScript(
+        javaScript.c_str(),
+        Callback<ICoreWebView2ExecuteScriptCompletedHandler>(
+            [completer(std::move(completer))](HRESULT error, PCWSTR result) -> HRESULT {
+              if (error != S_OK) {
+                completer->Error("0", "Error executing JavaScript");
+              } else {
+                completer->Success(flutter::EncodableValue(wide_to_utf8(std::wstring(result))));
+              }
+              return S_OK;
+            }).Get());
+  } else {
+    completer->Error("0", "webview not created");
+  }
+}
+
 WebView::~WebView() {
   if (webview_) {
     webview_->Stop();

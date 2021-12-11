@@ -26,7 +26,7 @@ class WebviewWindow {
 
   void Navigate(const char *url);
 
-  void RunJavaScript(const char *java_script);
+  void RunJavaScriptWhenContentReady(const char *java_script);
 
   void Close();
 
@@ -44,6 +44,8 @@ class WebviewWindow {
 
   gboolean DecidePolicy(WebKitPolicyDecision *decision,
                         WebKitPolicyDecisionType type);
+
+  void EvaluateJavaScript(const char *java_script, FlMethodCall* call);
 
  private:
   FlMethodChannel *method_channel_;

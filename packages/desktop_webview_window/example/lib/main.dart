@@ -149,8 +149,31 @@ class _MyAppState extends State<MyApp> {
       ..onClose.whenComplete(() {
         debugPrint("on close");
       });
+    await Future.delayed(const Duration(seconds: 2));
+    for (final javaScript in _javaScriptToEval) {
+      try {
+        final ret = await webview.evaluateJavaScript(javaScript);
+        debugPrint('evaluateJavaScript: $ret');
+      } catch (e) {
+        debugPrint('evaluateJavaScript error: $e \n $javaScript');
+      }
+    }
   }
 }
+
+const _javaScriptToEval = [
+  """
+  function test() {
+    return;
+  }
+  test();
+  """,
+  'eval({"name": "test", "user_agent": navigator.userAgent})',
+  '1 + 1',
+  'undefined',
+  '1.0 + 1.0',
+  '"test"',
+];
 
 Future<String> _getWebViewPath() async {
   final document = await getApplicationDocumentsDirectory();
