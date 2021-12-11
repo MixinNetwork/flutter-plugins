@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -200,11 +201,14 @@ class WebviewImpl extends Webview {
   }
 
   @override
-  Future evaluateJavaScript(String javaScript) {
-    return channel.invokeMethod("evaluateJavaScript", {
+  Future<String?> evaluateJavaScript(String javaScript) async {
+    final dynamic result = await channel.invokeMethod("evaluateJavaScript", {
       "viewId": viewId,
       "javaScriptString": javaScript,
     });
+    if (result is String || result == null) {
+      return result;
+    }
+    return json.encode(result);
   }
-
 }

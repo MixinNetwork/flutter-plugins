@@ -68,6 +68,6 @@ abstract class Webview {
   void close();
 
   /// evaluate JavaScript in the web view.
-  Future<dynamic> evaluateJavaScript(String javaScript);
+  Future<String?> evaluateJavaScript(String javaScript);
 
 }
