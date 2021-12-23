@@ -4,11 +4,12 @@
 
 A flutter plugin which could read image,files from clipboard and write files to clipboard.
 
-|          |       |
-| -------- | ------- |
-| Windows  | ✅     |
-| Linux    | ✅    |
-| macOS    | ✅     |
+|          |     |
+|----------|-----|
+| Windows  | ✅   |
+| Linux    | ✅   |
+| macOS    | ✅   |
+| iOS      | ✅   |
 
 ## Getting Started
 
@@ -18,13 +19,14 @@ A flutter plugin which could read image,files from clipboard and write files to 
      pasteboard: ^latest
    ```
 2. example.
+
 ```dart
 import 'package:pasteboard/pasteboard.dart';
 
 Future<void> readAndWriteFiles() async {
   final paths = ['your_file_path'];
   await Pasteboard.writeFiles(paths);
-  
+
   final files = await Pasteboard.files();
   print(files);
 }
