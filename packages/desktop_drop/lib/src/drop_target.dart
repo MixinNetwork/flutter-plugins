@@ -1,3 +1,4 @@
+import 'package:cross_file/cross_file.dart';
 import 'package:flutter/widgets.dart';
 
 import 'channel.dart';
@@ -7,12 +8,12 @@ import 'utils/platform.dart' if (dart.library.html) 'utils/platform_web.dart';
 @immutable
 class DropDoneDetails {
   const DropDoneDetails({
-    required this.urls,
+    required this.files,
     required this.localPosition,
     required this.globalPosition,
   });
 
-  final List<Uri> urls;
+  final List<XFile> files;
   final Offset localPosition;
   final Offset globalPosition;
 }
@@ -154,7 +155,7 @@ class _DropTargetState extends State<DropTarget> {
         localLocation: position,
       );
       widget.onDragDone?.call(DropDoneDetails(
-        urls: event.uris,
+        files: event.files,
         localPosition: position,
         globalPosition: globalPosition,
       ));

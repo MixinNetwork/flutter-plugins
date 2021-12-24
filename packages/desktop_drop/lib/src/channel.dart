@@ -1,9 +1,10 @@
 import 'dart:convert';
-import 'dart:ui';
 
+import 'package:cross_file/cross_file.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import 'drop_item.dart';
 import 'events.dart';
 import 'utils/platform.dart' if (dart.library.html) 'utils/platform_web.dart';
 
@@ -63,16 +64,12 @@ class DesktopDrop {
         break;
       case "performOperation":
         assert(_offset != null);
-        final urls = (call.arguments as List).cast<String>();
+        final paths = (call.arguments as List).cast<String>();
         _notifyEvent(
           DropDoneEvent(
-              location: _offset ?? Offset.zero,
-              uris: urls
-                  .map(
-                      (e) => Platform.isWindows ? Uri.file(e) : Uri.tryParse(e))
-                  .where((e) => e != null)
-                  .cast<Uri>()
-                  .toList()),
+            location: _offset ?? Offset.zero,
+            files: paths.map((e) => XFile(e)).toList(),
+          ),
         );
         _offset = null;
         break;
@@ -82,21 +79,30 @@ class DesktopDrop {
         final text = (call.arguments as List<dynamic>)[0] as String;
         final offset = ((call.arguments as List<dynamic>)[1] as List<dynamic>)
             .cast<double>();
-        final lines = const LineSplitter().convert(text);
+        final paths = const LineSplitter()
+            .convert(text)
+            .map((e) => Uri.tryParse(e)?.path ?? '')
+            .where((e) => e.isNotEmpty);
         _notifyEvent(DropDoneEvent(
           location: Offset(offset[0], offset[1]),
-          uris: lines
-              .map((e) => Uri.tryParse(e))
-              .where((e) => e != null)
-              .cast<Uri>()
-              .toList(),
+          files: paths.map((e) => XFile(e)).toList(),
         ));
         break;
       case "performOperation_web":
-        debugPrint('call.arguments: ${call.arguments}');
         assert(_offset != null);
+        final results = (call.arguments as List)
+            .cast<Map>()
+            .map((e) => WebDropItem.fromJson(e.cast<String, dynamic>()))
+            .map((e) => XFile(
+                  e.uri,
+                  name: e.name,
+                  length: e.size,
+                  lastModified: e.lastModified,
+                  mimeType: e.type,
+                ))
+            .toList();
         _notifyEvent(
-          DropDoneEvent(location: _offset ?? Offset.zero, uris: []),
+          DropDoneEvent(location: _offset ?? Offset.zero, files: results),
         );
         _offset = null;
         break;

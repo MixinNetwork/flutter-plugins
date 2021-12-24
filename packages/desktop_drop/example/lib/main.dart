@@ -51,10 +51,18 @@ class _ExmapleDragTargetState extends State<ExmapleDragTarget> {
   @override
   Widget build(BuildContext context) {
     return DropTarget(
-      onDragDone: (detail) {
+      onDragDone: (detail) async {
         setState(() {
-          _list.addAll(detail.urls.map((e) => XFile(e.path)));
+          _list.addAll(detail.files);
         });
+
+        debugPrint('onDragDone:');
+        for (final file in detail.files) {
+          debugPrint('  ${file.path} ${file.name}'
+              '  ${await file.lastModified()}'
+              '  ${await file.length()}'
+              '  ${file.mimeType}');
+        }
       },
       onDragUpdated: (details) {
         setState(() {

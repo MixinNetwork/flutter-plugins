@@ -4,13 +4,13 @@
 
 A plugin which allows user dragging files to your flutter desktop applications.
 
-|          |       |
-| -------- | ------- |
-| Windows  | ✅     |
-| Linux    | ✅    |
-| macOS    | ✅     |
-| Android  | ✅(preview) |
-| Web      | ✅     |
+|         |            |
+|---------|------------|
+| Windows | ✅          |
+| Linux   | ✅          |
+| macOS   | ✅          |
+| Android | ✅(preview) |
+| Web     | ✅          |
 
 ## Getting Started
 
