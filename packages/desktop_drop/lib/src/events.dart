@@ -1,3 +1,4 @@
+import 'package:cross_file/cross_file.dart';
 import 'package:flutter/painting.dart';
 
 abstract class DropEvent {
@@ -24,15 +25,15 @@ class DropUpdateEvent extends DropEvent {
 }
 
 class DropDoneEvent extends DropEvent {
-  final List<Uri> uris;
+  final List<XFile> files;
 
   DropDoneEvent({
     required Offset location,
-    required this.uris,
+    required this.files,
   }) : super(location);
 
   @override
   String toString() {
-    return '$runtimeType($location, $uris)';
+    return '$runtimeType($location, $files)';
   }
 }

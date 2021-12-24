@@ -1,5 +1,4 @@
 import 'dart:async';
-
 // In order to *not* need this ignore, consider extracting the "web" version
 // of your plugin as a separate package, instead of inlining it in the same
 // package as the core of your plugin.
@@ -9,6 +8,8 @@ import 'dart:html' as html show window, Url;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_web_plugins/flutter_web_plugins.dart';
+
+import 'src/drop_item.dart';
 
 /// A web implementation of the DesktopDrop plugin.
 class DesktopDropWeb {
@@ -32,20 +33,29 @@ class DesktopDropWeb {
     html.window.onDrop.listen((event) {
       event.preventDefault();
 
-      final urls = <String>[];
+      final results = <WebDropItem>[];
 
       try {
         final items = event.dataTransfer.files;
         if (items != null) {
           for (var index = 0; index < items.length; index++) {
-            final path = html.Url.createObjectUrl(items[index]);
-            urls.add(path);
+            results.add(WebDropItem(
+              uri: html.Url.createObjectUrl(items[index]),
+              name: items[index].name,
+              size: items[index].size,
+              type: items[index].type,
+              relativePath: items[index].relativePath,
+              lastModified: items[index].lastModifiedDate,
+            ));
           }
         }
       } catch (e, s) {
         debugPrint('desktop_drop_web: $e $s');
       } finally {
-        channel.invokeMethod("performOperation", urls);
+        channel.invokeMethod(
+          "performOperation_web",
+          results.map((e) => e.toJson()).toList(),
+        );
       }
     });
 

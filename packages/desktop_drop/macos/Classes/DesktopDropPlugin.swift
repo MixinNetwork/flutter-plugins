@@ -9,7 +9,6 @@ public class DesktopDropPlugin: NSObject, FlutterPlugin {
     let channel = FlutterMethodChannel(name: "desktop_drop", binaryMessenger: registrar.messenger)
     let instance = DesktopDropPlugin()
 
-    debugPrint("bounds: \(vc.view.bounds)")
     let d = DropTarget(frame: vc.view.bounds, channel: channel)
     d.autoresizingMask = [.width, .height]
 
@@ -95,7 +94,7 @@ class DropTarget: NSView {
             if let error = error {
               debugPrint("error: \(error)")
             } else {
-              urls.append(fileURL.standardized.absoluteString)
+              urls.append(fileURL.path)
             }
             group.leave()
           }
@@ -103,7 +102,7 @@ class DropTarget: NSView {
         }
       }
       if let fileURL = draggingItem.item as? URL {
-        urls.append(fileURL.standardized.absoluteString)
+        urls.append(fileURL.path)
         return
       }
     }

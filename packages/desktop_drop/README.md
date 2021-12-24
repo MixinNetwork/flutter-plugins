@@ -4,13 +4,13 @@
 
 A plugin which allows user dragging files to your flutter desktop applications.
 
-|          |       |
-| -------- | ------- |
-| Windows  | ✅     |
-| Linux    | ✅    |
-| macOS    | ✅     |
-| Android  | ✅(preview) |
-| Web      | ✅     |
+|         |            |
+|---------|------------|
+| Windows | ✅          |
+| Linux   | ✅          |
+| macOS   | ✅          |
+| Android | ✅(preview) |
+| Web     | ✅          |
 
 ## Getting Started
 
@@ -31,7 +31,7 @@ class ExmapleDragTarget extends StatefulWidget {
 }
 
 class _ExmapleDragTargetState extends State<ExmapleDragTarget> {
-  final List<Uri> _list = [];
+  final List<XFile> _list = [];
 
   bool _dragging = false;
 
@@ -40,7 +40,7 @@ class _ExmapleDragTargetState extends State<ExmapleDragTarget> {
     return DropTarget(
       onDragDone: (detail) {
         setState(() {
-          _list.addAll(detail.urls);
+          _list.addAll(detail.files);
         });
       },
       onDragEntered: (detail) {
