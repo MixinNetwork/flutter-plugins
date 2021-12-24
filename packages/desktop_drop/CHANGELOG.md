@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.0
+
+** BREAK CHANGES**
+* replace DropDoneDetails property `urls: List<Uri>` to `files: List<XFile>`. which is more general.
+
 ## 0.2.0 (2021/11/23)
 
 Add web support
