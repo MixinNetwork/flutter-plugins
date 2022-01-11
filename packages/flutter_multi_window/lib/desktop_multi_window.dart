@@ -6,7 +6,7 @@ import 'src/window_controller_impl.dart';
 
 export 'src/window_controller.dart';
 
-class FlutterMultiWindow {
+class DesktopMultiWindow {
   static Future<WindowController> createWindow([String? arguments]) async {
     final windowId = await miltiWindowChannel.invokeMethod<int>(
       'createWindow',

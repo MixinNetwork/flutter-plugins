@@ -3,7 +3,7 @@
 # Run `pod lib lint flutter_multi_window.podspec` to validate before publishing.
 #
 Pod::Spec.new do |s|
-  s.name             = 'flutter_multi_window'
+  s.name             = 'desktop_multi_window'
   s.version          = '0.0.1'
   s.summary          = 'A new flutter plugin project.'
   s.description      = <<-DESC

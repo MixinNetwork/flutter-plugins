@@ -33,6 +33,7 @@ class FlutterWindow: NSObject {
     window.delegate = self
     window.isReleasedWhenClosed = false
     window.titleVisibility = .hidden
+    window.titlebarAppearsTransparent = true
     
   }
 

@@ -55,7 +55,7 @@ public class FlutterMultiWindowPlugin: NSObject, FlutterPlugin {
       let arguments = call.arguments as! [String: Any?]
       let windowId = arguments["windowId"] as! Int64
       let frameAutosaveName = arguments["name"] as! String
-      MultiWindowManager.shared.setFrameAutosaveName(windowId: windowId, frameAutosaveName: frameAutosaveName)
+      MultiWindowManager.shared.setFrameAutosaveName(windowId: windowId, name: frameAutosaveName)
       result(nil)
     default:
       result(FlutterMethodNotImplemented)
