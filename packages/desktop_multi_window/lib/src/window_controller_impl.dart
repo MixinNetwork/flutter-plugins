@@ -41,22 +41,16 @@ class WindowControllerMainImpl extends WindowController {
   }
 
   @override
-  Future<void> setPosition(Offset position) {
-    return _channel.invokeMethod('setPosition', <String, dynamic>{
+  Future<void> setFrame(Rect frame) {
+    return _channel.invokeMethod('setFrame', <String, dynamic>{
       'windowId': _id,
-      'x': position.dx,
-      'y': position.dy,
+      'left': frame.left,
+      'top': frame.top,
+      'width': frame.width,
+      'height': frame.height,
     });
   }
 
-  @override
-  Future<void> setSize(Size size) {
-    return _channel.invokeMethod('setSize', <String, dynamic>{
-      'windowId': _id,
-      'width': size.width,
-      'height': size.height,
-    });
-  }
 
   @override
   Future<void> setTitle(String title) {

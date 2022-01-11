@@ -22,11 +22,8 @@ abstract class WindowController {
   /// Hide the window.
   Future<void> hide();
 
-  /// Set the size of the window.
-  Future<void> setSize(Size size);
-
-  /// Sets the position of the window.
-  Future<void> setPosition(Offset position);
+  /// Set the window frame rect.
+  Future<void> setFrame(Rect frame);
 
   /// Center the window on the screen.
   Future<void> center();

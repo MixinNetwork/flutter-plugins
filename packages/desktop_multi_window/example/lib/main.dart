@@ -44,7 +44,7 @@ class _ExampleMainWindowState extends State<_ExampleMainWindow> {
                 'bussiness': 'bussiness_test',
               }));
               window
-                ..setSize(const Size(1280, 720))
+                ..setFrame(const Offset(0, 0) & const Size(1280, 720))
                 ..center()
                 ..setTitle('Another window')
                 ..show();
