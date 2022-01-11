@@ -57,6 +57,25 @@ public class FlutterMultiWindowPlugin: NSObject, FlutterPlugin {
       let frameAutosaveName = arguments["name"] as! String
       MultiWindowManager.shared.setFrameAutosaveName(windowId: windowId, name: frameAutosaveName)
       result(nil)
+    case "startDragging":
+      let arguments = call.arguments as! [String: Any?]
+      let windowId = arguments["windowId"] as! Int64
+      MultiWindowManager.shared.startDragging(windowId: windowId)
+      result(nil)
+    case "setMinSize":
+      let arguments = call.arguments as! [String: Any?]
+      let windowId = arguments["windowId"] as! Int64
+      let width = arguments["width"] as! Int
+      let height = arguments["height"] as! Int
+      MultiWindowManager.shared.setMinSize(windowId: windowId, width: width, height: height)
+      result(nil)
+    case "setMaxSize":
+      let arguments = call.arguments as! [String: Any?]
+      let windowId = arguments["windowId"] as! Int64
+      let width = arguments["width"] as! Int
+      let height = arguments["height"] as! Int
+      MultiWindowManager.shared.setMaxSize(windowId: windowId, width: width, height: height)
+      result(nil)
     default:
       result(FlutterMethodNotImplemented)
     }

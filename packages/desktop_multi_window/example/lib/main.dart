@@ -70,25 +70,31 @@ class _ExampleSubWindow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      home: Scaffold(
-        appBar: AppBar(
-          title: const Text('Plugin example app'),
-        ),
-        body: Center(
-          child: Column(
-            children: [
-              if (args != null)
-                Text(
-                  'Arguments: ${args.toString()}',
-                  style: const TextStyle(fontSize: 20),
+      home: GestureDetector(
+        onPanStart: (details) {
+          debugPrint('onPanStart');
+          windowController.startDragging();
+        },
+        child: Scaffold(
+          appBar: AppBar(
+            title: const Text('Plugin example app'),
+          ),
+          body: Center(
+            child: Column(
+              children: [
+                if (args != null)
+                  Text(
+                    'Arguments: ${args.toString()}',
+                    style: const TextStyle(fontSize: 20),
+                  ),
+                TextButton(
+                  onPressed: () async {
+                    windowController.close();
+                  },
+                  child: const Text('Close this window'),
                 ),
-              TextButton(
-                onPressed: () async {
-                  windowController.close();
-                },
-                child: const Text('Close this window'),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

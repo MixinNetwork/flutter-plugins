@@ -95,6 +95,31 @@ class MultiWindowManager {
     }
     window.setFrameAutosaveName(name: name)
   }
+
+  func startDragging(windowId: Int64) {
+    guard let window = windows[windowId] else {
+      debugPrint("window \(windowId) not exists.")
+      return
+    }
+    window.startDragging()
+  }
+
+  func setMinSize(windowId: Int64, width: Int, height: Int) {
+    guard let window = windows[windowId] else {
+      debugPrint("window \(windowId) not exists.")
+      return
+    }
+    window.setMinSize(width: width, height: height)
+  }
+
+  func setMaxSize(windowId: Int64, width: Int, height: Int) {
+    guard let window = windows[windowId] else {
+      debugPrint("window \(windowId) not exists.")
+      return
+    }
+    window.setMaxSize(width: width, height: height)
+  }
+
 }
 
 protocol WindowManagerDelegate: AnyObject {

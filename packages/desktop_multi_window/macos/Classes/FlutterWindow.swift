@@ -34,7 +34,6 @@ class FlutterWindow: NSObject {
     window.isReleasedWhenClosed = false
     window.titleVisibility = .hidden
     window.titlebarAppearsTransparent = true
-    
   }
 
   func show() {
@@ -70,6 +69,21 @@ class FlutterWindow: NSObject {
     window.setFrameAutosaveName(name)
   }
 
+  func startDragging() {
+    guard let event = window.currentEvent else {
+      debugPrint("current window event is nil")
+      return
+    }
+    window.performDrag(with: event)
+  }
+
+  func setMinSize(width: Int, height: Int) {
+    window.minSize = NSSize(width: width, height: height)
+  }
+
+  func setMaxSize(width: Int, height: Int) {
+    window.maxSize = NSSize(width: width, height: height)
+  }
 }
 
 extension FlutterWindow: NSWindowDelegate {

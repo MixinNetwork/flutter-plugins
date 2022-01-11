@@ -94,4 +94,29 @@ class WindowControllerMainImpl extends WindowController {
       'name': name,
     });
   }
+
+  @override
+  void startDragging() {
+    _channel.invokeMethod('startDragging', <String, dynamic>{
+      'windowId': _id,
+    });
+  }
+
+  @override
+  Future<void> setMaxSize(Size size) {
+    return _channel.invokeMethod('setMaxSize', <String, dynamic>{
+      'windowId': _id,
+      'width': size.width,
+      'height': size.height,
+    });
+  }
+
+  @override
+  Future<void> setMinSize(Size size) {
+    return _channel.invokeMethod('setMinSize', <String, dynamic>{
+      'windowId': _id,
+      'width': size.width,
+      'height': size.height,
+    });
+  }
 }
