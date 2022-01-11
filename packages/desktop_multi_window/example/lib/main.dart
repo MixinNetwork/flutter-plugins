@@ -72,7 +72,6 @@ class _ExampleSubWindow extends StatelessWidget {
     return MaterialApp(
       home: GestureDetector(
         onPanStart: (details) {
-          debugPrint('onPanStart');
           windowController.startDragging();
         },
         child: Scaffold(
