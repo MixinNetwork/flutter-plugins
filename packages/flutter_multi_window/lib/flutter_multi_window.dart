@@ -1,17 +1,22 @@
 import 'dart:async';
 
-import 'package:flutter/services.dart';
-
+import 'src/window_channel.dart';
 import 'src/window_controller.dart';
 import 'src/window_controller_impl.dart';
 
-class FlutterMultiWindow {
-  static const MethodChannel _channel =
-      MethodChannel('mixin.one/flutter_multi_window');
+export 'src/window_controller.dart';
 
-  static Future<WindowController> createWindow() async {
-    final windowId = await _channel.invokeMethod<int>('createWindow');
+class FlutterMultiWindow {
+  static Future<WindowController> createWindow([String? arguments]) async {
+    final windowId = await miltiWindowChannel.invokeMethod<int>(
+      'createWindow',
+      arguments,
+    );
     assert(windowId != null, 'windowId is null');
-    return WindowControllerMainImpl(_channel, windowId!);
+    assert(windowId! > 0, 'id must be greater than 0');
+    return WindowControllerMainImpl(
+      windowId!,
+      /* in main isolate */ true,
+    );
   }
 }

@@ -14,11 +14,14 @@ class MultiWindowManager {
 
   private var windows: [Int64: FlutterWindow] = [:]
 
-  func create() -> Int64 {
+  private var windowPlugins: [Int64: FlutterWindow] = [:]
+
+  func create(arguments: String) -> Int64 {
     id += 1
     let windowId = id
 
-    let window = FlutterWindow(id: windowId)
+    let window = FlutterWindow(id: windowId, arguments: arguments)
+    window.delegate = self
     windows[windowId] = window
     return windowId
   }
@@ -45,14 +48,12 @@ class MultiWindowManager {
       return
     }
     window.close()
-    windows.removeValue(forKey: windowId)
   }
 
   func closeAll() {
-    windows.forEach { (key, value) in
+    windows.forEach { _, value in
       value.close()
     }
-    windows.removeAll()
   }
 
   func center(windowId: Int64) {
@@ -87,28 +88,22 @@ class MultiWindowManager {
     window.setTitle(title: title)
   }
 
+  func setFrameAutosaveName(windowId: Int64, name: String) {
+    guard let window = windows[windowId] else {
+      debugPrint("window \(windowId) not exists.")
+      return
+    }
+    window.setFrameAutosaveName(name: name)
+  }
 }
 
 protocol WindowManagerDelegate: AnyObject {
   func onClose(windowId: Int64)
+}
 
-  func onFocus(windowId: Int64)
-
-  func onResize(windowId: Int64, width: Int, height: Int)
-
-  func onMove(windowId: Int64, x: Int, y: Int)
-
-  func onMinimize(windowId: Int64)
-
-  func onMaximize(windowId: Int64)
-
-  func onRestore(windowId: Int64)
-
-  func onFullscreen(windowId: Int64)
-
-  func onUnfullscreen(windowId: Int64)
-
-  func onShow(windowId: Int64)
-
-  func onHide(windowId: Int64)
+extension MultiWindowManager: WindowManagerDelegate {
+  func onClose(windowId: Int64) {
+    debugPrint("close : \(windowId)")
+    windows.removeValue(forKey: windowId)
+  }
 }

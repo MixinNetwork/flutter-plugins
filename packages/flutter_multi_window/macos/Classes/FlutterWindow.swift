@@ -8,19 +8,32 @@ import Cocoa
 import FlutterMacOS
 import Foundation
 
-class FlutterWindow {
+class FlutterWindow: NSObject {
   let windowId: Int64
 
   let window: NSWindow
 
-  init(id: Int64) {
+  weak var delegate: WindowManagerDelegate?
+
+  init(id: Int64, arguments: String) {
     windowId = id
     window = NSWindow(
       contentRect: NSRect(x: 0, y: 0, width: 480, height: 270),
-      styleMask: [.miniaturizable, .closable, .resizable, .titled],
+      styleMask: [.miniaturizable, .closable, .resizable, .titled, .fullSizeContentView],
       backing: .buffered, defer: false)
-    let flutterViewController = FlutterViewController()
+    let project = FlutterDartProject()
+    project.dartEntrypointArguments = ["multi_window", "\(windowId)", arguments]
+    let flutterViewController = FlutterViewController(project: project)
     window.contentViewController = flutterViewController
+
+    FlutterMultiWindowPlugin.register(with: flutterViewController.registrar(forPlugin: "FlutterMultiWindowPlugin"))
+
+    super.init()
+
+    window.delegate = self
+    window.isReleasedWhenClosed = false
+    window.titleVisibility = .hidden
+    
   }
 
   func show() {
@@ -51,5 +64,18 @@ class FlutterWindow {
   func close() {
     window.close()
   }
-  
+
+  func setFrameAutosaveName(name: String) {
+    window.setFrameAutosaveName(name)
+  }
+
+}
+
+extension FlutterWindow: NSWindowDelegate {
+  func windowWillClose(_ notification: Notification) {
+    window.delegate = nil
+    window.contentViewController = nil
+    window.windowController = nil
+    delegate?.onClose(windowId: windowId)
+  }
 }

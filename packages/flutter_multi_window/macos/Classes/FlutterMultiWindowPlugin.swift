@@ -6,12 +6,14 @@ public class FlutterMultiWindowPlugin: NSObject, FlutterPlugin {
     let channel = FlutterMethodChannel(name: "mixin.one/flutter_multi_window", binaryMessenger: registrar.messenger)
     let instance = FlutterMultiWindowPlugin()
     registrar.addMethodCallDelegate(instance, channel: channel)
+    ClientMessageChannelPlugin.register(with: registrar)
   }
 
   public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     switch call.method {
     case "createWindow":
-      let windowId = MultiWindowManager.shared.create()
+      let arguments = call.arguments as? String
+      let windowId = MultiWindowManager.shared.create(arguments: arguments ?? "")
       result(windowId)
     case "show":
       let windowId = call.arguments as! Int64
@@ -20,7 +22,7 @@ public class FlutterMultiWindowPlugin: NSObject, FlutterPlugin {
     case "hide":
       let windowId = call.arguments as! Int64
       MultiWindowManager.shared.hide(windowId: windowId)
-      result(nil)      
+      result(nil)
     case "close":
       let windowId = call.arguments as! Int64
       MultiWindowManager.shared.close(windowId: windowId)
@@ -48,6 +50,12 @@ public class FlutterMultiWindowPlugin: NSObject, FlutterPlugin {
       let windowId = arguments["windowId"] as! Int64
       let title = arguments["title"] as! String
       MultiWindowManager.shared.setTitle(windowId: windowId, title: title)
+      result(nil)
+    case "setFrameAutosaveName":
+      let arguments = call.arguments as! [String: Any?]
+      let windowId = arguments["windowId"] as! Int64
+      let frameAutosaveName = arguments["name"] as! String
+      MultiWindowManager.shared.setFrameAutosaveName(windowId: windowId, frameAutosaveName: frameAutosaveName)
       result(nil)
     default:
       result(FlutterMethodNotImplemented)
