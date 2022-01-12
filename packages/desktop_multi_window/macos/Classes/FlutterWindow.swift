@@ -27,6 +27,8 @@ class FlutterWindow: NSObject {
     window.contentViewController = flutterViewController
 
     FlutterMultiWindowPlugin.register(with: flutterViewController.registrar(forPlugin: "FlutterMultiWindowPlugin"))
+    // Give app a chance to register plugin.
+    FlutterMultiWindowPlugin.onWindowCreatedCallback?(flutterViewController)
 
     super.init()
 
@@ -49,12 +51,8 @@ class FlutterWindow: NSObject {
     window.center()
   }
 
-  func setSize(width: Int, height: Int) {
-    window.setContentSize(NSSize(width: width, height: height))
-  }
-
-  func setPosition(x: Int, y: Int) {
-    window.setFrameOrigin(NSPoint(x: x, y: y))
+  func setFrame(frame: NSRect) {
+    window.setFrame(frame, display: false, animate: true)
   }
 
   func setTitle(title: String) {

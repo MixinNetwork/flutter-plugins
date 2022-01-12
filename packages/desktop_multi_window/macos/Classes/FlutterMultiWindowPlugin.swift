@@ -9,6 +9,13 @@ public class FlutterMultiWindowPlugin: NSObject, FlutterPlugin {
     ClientMessageChannelPlugin.register(with: registrar)
   }
 
+  public typealias OnWindowCreatedCallback = (FlutterViewController) -> Void
+  static var onWindowCreatedCallback: OnWindowCreatedCallback?
+
+  public static func setOnWindowCreatedCallback(_ callback: @escaping OnWindowCreatedCallback) {
+    onWindowCreatedCallback = callback
+  }
+
   public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     switch call.method {
     case "createWindow":
@@ -27,23 +34,19 @@ public class FlutterMultiWindowPlugin: NSObject, FlutterPlugin {
       let windowId = call.arguments as! Int64
       MultiWindowManager.shared.close(windowId: windowId)
       result(nil)
-    case "setSize":
-      let arguments = call.arguments as! [String: Any?]
-      let windowId = arguments["windowId"] as! Int64
-      let width = arguments["width"] as! Int
-      let height = arguments["height"] as! Int
-      MultiWindowManager.shared.setSize(windowId: windowId, width: width, height: height)
-      result(nil)
     case "center":
       let windowId = call.arguments as! Int64
       MultiWindowManager.shared.center(windowId: windowId)
       result(nil)
-    case "setPosition":
+    case "setFrame":
       let arguments = call.arguments as! [String: Any?]
       let windowId = arguments["windowId"] as! Int64
-      let x = arguments["x"] as! Int
-      let y = arguments["y"] as! Int
-      MultiWindowManager.shared.setPosition(windowId: windowId, x: x, y: y)
+      let left = arguments["left"] as! Double
+      let top = arguments["top"] as! Double
+      let width = arguments["width"] as! Double
+      let height = arguments["height"] as! Double
+      let rect = NSRect(x: left, y: top, width: width, height: height)
+      MultiWindowManager.shared.setFrame(windowId: windowId, frame: rect)
       result(nil)
     case "setTitle":
       let arguments = call.arguments as! [String: Any?]

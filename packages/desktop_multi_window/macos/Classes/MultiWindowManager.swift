@@ -64,20 +64,12 @@ class MultiWindowManager {
     window.center()
   }
 
-  func setSize(windowId: Int64, width: Int, height: Int) {
+  func setFrame(windowId: Int64, frame: NSRect) {
     guard let window = windows[windowId] else {
       debugPrint("window \(windowId) not exists.")
       return
     }
-    window.setSize(width: width, height: height)
-  }
-
-  func setPosition(windowId: Int64, x: Int, y: Int) {
-    guard let window = windows[windowId] else {
-      debugPrint("window \(windowId) not exists.")
-      return
-    }
-    window.setPosition(x: x, y: y)
+    window.setFrame(frame: frame)
   }
 
   func setTitle(windowId: Int64, title: String) {
