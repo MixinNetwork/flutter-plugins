@@ -1,10 +1,14 @@
 #include "flutter_window.h"
 
 #include <optional>
+#include <iostream>
 
 #include "flutter/generated_plugin_registrant.h"
 
-FlutterWindow::FlutterWindow(const flutter::DartProject& project)
+#include "desktop_multi_window/desktop_multi_window_plugin.h"
+#include "desktop_lifecycle/desktop_lifecycle_plugin.h"
+
+FlutterWindow::FlutterWindow(const flutter::DartProject &project)
     : project_(project) {}
 
 FlutterWindow::~FlutterWindow() {}
@@ -25,6 +29,13 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
   RegisterPlugins(flutter_controller_->engine());
+  DesktopMultiWindowSetWindowCreatedCallback([](void *controller) {
+    auto *flutter_view_controller =
+        reinterpret_cast<flutter::FlutterViewController *>(controller);
+    auto *registry = flutter_view_controller->engine();
+    DesktopLifecyclePluginRegisterWithRegistrar(
+        registry->GetRegistrarForPlugin("DesktopLifecyclePlugin"));
+  });
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
   return true;
 }
@@ -52,8 +63,7 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
   }
 
   switch (message) {
-    case WM_FONTCHANGE:
-      flutter_controller_->engine()->ReloadSystemFonts();
+    case WM_FONTCHANGE:flutter_controller_->engine()->ReloadSystemFonts();
       break;
   }
 

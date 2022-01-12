@@ -1,10 +1,9 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:collection/collection.dart';
+import 'package:desktop_lifecycle/desktop_lifecycle.dart';
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
 
 void main(List<String> args) {
   if (args.firstOrNull == 'multi_window') {
@@ -88,15 +87,13 @@ class _ExampleSubWindow extends StatelessWidget {
                     'Arguments: ${args.toString()}',
                     style: const TextStyle(fontSize: 20),
                   ),
-                FutureBuilder<Directory>(
-                  future: getApplicationDocumentsDirectory(),
-                  builder: (context, snapshot) {
-                    if (snapshot.hasError) {
-                      return Text('Error: ${snapshot.error}');
-                    } else if (snapshot.hasData) {
-                      return Text('Path: ${snapshot.requireData.path}');
+                ValueListenableBuilder<bool>(
+                  valueListenable: DesktopLifecycle.instance.isActive,
+                  builder: (context, active, child) {
+                    if (active) {
+                      return const Text('Window Active');
                     } else {
-                      return const Text('Loading...');
+                      return const Text('Window Inactive');
                     }
                   },
                 ),

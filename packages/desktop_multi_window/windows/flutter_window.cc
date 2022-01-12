@@ -14,6 +14,9 @@
 #include "include/desktop_multi_window/desktop_multi_window_plugin.h"
 
 namespace {
+
+WindowCreatedCallback _g_window_created_callback = nullptr;
+
 TCHAR kFlutterWindowClassName[] = _T("FlutterMultiWindow");
 
 int32_t class_registered_ = 0;
@@ -146,6 +149,9 @@ FlutterWindow::FlutterWindow(
 
   DesktopMultiWindowPluginRegisterWithRegistrar(
       flutter_controller_->engine()->GetRegistrarForPlugin("DesktopMultiWindowPlugin"));
+  if (_g_window_created_callback) {
+    _g_window_created_callback(flutter_controller_.get());
+  }
 
 }
 
@@ -283,8 +289,7 @@ void FlutterWindow::Center() {
 }
 
 void FlutterWindow::Close() {
-  CloseWindow(window_handle_);
-  DestroyWindow(window_handle_);
+  PostMessage(window_handle_, WM_SYSCOMMAND, SC_CLOSE, 0);
 }
 
 void FlutterWindow::StartDragging() {
@@ -297,4 +302,9 @@ FlutterWindow::~FlutterWindow() {
     std::cout << "window_handle leak." << std::endl;
   }
   UnregisterWindowClass();
+}
+
+
+void DesktopMultiWindowSetWindowCreatedCallback(WindowCreatedCallback callback) {
+  _g_window_created_callback = callback;
 }
