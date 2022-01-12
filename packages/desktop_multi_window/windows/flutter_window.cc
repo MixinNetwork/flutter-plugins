@@ -128,7 +128,7 @@ FlutterWindow::FlutterWindow(
   scale_factor_ = dpi / 96.0;
 
   HWND window_handle = CreateWindow(
-      kFlutterWindowClassName, L"", WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+      kFlutterWindowClassName, L"", WS_OVERLAPPEDWINDOW,
       Scale(target_point.x, scale_factor_), Scale(target_point.y, scale_factor_),
       Scale(1280, scale_factor_), Scale(720, scale_factor_),
       nullptr, nullptr, GetModuleHandle(nullptr), this);
@@ -145,13 +145,16 @@ FlutterWindow::FlutterWindow(
   }
   auto view_handle = flutter_controller_->view()->GetNativeWindow();
   SetParent(view_handle, window_handle);
-  MoveWindow(view_handle, 0, 0, frame.right - frame.left, frame.bottom - frame.top, true);
+  MoveWindow(view_handle, 0, 0, frame.right - frame.left, frame.bottom - frame.top, false);
 
   DesktopMultiWindowPluginRegisterWithRegistrar(
       flutter_controller_->engine()->GetRegistrarForPlugin("DesktopMultiWindowPlugin"));
   if (_g_window_created_callback) {
     _g_window_created_callback(flutter_controller_.get());
   }
+
+  // hide the window when created.
+  ShowWindow(window_handle, SW_HIDE);
 
 }
 
@@ -256,6 +259,9 @@ void FlutterWindow::Destroy() {
 
 void FlutterWindow::Show() {
   ShowWindow(window_handle_, SW_SHOW);
+//  PostMessage(window_handle_, WM_SYSCOMMAND, SC_RESTORE, 0);
+//  SetWindowPos(window_handle_, nullptr, 0, 0, 0, 0,
+//               SWP_NOSIZE | SWP_NOMOVE | SWP_SHOWWINDOW);
 }
 
 void FlutterWindow::Hide() {
@@ -303,7 +309,6 @@ FlutterWindow::~FlutterWindow() {
   }
   UnregisterWindowClass();
 }
-
 
 void DesktopMultiWindowSetWindowCreatedCallback(WindowCreatedCallback callback) {
   _g_window_created_callback = callback;
