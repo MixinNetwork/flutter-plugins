@@ -4,14 +4,12 @@
 
 class BorderlessWindowHelper {
  public:
-  explicit BorderlessWindowHelper(HWND hwnd);
+  explicit BorderlessWindowHelper(HWND hwnd, HWND flutter_view);
 
   auto set_borderless(bool enabled) -> void;
   auto set_borderless_shadow(bool enabled) -> void;
 
   std::optional<LRESULT> HandWndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
-
-  static LRESULT hit_test(POINT cursor, HWND handle);
 
  private:
 
@@ -21,4 +19,5 @@ class BorderlessWindowHelper {
   bool borderless_shadow_ = true; // should the window display a native aero shadow while borderless
 
   HWND handle_;
+
 };

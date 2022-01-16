@@ -145,7 +145,7 @@ FlutterWindow::FlutterWindow(
   }
   auto view_handle = flutter_controller_->view()->GetNativeWindow();
   SetParent(view_handle, window_handle);
-  MoveWindow(view_handle, 0, 0, frame.right - frame.left, frame.bottom - frame.top, false);
+  MoveWindow(view_handle, 0, 0, frame.right - frame.left, frame.bottom - frame.top, true);
 
   DesktopMultiWindowPluginRegisterWithRegistrar(
       flutter_controller_->engine()->GetRegistrarForPlugin("DesktopMultiWindowPlugin"));
@@ -155,6 +155,10 @@ FlutterWindow::FlutterWindow(
 
   // hide the window when created.
   ShowWindow(window_handle, SW_HIDE);
+
+  // enable frameless on Windows 10.
+//  borderless_window_helper_ = std::make_unique<BorderlessWindowHelper>(window_handle, view_handle);
+//  borderless_window_helper_->set_borderless(true);
 
 }
 
@@ -181,11 +185,17 @@ LRESULT CALLBACK FlutterWindow::WndProc(HWND window, UINT message, WPARAM wparam
 }
 
 LRESULT FlutterWindow::MessageHandler(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam) {
+
+  if (borderless_window_helper_) {
+    std::optional<LRESULT> result = borderless_window_helper_->HandWndProc(hwnd, message, wparam, lparam);
+    if (result) {
+      return *result;
+    }
+  }
+
   // Give Flutter, including plugins, an opportunity to handle window messages.
   if (flutter_controller_) {
-    std::optional<LRESULT> result =
-        flutter_controller_->HandleTopLevelWindowProc(hwnd, message, wparam,
-                                                      lparam);
+    std::optional<LRESULT> result = flutter_controller_->HandleTopLevelWindowProc(hwnd, message, wparam, lparam);
     if (result) {
       return *result;
     }

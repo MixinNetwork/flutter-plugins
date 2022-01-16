@@ -2,16 +2,12 @@
 // Created by yangbin on 2021/12/19.
 //
 
-#include <stdexcept>
-#include <system_error>
-
 #include <Windows.h>
 #include <windowsx.h>
 #include <dwmapi.h>
 #pragma comment(lib, "dwmapi.lib")
-
-#include <iostream>
-
+#include <CommCtrl.h>
+#pragma comment(lib, "ComCtl32.lib")
 #include "borderless_window_helper.h"
 
 namespace {
@@ -41,6 +37,11 @@ auto maximized(HWND hwnd) -> bool {
  */
 auto adjust_maximized_client_rect(HWND window, RECT &rect) -> void {
   if (!maximized(window)) {
+    // add this to ensure the window is not blinking when resizing.
+    rect.top += 1;
+    rect.left += 7;
+    rect.right -= 7;
+    rect.bottom -= 7;
     return;
   }
 
@@ -77,70 +78,7 @@ auto set_shadow(HWND handle, bool enabled) -> void {
   }
 }
 
-}
-
-BorderlessWindowHelper::BorderlessWindowHelper(HWND hwnd) : handle_(hwnd) {
-  set_borderless(borderless_);
-  set_borderless_shadow(borderless_shadow_);
-}
-
-void BorderlessWindowHelper::set_borderless(bool enabled) {
-  Style new_style = (enabled) ? select_borderless_style() : Style::windowed;
-  Style old_style = static_cast<Style>(::GetWindowLongPtrW(handle_, GWL_STYLE));
-
-  if (new_style != old_style) {
-    borderless_ = enabled;
-
-    ::SetWindowLongPtrW(handle_, GWL_STYLE, static_cast<LONG>(new_style));
-
-    // when switching between borderless and windowed, restore appropriate shadow state
-    set_shadow(handle_, borderless_shadow_ && (new_style != Style::windowed));
-
-    // redraw frame
-    ::SetWindowPos(handle_, nullptr, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE);
-    ::ShowWindow(handle_, SW_SHOW);
-  }
-}
-
-void BorderlessWindowHelper::set_borderless_shadow(bool enabled) {
-  if (borderless_) {
-    borderless_shadow_ = enabled;
-    set_shadow(handle_, enabled);
-  }
-}
-
-std::optional<LRESULT> BorderlessWindowHelper::HandWndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
-  switch (msg) {
-    case WM_NCCALCSIZE: {
-      if (wparam == TRUE && borderless_) {
-        auto &params = *reinterpret_cast<NCCALCSIZE_PARAMS *>(lparam);
-        adjust_maximized_client_rect(hwnd, params.rgrc[0]);
-        return 0;
-      }
-      break;
-    }
-    case WM_NCHITTEST: {
-      // When we have no border or title bar, we need to perform our
-      // own hit testing to allow resizing and moving.
-      if (borderless_) {
-        return hit_test(POINT{GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam)}, hwnd);
-      }
-      break;
-    }
-    case WM_NCACTIVATE: {
-      if (!composition_enabled()) {
-        // Prevents window frame reappearing on window activation
-        // in "basic" theme, where no aero shadow is present.
-        return 1;
-      }
-      break;
-    }
-  }
-  return std::nullopt;
-}
-
-// static
-LRESULT BorderlessWindowHelper::hit_test(POINT cursor, HWND handle) {
+LRESULT handle_hit_test(POINT cursor, HWND handle) {
   // identify borders and corners to allow resizing the window.
   // Note: On Windows 10, windows behave differently and
   // allow resizing outside the visible window frame.
@@ -181,4 +119,87 @@ LRESULT BorderlessWindowHelper::hit_test(POINT cursor, HWND handle) {
     case bottom | right: return HTBOTTOMRIGHT;
     default            : return HTCLIENT;
   }
+}
+
+LRESULT FlutterViewWindowProc(HWND window,
+                              UINT message,
+                              WPARAM wparam,
+                              LPARAM lparam,
+                              UINT_PTR subclassID,
+                              DWORD_PTR refData) {
+  switch (message) {
+    case WM_NCHITTEST: {
+      // intercept flutter mouse events, so we can handle the resize drag.
+      auto result = handle_hit_test(POINT{GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam)}, window);
+      if (result != HTCLIENT) {
+        return HTTRANSPARENT;
+      }
+      break;
+    }
+  }
+  return DefSubclassProc(window, message, wparam, lparam);
+}
+}
+
+BorderlessWindowHelper::BorderlessWindowHelper(HWND hwnd, HWND flutter_view) : handle_(hwnd) {
+  set_borderless(borderless_);
+  set_borderless_shadow(borderless_shadow_);
+  if (flutter_view) {
+    SetWindowSubclass(flutter_view, FlutterViewWindowProc, 1, NULL);
+  }
+}
+
+void BorderlessWindowHelper::set_borderless(bool enabled) {
+  auto new_style = (enabled) ? select_borderless_style() : Style::windowed;
+  auto old_style = static_cast<Style>(::GetWindowLongPtrW(handle_, GWL_STYLE));
+
+  if (new_style != old_style) {
+    borderless_ = enabled;
+
+    ::SetWindowLongPtrW(handle_, GWL_STYLE, static_cast<LONG>(new_style));
+
+    // when switching between borderless and windowed, restore appropriate shadow state
+    set_shadow(handle_, borderless_shadow_ && (new_style != Style::windowed));
+
+    // redraw frame
+    ::SetWindowPos(handle_, nullptr, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE);
+  }
+}
+
+void BorderlessWindowHelper::set_borderless_shadow(bool enabled) {
+  if (borderless_) {
+    borderless_shadow_ = enabled;
+    set_shadow(handle_, enabled);
+  }
+}
+
+std::optional<LRESULT> BorderlessWindowHelper::HandWndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
+  switch (msg) {
+    case WM_NCCALCSIZE: {
+      if (wparam == TRUE && borderless_) {
+        auto &params = *reinterpret_cast<NCCALCSIZE_PARAMS *>(lparam);
+        adjust_maximized_client_rect(hwnd, params.rgrc[0]);
+        return (WVR_HREDRAW | WVR_VREDRAW);
+      }
+      break;
+    }
+    case WM_NCHITTEST: {
+      // When we have no border or title bar, we need to perform our
+      // own hit testing to allow resizing and moving.
+      if (borderless_) {
+        return handle_hit_test(POINT{GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam)}, hwnd);
+      }
+      break;
+    }
+    case WM_NCACTIVATE: {
+      if (!composition_enabled()) {
+        // Prevents window frame reappearing on window activation
+        // in "basic" theme, where no aero shadow is present.
+        return 1;
+      }
+      break;
+    }
+    default:break;
+  }
+  return std::nullopt;
 }

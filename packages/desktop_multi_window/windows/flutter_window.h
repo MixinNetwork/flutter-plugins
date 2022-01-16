@@ -12,6 +12,8 @@
 #include <cstdint>
 #include <memory>
 
+#include "borderless_window_helper.h"
+
 class FlutterWindowCallback {
 
  public:
@@ -60,6 +62,10 @@ class FlutterWindow {
   double scale_factor_;
 
   bool destroyed_ = false;
+
+  LONG last_screen_rect_width_ = 0;
+
+  std::unique_ptr<BorderlessWindowHelper> borderless_window_helper_;
 
   static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
