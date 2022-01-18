@@ -77,7 +77,7 @@ void WebviewWindow::CreateAndShow(const std::wstring &title, int height, int wid
 
   // Centered window on screen.
   RECT rc;
-  GetWindowRect(hwnd_.get(), &rc);
+  GetClientRect(hwnd_.get(), &rc);
   ClipOrCenterRectToMonitor(&rc, MONITOR_CENTER);
   SetWindowPos(hwnd_.get(), nullptr, rc.left, rc.top, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
 
@@ -188,7 +188,7 @@ WebviewWindow::MessageHandler(
     }
     case WM_SIZE: {
       RECT rect;
-      GetWindowRect(hwnd, &rect);
+      GetClientRect(hwnd, &rect);
       HMONITOR monitor = MonitorFromRect(&rect, MONITOR_DEFAULTTONEAREST);
       UINT dpi = FlutterDesktopGetDpiForMonitor(monitor);
       double scale_factor = dpi / 96.0;
