@@ -156,10 +156,6 @@ FlutterWindow::FlutterWindow(
   // hide the window when created.
   ShowWindow(window_handle, SW_HIDE);
 
-  // enable frameless on Windows 10.
-//  borderless_window_helper_ = std::make_unique<BorderlessWindowHelper>(window_handle, view_handle);
-//  borderless_window_helper_->set_borderless(true);
-
 }
 
 // static
@@ -185,13 +181,6 @@ LRESULT CALLBACK FlutterWindow::WndProc(HWND window, UINT message, WPARAM wparam
 }
 
 LRESULT FlutterWindow::MessageHandler(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam) {
-
-  if (borderless_window_helper_) {
-    std::optional<LRESULT> result = borderless_window_helper_->HandWndProc(hwnd, message, wparam, lparam);
-    if (result) {
-      return *result;
-    }
-  }
 
   // Give Flutter, including plugins, an opportunity to handle window messages.
   if (flutter_controller_) {
@@ -289,13 +278,6 @@ void FlutterWindow::SetTitle(const std::string &title) {
   SetWindowText(window_handle_, Utf16FromUtf8(title).c_str());
 }
 
-void FlutterWindow::SetMaxSize(double width, double height) {
-  // TODO(boyan): implement
-}
-
-void FlutterWindow::SetMinSize(double width, double height) {
-  // TODO(boyan): implement
-}
 
 void FlutterWindow::Center() {
   RECT rc;
@@ -306,11 +288,6 @@ void FlutterWindow::Center() {
 
 void FlutterWindow::Close() {
   PostMessage(window_handle_, WM_SYSCOMMAND, SC_CLOSE, 0);
-}
-
-void FlutterWindow::StartDragging() {
-  ReleaseCapture();
-  SendMessage(window_handle_, WM_SYSCOMMAND, SC_MOVE | HTCAPTION, 0);
 }
 
 FlutterWindow::~FlutterWindow() {

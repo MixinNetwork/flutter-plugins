@@ -10,7 +10,6 @@ add_library(${PLUGIN_NAME} SHARED
   "desktop_multi_window_plugin.cpp"
   "multi_window_manager.cc"
   "flutter_window.cc"
-  "borderless_window_helper.cpp"
 )
 apply_standard_settings(${PLUGIN_NAME})
 set_target_properties(${PLUGIN_NAME} PROPERTIES

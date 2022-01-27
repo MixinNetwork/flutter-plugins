@@ -32,12 +32,6 @@ class MultiWindowManager : public std::enable_shared_from_this<MultiWindowManage
 
   void SetTitle(int64_t id, const std::string &title);
 
-  void StartDragging(int64_t id);
-
-  void SetMinSize(int64_t id, double_t width, double_t height);
-
-  void SetMaxSize(int64_t id, double_t width, double_t height);
-
   void OnWindowClose(int64_t id) override;
 
   void OnWindowDestroy(int64_t id) override;

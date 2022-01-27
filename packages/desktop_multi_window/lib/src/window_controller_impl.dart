@@ -51,7 +51,6 @@ class WindowControllerMainImpl extends WindowController {
     });
   }
 
-
   @override
   Future<void> setTitle(String title) {
     return _channel.invokeMethod('setTitle', <String, dynamic>{
@@ -86,31 +85,6 @@ class WindowControllerMainImpl extends WindowController {
     return _channel.invokeMethod('setFrameAutosaveName', <String, dynamic>{
       'windowId': _id,
       'name': name,
-    });
-  }
-
-  @override
-  void startDragging() {
-    _channel.invokeMethod('startDragging', <String, dynamic>{
-      'windowId': _id,
-    });
-  }
-
-  @override
-  Future<void> setMaxSize(Size size) {
-    return _channel.invokeMethod('setMaxSize', <String, dynamic>{
-      'windowId': _id,
-      'width': size.width,
-      'height': size.height,
-    });
-  }
-
-  @override
-  Future<void> setMinSize(Size size) {
-    return _channel.invokeMethod('setMinSize', <String, dynamic>{
-      'windowId': _id,
-      'width': size.width,
-      'height': size.height,
     });
   }
 }

@@ -68,27 +68,6 @@ void MultiWindowManager::Center(int64_t id) {
   }
 }
 
-void MultiWindowManager::SetMinSize(int64_t id, double width, double height) {
-  auto window = windows_.find(id);
-  if (window != windows_.end()) {
-    window->second->SetMinSize(width, height);
-  }
-}
-
-void MultiWindowManager::SetMaxSize(int64_t id, double width, double height) {
-  auto window = windows_.find(id);
-  if (window != windows_.end()) {
-    window->second->SetMaxSize(width, height);
-  }
-}
-
-void MultiWindowManager::StartDragging(int64_t id) {
-  auto window = windows_.find(id);
-  if (window != windows_.end()) {
-    window->second->StartDragging();
-  }
-}
-
 void MultiWindowManager::OnWindowClose(int64_t id) {
 }
 

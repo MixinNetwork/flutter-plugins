@@ -12,8 +12,6 @@
 #include <cstdint>
 #include <memory>
 
-#include "borderless_window_helper.h"
-
 class FlutterWindowCallback {
 
  public:
@@ -40,13 +38,7 @@ class FlutterWindow {
 
   void SetBounds(double_t x, double_t y, double_t width, double_t height);
 
-  void SetMinSize(double_t width, double_t height);
-
-  void SetMaxSize(double_t width, double_t height);
-
   void Center();
-
-  void StartDragging();
 
  private:
 
@@ -62,10 +54,6 @@ class FlutterWindow {
   double scale_factor_;
 
   bool destroyed_ = false;
-
-  LONG last_screen_rect_width_ = 0;
-
-  std::unique_ptr<BorderlessWindowHelper> borderless_window_helper_;
 
   static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 

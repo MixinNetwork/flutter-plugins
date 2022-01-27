@@ -71,40 +71,35 @@ class _ExampleSubWindow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      home: GestureDetector(
-        onPanStart: (details) {
-          windowController.startDragging();
-        },
-        child: Scaffold(
-          appBar: AppBar(
-            title: const Text('Plugin example app'),
-          ),
-          body: Center(
-            child: Column(
-              children: [
-                if (args != null)
-                  Text(
-                    'Arguments: ${args.toString()}',
-                    style: const TextStyle(fontSize: 20),
-                  ),
-                ValueListenableBuilder<bool>(
-                  valueListenable: DesktopLifecycle.instance.isActive,
-                  builder: (context, active, child) {
-                    if (active) {
-                      return const Text('Window Active');
-                    } else {
-                      return const Text('Window Inactive');
-                    }
-                  },
+      home: Scaffold(
+        appBar: AppBar(
+          title: const Text('Plugin example app'),
+        ),
+        body: Center(
+          child: Column(
+            children: [
+              if (args != null)
+                Text(
+                  'Arguments: ${args.toString()}',
+                  style: const TextStyle(fontSize: 20),
                 ),
-                TextButton(
-                  onPressed: () async {
-                    windowController.close();
-                  },
-                  child: const Text('Close this window'),
-                ),
-              ],
-            ),
+              ValueListenableBuilder<bool>(
+                valueListenable: DesktopLifecycle.instance.isActive,
+                builder: (context, active, child) {
+                  if (active) {
+                    return const Text('Window Active');
+                  } else {
+                    return const Text('Window Inactive');
+                  }
+                },
+              ),
+              TextButton(
+                onPressed: () async {
+                  windowController.close();
+                },
+                child: const Text('Close this window'),
+              ),
+            ],
           ),
         ),
       ),

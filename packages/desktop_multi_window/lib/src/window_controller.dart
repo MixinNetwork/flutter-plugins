@@ -34,12 +34,6 @@ abstract class WindowController {
   /// available only on macOS.
   Future<void> setFrameAutosaveName(String name);
 
-  void startDragging();
-
-  Future<void> setMinSize(Size size);
-
-  Future<void> setMaxSize(Size size);
-
   /// Invoke method on the isolate of the window.
   void invokeMethod(String method, [dynamic arguments]);
 
