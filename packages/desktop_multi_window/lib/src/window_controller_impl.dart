@@ -2,7 +2,7 @@ import 'dart:ui';
 
 import 'package:flutter/services.dart';
 
-import 'window_channel.dart';
+import 'channels.dart';
 import 'window_controller.dart';
 
 class WindowControllerMainImpl extends WindowController {
@@ -11,14 +11,7 @@ class WindowControllerMainImpl extends WindowController {
   // the id of this window
   final int _id;
 
-  final bool _isInMainIsolate;
-
-  final _windowChannel = const ClientMessageChannel();
-
-  WindowControllerMainImpl(
-    this._id,
-    this._isInMainIsolate,
-  );
+  WindowControllerMainImpl(this._id);
 
   @override
   Future<void> close() {
@@ -60,23 +53,27 @@ class WindowControllerMainImpl extends WindowController {
   }
 
   @override
-  void invokeMethod(String method, [arguments]) {
-    _windowChannel.invokeMethod('invoke', <String, dynamic>{
-      'windowId': _isInMainIsolate ? 0 : _id,
+  Future<dynamic> invokeMethod(int targetWindowId, String method,
+      [dynamic arguments]) {
+    return windowEventChannel.invokeMethod(method, <String, dynamic>{
+      'targetWindowId': targetWindowId,
       'arguments': arguments,
-      'method': method,
     });
   }
 
   @override
-  void setMethodHandler(void Function(MethodCall call) handler) {
-    _windowChannel.setMessageHandler((call) async {
-      final windowId = call.arguments['windowId'];
-      if (_isInMainIsolate ? windowId == 0 : windowId == _id) {
-        final arguments = call.arguments['arguments'];
-        final method = call.arguments['method'] as String;
-        handler(MethodCall(method, arguments));
-      }
+  void setMethodHandler(
+      Future<dynamic> Function(MethodCall call, int fromWindowId)? handler) {
+    if (handler == null) {
+      windowEventChannel.setMethodCallHandler(null);
+      return;
+    }
+    windowEventChannel.setMethodCallHandler((call) async {
+      final fromWindowId = call.arguments['fromWindowId'] as int;
+      final arguments = call.arguments['arguments'];
+      final result =
+          await handler(MethodCall(call.method, arguments), fromWindowId);
+      return result;
     });
   }
 

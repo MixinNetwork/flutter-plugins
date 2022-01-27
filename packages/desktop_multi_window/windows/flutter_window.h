@@ -5,12 +5,15 @@
 #ifndef DESKTOP_MULTI_WINDOW_WINDOWS_FLUTTER_WINDOW_H_
 #define DESKTOP_MULTI_WINDOW_WINDOWS_FLUTTER_WINDOW_H_
 
-#include <windows.h>
+#include <Windows.h>
 
 #include <flutter/flutter_view_controller.h>
 
 #include <cstdint>
 #include <memory>
+
+#include "base_flutter_window.h"
+#include "window_channel.h"
 
 class FlutterWindowCallback {
 
@@ -21,24 +24,20 @@ class FlutterWindowCallback {
 
 };
 
-class FlutterWindow {
+class FlutterWindow : public BaseFlutterWindow {
 
  public:
 
   FlutterWindow(int64_t id, std::string args, const std::shared_ptr<FlutterWindowCallback> &callback);
-  virtual ~FlutterWindow();
+  ~FlutterWindow() override;
 
-  void Show();
+  WindowChannel *GetWindowChannel() override {
+    return window_channel_.get();
+  }
 
-  void Hide();
+ protected:
 
-  void Close();
-
-  void SetTitle(const std::string &title);
-
-  void SetBounds(double_t x, double_t y, double_t width, double_t height);
-
-  void Center();
+  HWND GetWindowHandle() override { return window_handle_; }
 
  private:
 
@@ -50,6 +49,8 @@ class FlutterWindow {
 
   // The Flutter instance hosted by this window.
   std::unique_ptr<flutter::FlutterViewController> flutter_controller_;
+
+  std::unique_ptr<WindowChannel> window_channel_;
 
   double scale_factor_;
 

@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'src/window_channel.dart';
+import 'src/channels.dart';
 import 'src/window_controller.dart';
 import 'src/window_controller_impl.dart';
 
@@ -14,9 +14,6 @@ class DesktopMultiWindow {
     );
     assert(windowId != null, 'windowId is null');
     assert(windowId! > 0, 'id must be greater than 0');
-    return WindowControllerMainImpl(
-      windowId!,
-      /* in main isolate */ true,
-    );
+    return WindowControllerMainImpl(windowId!);
   }
 }

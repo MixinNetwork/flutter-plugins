@@ -9,6 +9,7 @@
 #include <string>
 #include <map>
 
+#include "base_flutter_window.h"
 #include "flutter_window.h"
 
 class MultiWindowManager : public std::enable_shared_from_this<MultiWindowManager>, public FlutterWindowCallback {
@@ -19,6 +20,8 @@ class MultiWindowManager : public std::enable_shared_from_this<MultiWindowManage
   MultiWindowManager();
 
   int64_t Create(std::string args);
+
+  void AttachFlutterMainWindow(HWND main_window_handle, std::unique_ptr<WindowChannel> window_channel);
 
   void Show(int64_t id);
 
@@ -38,7 +41,15 @@ class MultiWindowManager : public std::enable_shared_from_this<MultiWindowManage
 
  private:
 
-  std::map<int64_t, std::unique_ptr<FlutterWindow>> windows_;
+  std::map<int64_t, std::unique_ptr<BaseFlutterWindow>> windows_;
+
+  void HandleWindowChannelCall(
+      int64_t from_window_id,
+      int64_t target_window_id,
+      const std::string &call,
+      flutter::EncodableValue *arguments,
+      std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result
+  );
 
 };
 

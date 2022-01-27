@@ -12,6 +12,7 @@
 #include <utility>
 
 #include "include/desktop_multi_window/desktop_multi_window_plugin.h"
+#include "multi_window_plugin_internal.h"
 
 namespace {
 
@@ -72,46 +73,6 @@ void EnableFullDpiSupportIfAvailable(HWND hwnd) {
   }
 }
 
-std::wstring Utf16FromUtf8(const std::string &string) {
-  int size_needed = MultiByteToWideChar(CP_UTF8, 0, string.c_str(), -1, nullptr, 0);
-  if (size_needed == 0) {
-    return {};
-  }
-  std::wstring wstrTo(size_needed, 0);
-  int converted_length = MultiByteToWideChar(CP_UTF8, 0, string.c_str(), -1, &wstrTo[0], size_needed);
-  if (converted_length == 0) {
-    return {};
-  }
-  return wstrTo;
-}
-
-void CenterRectToMonitor(LPRECT prc) {
-  HMONITOR hMonitor;
-  MONITORINFO mi;
-  RECT rc;
-  int w = prc->right - prc->left;
-  int h = prc->bottom - prc->top;
-
-  //
-  // get the nearest monitor to the passed rect.
-  //
-  hMonitor = MonitorFromRect(prc, MONITOR_DEFAULTTONEAREST);
-
-  //
-  // get the work area or entire monitor rect.
-  //
-  mi.cbSize = sizeof(mi);
-  GetMonitorInfo(hMonitor, &mi);
-
-  rc = mi.rcMonitor;
-
-  prc->left = rc.left + (rc.right - rc.left - w) / 2;
-  prc->top = rc.top + (rc.bottom - rc.top - h) / 2;
-  prc->right = prc->left + w;
-  prc->bottom = prc->top + h;
-
-}
-
 }
 
 FlutterWindow::FlutterWindow(
@@ -147,8 +108,11 @@ FlutterWindow::FlutterWindow(
   SetParent(view_handle, window_handle);
   MoveWindow(view_handle, 0, 0, frame.right - frame.left, frame.bottom - frame.top, true);
 
-  DesktopMultiWindowPluginRegisterWithRegistrar(
+  InternalMultiWindowPluginRegisterWithRegistrar(
       flutter_controller_->engine()->GetRegistrarForPlugin("DesktopMultiWindowPlugin"));
+  window_channel_ = WindowChannel::RegisterWithRegistrar(
+      flutter_controller_->engine()->GetRegistrarForPlugin("DesktopMultiWindowPlugin"), id_);
+
   if (_g_window_created_callback) {
     _g_window_created_callback(flutter_controller_.get());
   }
@@ -254,40 +218,6 @@ void FlutterWindow::Destroy() {
     DestroyWindow(window_handle_);
     window_handle_ = nullptr;
   }
-}
-
-void FlutterWindow::Show() {
-  ShowWindow(window_handle_, SW_SHOW);
-//  PostMessage(window_handle_, WM_SYSCOMMAND, SC_RESTORE, 0);
-//  SetWindowPos(window_handle_, nullptr, 0, 0, 0, 0,
-//               SWP_NOSIZE | SWP_NOMOVE | SWP_SHOWWINDOW);
-}
-
-void FlutterWindow::Hide() {
-  ShowWindow(window_handle_, SW_HIDE);
-}
-
-void FlutterWindow::SetBounds(double_t x, double_t y, double_t width, double_t height) {
-  MoveWindow(window_handle_, int32_t(x), int32_t(y),
-             static_cast<int>(width * scale_factor_),
-             static_cast<int>(height * scale_factor_),
-             TRUE);
-}
-
-void FlutterWindow::SetTitle(const std::string &title) {
-  SetWindowText(window_handle_, Utf16FromUtf8(title).c_str());
-}
-
-
-void FlutterWindow::Center() {
-  RECT rc;
-  GetWindowRect(window_handle_, &rc);
-  CenterRectToMonitor(&rc);
-  SetWindowPos(window_handle_, nullptr, rc.left, rc.top, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
-}
-
-void FlutterWindow::Close() {
-  PostMessage(window_handle_, WM_SYSCOMMAND, SC_CLOSE, 0);
 }
 
 FlutterWindow::~FlutterWindow() {

@@ -1,4 +1,5 @@
 #include "include/desktop_multi_window/desktop_multi_window_plugin.h"
+#include "multi_window_plugin_internal.h"
 
 #include <flutter/method_channel.h>
 #include <flutter/plugin_registrar_windows.h>
@@ -39,7 +40,6 @@ void DesktopMultiWindowPlugin::RegisterWithRegistrar(
       [plugin_pointer = plugin.get()](const auto &call, auto result) {
         plugin_pointer->HandleMethodCall(call, std::move(result));
       });
-
   registrar->AddPlugin(std::move(plugin));
 }
 
@@ -100,6 +100,17 @@ void DesktopMultiWindowPlugin::HandleMethodCall(
 
 void DesktopMultiWindowPluginRegisterWithRegistrar(
     FlutterDesktopPluginRegistrarRef registrar) {
+
+  InternalMultiWindowPluginRegisterWithRegistrar(registrar);
+
+  // Attach MainWindow for
+  auto hwnd = FlutterDesktopViewGetHWND(FlutterDesktopPluginRegistrarGetView(registrar));
+  auto channel = WindowChannel::RegisterWithRegistrar(registrar, 0);
+  MultiWindowManager::Instance()->AttachFlutterMainWindow(GetAncestor(hwnd, GA_ROOT),
+                                                          std::move(channel));
+}
+
+void InternalMultiWindowPluginRegisterWithRegistrar(FlutterDesktopPluginRegistrarRef registrar) {
   DesktopMultiWindowPlugin::RegisterWithRegistrar(
       flutter::PluginRegistrarManager::GetInstance()
           ->GetRegistrar<flutter::PluginRegistrarWindows>(registrar));

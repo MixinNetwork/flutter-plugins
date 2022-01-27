@@ -10,7 +10,11 @@ abstract class WindowController {
 
   /// NOTE: you should only call this method in current window [id] isolate.
   factory WindowController.fromWindowId(int id) {
-    return WindowControllerMainImpl(id, /* in main isolate */ false);
+    return WindowControllerMainImpl(id);
+  }
+
+  factory WindowController.main() {
+    return WindowControllerMainImpl(0);
   }
 
   /// Close the window.
@@ -35,8 +39,10 @@ abstract class WindowController {
   Future<void> setFrameAutosaveName(String name);
 
   /// Invoke method on the isolate of the window.
-  void invokeMethod(String method, [dynamic arguments]);
+  Future<dynamic> invokeMethod(int targetWindowId, String method,
+      [dynamic arguments]);
 
   /// Add a method handler to the isolate of the window.
-  void setMethodHandler(void Function(MethodCall call) handler);
+  void setMethodHandler(
+      Future<dynamic> Function(MethodCall call, int fromWindowId)? handler);
 }

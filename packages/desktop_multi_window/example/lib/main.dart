@@ -4,6 +4,7 @@ import 'package:collection/collection.dart';
 import 'package:desktop_lifecycle/desktop_lifecycle.dart';
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_multi_window_example/event_widget.dart';
 
 void main(List<String> args) {
   if (args.firstOrNull == 'multi_window') {
@@ -35,23 +36,29 @@ class _ExampleMainWindowState extends State<_ExampleMainWindow> {
         appBar: AppBar(
           title: const Text('Plugin example app'),
         ),
-        body: Center(
-          child: TextButton(
-            onPressed: () async {
-              final window = await DesktopMultiWindow.createWindow(jsonEncode({
-                'args1': 'Sub window',
-                'args2': 100,
-                'args3': true,
-                'bussiness': 'bussiness_test',
-              }));
-              window
-                ..setFrame(const Offset(0, 0) & const Size(1280, 720))
-                ..center()
-                ..setTitle('Another window')
-                ..show();
-            },
-            child: const Text('Create a new World!'),
-          ),
+        body: Column(
+          children: [
+            TextButton(
+              onPressed: () async {
+                final window =
+                    await DesktopMultiWindow.createWindow(jsonEncode({
+                  'args1': 'Sub window',
+                  'args2': 100,
+                  'args3': true,
+                  'bussiness': 'bussiness_test',
+                }));
+                window
+                  ..setFrame(const Offset(0, 0) & const Size(1280, 720))
+                  ..center()
+                  ..setTitle('Another window')
+                  ..show();
+              },
+              child: const Text('Create a new World!'),
+            ),
+            Expanded(
+              child: EventWidget(controller: WindowController.fromWindowId(0)),
+            )
+          ],
         ),
       ),
     );
@@ -75,32 +82,31 @@ class _ExampleSubWindow extends StatelessWidget {
         appBar: AppBar(
           title: const Text('Plugin example app'),
         ),
-        body: Center(
-          child: Column(
-            children: [
-              if (args != null)
-                Text(
-                  'Arguments: ${args.toString()}',
-                  style: const TextStyle(fontSize: 20),
-                ),
-              ValueListenableBuilder<bool>(
-                valueListenable: DesktopLifecycle.instance.isActive,
-                builder: (context, active, child) {
-                  if (active) {
-                    return const Text('Window Active');
-                  } else {
-                    return const Text('Window Inactive');
-                  }
-                },
+        body: Column(
+          children: [
+            if (args != null)
+              Text(
+                'Arguments: ${args.toString()}',
+                style: const TextStyle(fontSize: 20),
               ),
-              TextButton(
-                onPressed: () async {
-                  windowController.close();
-                },
-                child: const Text('Close this window'),
-              ),
-            ],
-          ),
+            ValueListenableBuilder<bool>(
+              valueListenable: DesktopLifecycle.instance.isActive,
+              builder: (context, active, child) {
+                if (active) {
+                  return const Text('Window Active');
+                } else {
+                  return const Text('Window Inactive');
+                }
+              },
+            ),
+            TextButton(
+              onPressed: () async {
+                windowController.close();
+              },
+              child: const Text('Close this window'),
+            ),
+            Expanded(child: EventWidget(controller: windowController)),
+          ],
         ),
       ),
     );
