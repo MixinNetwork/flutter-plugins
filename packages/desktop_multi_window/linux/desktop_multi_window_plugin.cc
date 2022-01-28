@@ -6,6 +6,7 @@
 #include <cstring>
 
 #include "multi_window_manager.h"
+#include "desktop_multi_window_plugin_internal.h"
 
 #define DESKTOP_MULTI_WINDOW_PLUGIN(obj) \
   (G_TYPE_CHECK_INSTANCE_CAST((obj), desktop_multi_window_plugin_get_type(), \
@@ -21,7 +22,7 @@ G_DEFINE_TYPE(DesktopMultiWindowPlugin, desktop_multi_window_plugin, g_object_ge
 static void desktop_multi_window_plugin_handle_method_call(
     DesktopMultiWindowPlugin *self,
     FlMethodCall *method_call) {
-  g_autoptr(FlMethodResponse) response = nullptr;
+  g_autoptr(FlMethodResponse) response;
 
   const gchar *method = fl_method_call_get_name(method_call);
 
@@ -65,25 +66,6 @@ static void desktop_multi_window_plugin_handle_method_call(
     auto title = fl_value_get_string(fl_value_lookup_string(args, "title"));
     MultiWindowManager::Instance()->SetTitle(window_id, title);
     response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
-  } else if (strcmp(method, "startDragging") == 0) {
-    auto *args = fl_method_call_get_args(method_call);
-    auto window_id = fl_value_get_int(fl_value_lookup_string(args, "windowId"));
-    MultiWindowManager::Instance()->StartDragging(window_id);
-    response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
-  } else if (strcmp(method, "setMinSize") == 0) {
-    auto *args = fl_method_call_get_args(method_call);
-    auto window_id = fl_value_get_int(fl_value_lookup_string(args, "windowId"));
-    auto width = fl_value_get_int(fl_value_lookup_string(args, "width"));
-    auto height = fl_value_get_int(fl_value_lookup_string(args, "height"));
-    MultiWindowManager::Instance()->SetMinSize(window_id, width, height);
-    response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
-  } else if (strcmp(method, "setMaxSize") == 0) {
-    auto *args = fl_method_call_get_args(method_call);
-    auto window_id = fl_value_get_int(fl_value_lookup_string(args, "windowId"));
-    auto width = fl_value_get_int(fl_value_lookup_string(args, "width"));
-    auto height = fl_value_get_int(fl_value_lookup_string(args, "height"));
-    MultiWindowManager::Instance()->SetMaxSize(window_id, width, height);
-    response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
   } else {
     response = FL_METHOD_RESPONSE(fl_method_not_implemented_response_new());
   }
@@ -107,7 +89,7 @@ static void method_call_cb(FlMethodChannel *channel, FlMethodCall *method_call,
   desktop_multi_window_plugin_handle_method_call(plugin, method_call);
 }
 
-void desktop_multi_window_plugin_register_with_registrar(FlPluginRegistrar *registrar) {
+void desktop_multi_window_plugin_register_with_registrar_internal(FlPluginRegistrar *registrar) {
   DesktopMultiWindowPlugin *plugin = DESKTOP_MULTI_WINDOW_PLUGIN(
       g_object_new(desktop_multi_window_plugin_get_type(), nullptr));
 
@@ -121,4 +103,16 @@ void desktop_multi_window_plugin_register_with_registrar(FlPluginRegistrar *regi
                                             g_object_unref);
 
   g_object_unref(plugin);
+}
+
+void desktop_multi_window_plugin_register_with_registrar(FlPluginRegistrar *registrar) {
+  desktop_multi_window_plugin_register_with_registrar_internal(registrar);
+  auto view = fl_plugin_registrar_get_view(registrar);
+  auto window = gtk_widget_get_toplevel(GTK_WIDGET(view));
+  if (GTK_IS_WINDOW(window)) {
+    auto window_channel = WindowChannel::RegisterWithRegistrar(registrar, 0);
+    MultiWindowManager::Instance()->AttachMainWindow(window, std::move(window_channel));
+  } else {
+    g_critical("can not find GtkWindow instance for main window.");
+  }
 }

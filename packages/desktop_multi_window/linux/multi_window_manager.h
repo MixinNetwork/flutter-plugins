@@ -10,6 +10,7 @@
 #include <map>
 #include <cmath>
 
+#include "base_flutter_window.h"
 #include "flutter_window.h"
 
 class MultiWindowManager : public std::enable_shared_from_this<MultiWindowManager>, public FlutterWindowCallback {
@@ -21,7 +22,9 @@ class MultiWindowManager : public std::enable_shared_from_this<MultiWindowManage
 
   virtual ~MultiWindowManager();
 
-  int64_t Create(std::string args);
+  int64_t Create(const std::string &args);
+
+  void AttachMainWindow(GtkWidget *main_flutter_window, std::unique_ptr<WindowChannel> window_channel);
 
   void Show(int64_t id);
 
@@ -35,19 +38,13 @@ class MultiWindowManager : public std::enable_shared_from_this<MultiWindowManage
 
   void SetTitle(int64_t id, const std::string &title);
 
-  void StartDragging(int64_t id);
-
-  void SetMinSize(int64_t id, int64_t width, int64_t height);
-
-  void SetMaxSize(int64_t id, int64_t width, int64_t height);
-
   void OnWindowClose(int64_t id) override;
 
   void OnWindowDestroy(int64_t id) override;
 
  private:
 
-  std::map<int64_t, std::unique_ptr<FlutterWindow>> windows_;
+  std::map<int64_t, std::unique_ptr<BaseFlutterWindow>> windows_;
 
 };
 

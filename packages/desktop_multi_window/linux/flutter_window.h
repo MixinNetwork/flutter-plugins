@@ -12,6 +12,8 @@
 #include <gtk/gtk.h>
 #include <flutter_linux/flutter_linux.h>
 
+#include "base_flutter_window.h"
+
 class FlutterWindowCallback {
 
  public:
@@ -21,30 +23,20 @@ class FlutterWindowCallback {
 
 };
 
-class FlutterWindow {
+class FlutterWindow : public BaseFlutterWindow {
 
  public:
 
-  FlutterWindow(int64_t id, const std::string& args, const std::shared_ptr<FlutterWindowCallback> &callback);
-  ~FlutterWindow();
+  FlutterWindow(int64_t id, const std::string &args, const std::shared_ptr<FlutterWindowCallback> &callback);
+  ~FlutterWindow() override;
 
-  void Show();
+  WindowChannel *GetWindowChannel() override;
 
-  void Hide();
+ protected:
 
-  void Close();
-
-  void SetTitle(const std::string &title);
-
-  void SetBounds(double_t x, double_t y, double_t width, double_t height);
-
-  void SetMinSize(int64_t width, int64_t height);
-
-  void SetMaxSize(int64_t width, int64_t height);
-
-  void Center();
-
-  void StartDragging();
+  GtkWindow *GetWindow() override {
+    return GTK_WINDOW(window_);
+  }
 
  private:
 
@@ -52,10 +44,10 @@ class FlutterWindow {
 
   int64_t id_;
 
-  gboolean dragging_;
-
   GtkWidget *window_ = nullptr;
-  FlView *fl_view_ = nullptr;
+
+  std::unique_ptr<WindowChannel> window_channel_;
+
 };
 
 #endif //DESKTOP_MULTI_WINDOW_WINDOWS_FLUTTER_WINDOW_H_
