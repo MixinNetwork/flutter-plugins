@@ -5,16 +5,15 @@
 //  Created by Bin Yang on 2022/1/10.
 //
 
+import FlutterMacOS
 import Foundation
 
 class MultiWindowManager {
   static let shared = MultiWindowManager()
 
-  private var id: Int64 = 1
+  private var id: Int64 = 0
 
-  private var windows: [Int64: FlutterWindow] = [:]
-
-  private var windowPlugins: [Int64: FlutterWindow] = [:]
+  private var windows: [Int64: BaseFlutterWindow] = [:]
 
   func create(arguments: String) -> Int64 {
     id += 1
@@ -22,8 +21,23 @@ class MultiWindowManager {
 
     let window = FlutterWindow(id: windowId, arguments: arguments)
     window.delegate = self
+    window.windowChannel.methodHandler = self.handleMethodCall
     windows[windowId] = window
     return windowId
+  }
+
+  func attachMainWindow(window: NSWindow, _ channel: WindowChannel) {
+    let mainWindow = BaseFlutterWindow(window: window, channel: channel)
+    mainWindow.windowChannel.methodHandler = self.handleMethodCall
+    windows[0] = mainWindow
+  }
+
+  private func handleMethodCall(fromWindowId: Int64, targetWindowId: Int64, method: String, arguments: Any?, result: @escaping FlutterResult) {
+    guard let window = self.windows[targetWindowId] else {
+      result(FlutterError(code: "-1", message: "failed to find target window. \(targetWindowId)", details: nil))
+      return
+    }
+    window.windowChannel.invokeMethod(fromWindowId: fromWindowId, method: method, arguments: arguments, result: result)
   }
 
   func show(windowId: Int64) {
@@ -87,31 +101,6 @@ class MultiWindowManager {
     }
     window.setFrameAutosaveName(name: name)
   }
-
-  func startDragging(windowId: Int64) {
-    guard let window = windows[windowId] else {
-      debugPrint("window \(windowId) not exists.")
-      return
-    }
-    window.startDragging()
-  }
-
-  func setMinSize(windowId: Int64, width: Int, height: Int) {
-    guard let window = windows[windowId] else {
-      debugPrint("window \(windowId) not exists.")
-      return
-    }
-    window.setMinSize(width: width, height: height)
-  }
-
-  func setMaxSize(windowId: Int64, width: Int, height: Int) {
-    guard let window = windows[windowId] else {
-      debugPrint("window \(windowId) not exists.")
-      return
-    }
-    window.setMaxSize(width: width, height: height)
-  }
-
 }
 
 protocol WindowManagerDelegate: AnyObject {
@@ -120,7 +109,6 @@ protocol WindowManagerDelegate: AnyObject {
 
 extension MultiWindowManager: WindowManagerDelegate {
   func onClose(windowId: Int64) {
-    debugPrint("close : \(windowId)")
     windows.removeValue(forKey: windowId)
   }
 }

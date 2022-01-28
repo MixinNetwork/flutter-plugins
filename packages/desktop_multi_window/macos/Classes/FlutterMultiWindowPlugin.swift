@@ -2,11 +2,24 @@ import Cocoa
 import FlutterMacOS
 
 public class FlutterMultiWindowPlugin: NSObject, FlutterPlugin {
-  public static func register(with registrar: FlutterPluginRegistrar) {
+  static func registerInternal(with registrar: FlutterPluginRegistrar) {
     let channel = FlutterMethodChannel(name: "mixin.one/flutter_multi_window", binaryMessenger: registrar.messenger)
     let instance = FlutterMultiWindowPlugin()
     registrar.addMethodCallDelegate(instance, channel: channel)
-    ClientMessageChannelPlugin.register(with: registrar)
+  }
+
+  public static func register(with registrar: FlutterPluginRegistrar) {
+    registerInternal(with: registrar)
+    guard let app = NSApplication.shared.delegate as? FlutterAppDelegate else {
+      debugPrint("failed to find flutter main window, application delegate is not FlutterAppDelegate")
+      return
+    }
+    guard let window = app.mainFlutterWindow else {
+      debugPrint("failed to find flutter main window")
+      return
+    }
+    let mainWindowChannel = WindowChannel.register(with: registrar, windowId: 0)
+    MultiWindowManager.shared.attachMainWindow(window: window, mainWindowChannel)
   }
 
   public typealias OnWindowCreatedCallback = (FlutterViewController) -> Void
@@ -59,25 +72,6 @@ public class FlutterMultiWindowPlugin: NSObject, FlutterPlugin {
       let windowId = arguments["windowId"] as! Int64
       let frameAutosaveName = arguments["name"] as! String
       MultiWindowManager.shared.setFrameAutosaveName(windowId: windowId, name: frameAutosaveName)
-      result(nil)
-    case "startDragging":
-      let arguments = call.arguments as! [String: Any?]
-      let windowId = arguments["windowId"] as! Int64
-      MultiWindowManager.shared.startDragging(windowId: windowId)
-      result(nil)
-    case "setMinSize":
-      let arguments = call.arguments as! [String: Any?]
-      let windowId = arguments["windowId"] as! Int64
-      let width = arguments["width"] as! Int
-      let height = arguments["height"] as! Int
-      MultiWindowManager.shared.setMinSize(windowId: windowId, width: width, height: height)
-      result(nil)
-    case "setMaxSize":
-      let arguments = call.arguments as! [String: Any?]
-      let windowId = arguments["windowId"] as! Int64
-      let width = arguments["width"] as! Int
-      let height = arguments["height"] as! Int
-      MultiWindowManager.shared.setMaxSize(windowId: windowId, width: width, height: height)
       result(nil)
     default:
       result(FlutterMethodNotImplemented)
