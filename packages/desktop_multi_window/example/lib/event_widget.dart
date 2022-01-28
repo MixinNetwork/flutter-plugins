@@ -49,21 +49,12 @@ class _EventWidgetState extends State<EventWidget> {
   @override
   void initState() {
     super.initState();
-    widget.controller.setMethodHandler(_handleMethodCallback);
-  }
-
-  @override
-  void didUpdateWidget(EventWidget oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.controller != widget.controller) {
-      oldWidget.controller.setMethodHandler(null);
-      widget.controller.setMethodHandler(_handleMethodCallback);
-    }
+    DesktopMultiWindow.setMethodHandler(_handleMethodCallback);
   }
 
   @override
   dispose() {
-    widget.controller.setMethodHandler(null);
+    DesktopMultiWindow.setMethodHandler(null);
     super.dispose();
   }
 
@@ -94,7 +85,7 @@ class _EventWidgetState extends State<EventWidget> {
       final windowId = int.tryParse(windowInputController.text);
       textInputController.clear();
       final result =
-          await widget.controller.invokeMethod(windowId!, "onSend", text);
+          await DesktopMultiWindow.invokeMethod(windowId!, "onSend", text);
       debugPrint("onSend result: $result");
     }
 

@@ -1,18 +1,51 @@
 # flutter_multi_window
 
-A new flutter plugin project.
+[![Pub](https://img.shields.io/pub/v/desktop_multi_window.svg)](https://pub.dev/packages/desktop_multi_window)
 
-## Getting Started
+A flutter plugin that create and manager multi window in desktop.
 
-This project is a starting point for a Flutter
-[plug-in package](https://flutter.dev/developing-packages/),
-a specialized package that includes platform-specific implementation code for
-Android and/or iOS.
+|         |     | 
+|---------|-----|
+| Windows | ✅   | 
+| Linux   | ✅   |  
+| macOS   | ✅   | 
 
-For help getting started with Flutter, view our
-[online documentation](https://flutter.dev/docs), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Usage
 
-The plugin project was generated without specifying the `--platforms` flag, no platforms are currently supported.
-To add platforms, run `flutter create -t plugin --platforms <platforms> .` under the same
-directory. You can also find a detailed instruction on how to add platforms in the `pubspec.yaml` at https://flutter.dev/docs/development/packages-and-plugins/developing-packages#plugin-platforms.
+To use this plugin, add `desktop_multi_window` as a dependency in your pubspec.yaml file.
+
+## Example
+
+### Create and Show another window.
+
+```
+final window = await DesktopMultiWindow.createWindow(jsonEncode({
+  'args1': 'Sub window',
+  'args2': 100,
+  'args3': true,
+  'bussiness': 'bussiness_test',
+}));
+window
+  ..setFrame(const Offset(0, 0) & const Size(1280, 720))
+  ..center()
+  ..setTitle('Another window')
+  ..show();
+```
+
+### Invoke remote window method.
+
+The windows run on different flutter engine. So we need use `DesktopMultiWindow.invokeMethod`
+and `DesktopMultiWindow.invokeMethod` to handle method calls between windows.
+
+```
+DesktopMultiWindow.setMethodCallHandler((call, fromWindowId) async {
+  debugPrint('${call.method} ${call.arguments} $fromWindowId');
+  return "result";
+});
+```
+
+```
+final result =
+    await DesktopMultiWindow.invokeMethod(windowId!, "method_name", "arguments");
+debugPrint("onSend result: $result");
+```

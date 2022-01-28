@@ -14,6 +14,9 @@ class WindowControllerMainImpl extends WindowController {
   WindowControllerMainImpl(this._id);
 
   @override
+  int get windowId => _id;
+
+  @override
   Future<void> close() {
     return _channel.invokeMethod('close', _id);
   }
@@ -49,31 +52,6 @@ class WindowControllerMainImpl extends WindowController {
     return _channel.invokeMethod('setTitle', <String, dynamic>{
       'windowId': _id,
       'title': title,
-    });
-  }
-
-  @override
-  Future<dynamic> invokeMethod(int targetWindowId, String method,
-      [dynamic arguments]) {
-    return windowEventChannel.invokeMethod(method, <String, dynamic>{
-      'targetWindowId': targetWindowId,
-      'arguments': arguments,
-    });
-  }
-
-  @override
-  void setMethodHandler(
-      Future<dynamic> Function(MethodCall call, int fromWindowId)? handler) {
-    if (handler == null) {
-      windowEventChannel.setMethodCallHandler(null);
-      return;
-    }
-    windowEventChannel.setMethodCallHandler((call) async {
-      final fromWindowId = call.arguments['fromWindowId'] as int;
-      final arguments = call.arguments['arguments'];
-      final result =
-          await handler(MethodCall(call.method, arguments), fromWindowId);
-      return result;
     });
   }
 
