@@ -79,10 +79,14 @@ class DesktopDrop {
         final text = (call.arguments as List<dynamic>)[0] as String;
         final offset = ((call.arguments as List<dynamic>)[1] as List<dynamic>)
             .cast<double>();
-        final paths = const LineSplitter()
-            .convert(text)
-            .map((e) => Uri.tryParse(e)?.path ?? '')
-            .where((e) => e.isNotEmpty);
+        final paths = const LineSplitter().convert(text).map((e) {
+          try {
+            return Uri.tryParse(e)?.toFilePath() ?? '';
+          } catch (error, stacktrace) {
+            debugPrint('failed to parse linux path: $error $stacktrace');
+          }
+          return '';
+        }).where((e) => e.isNotEmpty);
         _notifyEvent(DropDoneEvent(
           location: Offset(offset[0], offset[1]),
           files: paths.map((e) => XFile(e)).toList(),

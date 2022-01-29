@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.2
+
+* Fix non ascii characters path on linux. (#53)[https://github.com/MixinNetwork/flutter-plugins/issues/53]
+
 ## 0.3.1
 
 * Fix desktop_drop web lastModifiedDate. (Thanks [Luigi Rosso](https://github.com/luigi-rosso))
