@@ -1,6 +1,6 @@
 # flutter-plugins
 
-This repo contains the source code for Flutter plugins which used in Mixin. Check the `packages` directory for all plugins.
+This repo contains the source code for Flutter plugins which used in [Mixin Messenger Desktop](https://github.com/MixinNetwork/flutter-app). Check the `packages` directory for all plugins.
 
 ## Plugins
 
