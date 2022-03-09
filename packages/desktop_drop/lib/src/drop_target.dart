@@ -33,6 +33,7 @@ typedef OnDragDoneCallback = void Function(DropDoneDetails details);
 
 typedef OnDragCallback<Detail> = void Function(Detail details);
 
+/// A widget that accepts draggable files.
 class DropTarget extends StatefulWidget {
   const DropTarget({
     Key? key,
@@ -55,8 +56,15 @@ class DropTarget extends StatefulWidget {
   /// Callback when drag hover on target area.
   final OnDragCallback<DropEventDetails>? onDragUpdated;
 
+  /// Callback when drag dropped on target area.
   final OnDragDoneCallback? onDragDone;
 
+  /// Whether to enable drop target.
+  ///
+  /// ATTENTION: You should disable drop target when you push a new page/widget in
+  /// front of this drop target, since the drop target will still receive drag events
+  /// even it is invisible.
+  /// https://github.com/MixinNetwork/flutter-plugins/issues/2
   final bool enable;
 
   @override
