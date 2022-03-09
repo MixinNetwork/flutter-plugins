@@ -1,8 +1,12 @@
 # Changelog
 
+## 0.3.3
+
+* Fix dragging multiple files at once from Apple Music does not work well. [#72](https://github.com/MixinNetwork/flutter-plugins/issues/72)
+
 ## 0.3.2
 
-* Fix non ascii characters path on linux. (#53)[https://github.com/MixinNetwork/flutter-plugins/issues/53]
+* Fix non ascii characters path on linux. [#53](https://github.com/MixinNetwork/flutter-plugins/issues/53)
 
 ## 0.3.1
 
