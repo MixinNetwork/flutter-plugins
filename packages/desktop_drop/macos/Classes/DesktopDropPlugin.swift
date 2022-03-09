@@ -12,14 +12,17 @@ public class DesktopDropPlugin: NSObject, FlutterPlugin {
     let d = DropTarget(frame: vc.view.bounds, channel: channel)
     d.autoresizingMask = [.width, .height]
 
+    var dragTypes = [NSPasteboard.PasteboardType]()
+
     if #available(macOS 10.12, *) {
-      d.registerForDraggedTypes(NSFilePromiseReceiver.readableDraggedTypes.map { NSPasteboard.PasteboardType($0) })
+      dragTypes.append(contentsOf: NSFilePromiseReceiver.readableDraggedTypes.map { NSPasteboard.PasteboardType($0) })
     }
 
     if #available(macOS 10.13, *) {
-      d.registerForDraggedTypes([.fileURL])
+      dragTypes.append(.fileURL)
     }
-    d.registerForDraggedTypes([.filePromise])
+    dragTypes.append(.filePromise)
+    d.registerForDraggedTypes(dragTypes)
     vc.view.addSubview(d)
 
     registrar.addMethodCallDelegate(instance, channel: channel)
@@ -73,21 +76,15 @@ class DropTarget: NSView {
   override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
     var urls = [String]()
 
-    let group = DispatchGroup()
-
-    var supportedClasses: [NSObject.Type] = [
-      NSURL.self,
-    ]
-    if #available(macOS 10.12, *) {
-      supportedClasses.append(NSFilePromiseReceiver.self)
-    }
-
     let searchOptions: [NSPasteboard.ReadingOptionKey: Any] = [
       .urlReadingFileURLsOnly: true,
     ]
 
-    sender.enumerateDraggingItems(options: [], for: nil, classes: supportedClasses, searchOptions: searchOptions) { draggingItem, _, _ in
-      if #available(macOS 10.12, *) {
+    let group = DispatchGroup()
+
+    if #available(macOS 10.12, *) {
+      // retrieve NSFilePromise.
+      sender.enumerateDraggingItems(options: [], for: nil, classes: [NSFilePromiseReceiver.self], searchOptions: searchOptions) { draggingItem, _, _ in
         if let filePromiseReceiver = draggingItem.item as? NSFilePromiseReceiver {
           group.enter()
           filePromiseReceiver.receivePromisedFiles(atDestination: self.destinationURL, options: [:], operationQueue: self.workQueue) { fileURL, error in
@@ -101,11 +98,16 @@ class DropTarget: NSView {
           return
         }
       }
-      if let fileURL = draggingItem.item as? URL {
+    }
+
+    let pasteboardObjects = sender.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: searchOptions)
+
+    pasteboardObjects?.forEach({ item in
+      if let fileURL = item as? URL {
         urls.append(fileURL.path)
         return
       }
-    }
+    })
 
     group.notify(queue: .main) {
       self.channel.invokeMethod("performOperation", arguments: urls)
