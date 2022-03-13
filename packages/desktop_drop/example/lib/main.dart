@@ -21,12 +21,12 @@ class MyApp extends StatelessWidget {
           runSpacing: 8,
           spacing: 8,
           children: const [
-            ExmapleDragTarget(),
-            ExmapleDragTarget(),
-            ExmapleDragTarget(),
-            ExmapleDragTarget(),
-            ExmapleDragTarget(),
-            ExmapleDragTarget(),
+            ExampleDragTarget(),
+            ExampleDragTarget(),
+            ExampleDragTarget(),
+            ExampleDragTarget(),
+            ExampleDragTarget(),
+            ExampleDragTarget(),
           ],
         ),
       ),
@@ -34,14 +34,14 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class ExmapleDragTarget extends StatefulWidget {
-  const ExmapleDragTarget({Key? key}) : super(key: key);
+class ExampleDragTarget extends StatefulWidget {
+  const ExampleDragTarget({Key? key}) : super(key: key);
 
   @override
-  _ExmapleDragTargetState createState() => _ExmapleDragTargetState();
+  _ExampleDragTargetState createState() => _ExampleDragTargetState();
 }
 
-class _ExmapleDragTargetState extends State<ExmapleDragTarget> {
+class _ExampleDragTargetState extends State<ExampleDragTarget> {
   final List<XFile> _list = [];
 
   bool _dragging = false;
