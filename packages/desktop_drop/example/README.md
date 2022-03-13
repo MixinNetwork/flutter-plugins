@@ -18,14 +18,14 @@ full API reference.
 ## Example
 
 ```dart
-class ExmapleDragTarget extends StatefulWidget {
-  const ExmapleDragTarget({Key? key}) : super(key: key);
+class ExampleDragTarget extends StatefulWidget {
+  const ExampleDragTarget({Key? key}) : super(key: key);
 
   @override
-  _ExmapleDragTargetState createState() => _ExmapleDragTargetState();
+  _ExampleDragTargetState createState() => _ExampleDragTargetState();
 }
 
-class _ExmapleDragTargetState extends State<ExmapleDragTarget> {
+class _ExampleDragTargetState extends State<ExampleDragTarget> {
   final List<Uri> _list = [];
 
   bool _dragging = false;

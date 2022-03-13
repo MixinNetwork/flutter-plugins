@@ -23,14 +23,14 @@ A plugin which allows user dragging files to your flutter desktop applications.
 2. Then you can use `DropTarget` to receive file drop events.
 
 ```dart
-class ExmapleDragTarget extends StatefulWidget {
-  const ExmapleDragTarget({Key? key}) : super(key: key);
+class ExampleDragTarget extends StatefulWidget {
+  const ExampleDragTarget({Key? key}) : super(key: key);
 
   @override
-  _ExmapleDragTargetState createState() => _ExmapleDragTargetState();
+  _ExampleDragTargetState createState() => _ExampleDragTargetState();
 }
 
-class _ExmapleDragTargetState extends State<ExmapleDragTarget> {
+class _ExampleDragTargetState extends State<ExampleDragTarget> {
   final List<XFile> _list = [];
 
   bool _dragging = false;
