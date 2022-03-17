@@ -129,6 +129,16 @@ void MultiWindowManager::Center(int64_t id) {
   }
 }
 
+std::vector<int64_t> MultiWindowManager::GetAllSubWindowIds() {
+  std::vector<int64_t> ids;
+  for (auto &window : windows_) {
+    if (window.first != 0) {
+      ids.push_back(window.first);
+    }
+  }
+  return ids;
+}
+
 void MultiWindowManager::OnWindowClose(int64_t id) {
 }
 

@@ -92,6 +92,10 @@ void DesktopMultiWindowPlugin::HandleMethodCall(
     MultiWindowManager::Instance()->SetTitle(window_id, title);
     result->Success();
     return;
+  } else if (method_call.method_name() == "getAllSubWindowIds") {
+    auto window_ids = MultiWindowManager::Instance()->GetAllSubWindowIds();
+    result->Success(flutter::EncodableValue(window_ids));
+    return;
   }
   result->NotImplemented();
 }
