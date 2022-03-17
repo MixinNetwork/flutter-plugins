@@ -101,6 +101,10 @@ class MultiWindowManager {
     }
     window.setFrameAutosaveName(name: name)
   }
+
+  func getAllSubWindowIds() -> [Int64] {
+    return windows.keys.filter { $0 != 0 }
+  }
 }
 
 protocol WindowManagerDelegate: AnyObject {

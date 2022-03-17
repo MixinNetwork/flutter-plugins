@@ -73,6 +73,9 @@ public class FlutterMultiWindowPlugin: NSObject, FlutterPlugin {
       let frameAutosaveName = arguments["name"] as! String
       MultiWindowManager.shared.setFrameAutosaveName(windowId: windowId, name: frameAutosaveName)
       result(nil)
+    case "getAllSubWindowIds":
+      let subWindowIds = MultiWindowManager.shared.getAllSubWindowIds()
+      result(subWindowIds)
     default:
       result(FlutterMethodNotImplemented)
     }

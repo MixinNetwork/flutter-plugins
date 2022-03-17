@@ -70,4 +70,15 @@ class DesktopMultiWindow {
       return result;
     });
   }
+
+  /// Get all sub window id.
+  static Future<List<int>> getAllSubWindowIds() async {
+    final result = await miltiWindowChannel
+        .invokeMethod<List<dynamic>>('getAllSubWindowIds');
+    final ids = result?.cast<int>() ?? const [];
+    assert(ids.isNotEmpty);
+    assert(ids.every((id) => id > 0));
+    assert(!ids.contains(0), 'ids must not contains main window id');
+    return ids;
+  }
 }

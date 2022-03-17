@@ -55,6 +55,20 @@ class _ExampleMainWindowState extends State<_ExampleMainWindow> {
               },
               child: const Text('Create a new World!'),
             ),
+            TextButton(
+              child: const Text('Send event to all sub windows'),
+              onPressed: () async {
+                final subWindowIds =
+                    await DesktopMultiWindow.getAllSubWindowIds();
+                for (final windowId in subWindowIds) {
+                  DesktopMultiWindow.invokeMethod(
+                    windowId,
+                    'broadcast',
+                    'Broadcast from main window',
+                  );
+                }
+              },
+            ),
             Expanded(
               child: EventWidget(controller: WindowController.fromWindowId(0)),
             )
