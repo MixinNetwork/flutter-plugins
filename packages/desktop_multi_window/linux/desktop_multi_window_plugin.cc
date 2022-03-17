@@ -66,6 +66,10 @@ static void desktop_multi_window_plugin_handle_method_call(
     auto title = fl_value_get_string(fl_value_lookup_string(args, "title"));
     MultiWindowManager::Instance()->SetTitle(window_id, title);
     response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
+  } else if (strcmp(method, "getAllSubWindowIds") == 0) {
+    auto window_ids = MultiWindowManager::Instance()->GetAllSubWindowIds();
+    response = FL_METHOD_RESPONSE(fl_method_success_response_new(
+        fl_value_new_int64_list(window_ids.data(), window_ids.size())));
   } else {
     response = FL_METHOD_RESPONSE(fl_method_not_implemented_response_new());
   }

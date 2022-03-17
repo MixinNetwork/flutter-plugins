@@ -126,6 +126,16 @@ void MultiWindowManager::SetTitle(int64_t id, const std::string &title) {
   }
 }
 
+std::vector<int64_t> MultiWindowManager::GetAllSubWindowIds() {
+  std::vector<int64_t> ids;
+  for (auto &window : windows_) {
+    if (window.first != 0) {
+      ids.push_back(window.first);
+    }
+  }
+  return ids;
+}
+
 void MultiWindowManager::Center(int64_t id) {
   auto window = windows_.find(id);
   if (window != windows_.end()) {
