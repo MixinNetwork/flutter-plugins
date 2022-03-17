@@ -211,6 +211,9 @@ LRESULT FlutterWindow::MessageHandler(HWND hwnd, UINT message, WPARAM wparam, LP
 }
 
 void FlutterWindow::Destroy() {
+  if (window_channel_) {
+    window_channel_ = nullptr;
+  }
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
   }

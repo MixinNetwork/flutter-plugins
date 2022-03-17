@@ -153,7 +153,6 @@ void MultiWindowManager::HandleWindowChannelCall(
     flutter::EncodableValue *arguments,
     std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result
 ) {
-  std::cout << "MultiWindowManager::HandleWindowChannelCall " << call << std::endl;
   auto target_window_entry = windows_.find(target_window_id);
   if (target_window_entry == windows_.end()) {
     result->Error("-1", "target window not found.");
