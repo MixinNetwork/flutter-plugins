@@ -1,4 +1,4 @@
-# flutter_multi_window
+# desktop_multi_window
 
 [![Pub](https://img.shields.io/pub/v/desktop_multi_window.svg)](https://pub.dev/packages/desktop_multi_window)
 
