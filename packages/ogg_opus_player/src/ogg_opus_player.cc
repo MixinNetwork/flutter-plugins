@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <memory>
+#include <chrono>
 
 #include "ogg/opus.h"
 #include "ogg/opusfile.h"
@@ -100,6 +101,8 @@ class SdlOggOpusPlayer : public Player {
 
   double current_time_ = 0;
 
+  int64_t last_update_time_ = 0;
+
   int Initialize();
 
   void ReadAudioData(Uint8 *stream, int len);
@@ -127,10 +130,12 @@ void SdlOggOpusPlayer::Stop() {
 
 void SdlOggOpusPlayer::ReadAudioData(Uint8 *stream, int len) {
   std::cout << "ReadAudioData: " << len << std::endl;
+  last_update_time_ = std::chrono::system_clock::now().time_since_epoch().count();
   auto read = reader_->ReadPcmData(reinterpret_cast<opus_int16 *>(stream), len / 2) * 2;
   if (read < len) {
     memset(stream + read, 0, len - read);
   }
+  current_time_ = current_time_ + read / 48000.0;
 }
 
 int SdlOggOpusPlayer::Initialize() {
@@ -144,8 +149,9 @@ int SdlOggOpusPlayer::Initialize() {
   SDL_AudioSpec wanted_spec, spec;
   wanted_spec.silence = 0;
   wanted_spec.format = AUDIO_S16SYS;
-  wanted_spec.channels = 2;
-  wanted_spec.freq = 24000;
+  wanted_spec.channels = 1;
+  wanted_spec.samples = 1024;
+  wanted_spec.freq = 48000 / 2;
   wanted_spec.callback = [](void *userdata, Uint8 *stream, int len) {
     auto *player = static_cast<SdlOggOpusPlayer *>(userdata);
     player->ReadAudioData(stream, len);
@@ -175,7 +181,11 @@ SdlOggOpusPlayer::~SdlOggOpusPlayer() {
 }
 
 double SdlOggOpusPlayer::CurrentTime() {
-  return 0;
+  if (last_update_time_ == 0) {
+    return current_time_;
+  }
+  auto time = std::chrono::system_clock::now().time_since_epoch().count() - last_update_time_;
+  return current_time_ + (double) time / 1000000000.0;
 }
 
 }
@@ -198,4 +208,9 @@ void ogg_opus_player_dispose(void *player) {
   auto *p = static_cast<Player *>(player);
   ogg_opus_player_pause(player);
   delete p;
+}
+
+double ogg_opus_player_get_current_time(void *player) {
+  auto *p = static_cast<Player *>(player);
+  return p->CurrentTime();
 }
