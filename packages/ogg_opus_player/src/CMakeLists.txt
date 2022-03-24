@@ -6,9 +6,11 @@ cmake_minimum_required(VERSION 3.10)
 project(ogg_opus_player_library VERSION 0.0.1 LANGUAGES C CXX)
 
 include_directories(SDL2)
+include_directories(dart)
 
 add_library(ogg_opus_player SHARED
   "ogg_opus_player.cc"
+  "dart/dart_api_dl.c"
   )
 
 set_target_properties(ogg_opus_player PROPERTIES
@@ -20,7 +22,7 @@ if (UNIX AND NOT APPLE)
   add_library(ogg SHARED IMPORTED GLOBAL)
   set_target_properties(ogg PROPERTIES
     IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/libs/linux_amd64/libogg.so)
-  add_library (opus SHARED IMPORTED GLOBAL)
+  add_library(opus SHARED IMPORTED GLOBAL)
   set_target_properties(opus PROPERTIES
     IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/libs/linux_amd64/libopus.so)
   target_link_libraries(ogg_opus_player ${CMAKE_CURRENT_SOURCE_DIR}/libs/linux_amd64/libopusenc.a)
@@ -51,6 +53,7 @@ elseif (WIN32)
   target_link_libraries(ogg_opus_player
     ogg opus opusfile opusenc sdl2
     )
+  set_property(TARGET ogg_opus_player APPEND PROPERTY LINK_FLAGS "/NODEFAULTLIB:LIBCMT")
 endif ()
 
 target_compile_definitions(ogg_opus_player PUBLIC DART_SHARED_LIB)
