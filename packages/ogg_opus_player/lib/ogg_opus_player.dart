@@ -18,9 +18,16 @@ class OggOpusPlayer {
 
   Pointer<Void> _playerHandle = nullptr;
 
-  var _state = ValueNotifier(PlayerState.idle);
+  final _state = ValueNotifier(PlayerState.idle);
 
   ValueListenable<PlayerState> get state => _state;
+
+  double get currentPosition {
+    if (_playerHandle == nullptr) {
+      return 0;
+    }
+    return _bindings.ogg_opus_player_get_current_time(_playerHandle);
+  }
 
   OggOpusPlayer(this._path) {
     debugPrint('OggOpusPlayer._init');

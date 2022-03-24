@@ -90,7 +90,7 @@ class _PlayerBodyState extends State<PlayerBody> {
     _player = OggOpusPlayer(widget.path);
     timer = Timer.periodic(const Duration(milliseconds: 50), (timer) {
       setState(() {
-        // _playingPosition = _player.currentPosition;
+        _playingPosition = _player.currentPosition;
       });
     });
   }

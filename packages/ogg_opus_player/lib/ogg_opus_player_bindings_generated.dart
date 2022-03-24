@@ -82,4 +82,19 @@ class OggOpusPlayerBindings {
           'ogg_opus_player_dispose');
   late final _ogg_opus_player_dispose = _ogg_opus_player_disposePtr
       .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
+
+  double ogg_opus_player_get_current_time(
+    ffi.Pointer<ffi.Void> player,
+  ) {
+    return _ogg_opus_player_get_current_time(
+      player,
+    );
+  }
+
+  late final _ogg_opus_player_get_current_timePtr =
+      _lookup<ffi.NativeFunction<ffi.Double Function(ffi.Pointer<ffi.Void>)>>(
+          'ogg_opus_player_get_current_time');
+  late final _ogg_opus_player_get_current_time =
+      _ogg_opus_player_get_current_timePtr
+          .asFunction<double Function(ffi.Pointer<ffi.Void>)>();
 }
