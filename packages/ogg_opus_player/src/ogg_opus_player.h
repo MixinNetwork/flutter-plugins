@@ -25,6 +25,8 @@ FFI_PLUGIN_EXPORT void ogg_opus_player_dispose(void *player);
 
 FFI_PLUGIN_EXPORT double ogg_opus_player_get_current_time(void *player);
 
+FFI_PLUGIN_EXPORT double ogg_opus_player_set_send_port(void *player, long long send_port);
+
 #ifdef __cplusplus
 }
 #endif
