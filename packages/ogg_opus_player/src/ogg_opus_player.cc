@@ -24,7 +24,7 @@ class OggOpusReader {
 
   ~OggOpusReader();
 
-  int ReadPcmData(uint8_t *data, int length);
+  int ReadPcmData(opus_int16 *data, int length);
 
 };
 
@@ -43,18 +43,18 @@ OggOpusReader::~OggOpusReader() {
     op_free(opus_file_);
   }
 }
-int OggOpusReader::ReadPcmData(uint8_t *data, int length) {
+int OggOpusReader::ReadPcmData(opus_int16 *data, int length) {
   if (!opus_file_) {
     return 0;
   }
-  auto read_bytes = 0;
+  auto read = 0;
 
   auto result = 1;
-  while ((result == OP_HOLE || result > 0) && read_bytes < length) {
-    result = op_read(opus_file_, reinterpret_cast<opus_int16 *>(data + read_bytes),
-                     (length - read_bytes) / 2, nullptr);
+  while ((result == OP_HOLE || result > 0) && read < length) {
+    result = op_read(opus_file_, data + read,
+                     length - read, nullptr);
     if (result >= 0) {
-      read_bytes += result * 2;
+      read += result;
     }
   }
 
@@ -66,7 +66,7 @@ int OggOpusReader::ReadPcmData(uint8_t *data, int length) {
     ended_ = true;
   }
 
-  return read_bytes;
+  return read;
 }
 
 class Player {
@@ -127,7 +127,7 @@ void SdlOggOpusPlayer::Stop() {
 
 void SdlOggOpusPlayer::ReadAudioData(Uint8 *stream, int len) {
   std::cout << "ReadAudioData: " << len << std::endl;
-  auto read = reader_->ReadPcmData(stream, len);
+  auto read = reader_->ReadPcmData(reinterpret_cast<opus_int16 *>(stream), len / 2) * 2;
   if (read < len) {
     memset(stream + read, 0, len - read);
   }
@@ -144,8 +144,8 @@ int SdlOggOpusPlayer::Initialize() {
   SDL_AudioSpec wanted_spec, spec;
   wanted_spec.silence = 0;
   wanted_spec.format = AUDIO_S16SYS;
-  wanted_spec.channels = 1;
-  wanted_spec.freq = 48000;
+  wanted_spec.channels = 2;
+  wanted_spec.freq = 24000;
   wanted_spec.callback = [](void *userdata, Uint8 *stream, int len) {
     auto *player = static_cast<SdlOggOpusPlayer *>(userdata);
     player->ReadAudioData(stream, len);
