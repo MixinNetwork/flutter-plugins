@@ -6,7 +6,7 @@
 #endif
 
 #if _WIN32
-#define FFI_PLUGIN_EXPORT __declspec(dllexport)
+#define FFI_PLUGIN_EXPORT extern "C" __declspec(dllexport)
 #else
 #define FFI_PLUGIN_EXPORT extern "C"
 #endif

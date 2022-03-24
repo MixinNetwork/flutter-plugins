@@ -1,6 +1,6 @@
 /*
   Simple DirectMedia Layer
-  Copyright (C) 1997-2019 Sam Lantinga <slouken@libsdl.org>
+  Copyright (C) 1997-2020 Sam Lantinga <slouken@libsdl.org>
 
   This software is provided 'as-is', without any express or implied
   warranty.  In no event will the authors be held liable for any damages
@@ -390,7 +390,10 @@ typedef enum {
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN 1
 #endif
-#include <windows.h>
+#ifndef NOMINMAX   /* don't define min() and max(). */
+#define NOMINMAX
+#endif
+#include <Windows.h>
 
 #if __WINRT__
 #include <Unknwn.h>
