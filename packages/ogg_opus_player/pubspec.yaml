@@ -1,6 +1,6 @@
 name: ogg_opus_player
 description: A new Flutter FFI plugin project.
-version: 0.0.1
+version: 0.3.0
 homepage:
 
 environment:

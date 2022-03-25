@@ -4,10 +4,12 @@
 
 a ogg opus file player for flutter.
 
-|     platform     |       |  required os version |
-| -------- | ------- | ---- |
-| iOS    | ✅    |  10.0 |
-| macOS    | ✅     |   10.12  |
+| platform  |       | required os version |
+|-----------|-------|---------------------|
+| iOS       | ✅     | 10.0                |
+| macOS     | ✅     | 10.12               |
+| Windows   | ✅     |                     |
+| Linux     | ✅     |                     |
 
 ## Getting Started
 
@@ -30,6 +32,13 @@ player.dipose();
 
 ```
 
+## Linux required
+
+Need SDL2 library installed on Linux.
+
+```shell
+sudo apt-get install libSDL2-2.0
+```
 
 ## LICENSE
 

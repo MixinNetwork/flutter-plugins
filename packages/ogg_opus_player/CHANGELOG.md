@@ -1,3 +1,7 @@
+## 0.3.0
+
+support windows and linux.
+
 ## 0.2.0
 
 suppport macos arm64
