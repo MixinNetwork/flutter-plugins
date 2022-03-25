@@ -15,7 +15,7 @@ extern "C" {
 #define FFI_PLUGIN_EXPORT
 #endif
 
-FFI_PLUGIN_EXPORT void *ogg_opus_player_create(const char *file_path);
+FFI_PLUGIN_EXPORT void *ogg_opus_player_create(const char *file_path, long int send_port);
 
 FFI_PLUGIN_EXPORT void ogg_opus_player_pause(void *player);
 
@@ -25,7 +25,7 @@ FFI_PLUGIN_EXPORT void ogg_opus_player_dispose(void *player);
 
 FFI_PLUGIN_EXPORT double ogg_opus_player_get_current_time(void *player);
 
-FFI_PLUGIN_EXPORT double ogg_opus_player_set_send_port(void *player, long long send_port);
+FFI_PLUGIN_EXPORT void ogg_opus_player_initialize_dart(void *native_port);
 
 #ifdef __cplusplus
 }

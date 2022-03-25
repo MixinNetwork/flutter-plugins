@@ -28,18 +28,20 @@ class OggOpusPlayerBindings {
 
   ffi.Pointer<ffi.Void> ogg_opus_player_create(
     ffi.Pointer<ffi.Int8> file_path,
+    int send_port,
   ) {
     return _ogg_opus_player_create(
       file_path,
+      send_port,
     );
   }
 
   late final _ogg_opus_player_createPtr = _lookup<
       ffi.NativeFunction<
           ffi.Pointer<ffi.Void> Function(
-              ffi.Pointer<ffi.Int8>)>>('ogg_opus_player_create');
+              ffi.Pointer<ffi.Int8>, ffi.Int64)>>('ogg_opus_player_create');
   late final _ogg_opus_player_create = _ogg_opus_player_createPtr
-      .asFunction<ffi.Pointer<ffi.Void> Function(ffi.Pointer<ffi.Int8>)>();
+      .asFunction<ffi.Pointer<ffi.Void> Function(ffi.Pointer<ffi.Int8>, int)>();
 
   void ogg_opus_player_pause(
     ffi.Pointer<ffi.Void> player,
@@ -97,4 +99,19 @@ class OggOpusPlayerBindings {
   late final _ogg_opus_player_get_current_time =
       _ogg_opus_player_get_current_timePtr
           .asFunction<double Function(ffi.Pointer<ffi.Void>)>();
+
+  void ogg_opus_player_initialize_dart(
+    ffi.Pointer<ffi.Void> native_port,
+  ) {
+    return _ogg_opus_player_initialize_dart(
+      native_port,
+    );
+  }
+
+  late final _ogg_opus_player_initialize_dartPtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
+          'ogg_opus_player_initialize_dart');
+  late final _ogg_opus_player_initialize_dart =
+      _ogg_opus_player_initialize_dartPtr
+          .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
 }

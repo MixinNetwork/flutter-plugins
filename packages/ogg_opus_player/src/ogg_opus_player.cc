@@ -8,6 +8,7 @@
 #include "ogg/opus.h"
 #include "ogg/opusfile.h"
 
+#include "dart_api_dl.h"
 #include "SDL.h"
 
 #define _OPUS_OGG_PLAYER_LOG
@@ -77,7 +78,6 @@ class Player {
  public:
   virtual void Play() = 0;
   virtual void Pause() = 0;
-  virtual void Stop() = 0;
 
   virtual ~Player();
 
@@ -86,15 +86,18 @@ class Player {
 
 Player::~Player() = default;
 
+enum DartPortMessage {
+  PLAYER_REACH_ENDED = 0
+};
+
 class SdlOggOpusPlayer : public Player {
 
  public:
-  explicit SdlOggOpusPlayer(const char *file_path);
+  SdlOggOpusPlayer(const char *file_path, Dart_Port_DL send_port);
   ~SdlOggOpusPlayer() override;
 
   void Play() override;
   void Pause() override;
-  void Stop() override;
   double CurrentTime() override;
 
  private:
@@ -108,14 +111,20 @@ class SdlOggOpusPlayer : public Player {
 
   bool paused_ = true;
 
+  Dart_Port_DL dart_port_dl_;
+
   int Initialize();
 
   void ReadAudioData(Uint8 *stream, int len);
 
 };
 
-SdlOggOpusPlayer::SdlOggOpusPlayer(const char *file_path)
-    : reader_(std::make_unique<OggOpusReader>(file_path)) {
+SdlOggOpusPlayer::SdlOggOpusPlayer(const char *file_path, Dart_Port_DL send_port)
+    : reader_(std::make_unique<OggOpusReader>(file_path)),
+      dart_port_dl_(send_port) {
+#ifdef _OPUS_OGG_PLAYER_LOG
+  std::cout << "SdlOggOpusPlayer: " << file_path << " port: " << send_port << std::endl;
+#endif
   Initialize();
 }
 
@@ -134,9 +143,6 @@ void SdlOggOpusPlayer::Pause() {
     last_update_time_ = 0;
   }
 }
-void SdlOggOpusPlayer::Stop() {
-
-}
 
 void SdlOggOpusPlayer::ReadAudioData(Uint8 *stream, int len) {
   auto read = reader_->ReadPcmData(reinterpret_cast<opus_int16 *>(stream), len / 2) * 2;
@@ -145,14 +151,18 @@ void SdlOggOpusPlayer::ReadAudioData(Uint8 *stream, int len) {
   }
   current_time_ = current_time_ + read / (48000.0 * 2);
   last_update_time_ = std::chrono::system_clock::now().time_since_epoch().count();
+  if (read <= 0) {
+    Dart_PostInteger_DL(dart_port_dl_, PLAYER_REACH_ENDED);
+  }
 }
+
+bool global_init = false;
 
 int SdlOggOpusPlayer::Initialize() {
 
-  static bool sub_system_inited = false;
-  if (!sub_system_inited) {
-    sub_system_inited = true;
+  if (!global_init) {
     SDL_InitSubSystem(SDL_INIT_AUDIO);
+    global_init = true;
   }
 
   SDL_AudioSpec wanted_spec, spec;
@@ -208,8 +218,8 @@ double SdlOggOpusPlayer::CurrentTime() {
 
 }
 
-void *ogg_opus_player_create(const char *file_path) {
-  auto *player = new SdlOggOpusPlayer(file_path);
+void *ogg_opus_player_create(const char *file_path, Dart_Port_DL send_port) {
+  auto *player = new SdlOggOpusPlayer(file_path, send_port);
   return player;
 }
 
@@ -231,4 +241,8 @@ void ogg_opus_player_dispose(void *player) {
 double ogg_opus_player_get_current_time(void *player) {
   auto *p = static_cast<Player *>(player);
   return p->CurrentTime();
+}
+
+void ogg_opus_player_initialize_dart(void *native_port) {
+  Dart_InitializeApiDL(native_port);
 }

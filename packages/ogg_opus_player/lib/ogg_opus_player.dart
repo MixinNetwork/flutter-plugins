@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:ffi';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart';
@@ -18,6 +20,10 @@ class OggOpusPlayer {
 
   Pointer<Void> _playerHandle = nullptr;
 
+  final ReceivePort _port;
+
+  StreamSubscription? _portSubscription;
+
   final _state = ValueNotifier(PlayerState.idle);
 
   ValueListenable<PlayerState> get state => _state;
@@ -29,10 +35,19 @@ class OggOpusPlayer {
     return _bindings.ogg_opus_player_get_current_time(_playerHandle);
   }
 
-  OggOpusPlayer(this._path) {
-    debugPrint('OggOpusPlayer._init');
-    _playerHandle =
-        _bindings.ogg_opus_player_create(_path.toNativeUtf8().cast());
+  OggOpusPlayer(this._path) : _port = ReceivePort('OggOpusPlayer: #$_path') {
+    _initializeDartApi();
+    _playerHandle = _bindings.ogg_opus_player_create(
+        _path.toNativeUtf8().cast(), _port.sendPort.nativePort);
+    _portSubscription = _port.listen((message) {
+      if (message is int) {
+        // 0: play finished
+        if (message == 0) {
+          _bindings.ogg_opus_player_pause(_playerHandle);
+          _state.value = PlayerState.ended;
+        }
+      }
+    });
   }
 
   void play() {
@@ -50,12 +65,23 @@ class OggOpusPlayer {
   }
 
   void dispose() {
+    _portSubscription?.cancel();
     if (_playerHandle != nullptr) {
       _bindings.ogg_opus_player_dispose(_playerHandle);
       _playerHandle = nullptr;
     }
     _state.value = PlayerState.idle;
   }
+}
+
+bool _isolateInitialized = false;
+
+void _initializeDartApi() {
+  if (_isolateInitialized) {
+    return;
+  }
+  _isolateInitialized = true;
+  _bindings.ogg_opus_player_initialize_dart(NativeApi.initializeApiDLData);
 }
 
 const String _libName = 'ogg_opus_player';
