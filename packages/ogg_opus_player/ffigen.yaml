@@ -4,7 +4,7 @@ description: |
   Bindings for `src/ogg_opus_player.h`.
 
   Regenerate bindings with `dart run ffigen --config ffigen.yaml`.
-output: 'lib/ogg_opus_player_bindings_generated.dart'
+output: 'lib/src/ogg_opus_player_bindings_generated.dart'
 headers:
   entry-points:
     - 'src/ogg_opus_player.h'

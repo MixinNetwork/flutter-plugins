@@ -12,6 +12,7 @@ dependencies:
     sdk: flutter
   plugin_platform_interface: ^2.0.2
   ffi: ^1.1.2
+  system_clock: ^1.2.0
 
 dev_dependencies:
   ffigen: ^4.1.2
@@ -42,6 +43,10 @@ flutter:
         ffiPlugin: true
       windows:
         ffiPlugin: true
+      ios:
+        pluginClass: OggOpusPlayerPlugin
+      macos:
+        pluginClass: OggOpusPlayerPlugin
 
   # To add assets to your plugin package, add an assets section, like this:
   # assets:
