@@ -18,7 +18,6 @@ set(ogg_opus_player_bundled_libraries
   # Defined in ../src/CMakeLists.txt.
   # This can be changed to accomodate different builds.
   $<TARGET_FILE:ogg_opus_player>
-  $<TARGET_FILE:ogg>
-  $<TARGET_FILE:opus>
+  $<TARGET_FILE:opus_shared>
   PARENT_SCOPE
 )

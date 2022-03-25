@@ -37,7 +37,7 @@ player.dipose();
 Need SDL2 library installed on Linux.
 
 ```shell
-sudo apt-get install libSDL2-2.0
+sudo apt-get install libsdl2-dev
 ```
 
 ## LICENSE

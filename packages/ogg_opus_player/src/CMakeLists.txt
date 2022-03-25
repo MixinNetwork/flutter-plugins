@@ -19,15 +19,12 @@ set_target_properties(ogg_opus_player PROPERTIES
   )
 
 if (UNIX AND NOT APPLE)
-  add_library(ogg SHARED IMPORTED GLOBAL)
-  set_target_properties(ogg PROPERTIES
-    IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/libs/linux_amd64/libogg.so)
-  add_library(opus SHARED IMPORTED GLOBAL)
-  set_target_properties(opus PROPERTIES
-    IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/libs/linux_amd64/libopus.so)
+  add_library(opus_shared SHARED IMPORTED GLOBAL)
+  set_target_properties(opus_shared PROPERTIES
+    IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/libs/linux_amd64/libopus.so.0)
   target_link_libraries(ogg_opus_player ${CMAKE_CURRENT_SOURCE_DIR}/libs/linux_amd64/libopusenc.a)
   target_link_libraries(ogg_opus_player ${CMAKE_CURRENT_SOURCE_DIR}/libs/linux_amd64/libopusfile.a)
-  target_link_libraries(ogg_opus_player -lSDL2 ogg opus)
+  target_link_libraries(ogg_opus_player -lSDL2 opus_shared)
 elseif (WIN32)
   add_library(ogg STATIC IMPORTED)
   set_target_properties(ogg PROPERTIES
