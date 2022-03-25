@@ -1,0 +1,19 @@
+# Run with `dart run ffigen --config ffigen.yaml`.
+name: OggOpusPlayerBindings
+description: |
+  Bindings for `src/ogg_opus_player.h`.
+
+  Regenerate bindings with `dart run ffigen --config ffigen.yaml`.
+output: 'lib/src/ogg_opus_player_bindings_generated.dart'
+headers:
+  entry-points:
+    - 'src/ogg_opus_player.h'
+  include-directives:
+    - 'src/ogg_opus_player.h'
+preamble: |
+  // ignore_for_file: always_specify_types
+  // ignore_for_file: camel_case_types
+  // ignore_for_file: non_constant_identifier_names
+comments:
+  style: any
+  length: full
