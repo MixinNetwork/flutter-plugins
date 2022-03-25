@@ -1,9 +1,11 @@
 #if _WIN32
-#include <windows.h>
+#include <Windows.h>
 #else
 #include <pthread.h>
 #include <unistd.h>
 #endif
+
+#include "stdint.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -15,7 +17,7 @@ extern "C" {
 #define FFI_PLUGIN_EXPORT
 #endif
 
-FFI_PLUGIN_EXPORT void *ogg_opus_player_create(const char *file_path, long int send_port);
+FFI_PLUGIN_EXPORT void *ogg_opus_player_create(const char *file_path, int64_t send_port);
 
 FFI_PLUGIN_EXPORT void ogg_opus_player_pause(void *player);
 
