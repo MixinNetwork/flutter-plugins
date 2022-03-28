@@ -4,9 +4,8 @@
 #include <flutter/plugin_registrar_windows.h>
 #include <flutter/standard_method_codec.h>
 
-#include <windows.h>
-#include <atlimage.h>
-#include <shlobj.h>
+#include <Windows.h>
+#include <ShlObj.h>
 
 #include <map>
 #include <memory>
