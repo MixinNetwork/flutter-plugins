@@ -439,28 +439,28 @@ void PasteboardPlugin::HandleMethodCall(
       return;
     }
 
-    if (!OpenClipboard(nullptr)) {
-      result->Error("0", "open clipboard failed");
-      return;
-    }
-
-			HANDLE t = GetClipboardData(CF_HTML);
-			if (t == NULL) {
-				result->Success();
-        return;
-			}
-			else {				
-					char* p = (char*)GlobalLock(t);
-					SIZE_T size = GlobalSize(t);
-					std::string str;
-					str.assign(p, size);
-					result->Success(flutter::EncodableValue(str));
-					GlobalUnlock(t);
-				}		
+	if (!OpenClipboard(nullptr)) {
+		result->Error("0", "open clipboard failed");
+		return;
+	}
+	HANDLE hClipboardData = GetClipboardData(CF_HTML);
+	if (hClipboardData == NULL) {
+		result->Success();
 		CloseClipboard();
-
-  }  else {
-    result->NotImplemented();
+		return;
+	}
+	else {
+		char* p = (char*)GlobalLock(hClipboardData);
+		SIZE_T size = GlobalSize(hClipboardData);
+		std::string str;
+		str.assign(p, size);
+		result->Success(flutter::EncodableValue(str));
+		GlobalUnlock(hClipboardData);
+	}
+	CloseClipboard();
+  }
+  else {
+  result->NotImplemented();
   }
 }
 

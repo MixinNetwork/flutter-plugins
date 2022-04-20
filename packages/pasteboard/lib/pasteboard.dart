@@ -32,7 +32,7 @@ class Pasteboard {
   ///
   static Future<String?> get html async {
     if (Platform.isWindows) {
-      return await _channel.invokeMethod<Object>('html') as String;
+      return await _channel.invokeMethod<Object>('html') as String?;
     }
     return null;
   }
