@@ -26,6 +26,17 @@ class Pasteboard {
     return null;
   }
 
+  /// only available on Windows
+  /// Get "HTML format" from system pasteboard.
+  ///  HTML format: https://docs.microsoft.com/en-us/previous-versions/windows/internet-explorer/ie-developer/platform-apis/aa767917(v=vs.85)
+  ///
+  static Future<String?> get html async {
+    if (Platform.isWindows) {
+      return await _channel.invokeMethod<Object>('html') as String;
+    }
+    return null;
+  }
+
   /// only available on iOS
   ///
   /// set image data to system pasteboard.

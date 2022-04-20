@@ -430,7 +430,36 @@ void PasteboardPlugin::HandleMethodCall(
     }
     SetClipboardData(CF_HDROP, storage.hGlobal);
     result->Success();
-  } else {
+  } else if (method_call.method_name() == "html"){
+    
+    #define CF_HTML 49380
+
+    if (!IsClipboardFormatAvailable(CF_HTML)) {
+      result->Success();
+      return;
+    }
+
+    if (!OpenClipboard(nullptr)) {
+      result->Error("0", "open clipboard failed");
+      return;
+    }
+
+			HANDLE t = GetClipboardData(CF_HTML);
+			if (t == NULL) {
+				result->Success();
+        return;
+			}
+			else {				
+					char* p = (char*)GlobalLock(t);
+					SIZE_T size = GlobalSize(t);
+					std::string str;
+					str.assign(p, size);
+					result->Success(flutter::EncodableValue(str));
+					GlobalUnlock(t);
+				}		
+		CloseClipboard();
+
+  }  else {
     result->NotImplemented();
   }
 }
