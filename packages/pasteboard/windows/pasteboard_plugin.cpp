@@ -429,15 +429,25 @@ void PasteboardPlugin::HandleMethodCall(
       return;
     }
     SetClipboardData(CF_HDROP, storage.hGlobal);
-    result->Success();
-  } else if (method_call.method_name() == "html"){
-    
-    #define CF_HTML 49380
+	result->Success();
+  }
+  else if (method_call.method_name() == "html") {
 
-    if (!IsClipboardFormatAvailable(CF_HTML)) {
-      result->Success();
-      return;
-    }
+  UINT CF_HTML = 49380;
+  bool isHTMLFormatAvailable = false;
+
+  if (IsClipboardFormatAvailable(CF_HTML)) {
+	  isHTMLFormatAvailable = true;
+  }
+  else if (IsClipboardFormatAvailable(49381)) {
+	  isHTMLFormatAvailable = true;
+	  CF_HTML = 49381;
+  }
+
+  if (!isHTMLFormatAvailable) {
+	  result->Success();
+	  return;
+  }
 
 	if (!OpenClipboard(nullptr)) {
 		result->Error("0", "open clipboard failed");
