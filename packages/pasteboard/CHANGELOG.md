@@ -1,3 +1,8 @@
+## 0.1.0
+
+* add web supoort.
+* add `writeText` and `text` support.
+
 ## 0.0.3
 
 * Remove `atlimage.h` include for Windows. fix [#75](https://github.com/MixinNetwork/flutter-plugins/issues/75)
