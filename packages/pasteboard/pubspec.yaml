@@ -1,6 +1,6 @@
 name: pasteboard
 description: A flutter plugin which could read image,files from clipboard and write files to clipboard.
-version: 0.0.3
+version: 0.1.0
 homepage: https://github.com/MixinNetwork/flutter-plugins/tree/main/packages/pasteboard.
 
 environment:
@@ -10,11 +10,13 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_web_plugins:
+    sdk: flutter
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  very_good_analysis: ^2.1.2
+  flutter_lints: '^2.0.0'
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
