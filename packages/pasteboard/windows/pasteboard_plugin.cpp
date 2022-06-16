@@ -433,15 +433,11 @@ void PasteboardPlugin::HandleMethodCall(
   }
   else if (method_call.method_name() == "html") {
 
-  UINT CF_HTML = 49380;
+  UINT CF_HTML = RegisterClipboardFormatA("HTML Format");
   bool isHTMLFormatAvailable = false;
 
   if (IsClipboardFormatAvailable(CF_HTML)) {
 	  isHTMLFormatAvailable = true;
-  }
-  else if (IsClipboardFormatAvailable(49381)) {
-	  isHTMLFormatAvailable = true;
-	  CF_HTML = 49381;
   }
 
   if (!isHTMLFormatAvailable) {
