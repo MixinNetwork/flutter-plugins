@@ -6,6 +6,43 @@ import 'package:flutter/services.dart';
 
 import 'pasteboard_platform.dart';
 
+import 'dart:js_util';
+import 'package:js/js.dart';
+
+@JS('navigator.clipboard.read')
+external List<ClipboardItem> read();
+
+@JS()
+abstract class ClipboardItem {
+  external factory ClipboardItem();
+  external List<String> get types;
+  external Blob getType(String type);
+}
+
+Future<String?> readBlobAsText(Blob blob) async {
+  final FileReader reader = new FileReader();
+  var future = reader.onLoad.first.then((ProgressEvent event) {
+    return reader.result;
+  });
+
+  reader.readAsText(blob);
+
+  final res = await future;
+  return res.toString();
+}
+
+Future<Uint8List?> readBlobAsArrayBuffer(Blob blob) async {
+  final FileReader reader = FileReader();
+  var future = reader.onLoad.first.then((ProgressEvent event) {
+    return reader.result;
+  });
+
+  reader.readAsArrayBuffer(blob);
+
+  final res = await future;
+  return res as Uint8List;
+}
+
 const PasteboardPlatform pasteboard = PasteboardPlatformWeb();
 
 class PasteboardPlatformWeb implements PasteboardPlatform {
@@ -15,10 +52,40 @@ class PasteboardPlatformWeb implements PasteboardPlatform {
   Future<List<String>> files() async => const [];
 
   @override
-  Future<String?> get html async => null;
+  Future<String?> get html async {
+    try {
+      final clipboardItems = await promiseToFuture(read());
+      for (var clipboardItem in clipboardItems) {
+        List<dynamic> types = clipboardItem.types as List<dynamic>;
+
+        if (types.contains('text/html')) {
+          Blob blob = await promiseToFuture(clipboardItem.getType('text/html'));
+          return readBlobAsText(blob);
+        }
+      }
+    } catch (e) {
+      return null;
+    }
+    return null;
+  }
 
   @override
-  Future<Uint8List?> get image async => null;
+  Future<Uint8List?> get image async {
+    try {
+      final clipboardItems = await promiseToFuture(read());
+      for (var clipboardItem in clipboardItems) {
+        List<dynamic> types = clipboardItem.types as List<dynamic>;
+
+        if (types.contains('image/png')) {
+          Blob blob = await promiseToFuture(clipboardItem.getType('image/png'));
+          return readBlobAsArrayBuffer(blob);
+        }
+      }
+    } catch (e) {
+      return null;
+    }
+    return null;
+  }
 
   @override
   Future<bool> writeFiles(List<String> files) async => false;
