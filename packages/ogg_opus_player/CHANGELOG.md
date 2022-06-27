@@ -1,3 +1,7 @@
+## 0.3.2
+
+Fix wrong playback speed on some devices.
+
 ## 0.3.1
 
 Fix linux build.
