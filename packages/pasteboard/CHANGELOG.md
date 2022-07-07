@@ -5,7 +5,7 @@
 
 ## 0.1.0
 
-* add web supoort.
+* add web support.
 * add `writeText` and `text` support.
 
 ## 0.0.3
