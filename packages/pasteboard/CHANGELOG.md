@@ -19,4 +19,4 @@
 ## 0.0.1
 
 * add Linux,Windows,macOS support.
-* suport basic functions.
+* support basic functions.
