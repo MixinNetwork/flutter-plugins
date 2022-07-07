@@ -4,24 +4,28 @@ import 'dart:html';
 import 'dart:js_util';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:js/js.dart';
 
 import 'pasteboard_platform.dart';
 
 @JS('navigator.clipboard.read')
-external List<ClipboardItem> read();
+external List<ClipboardItem> _readClipboard();
 
-@JS()
-abstract class ClipboardItem {
-  external factory ClipboardItem();
+@JS('navigator.clipboard.write')
+external void _writeClipboard(List<ClipboardItem> data);
+
+@JS('ClipboardItem')
+class ClipboardItem {
+  external ClipboardItem(dynamic data);
 
   external List<String> get types;
 
   external Blob getType(String type);
 }
 
-Future<String?> readBlobAsText(Blob blob) async {
+Future<String?> _readBlobAsText(Blob blob) async {
   final FileReader reader = FileReader();
   final future =
       reader.onLoad.first.then((ProgressEvent event) => reader.result);
@@ -32,7 +36,7 @@ Future<String?> readBlobAsText(Blob blob) async {
   return res.toString();
 }
 
-Future<Uint8List?> readBlobAsArrayBuffer(Blob blob) async {
+Future<Uint8List?> _readBlobAsArrayBuffer(Blob blob) async {
   final FileReader reader = FileReader();
   final future =
       reader.onLoad.first.then((ProgressEvent event) => reader.result);
@@ -54,14 +58,13 @@ class PasteboardPlatformWeb implements PasteboardPlatform {
   @override
   Future<String?> get html async {
     try {
-      final clipboardItems = await promiseToFuture(read());
-      for (var clipboardItem in clipboardItems) {
-        final List<dynamic> types = clipboardItem.types as List<dynamic>;
-
-        if (types.contains('text/html')) {
+      final clipboardItems =
+          await promiseToFuture(_readClipboard()) as List<dynamic>;
+      for (var clipboardItem in clipboardItems.cast<ClipboardItem>()) {
+        if (clipboardItem.types.contains('text/html')) {
           final Blob blob =
               await promiseToFuture(clipboardItem.getType('text/html'));
-          return readBlobAsText(blob);
+          return _readBlobAsText(blob);
         }
       }
     } catch (e) {
@@ -73,14 +76,13 @@ class PasteboardPlatformWeb implements PasteboardPlatform {
   @override
   Future<Uint8List?> get image async {
     try {
-      final clipboardItems = await promiseToFuture(read());
-      for (var clipboardItem in clipboardItems) {
-        final List<dynamic> types = clipboardItem.types as List<dynamic>;
-
-        if (types.contains('image/png')) {
+      final clipboardItems =
+          await promiseToFuture(_readClipboard()) as List<dynamic>;
+      for (var clipboardItem in clipboardItems.cast<ClipboardItem>()) {
+        if (clipboardItem.types.contains('image/png')) {
           final Blob blob =
               await promiseToFuture(clipboardItem.getType('image/png'));
-          return readBlobAsArrayBuffer(blob);
+          return _readBlobAsArrayBuffer(blob);
         }
       }
     } catch (e) {
@@ -93,7 +95,20 @@ class PasteboardPlatformWeb implements PasteboardPlatform {
   Future<bool> writeFiles(List<String> files) async => false;
 
   @override
-  Future<void> writeImage(Uint8List? image) async {}
+  Future<void> writeImage(Uint8List? image) async {
+    if (image == null) {
+      return;
+    }
+    try {
+      final blob = Blob([image], 'image/png');
+      _writeClipboard([
+        ClipboardItem(jsify({'image/png': blob}))
+      ]);
+    } catch (e) {
+      debugPrint('Error writing image to clipboard: $e');
+      return;
+    }
+  }
 
   @override
   Future<String?> get text async {
