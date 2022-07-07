@@ -1,13 +1,13 @@
-// ignore: avoid_web_libraries_in_flutter
+// ignore_for_file: avoid_web_libraries_in_flutter
+
 import 'dart:html';
+import 'dart:js_util';
 import 'dart:typed_data';
 
 import 'package:flutter/services.dart';
+import 'package:js/js.dart';
 
 import 'pasteboard_platform.dart';
-
-import 'dart:js_util';
-import 'package:js/js.dart';
 
 @JS('navigator.clipboard.read')
 external List<ClipboardItem> read();
@@ -15,15 +15,16 @@ external List<ClipboardItem> read();
 @JS()
 abstract class ClipboardItem {
   external factory ClipboardItem();
+
   external List<String> get types;
+
   external Blob getType(String type);
 }
 
 Future<String?> readBlobAsText(Blob blob) async {
-  final FileReader reader = new FileReader();
-  var future = reader.onLoad.first.then((ProgressEvent event) {
-    return reader.result;
-  });
+  final FileReader reader = FileReader();
+  final future =
+      reader.onLoad.first.then((ProgressEvent event) => reader.result);
 
   reader.readAsText(blob);
 
@@ -33,14 +34,13 @@ Future<String?> readBlobAsText(Blob blob) async {
 
 Future<Uint8List?> readBlobAsArrayBuffer(Blob blob) async {
   final FileReader reader = FileReader();
-  var future = reader.onLoad.first.then((ProgressEvent event) {
-    return reader.result;
-  });
+  final future =
+      reader.onLoad.first.then((ProgressEvent event) => reader.result);
 
   reader.readAsArrayBuffer(blob);
 
   final res = await future;
-  return res as Uint8List;
+  return res as Uint8List?;
 }
 
 const PasteboardPlatform pasteboard = PasteboardPlatformWeb();
@@ -56,10 +56,11 @@ class PasteboardPlatformWeb implements PasteboardPlatform {
     try {
       final clipboardItems = await promiseToFuture(read());
       for (var clipboardItem in clipboardItems) {
-        List<dynamic> types = clipboardItem.types as List<dynamic>;
+        final List<dynamic> types = clipboardItem.types as List<dynamic>;
 
         if (types.contains('text/html')) {
-          Blob blob = await promiseToFuture(clipboardItem.getType('text/html'));
+          final Blob blob =
+              await promiseToFuture(clipboardItem.getType('text/html'));
           return readBlobAsText(blob);
         }
       }
@@ -74,10 +75,11 @@ class PasteboardPlatformWeb implements PasteboardPlatform {
     try {
       final clipboardItems = await promiseToFuture(read());
       for (var clipboardItem in clipboardItems) {
-        List<dynamic> types = clipboardItem.types as List<dynamic>;
+        final List<dynamic> types = clipboardItem.types as List<dynamic>;
 
         if (types.contains('image/png')) {
-          Blob blob = await promiseToFuture(clipboardItem.getType('image/png'));
+          final Blob blob =
+              await promiseToFuture(clipboardItem.getType('image/png'));
           return readBlobAsArrayBuffer(blob);
         }
       }
