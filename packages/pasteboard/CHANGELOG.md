@@ -1,3 +1,8 @@
+## 0.1.1
+
+* add `html` to get the html from clipboard. [@alexkmbk](https://github.com/alexkmbk)
+* support write image on web.
+
 ## 0.1.0
 
 * add web supoort.
