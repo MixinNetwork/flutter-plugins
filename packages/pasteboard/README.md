@@ -4,41 +4,42 @@
 
 A flutter plugin which could read image,files from clipboard and write files to clipboard.
 
-|          |     |
-|----------|-----|
-| Windows  | ✅   |
-| Linux    | ✅   |
-| macOS    | ✅   |
-| iOS      | ✅   |
-| Web      | ✅   |
+|         |     |
+| ------- | --- |
+| Windows | ✅  |
+| Linux   | ✅  |
+| macOS   | ✅  |
+| iOS     | ✅  |
+| Web     | ✅  |
 
 ## Getting Started
 
 1. add `package:pasteboard` to `pubspec.yaml`
+
    ```yaml
    dependencies:
      pasteboard: ^latest
    ```
-2. example.
 
-```dart
-import 'package:pasteboard/pasteboard.dart';
+2. example
 
-Future<void> readAndWriteFiles() async {
-  final paths = ['your_file_path'];
-  await Pasteboard.writeFiles(paths);
+   ```dart
+   import 'package:pasteboard/pasteboard.dart';
 
-  final files = await Pasteboard.files();
-  print(files);
-}
+   Future<void> readAndWriteFiles() async {
+     final paths = ['your_file_path'];
+     await Pasteboard.writeFiles(paths);
 
-Future<void> readImages() async {
-  final imageBytes = await Pasteboard.image;
-  print(imageBytes?.length);
-}
+     final files = await Pasteboard.files();
+     print(files);
+   }
 
-```
+   Future<void> readImages() async {
+     final imageBytes = await Pasteboard.image;
+     print(imageBytes?.length);
+   }
+   ```
 
 ## License
 
-See the [LICENSE](LICENSE.md) file for the full license.
+See the [LICENSE](LICENSE) file for the full license.
