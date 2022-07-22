@@ -5,12 +5,12 @@
 A flutter plugin which could read image,files from clipboard and write files to clipboard.
 
 |         |     |
-| ------- | --- |
-| Windows | ✅  |
-| Linux   | ✅  |
-| macOS   | ✅  |
-| iOS     | ✅  |
-| Web     | ✅  |
+|---------|-----|
+| Windows | ✅   |
+| Linux   | ✅   |
+| macOS   | ✅   |
+| iOS     | ✅   |
+| Web     | ✅   |
 
 ## Getting Started
 
