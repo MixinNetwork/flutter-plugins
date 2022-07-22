@@ -1,7 +1,7 @@
 ## 0.2.0
 
 * update docs. [@OutdatedGuy](https://github.com/OutdatedGuy)
-* remove js dependency. since it included by flutter_web_plugins.
+* fix js version dependency. [@alexkmbk](https://github.com/alexkmbk)
 
 ## 0.1.1
 
