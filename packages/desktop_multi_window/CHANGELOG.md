@@ -1,3 +1,8 @@
+## 0.1.0
+
+* [BREAK CHANGE] upgrade min flutter version to 3.0.0
+* fix macOS memory leak issue. [#123](https://github.com/MixinNetwork/flutter-plugins/issues/123)
+
 ## 0.0.2
 
 * [Windows] fix free window_channel_ may cause crash. [#78](https://github.com/MixinNetwork/flutter-plugins/pull/78)
