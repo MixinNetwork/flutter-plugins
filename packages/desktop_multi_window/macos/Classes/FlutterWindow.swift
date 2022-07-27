@@ -79,13 +79,25 @@ class FlutterWindow: BaseFlutterWindow {
     window.titleVisibility = .hidden
     window.titlebarAppearsTransparent = true
   }
+
+  deinit {
+    debugPrint("release window resource")
+    window.delegate = nil
+    if let flutterViewController = window.contentViewController as? FlutterViewController {
+      flutterViewController.engine.shutDownEngine()
+    }
+    window.contentViewController = nil
+    window.windowController = nil
+  }
 }
 
 extension FlutterWindow: NSWindowDelegate {
   func windowWillClose(_ notification: Notification) {
-    window.delegate = nil
-    window.contentViewController = nil
-    window.windowController = nil
     delegate?.onClose(windowId: windowId)
+  }
+
+  func windowShouldClose(_ sender: NSWindow) -> Bool {
+    delegate?.onClose(windowId: windowId)
+    return true
   }
 }
