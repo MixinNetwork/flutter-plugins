@@ -46,13 +46,24 @@ class _MyAppState extends State<MyApp> {
                 controller: textController,
                 maxLines: 10,
               ),
-              MaterialButton(
-                onPressed: () async {
-                  final lines =
-                      const LineSplitter().convert(textController.text);
-                  await Pasteboard.writeFiles(lines);
-                },
-                child: const Text('copy'),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextButton(
+                    onPressed: () async {
+                      final lines =
+                          const LineSplitter().convert(textController.text);
+                      await Pasteboard.writeFiles(lines);
+                    },
+                    child: const Text('copy as files'),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      Pasteboard.writeText(textController.text);
+                    },
+                    child: const Text('copy as text'),
+                  ),
+                ],
               ),
               MaterialButton(
                 onPressed: () async {

@@ -76,9 +76,8 @@ class DesktopMultiWindow {
     final result = await miltiWindowChannel
         .invokeMethod<List<dynamic>>('getAllSubWindowIds');
     final ids = result?.cast<int>() ?? const [];
-    assert(ids.isNotEmpty);
-    assert(ids.every((id) => id > 0));
     assert(!ids.contains(0), 'ids must not contains main window id');
+    assert(ids.every((id) => id > 0), 'id must be greater than 0');
     return ids;
   }
 }

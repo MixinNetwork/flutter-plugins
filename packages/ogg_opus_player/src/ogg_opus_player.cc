@@ -31,6 +31,8 @@ class OggOpusReader {
 
   int ReadPcmData(opus_int16 *data, int length);
 
+  int GetChannelCount() const;
+
 };
 
 OggOpusReader::OggOpusReader(const char *file_path) : file_path_(file_path) {
@@ -72,6 +74,12 @@ int OggOpusReader::ReadPcmData(opus_int16 *data, int length) {
   }
 
   return read;
+}
+int OggOpusReader::GetChannelCount() const {
+  if (!opus_file_) {
+    return 1;
+  }
+  return op_channel_count(opus_file_, -1);
 }
 
 class Player {
@@ -168,9 +176,9 @@ int SdlOggOpusPlayer::Initialize() {
   SDL_AudioSpec wanted_spec, spec;
   wanted_spec.silence = 0;
   wanted_spec.format = AUDIO_S16SYS;
-  wanted_spec.channels = 2;
+  wanted_spec.channels = reader_->GetChannelCount();
   wanted_spec.samples = 1024;
-  wanted_spec.freq = 48000 / 2;
+  wanted_spec.freq = 48000;
   wanted_spec.callback = [](void *userdata, Uint8 *stream, int len) {
     auto *player = static_cast<SdlOggOpusPlayer *>(userdata);
     player->ReadAudioData(stream, len);
@@ -179,7 +187,7 @@ int SdlOggOpusPlayer::Initialize() {
 
   audio_device_id_ = SDL_OpenAudioDevice(nullptr, 0,
                                          &wanted_spec, &spec,
-                                         SDL_AUDIO_ALLOW_FREQUENCY_CHANGE | SDL_AUDIO_ALLOW_CHANNELS_CHANGE);
+                                         0);
   if (audio_device_id_ <= 0) {
     std::cout << "SDL_OpenAudioDevice failed: " << SDL_GetError() << std::endl;
     return -1;
