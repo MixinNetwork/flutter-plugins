@@ -114,6 +114,7 @@ class OggOpusRecorderFfiImpl extends OggOpusRecorder {
   OggOpusRecorderFfiImpl(this._path)
       : _port = ReceivePort('OggOpusRecorderFfiImpl: $_path'),
         super.create() {
+    _initializeDartApi();
     _recorderHandle = _bindings.ogg_opus_recorder_create(
         _path.toNativeUtf8().cast(), _port.sendPort.nativePort);
   }
