@@ -54,15 +54,21 @@ class _MyAppState extends State<MyApp> {
         appBar: AppBar(
           title: const Text('Plugin example app'),
         ),
-        body: _copyCompleted
-            ? PlayerBody(path: _path)
-            : const Center(
-                child: SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(),
-                ),
-              ),
+        body: Column(
+          children: [
+            _copyCompleted
+                ? PlayerBody(path: _path)
+                : const Center(
+                    child: SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(),
+                    ),
+                  ),
+            const SizedBox(height: 16),
+            const _RecorderExample(),
+          ],
+        ),
       ),
     );
   }
@@ -148,6 +154,60 @@ class _PlayerBodyState extends State<PlayerBody> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _RecorderExample extends StatefulWidget {
+  const _RecorderExample({Key? key}) : super(key: key);
+
+  @override
+  State<_RecorderExample> createState() => _RecorderExampleState();
+}
+
+class _RecorderExampleState extends State<_RecorderExample> {
+  OggOpusRecorder? _recorder;
+
+  @override
+  void initState() {
+    super.initState();
+    scheduleMicrotask(() async {
+      final dir = await getApplicationDocumentsDirectory();
+      final dest = File(p.join(dir.path, "test_recorder.ogg"));
+      if (dest.existsSync()) {
+        dest.deleteSync();
+      }
+      setState(() {
+        _recorder = OggOpusRecorder(dest.path);
+      });
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_recorder == null) {
+      return const SizedBox();
+    }
+    return Column(
+      children: [
+        const Text('recorder'),
+        const SizedBox(height: 8),
+        IconButton(
+          onPressed: () {
+            _recorder?.start();
+          },
+          icon: const Icon(Icons.play_arrow),
+        ),
+        const SizedBox(height: 8),
+        IconButton(
+          onPressed: () {
+            _recorder?.stop();
+            _recorder?.dispose();
+            _recorder = null;
+          },
+          icon: const Icon(Icons.stop),
+        ),
+      ],
     );
   }
 }

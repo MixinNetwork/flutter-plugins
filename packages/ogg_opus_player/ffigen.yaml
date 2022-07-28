@@ -1,7 +1,7 @@
 # Run with `dart run ffigen --config ffigen.yaml`.
 name: OggOpusBindings
 description: |
-  Bindings for `src/ogg_opus_player.h`.
+  Bindings for `src/ogg_opus_player.h`, `src/ogg_opus_recorder.h`.
 
   Regenerate bindings with `dart run ffigen --config ffigen.yaml`.
 output: 'lib/src/ogg_opus_bindings_generated.dart'

@@ -66,7 +66,7 @@ int OggOpusWriter::Write(const opus_int16 *data, int size) {
   if (!encoder_) {
     return -1;
   }
-  int error = ope_encoder_write(encoder_, data, size);
+  int error = ope_encoder_write(encoder_, data, size / 2);
   return error;
 }
 
@@ -94,7 +94,7 @@ class SdlOggOpusRecorder {
 int SdlOggOpusRecorder::Init(const char *file_name) {
   SDL_AudioSpec wanted_spec;
   SDL_AudioSpec spec;
-  wanted_spec.freq = 48000 / 2;
+  wanted_spec.freq = 48000;
   wanted_spec.format = AUDIO_S16SYS;
   wanted_spec.channels = 2;
   wanted_spec.samples = 1024;
@@ -109,6 +109,7 @@ int SdlOggOpusRecorder::Init(const char *file_name) {
     return -1;
   }
   sample_rate_ = spec.freq;
+  std::cout << "SDL_OpenAudioDevice: spec freq = " << spec.freq << std::endl;
   writer_ = std::make_unique<OggOpusWriter>();
   return writer_->Init(file_name, sample_rate_);
 }
