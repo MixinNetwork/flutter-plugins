@@ -15,22 +15,24 @@ a ogg opus file player for flutter.
 
 1. add `ogg_opus_player` to your pubspec.yaml
 
-```yaml
-  ogg_opus_player: $latest_version
-```
+    ```yaml
+      ogg_opus_player: $latest_version
+    ```
 
-2. then you can play you opus ogg file from `OggOpusPlayer`
+2. then you can play your opus ogg file from `OggOpusPlayer`
 
-```dart
-
-final player = OggOpusPlayer("file_path");
-
-player.play();
-player.pause();
-
-player.dipose();
-
-```
+    ```dart
+    import 'package:ogg_opus_player/ogg_opus_player.dart';
+    
+    void playOggOpusFile() {
+      final player = OggOpusPlayer("file_path");
+    
+      player.play();
+      player.pause();
+    
+      player.dipose();
+    }
+    ```
 
 ## Linux required
 
@@ -38,6 +40,18 @@ Need SDL2 library installed on Linux.
 
 ```shell
 sudo apt-get install libsdl2-dev
+```
+
+## iOS required
+
+Record voice need update your app's Info.plist NSMicrophoneUsageDescription key with a string value 
+explaining to the user how the app uses this data.
+
+For example:
+
+```plist
+	<key>NSMicrophoneUsageDescription</key>
+    <string>Example uses your microphone to record voice for test.</string>
 ```
 
 ## LICENSE

@@ -22,47 +22,47 @@ PlayerState _convertFromRawValue(int state) {
   }
 }
 
-class OggOpusPlayerPluginImpl extends OggOpusPlayer {
-  static const MethodChannel _channel = MethodChannel('ogg_opus_player');
+const MethodChannel _channel = MethodChannel('ogg_opus_player');
 
-  static var _inited = false;
+final Map<int, OggOpusPlayerPluginImpl> _players = {};
 
-  static final Map<int, OggOpusPlayerPluginImpl> _players = {};
+var _initialized = false;
 
-  static Future<dynamic> _handleMethodCall(MethodCall call) async {
-    switch (call.method) {
-      case "onPlayerStateChanged":
-        final state = call.arguments['state'] as int;
-        final position = call.arguments['position'] as double;
-        final playerId = call.arguments['playerId'] as int;
-        final updateTime = call.arguments['updateTime'] as int;
-        final player = _players[playerId];
-        if (player == null) {
-          return;
-        }
-        player._playerState.value = _convertFromRawValue(state);
-        player._lastUpdateTimeStampe = updateTime;
-        player._position = position;
-        break;
-      default:
-        break;
-    }
+void _initChannelIfNeeded() {
+  if (_initialized) {
+    return;
   }
-
-  static void _initChannelIfNeeded() {
-    if (_inited) {
-      return;
+  _initialized = true;
+  _channel.setMethodCallHandler((call) async {
+    try {
+      return await _handleMethodCall(call);
+    } catch (e) {
+      debugPrint("_handleMethodCall: $e");
     }
-    _inited = true;
-    _channel.setMethodCallHandler((call) async {
-      try {
-        return await _handleMethodCall(call);
-      } catch (e) {
-        debugPrint("_handleMethodCall: $e");
+  });
+}
+
+Future<dynamic> _handleMethodCall(MethodCall call) async {
+  switch (call.method) {
+    case "onPlayerStateChanged":
+      final state = call.arguments['state'] as int;
+      final position = call.arguments['position'] as double;
+      final playerId = call.arguments['playerId'] as int;
+      final updateTime = call.arguments['updateTime'] as int;
+      final player = _players[playerId];
+      if (player == null) {
+        return;
       }
-    });
+      player._playerState.value = _convertFromRawValue(state);
+      player._lastUpdateTimeStamp = updateTime;
+      player._position = position;
+      break;
+    default:
+      break;
   }
+}
 
+class OggOpusPlayerPluginImpl extends OggOpusPlayer {
   OggOpusPlayerPluginImpl(this._path) : super.create() {
     _initChannelIfNeeded();
     assert(() {
@@ -99,17 +99,17 @@ class OggOpusPlayerPluginImpl extends OggOpusPlayer {
   double _position = 0.0;
 
   // [_position] updated timestamp, in milliseconds.
-  int _lastUpdateTimeStampe = -1;
+  int _lastUpdateTimeStamp = -1;
 
   @override
   double get currentPosition {
-    if (_lastUpdateTimeStampe == -1) {
+    if (_lastUpdateTimeStamp == -1) {
       return 0;
     }
     if (state.value != PlayerState.playing) {
       return _position;
     }
-    final offset = SystemClock.uptime().inMilliseconds - _lastUpdateTimeStampe;
+    final offset = SystemClock.uptime().inMilliseconds - _lastUpdateTimeStamp;
     assert(offset >= 0);
     if (offset < 0) {
       return _position;
@@ -143,5 +143,46 @@ class OggOpusPlayerPluginImpl extends OggOpusPlayer {
   @override
   void dispose() {
     _channel.invokeMethod("stop", _playerId);
+  }
+}
+
+class OggOpusRecorderPluginImpl extends OggOpusRecorder {
+  OggOpusRecorderPluginImpl(this._path) : super.create() {
+    scheduleMicrotask(() async {
+      try {
+        _id = await _channel.invokeMethod('createRecorder', _path);
+      } catch (e) {
+        debugPrint('create recorder failed. error: $e');
+      }
+      _createCompleter.complete();
+    });
+  }
+
+  final String _path;
+  int _id = -1;
+
+  final _createCompleter = Completer<void>();
+
+  @override
+  void dispose() {
+    stop();
+  }
+
+  @override
+  Future<void> start() async {
+    await _createCompleter.future;
+    if (_id <= 0) {
+      return;
+    }
+    await _channel.invokeMethod('startRecord', _id);
+  }
+
+  @override
+  Future<void> stop() async {
+    await _createCompleter.future;
+    if (_id <= 0) {
+      return;
+    }
+    await _channel.invokeMethod('stopRecord', _id);
   }
 }

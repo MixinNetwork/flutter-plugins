@@ -9,6 +9,8 @@
 // value -> OggOpusPlayer
 private var playerDictionary: [Int: OggOpusPlayer] = [:]
 
+private var recorderDictionary: [Int: OggOpusRecorder] = [:]
+
 public class SwiftOggOpusPlayerPlugin: NSObject, FlutterPlugin {
   public static func register(with registrar: FlutterPluginRegistrar) {
     #if os(iOS)
@@ -71,6 +73,31 @@ public class SwiftOggOpusPlayerPlugin: NSObject, FlutterPlugin {
       if let playerId = call.arguments as? Int {
         playerDictionary[playerId]?.stop()
         playerDictionary.removeValue(forKey: playerId)
+      }
+      result(nil)
+    case "createRecorder":
+      guard let path = call.arguments as? String else {
+        result(FlutterError(code: "3", message: "recorder path can not be null", details: nil))
+        break
+      }
+      do {
+        let recorder = try OggOpusRecorder(path: path)
+        let id = generatedPlayerId()
+        recorderDictionary[id] = recorder
+        result(id)
+      } catch {
+        result(FlutterError(code: "4", message: error.localizedDescription, details: nil))
+      }
+      result(nil)
+    case "startRecord":
+      if let id = call.arguments as? Int {
+        recorderDictionary[id]?.record(for: TimeInterval.infinity)
+      }
+      result(nil)
+    case "stopRecord":
+      if let id = call.arguments as? Int {
+        recorderDictionary[id]?.stop()
+        recorderDictionary.removeValue(forKey: id)
       }
       result(nil)
     default:
