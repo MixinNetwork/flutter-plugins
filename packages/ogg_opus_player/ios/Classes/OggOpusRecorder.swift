@@ -12,7 +12,7 @@ protocol OggOpusRecorderDelegate: AnyObject {
   func oggOpusRecorderDidDetectAudioSessionInterruptionEnd(_ recorder: OggOpusRecorder)
 }
 
-fileprivate let recordingSampleRate: Int32 = 48000
+fileprivate let recordingSampleRate: Int32 = 16000
 fileprivate let streamFormat: AudioStreamBasicDescription = {
   let bitsPerChannel: UInt32 = 16
   let channelsPerFrame: UInt32 = 1
@@ -20,7 +20,7 @@ fileprivate let streamFormat: AudioStreamBasicDescription = {
   return .init(
     mSampleRate: Float64(recordingSampleRate),
     mFormatID: kAudioFormatLinearPCM,
-    mFormatFlags: kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked | kAudioFormatFlagIsNonInterleaved,
+    mFormatFlags: kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked,
     mBytesPerPacket: bytesPerFrame,
     mFramesPerPacket: 1,
     mBytesPerFrame: bytesPerFrame,
@@ -256,16 +256,7 @@ extension OggOpusRecorder {
 
     #endif
 
-    let audioFormat = AudioStreamBasicDescription(
-      mSampleRate: 48000,
-      mFormatID: kAudioFormatLinearPCM,
-      mFormatFlags: kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked,
-      mBytesPerPacket: 2,
-      mFramesPerPacket: 1, mBytesPerFrame: 2,
-      mChannelsPerFrame: 1, mBitsPerChannel: 16,
-      mReserved: 0)
-
-    result = withUnsafePointer(to: audioFormat) { format -> OSStatus in
+    result = withUnsafePointer(to: streamFormat) { format -> OSStatus in
       AudioUnitSetProperty(
         audioUnit,
         kAudioUnitProperty_StreamFormat,
@@ -281,7 +272,7 @@ extension OggOpusRecorder {
       throw Error.setStreamFormat(result)
     }
 
-    result = withUnsafePointer(to: audioFormat) { format -> OSStatus in
+    result = withUnsafePointer(to: streamFormat) { format -> OSStatus in
       AudioUnitSetProperty(
         audioUnit,
         kAudioUnitProperty_StreamFormat,
