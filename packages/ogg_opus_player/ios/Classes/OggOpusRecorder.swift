@@ -136,7 +136,6 @@ final class OggOpusRecorder {
         DispatchQueue.main.async {
           self.delegate?.oggOpusRecorder(self, didFailRecordingWithError: error)
         }
-        debugPrint("failed to start record: \(error) \(error.localizedDescription)")
       }
     }
   }
@@ -457,7 +456,6 @@ fileprivate func recordingCallback(
   _ inNumberFrames: UInt32,
   _ ioData: UnsafeMutablePointer<AudioBufferList>?
 ) -> OSStatus {
-  debugPrint("recordingCallback")
   let recorder = Unmanaged<OggOpusRecorder>.fromOpaque(inRefCon).takeUnretainedValue()
   guard let audioUnit = recorder.audioUnit else {
     return noErr
