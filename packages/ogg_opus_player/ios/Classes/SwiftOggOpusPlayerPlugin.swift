@@ -88,7 +88,6 @@ public class SwiftOggOpusPlayerPlugin: NSObject, FlutterPlugin {
       } catch {
         result(FlutterError(code: "4", message: error.localizedDescription, details: nil))
       }
-      result(nil)
     case "startRecord":
       if let id = call.arguments as? Int {
         recorderDictionary[id]?.record(for: TimeInterval.infinity)

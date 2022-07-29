@@ -12,20 +12,22 @@ protocol OggOpusRecorderDelegate: AnyObject {
   func oggOpusRecorderDidDetectAudioSessionInterruptionEnd(_ recorder: OggOpusRecorder)
 }
 
-fileprivate let recordingSampleRate: Int32 = 16000
+fileprivate let recordingSampleRate: Int32 = 48000
 fileprivate let streamFormat: AudioStreamBasicDescription = {
   let bitsPerChannel: UInt32 = 16
   let channelsPerFrame: UInt32 = 1
   let bytesPerFrame: UInt32 = (bitsPerChannel / 8) * channelsPerFrame
-  return .init(mSampleRate: Float64(recordingSampleRate),
-               mFormatID: kAudioFormatLinearPCM,
-               mFormatFlags: kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked,
-               mBytesPerPacket: bytesPerFrame,
-               mFramesPerPacket: 1,
-               mBytesPerFrame: bytesPerFrame,
-               mChannelsPerFrame: channelsPerFrame,
-               mBitsPerChannel: bitsPerChannel,
-               mReserved: 0)
+  return .init(
+    mSampleRate: Float64(recordingSampleRate),
+    mFormatID: kAudioFormatLinearPCM,
+    mFormatFlags: kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked | kAudioFormatFlagIsNonInterleaved,
+    mBytesPerPacket: bytesPerFrame,
+    mFramesPerPacket: 1,
+    mBytesPerFrame: bytesPerFrame,
+    mChannelsPerFrame: channelsPerFrame,
+    mBitsPerChannel: bitsPerChannel,
+    mReserved: 0
+  )
 }()
 
 // See kAudioUnitSubType_RemoteIO
@@ -90,32 +92,36 @@ final class OggOpusRecorder {
   }
 
   func record(for duration: TimeInterval) {
-    if AVAudioSession.sharedInstance().secondaryAudioShouldBeSilencedHint {
-      DispatchQueue.main.async {
-        self.delegate?.oggOpusRecorderIsWaitingForActivation(self)
+    #if os(iOS)
+      if AVAudioSession.sharedInstance().secondaryAudioShouldBeSilencedHint {
+        DispatchQueue.main.async {
+          self.delegate?.oggOpusRecorderIsWaitingForActivation(self)
+        }
       }
-    }
+    #endif
     processingQueue.async { [weak self] in
       guard let self = self else {
         return
       }
-      do {
-        try AudioSession.shared.activate(client: self) { session in
-          try session.setCategory(.playAndRecord,
-                                  mode: .default,
-                                  options: [.allowBluetooth])
-          if #available(iOS 13.0, *) {
-            try session.setAllowHapticsAndSystemSoundsDuringRecording(true)
-          }
-          try session.setPreferredIOBufferDuration(0.005)
-        }
-      } catch {
-        DispatchQueue.main.async {
-          self.delegate?.oggOpusRecorder(self, didFailRecordingWithError: error)
-        }
-        return
-      }
 
+      #if os(iOS)
+        do {
+          try AudioSession.shared.activate(client: self) { session in
+            try session.setCategory(.playAndRecord,
+                                    mode: .default,
+                                    options: [.allowBluetooth])
+            if #available(iOS 13.0, *) {
+              try session.setAllowHapticsAndSystemSoundsDuringRecording(true)
+            }
+            try session.setPreferredIOBufferDuration(0.005)
+          }
+        } catch {
+          DispatchQueue.main.async {
+            self.delegate?.oggOpusRecorder(self, didFailRecordingWithError: error)
+          }
+          return
+        }
+      #endif
       do {
         self.duration = duration
         self.stopAfterNumberOfPackets = nil
@@ -124,17 +130,24 @@ final class OggOpusRecorder {
           self.delegate?.oggOpusRecorderDidStartRecording(self)
         }
       } catch {
-        try? AudioSession.shared.deactivate(client: self, notifyOthersOnDeactivation: true)
+        #if os(iOS)
+          try? AudioSession.shared.deactivate(client: self, notifyOthersOnDeactivation: true)
+        #endif
         DispatchQueue.main.async {
           self.delegate?.oggOpusRecorder(self, didFailRecordingWithError: error)
         }
+        debugPrint("failed to start record: \(error) \(error.localizedDescription)")
       }
     }
   }
 
   func stop() {
     processingQueue.async {
-      let numberOfPackets = 0.1 / AVAudioSession.sharedInstance().ioBufferDuration
+      #if os(iOS)
+        let numberOfPackets = 0.1 / AVAudioSession.sharedInstance().ioBufferDuration
+      #elseif os(macOS)
+        let numberOfPackets = 0.1 / 0.005
+      #endif
       self.stopAfterNumberOfPackets = Int(ceil(numberOfPackets))
     }
   }
@@ -153,43 +166,55 @@ final class OggOpusRecorder {
   }
 }
 
-extension OggOpusRecorder: AudioSessionClient {
-  var priority: AudioSessionClientPriority {
-    .audioRecord
-  }
+#if os(iOS)
 
-  func audioSessionDidBeganInterruption(_ audioSession: AudioSession) {
-    cancel(for: .audioSessionInterrupted)
-  }
+  extension OggOpusRecorder: AudioSessionClient {
+    var priority: AudioSessionClientPriority {
+      .audioRecord
+    }
 
-  func audioSessionDidEndInterruption(_ audioSession: AudioSession) {
-    delegate?.oggOpusRecorderDidDetectAudioSessionInterruptionEnd(self)
-  }
+    func audioSessionDidBeganInterruption(_ audioSession: AudioSession) {
+      cancel(for: .audioSessionInterrupted)
+    }
 
-  func audioSession(_ audioSession: AudioSession, didChangeRouteFrom previousRoute: AVAudioSessionRouteDescription, reason: AVAudioSession.RouteChangeReason) {
-    let category = audioSession.avAudioSession.category
-    let isCategoryAvailable = category == .record || category == .playAndRecord
-    let hasInput = !audioSession.avAudioSession.currentRoute.inputs.isEmpty
-    if !hasInput || !isCategoryAvailable {
-      cancel(for: .audioRouteChange)
+    func audioSessionDidEndInterruption(_ audioSession: AudioSession) {
+      delegate?.oggOpusRecorderDidDetectAudioSessionInterruptionEnd(self)
+    }
+
+    func audioSession(_ audioSession: AudioSession, didChangeRouteFrom previousRoute: AVAudioSessionRouteDescription, reason: AVAudioSession.RouteChangeReason) {
+      let category = audioSession.avAudioSession.category
+      let isCategoryAvailable = category == .record || category == .playAndRecord
+      let hasInput = !audioSession.avAudioSession.currentRoute.inputs.isEmpty
+      if !hasInput || !isCategoryAvailable {
+        cancel(for: .audioRouteChange)
+      }
+    }
+
+    func audioSessionMediaServicesWereReset(_ audioSession: AudioSession) {
+      isRecording = false
+      DispatchQueue.main.async {
+        self.delegate?.oggOpusRecorder(self, didFailRecordingWithError: Error.mediaServiceWereReset)
+      }
     }
   }
 
-  func audioSessionMediaServicesWereReset(_ audioSession: AudioSession) {
-    isRecording = false
-    DispatchQueue.main.async {
-      self.delegate?.oggOpusRecorder(self, didFailRecordingWithError: Error.mediaServiceWereReset)
-    }
-  }
-}
+#endif
 
 extension OggOpusRecorder {
   private func startRecording() throws {
-    var acd = AudioComponentDescription(componentType: kAudioUnitType_Output,
-                                        componentSubType: kAudioUnitSubType_RemoteIO,
-                                        componentManufacturer: kAudioUnitManufacturer_Apple,
-                                        componentFlags: 0,
-                                        componentFlagsMask: 0)
+    #if os(iOS)
+      let componentSubType = kAudioUnitSubType_RemoteIO
+    #elseif os(macOS)
+      let componentSubType = kAudioUnitSubType_VoiceProcessingIO
+    #endif
+
+    var acd = AudioComponentDescription(
+      componentType: kAudioUnitType_Output,
+      componentSubType: componentSubType,
+      componentManufacturer: kAudioUnitManufacturer_Apple,
+      componentFlags: 0,
+      componentFlagsMask: 0
+    )
     guard let component = AudioComponentFindNext(nil, &acd) else {
       throw Error.missingAudioComponent
     }
@@ -199,53 +224,94 @@ extension OggOpusRecorder {
       throw Error.newAudioUnit(result)
     }
 
-    var disable: UInt32 = 0
-    result = AudioUnitSetProperty(audioUnit,
-                                  kAudioOutputUnitProperty_EnableIO,
-                                  kAudioUnitScope_Output,
-                                  RemoteIOBus.output,
-                                  &disable,
-                                  UInt32(MemoryLayout<UInt32>.size))
-    guard result == noErr else {
-      AudioComponentInstanceDispose(audioUnit)
-      throw Error.disableOutput(result)
+    #if os(iOS)
+      // On Mac OS，input and output are open by default and we can't change it.
+      // Thus, we don't need to set input and output for Mac OS
+      var enable: UInt32 = 1
+      result = AudioUnitSetProperty(
+        audioUnit,
+        kAudioOutputUnitProperty_EnableIO,
+        kAudioUnitScope_Input,
+        RemoteIOBus.input,
+        &enable,
+        UInt32(MemoryLayout.size(ofValue: enable))
+      )
+      guard result == noErr else {
+        AudioComponentInstanceDispose(audioUnit)
+        throw Error.enableInput(result)
+      }
+
+      var disable: UInt32 = 0
+      result = AudioUnitSetProperty(
+        audioUnit,
+        kAudioOutputUnitProperty_EnableIO,
+        kAudioUnitScope_Output,
+        RemoteIOBus.output,
+        &disable,
+        UInt32(MemoryLayout.size(ofValue: disable))
+      )
+      guard result == noErr else {
+        AudioComponentInstanceDispose(audioUnit)
+        throw Error.disableOutput(result)
+      }
+
+    #endif
+
+    let audioFormat = AudioStreamBasicDescription(
+      mSampleRate: 48000,
+      mFormatID: kAudioFormatLinearPCM,
+      mFormatFlags: kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked,
+      mBytesPerPacket: 2,
+      mFramesPerPacket: 1, mBytesPerFrame: 2,
+      mChannelsPerFrame: 1, mBitsPerChannel: 16,
+      mReserved: 0)
+
+    result = withUnsafePointer(to: audioFormat) { format -> OSStatus in
+      AudioUnitSetProperty(
+        audioUnit,
+        kAudioUnitProperty_StreamFormat,
+        kAudioUnitScope_Output,
+        1,
+        format,
+        UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
+      )
     }
 
-    var enable: UInt32 = 1
-    result = AudioUnitSetProperty(audioUnit,
-                                  kAudioOutputUnitProperty_EnableIO,
-                                  kAudioUnitScope_Input,
-                                  RemoteIOBus.input,
-                                  &enable,
-                                  UInt32(MemoryLayout<UInt32>.size))
     guard result == noErr else {
       AudioComponentInstanceDispose(audioUnit)
-      throw Error.enableInput(result)
+      throw Error.setStreamFormat(result)
     }
 
-    result = withUnsafePointer(to: streamFormat) { format -> OSStatus in
-      AudioUnitSetProperty(audioUnit,
-                           kAudioUnitProperty_StreamFormat,
-                           kAudioUnitScope_Output,
-                           RemoteIOBus.input,
-                           format,
-                           UInt32(MemoryLayout<AudioStreamBasicDescription>.size))
+    result = withUnsafePointer(to: audioFormat) { format -> OSStatus in
+      AudioUnitSetProperty(
+        audioUnit,
+        kAudioUnitProperty_StreamFormat,
+        kAudioUnitScope_Input,
+        0,
+        format,
+        UInt32(MemoryLayout<AudioStreamBasicDescription>.size)
+      )
     }
+
     guard result == noErr else {
       AudioComponentInstanceDispose(audioUnit)
       throw Error.setStreamFormat(result)
     }
 
     let retainedSelf = Unmanaged.passRetained(self)
-    let callback = AURenderCallbackStruct(inputProc: recordingCallback(_:_:_:_:_:_:),
-                                          inputProcRefCon: retainedSelf.toOpaque())
+    let callback = AURenderCallbackStruct(
+      inputProc: recordingCallback(_:_:_:_:_:_:),
+      inputProcRefCon: retainedSelf.toOpaque()
+    )
     result = withUnsafePointer(to: callback) { callback -> OSStatus in
-      AudioUnitSetProperty(audioUnit,
-                           kAudioOutputUnitProperty_SetInputCallback,
-                           kAudioUnitScope_Global,
-                           RemoteIOBus.input,
-                           callback,
-                           UInt32(MemoryLayout<AURenderCallbackStruct>.size))
+      AudioUnitSetProperty(
+        audioUnit,
+        kAudioOutputUnitProperty_SetInputCallback,
+        kAudioUnitScope_Global,
+        RemoteIOBus.input,
+        callback,
+        UInt32(MemoryLayout<AURenderCallbackStruct>.size)
+      )
     }
     guard result == noErr else {
       AudioComponentInstanceDispose(audioUnit)
@@ -289,7 +355,9 @@ extension OggOpusRecorder {
       DispatchQueue.main.async {
         self.delegate?.oggOpusRecorder(self, didFinishRecordingWithMetadata: metadata)
       }
-      try? AudioSession.shared.deactivate(client: self, notifyOthersOnDeactivation: true)
+      #if os(iOS)
+        try? AudioSession.shared.deactivate(client: self, notifyOthersOnDeactivation: true)
+      #endif
     }
   }
 
@@ -389,6 +457,7 @@ fileprivate func recordingCallback(
   _ inNumberFrames: UInt32,
   _ ioData: UnsafeMutablePointer<AudioBufferList>?
 ) -> OSStatus {
+  debugPrint("recordingCallback")
   let recorder = Unmanaged<OggOpusRecorder>.fromOpaque(inRefCon).takeUnretainedValue()
   guard let audioUnit = recorder.audioUnit else {
     return noErr

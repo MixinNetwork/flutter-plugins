@@ -11,6 +11,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final tempDir = await getTemporaryDirectory();
   final workDir = p.join(tempDir.path, 'ogg_opus_player');
+  debugPrint('workDir: $workDir');
   runApp(
     MaterialApp(
       home: Scaffold(

@@ -42,7 +42,7 @@ Need SDL2 library installed on Linux.
 sudo apt-get install libsdl2-dev
 ```
 
-## iOS required
+## iOS/macOS required
 
 Record voice need update your app's Info.plist NSMicrophoneUsageDescription key with a string value 
 explaining to the user how the app uses this data.
@@ -52,6 +52,13 @@ For example:
 ```plist
 	<key>NSMicrophoneUsageDescription</key>
     <string>Example uses your microphone to record voice for test.</string>
+```
+
+for macOS, you also need update your `DebugProfile.entitlements` and `ReleaseProfile.entitlements` with the following:
+
+```plist
+    <key>com.apple.security.device.microphone</key>
+    <true/>
 ```
 
 ## LICENSE
