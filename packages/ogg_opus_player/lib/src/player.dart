@@ -2,8 +2,8 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
-import 'player_plugin_impl.dart';
 import 'player_ffi_impl.dart';
+import 'player_plugin_impl.dart';
 import 'player_state.dart';
 
 abstract class OggOpusPlayer {
@@ -28,4 +28,23 @@ abstract class OggOpusPlayer {
 
   /// Current playing position, in seconds.
   double get currentPosition;
+}
+
+abstract class OggOpusRecorder {
+  OggOpusRecorder.create();
+
+  factory OggOpusRecorder(String path) {
+    if (Platform.isLinux || Platform.isWindows) {
+      return OggOpusRecorderFfiImpl(path);
+    } else if (Platform.isIOS || Platform.isMacOS) {
+      return OggOpusRecorderPluginImpl(path);
+    }
+    throw UnsupportedError('Platform not supported');
+  }
+
+  void start();
+
+  void stop();
+
+  void dispose();
 }

@@ -11,17 +11,17 @@ import 'dart:ffi' as ffi;
 ///
 /// Regenerate bindings with `dart run ffigen --config ffigen.yaml`.
 ///
-class OggOpusPlayerBindings {
+class OggOpusBindings {
   /// Holds the symbol lookup function.
   final ffi.Pointer<T> Function<T extends ffi.NativeType>(String symbolName)
       _lookup;
 
   /// The symbols are looked up in [dynamicLibrary].
-  OggOpusPlayerBindings(ffi.DynamicLibrary dynamicLibrary)
+  OggOpusBindings(ffi.DynamicLibrary dynamicLibrary)
       : _lookup = dynamicLibrary.lookup;
 
   /// The symbols are looked up with [lookup].
-  OggOpusPlayerBindings.fromLookup(
+  OggOpusBindings.fromLookup(
       ffi.Pointer<T> Function<T extends ffi.NativeType>(String symbolName)
           lookup)
       : _lookup = lookup;
@@ -114,4 +114,63 @@ class OggOpusPlayerBindings {
   late final _ogg_opus_player_initialize_dart =
       _ogg_opus_player_initialize_dartPtr
           .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
+
+  ffi.Pointer<ffi.Void> ogg_opus_recorder_create(
+    ffi.Pointer<ffi.Int8> file_path,
+    int send_port,
+  ) {
+    return _ogg_opus_recorder_create(
+      file_path,
+      send_port,
+    );
+  }
+
+  late final _ogg_opus_recorder_createPtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Pointer<ffi.Void> Function(
+              ffi.Pointer<ffi.Int8>, ffi.Int64)>>('ogg_opus_recorder_create');
+  late final _ogg_opus_recorder_create = _ogg_opus_recorder_createPtr
+      .asFunction<ffi.Pointer<ffi.Void> Function(ffi.Pointer<ffi.Int8>, int)>();
+
+  void ogg_opus_recorder_start(
+    ffi.Pointer<ffi.Void> recoder,
+  ) {
+    return _ogg_opus_recorder_start(
+      recoder,
+    );
+  }
+
+  late final _ogg_opus_recorder_startPtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
+          'ogg_opus_recorder_start');
+  late final _ogg_opus_recorder_start = _ogg_opus_recorder_startPtr
+      .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
+
+  void ogg_opus_recorder_stop(
+    ffi.Pointer<ffi.Void> recoder,
+  ) {
+    return _ogg_opus_recorder_stop(
+      recoder,
+    );
+  }
+
+  late final _ogg_opus_recorder_stopPtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
+          'ogg_opus_recorder_stop');
+  late final _ogg_opus_recorder_stop = _ogg_opus_recorder_stopPtr
+      .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
+
+  void ogg_opus_recorder_destroy(
+    ffi.Pointer<ffi.Void> recoder,
+  ) {
+    return _ogg_opus_recorder_destroy(
+      recoder,
+    );
+  }
+
+  late final _ogg_opus_recorder_destroyPtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
+          'ogg_opus_recorder_destroy');
+  late final _ogg_opus_recorder_destroy = _ogg_opus_recorder_destroyPtr
+      .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
 }
