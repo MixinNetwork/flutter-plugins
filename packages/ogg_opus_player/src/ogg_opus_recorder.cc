@@ -119,7 +119,6 @@ int SdlOggOpusRecorder::Init(const char *file_name) {
 }
 
 void SdlOggOpusRecorder::WriteAudioData(Uint8 *stream, int size) {
-  std::cout << "WriteAudioData: " << size << std::endl;
   if (!writer_) {
     std::cerr << "writer_ is null" << std::endl;
     return;
