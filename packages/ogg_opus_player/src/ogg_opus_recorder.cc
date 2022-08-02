@@ -10,6 +10,7 @@
 #include <iostream>
 
 #include "SDL.h"
+#include "ogg_opus_utils.h"
 
 namespace {
 
@@ -92,6 +93,9 @@ class SdlOggOpusRecorder {
   void WriteAudioData(Uint8 *stream, int size);
 };
 int SdlOggOpusRecorder::Init(const char *file_name) {
+
+  global_init_sdl2();
+
   SDL_AudioSpec wanted_spec;
   SDL_AudioSpec spec;
   wanted_spec.freq = 16000;
