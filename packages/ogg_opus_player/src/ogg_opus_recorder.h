@@ -25,6 +25,10 @@ FFI_PLUGIN_EXPORT void ogg_opus_recorder_stop(void *recoder);
 
 FFI_PLUGIN_EXPORT void ogg_opus_recorder_destroy(void *recoder);
 
+FFI_PLUGIN_EXPORT void ogg_opus_recorder_get_wave_data(void *recoder, uint8_t **wave_data, int64_t *wave_data_length);
+
+FFI_PLUGIN_EXPORT double ogg_opus_recorder_get_duration(void *recoder);
+
 #ifdef __cplusplus
 }
 #endif
