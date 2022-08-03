@@ -9,6 +9,8 @@
 #include <memory>
 #include <iostream>
 #include <vector>
+#include <cmath>
+#include <cstring>
 
 #include "SDL.h"
 #include "ogg_opus_utils.h"
@@ -194,7 +196,7 @@ void SdlOggOpusRecorder::MakeWaveData(uint8_t **result, int64_t *size) {
   auto *intensities = static_cast<uint8_t *>(malloc(number_of_waveform_intensities));
   memset(intensities, 0, number_of_waveform_intensities);
 
-  auto min_raw_sample = INT16_MAX;
+  int16_t min_raw_sample = INT16_MAX;
   int16_t max_raw_sample = 0;
 
   for (auto &sample : waveform_samples_) {
