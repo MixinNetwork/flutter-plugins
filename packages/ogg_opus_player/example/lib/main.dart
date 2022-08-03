@@ -213,7 +213,7 @@ class _RecorderExampleState extends State<_RecorderExample> {
         else
           IconButton(
             onPressed: () async {
-              _recorder?.stop();
+              await _recorder?.stop();
               debugPrint('recording stopped');
               debugPrint('duration: ${await _recorder?.duration()}');
               debugPrint('waveform: ${await _recorder?.getWaveformData()}');

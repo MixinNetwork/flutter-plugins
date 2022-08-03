@@ -127,10 +127,11 @@ class OggOpusRecorderFfiImpl extends OggOpusRecorder {
   }
 
   @override
-  void stop() {
+  Future<void> stop() {
     if (_recorderHandle != nullptr) {
       _bindings.ogg_opus_recorder_stop(_recorderHandle);
     }
+    return Future.value();
   }
 
   @override

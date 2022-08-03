@@ -25,6 +25,7 @@ PlayerState _convertFromRawValue(int state) {
 const MethodChannel _channel = MethodChannel('ogg_opus_player');
 
 final Map<int, OggOpusPlayerPluginImpl> _players = {};
+final Map<int, OggOpusRecorderPluginImpl> _recorders = {};
 
 var _initialized = false;
 
@@ -56,6 +57,34 @@ Future<dynamic> _handleMethodCall(MethodCall call) async {
       player._playerState.value = _convertFromRawValue(state);
       player._lastUpdateTimeStamp = updateTime;
       player._position = position;
+      break;
+    case "onRecorderCanceled":
+      final recorderId = call.arguments['recorderId'] as int;
+      final recorder = _recorders[recorderId];
+      final reason = call.arguments['reason'] as int;
+      if (recorder == null) {
+        return;
+      }
+      recorder.onCanceled(reason);
+      break;
+    case "onRecorderStartFailed":
+      final recorderId = call.arguments['recorderId'] as int;
+      final recorder = _recorders[recorderId];
+      if (recorder == null) {
+        return;
+      }
+      final reason = call.arguments['error'] as String;
+      debugPrint('onRecorderStartFailed: $reason');
+      break;
+    case "onRecorderFinished":
+      final recorderId = call.arguments['recorderId'] as int;
+      final recorder = _recorders[recorderId];
+      if (recorder == null) {
+        return;
+      }
+      final duration = call.arguments['duration'] as int;
+      final waveform = (call.arguments['waveform'] as List).cast<int>();
+      recorder.onFinished(duration, waveform);
       break;
     default:
       break;
@@ -148,9 +177,11 @@ class OggOpusPlayerPluginImpl extends OggOpusPlayer {
 
 class OggOpusRecorderPluginImpl extends OggOpusRecorder {
   OggOpusRecorderPluginImpl(this._path) : super.create() {
+    _initChannelIfNeeded();
     scheduleMicrotask(() async {
       try {
         _id = await _channel.invokeMethod('createRecorder', _path);
+        _recorders[_id] = this;
       } catch (e) {
         debugPrint('create recorder failed. error: $e');
       }
@@ -161,12 +192,12 @@ class OggOpusRecorderPluginImpl extends OggOpusRecorder {
   final String _path;
   int _id = -1;
 
+  double? _duration;
+  List<int>? _waveformData;
+
   final _createCompleter = Completer<void>();
 
-  @override
-  void dispose() {
-    stop();
-  }
+  final _stopCompleter = Completer<void>();
 
   @override
   Future<void> start() async {
@@ -184,17 +215,31 @@ class OggOpusRecorderPluginImpl extends OggOpusRecorder {
       return;
     }
     await _channel.invokeMethod('stopRecord', _id);
+    await _stopCompleter.future;
+  }
+
+  @override
+  void dispose() {
+    _channel.invokeMethod("destroyRecorder", _id);
   }
 
   @override
   Future<double> duration() async {
-    // TODO: implement duration
-    return 0;
+    return _duration ?? 0.0;
   }
 
   @override
   Future<List<int>> getWaveformData() async {
-    // TODO: implement getWaveformData
-    return const [];
+    return _waveformData ?? [];
+  }
+
+  void onCanceled(int reason) {
+    _stopCompleter.complete();
+  }
+
+  void onFinished(int duration, List<int> waveform) {
+    _duration = duration / 1000;
+    _waveformData = waveform;
+    _stopCompleter.complete();
   }
 }

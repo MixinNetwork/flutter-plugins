@@ -58,7 +58,7 @@ final class OggOpusRecorder {
 
   let path: String
 
-  weak var delegate: OggOpusRecorderDelegate?
+  var delegate: OggOpusRecorderDelegate?
 
   @Synchronized(value: false)
   private(set) var isRecording: Bool

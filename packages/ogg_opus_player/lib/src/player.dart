@@ -44,7 +44,7 @@ abstract class OggOpusRecorder {
 
   void start();
 
-  void stop();
+  Future<void> stop();
 
   void dispose();
 
