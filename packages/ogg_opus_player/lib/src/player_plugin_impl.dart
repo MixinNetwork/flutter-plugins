@@ -185,4 +185,16 @@ class OggOpusRecorderPluginImpl extends OggOpusRecorder {
     }
     await _channel.invokeMethod('stopRecord', _id);
   }
+
+  @override
+  Future<double> duration() async {
+    // TODO: implement duration
+    return 0;
+  }
+
+  @override
+  Future<List<int>> getWaveformData() async {
+    // TODO: implement getWaveformData
+    return const [];
+  }
 }

@@ -140,4 +140,42 @@ class OggOpusRecorderFfiImpl extends OggOpusRecorder {
       _recorderHandle = nullptr;
     }
   }
+
+  @override
+  Future<double> duration() async {
+    if (_recorderHandle == nullptr) {
+      return 0;
+    }
+    return _bindings.ogg_opus_recorder_get_duration(_recorderHandle);
+  }
+
+  @override
+  Future<List<int>> getWaveformData() async {
+    if (_recorderHandle == nullptr) {
+      return Future.value([]);
+    }
+    final waveDataPointer = malloc<Pointer<Uint8>>();
+    final waveDataSizePointer = malloc<Int64>();
+    _bindings.ogg_opus_recorder_get_wave_data(
+      _recorderHandle,
+      waveDataPointer,
+      waveDataSizePointer,
+    );
+    assert(
+      waveDataPointer.value != nullptr,
+      'waveDataPointer.value != nullptr',
+    );
+    if (waveDataPointer.value == nullptr) {
+      return Future.value([]);
+    }
+    final waveData = waveDataPointer.value
+        .cast<Uint8>()
+        .asTypedList(
+          waveDataSizePointer.value.toInt(),
+        )
+        .toList();
+    malloc.free(waveDataPointer);
+    malloc.free(waveDataSizePointer);
+    return Future.value(waveData);
+  }
 }

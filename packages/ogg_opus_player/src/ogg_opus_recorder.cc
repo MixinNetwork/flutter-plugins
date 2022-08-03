@@ -157,6 +157,7 @@ void SdlOggOpusRecorder::WriteAudioData(Uint8 *stream, int size) {
   if (number_of_samples <= 0) {
     return;
   }
+
   auto *samples = reinterpret_cast<int16_t *>(stream);
   for (int i = 0; i < number_of_samples; ++i) {
     auto sample = samples[i];
@@ -188,68 +189,30 @@ SdlOggOpusRecorder::~SdlOggOpusRecorder() {
   }
 }
 
-#ifndef max
-#define max(x, y) ((x) > (y)) ? (x) : (y)
-#endif
-#ifndef min
-#define min(x, y) ((x) < (y)) ? (x) : (y)
-#endif
-
 void SdlOggOpusRecorder::MakeWaveData(uint8_t **result, int64_t *size) {
-  short *sampleBuffer = waveform_samples_.data();
-  auto length = waveform_samples_.size();
-  const int32_t resultSamples = 100;
-  auto *samples = static_cast<uint16_t *>(malloc(100 * 2));
-  uint64_t sampleIndex = 0;
-  uint16_t peakSample = 0;
-  int32_t sampleRate = (int32_t) max(1, length / resultSamples);
-  int32_t index = 0;
+  const int number_of_waveform_intensities = 63;
+  auto *intensities = static_cast<uint8_t *>(malloc(number_of_waveform_intensities));
+  memset(intensities, 0, number_of_waveform_intensities);
 
-  for (int32_t i = 0; i < length; i++) {
-    uint16_t sample = (uint16_t) abs(sampleBuffer[i]);
-    if (sample > peakSample) {
-      peakSample = sample;
-    }
-    if (sampleIndex++ % sampleRate == 0) {
-      if (index < resultSamples) {
-        samples[index++] = peakSample;
-      }
-      peakSample = 0;
-    }
+  auto min_raw_sample = INT16_MAX;
+  int16_t max_raw_sample = 0;
+
+  for (auto &sample : waveform_samples_) {
+    min_raw_sample = std::min(min_raw_sample, sample);
+    max_raw_sample = std::max(max_raw_sample, sample);
   }
 
-  int64_t sumSamples = 0;
-  for (int32_t i = 0; i < resultSamples; i++) {
-    sumSamples += samples[i];
-  }
-  uint16_t peak = (uint16_t) (sumSamples * 1.8f / resultSamples);
-  if (peak < 2500) {
-    peak = 2500;
-  }
+  auto range = max_raw_sample - min_raw_sample;
+  auto delta = range == 0 ? 0 : float_t(UINT8_MAX) / float_t(range);
 
-  for (int32_t i = 0; i < resultSamples; i++) {
-    uint16_t sample = (uint16_t) ((int64_t) samples[i]);
-    if (sample > peak) {
-      samples[i] = peak;
-    }
+  for (int i = 0; i < waveform_samples_.size(); ++i) {
+    auto index = i * number_of_waveform_intensities / waveform_samples_.size();
+    auto intensity = std::min(float_t(UINT8_MAX), float_t(waveform_samples_[i]) * delta);
+    intensities[index] = uint8_t(intensity);
   }
 
-  uint32_t bitStreamLength = resultSamples * 5 / 8 + 1;
-
-  auto *bytes = static_cast<uint8_t *>(malloc(bitStreamLength + 4));
-  memset(bytes, 0, bitStreamLength + 4);
-  for (int32_t i = 0; i < resultSamples; i++) {
-    int32_t value = min(31, abs((int32_t) samples[i]) * 31 / peak);
-    set_bits(bytes, i * 5, value & 31);
-  }
-
-  // copy bytes to result
-  *result = static_cast<uint8_t *>(malloc(bitStreamLength));
-  *size = int64_t(bitStreamLength);
-  memcpy(*result, bytes, bitStreamLength);
-
-  free(bytes);
-  free(samples);
+  *result = intensities;
+  *size = number_of_waveform_intensities;
 
 }
 
