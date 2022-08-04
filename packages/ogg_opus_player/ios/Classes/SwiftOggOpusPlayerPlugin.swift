@@ -80,15 +80,12 @@ public class SwiftOggOpusPlayerPlugin: NSObject, FlutterPlugin {
         result(FlutterError(code: "3", message: "recorder path can not be null", details: nil))
         break
       }
-      do {
-        let recorder = try OggOpusRecorder(path: path)
-        let id = generatedPlayerId()
-        recorder.delegate = PluginOggOpusRecorderDelegate(channel: channel, recorderId: id)
-        recorderDictionary[id] = recorder
-        result(id)
-      } catch {
-        result(FlutterError(code: "4", message: error.localizedDescription, details: nil))
-      }
+
+      let recorder = OggOpusRecorder(path: path)
+      let id = generatedPlayerId()
+      recorder.delegate = PluginOggOpusRecorderDelegate(channel: channel, recorderId: id)
+      recorderDictionary[id] = recorder
+      result(id)
     case "startRecord":
       if let id = call.arguments as? Int {
         recorderDictionary[id]?.record(for: TimeInterval.infinity)
