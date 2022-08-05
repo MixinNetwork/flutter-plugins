@@ -192,7 +192,7 @@ SdlOggOpusRecorder::~SdlOggOpusRecorder() {
 }
 
 void SdlOggOpusRecorder::MakeWaveData(uint8_t **result, int64_t *size) {
-  const int number_of_waveform_intensities = 63;
+  const int number_of_waveform_intensities = 100;
   auto *intensities = static_cast<uint8_t *>(malloc(number_of_waveform_intensities));
   memset(intensities, 0, number_of_waveform_intensities);
 
