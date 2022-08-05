@@ -80,14 +80,12 @@ public class SwiftOggOpusPlayerPlugin: NSObject, FlutterPlugin {
         result(FlutterError(code: "3", message: "recorder path can not be null", details: nil))
         break
       }
-      do {
-        let recorder = try OggOpusRecorder(path: path)
-        let id = generatedPlayerId()
-        recorderDictionary[id] = recorder
-        result(id)
-      } catch {
-        result(FlutterError(code: "4", message: error.localizedDescription, details: nil))
-      }
+
+      let recorder = OggOpusRecorder(path: path)
+      let id = generatedPlayerId()
+      recorder.delegate = PluginOggOpusRecorderDelegate(channel: channel, recorderId: id)
+      recorderDictionary[id] = recorder
+      result(id)
     case "startRecord":
       if let id = call.arguments as? Int {
         recorderDictionary[id]?.record(for: TimeInterval.infinity)
@@ -96,6 +94,10 @@ public class SwiftOggOpusPlayerPlugin: NSObject, FlutterPlugin {
     case "stopRecord":
       if let id = call.arguments as? Int {
         recorderDictionary[id]?.stop()
+      }
+      result(nil)
+    case "destroyRecorder":
+      if let id = call.arguments as? Int {
         recorderDictionary.removeValue(forKey: id)
       }
       result(nil)
@@ -117,4 +119,54 @@ private func systemUptime() -> Int {
   var spec = timespec()
   clock_gettime(CLOCK_UPTIME_RAW, &spec)
   return spec.tv_sec * 1000 + spec.tv_nsec / 1000000
+}
+
+class PluginOggOpusRecorderDelegate: OggOpusRecorderDelegate {
+  let channel: FlutterMethodChannel
+  let recorderId: Int
+
+  init(channel: FlutterMethodChannel, recorderId: Int) {
+    self.channel = channel
+    self.recorderId = recorderId
+  }
+
+  func oggOpusRecorderIsWaitingForActivation(_ recorder: OggOpusRecorder) {
+  }
+
+  func oggOpusRecorderDidStartRecording(_ recorder: OggOpusRecorder) {
+  }
+
+  func oggOpusRecorder(_ recorder: OggOpusRecorder, didCancelRecordingForReason reason: OggOpusRecorder.CancelledReason, userInfo: [String: Any]?) {
+    channel.invokeMethod(
+      "onRecorderCanceled",
+      arguments: [
+        "recorderId": recorderId,
+        "reason": reason.rawValue,
+      ],
+      result: nil
+    )
+  }
+
+  func oggOpusRecorder(_ recorder: OggOpusRecorder, didFailRecordingWithError error: Error) {
+    channel.invokeMethod(
+      "onRecorderStartFailed",
+      arguments: [
+        "error": error.localizedDescription,
+        "recorderId": recorderId,
+      ],
+      result: nil
+    )
+  }
+
+  func oggOpusRecorder(_ recorder: OggOpusRecorder, didFinishRecordingWithMetadata data: AudioMetadata) {
+    debugPrint("onRecorderFinished: ")
+    channel.invokeMethod("onRecorderFinished", arguments: [
+      "duration": NSNumber(value: data.duration),
+      "waveform": FlutterStandardTypedData(bytes: data.waveform),
+      "recorderId": recorderId,
+    ], result: nil)
+  }
+
+  func oggOpusRecorderDidDetectAudioSessionInterruptionEnd(_ recorder: OggOpusRecorder) {
+  }
 }

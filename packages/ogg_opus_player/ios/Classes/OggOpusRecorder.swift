@@ -12,13 +12,12 @@ protocol OggOpusRecorderDelegate: AnyObject {
   func oggOpusRecorderDidDetectAudioSessionInterruptionEnd(_ recorder: OggOpusRecorder)
 }
 
-fileprivate let recordingSampleRate: Int32 = 16000
-fileprivate let streamFormat: AudioStreamBasicDescription = {
+func audioRecorderNativeStreamDescription(_ sampleRate: Float64) -> AudioStreamBasicDescription {
   let bitsPerChannel: UInt32 = 16
   let channelsPerFrame: UInt32 = 1
   let bytesPerFrame: UInt32 = (bitsPerChannel / 8) * channelsPerFrame
   return .init(
-    mSampleRate: Float64(recordingSampleRate),
+    mSampleRate: Float64(sampleRate),
     mFormatID: kAudioFormatLinearPCM,
     mFormatFlags: kAudioFormatFlagIsSignedInteger | kAudioFormatFlagIsPacked,
     mBytesPerPacket: bytesPerFrame,
@@ -28,7 +27,7 @@ fileprivate let streamFormat: AudioStreamBasicDescription = {
     mBitsPerChannel: bitsPerChannel,
     mReserved: 0
   )
-}()
+}
 
 // See kAudioUnitSubType_RemoteIO
 fileprivate enum RemoteIOBus {
@@ -58,15 +57,15 @@ final class OggOpusRecorder {
 
   let path: String
 
-  weak var delegate: OggOpusRecorderDelegate?
+  var delegate: OggOpusRecorderDelegate?
 
   @Synchronized(value: false)
   private(set) var isRecording: Bool
 
-  private let writer: OggOpusWriter
+  private var writer: OggOpusWriter?
   private let processingQueue = DispatchQueue(label: "one.mixin.messenger.OggOpusRecorder")
   private let waveformPeakSampleScope = 100
-  private let numberOfWaveformIntensities = 63
+  private let numberOfWaveformIntensities = 100
 
   fileprivate var audioUnit: AudioUnit?
 
@@ -80,9 +79,10 @@ final class OggOpusRecorder {
 
   private weak var timer: Timer?
 
-  public init(path: String) throws {
+  private var sampleRate: Int32 = 0
+
+  public init(path: String) {
     self.path = path
-    self.writer = try OggOpusWriter(path: path, inputSampleRate: recordingSampleRate)
   }
 
   deinit {
@@ -204,7 +204,7 @@ extension OggOpusRecorder {
     #if os(iOS)
       let componentSubType = kAudioUnitSubType_RemoteIO
     #elseif os(macOS)
-      let componentSubType = kAudioUnitSubType_VoiceProcessingIO
+      let componentSubType = kAudioUnitSubType_HALOutput
     #endif
 
     var acd = AudioComponentDescription(
@@ -223,38 +223,82 @@ extension OggOpusRecorder {
       throw Error.newAudioUnit(result)
     }
 
-    #if os(iOS)
-      // On Mac OS，input and output are open by default and we can't change it.
-      // Thus, we don't need to set input and output for Mac OS
-      var enable: UInt32 = 1
-      result = AudioUnitSetProperty(
-        audioUnit,
-        kAudioOutputUnitProperty_EnableIO,
-        kAudioUnitScope_Input,
-        RemoteIOBus.input,
-        &enable,
-        UInt32(MemoryLayout.size(ofValue: enable))
-      )
-      guard result == noErr else {
+    var enable: UInt32 = 1
+    result = AudioUnitSetProperty(
+      audioUnit,
+      kAudioOutputUnitProperty_EnableIO,
+      kAudioUnitScope_Input,
+      RemoteIOBus.input,
+      &enable,
+      UInt32(MemoryLayout.size(ofValue: enable))
+    )
+    guard result == noErr else {
+      AudioComponentInstanceDispose(audioUnit)
+      throw Error.enableInput(result)
+    }
+
+    var disable: UInt32 = 0
+    result = AudioUnitSetProperty(
+      audioUnit,
+      kAudioOutputUnitProperty_EnableIO,
+      kAudioUnitScope_Output,
+      RemoteIOBus.output,
+      &disable,
+      UInt32(MemoryLayout.size(ofValue: disable))
+    )
+    guard result == noErr else {
+      AudioComponentInstanceDispose(audioUnit)
+      throw Error.disableOutput(result)
+    }
+
+    #if os(macOS)
+      var deviceId: AudioDeviceID = AudioDeviceID()
+      var deviceIdRequest: AudioObjectPropertyAddress = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyDefaultInputDevice, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMaster)
+      var deviceIdSize: UInt32 = UInt32(MemoryLayout<AudioDeviceID>.size)
+
+      guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &deviceIdRequest, 0, nil, &deviceIdSize, &deviceId) == noErr else {
         AudioComponentInstanceDispose(audioUnit)
-        throw Error.enableInput(result)
+        return
       }
 
-      var disable: UInt32 = 0
-      result = AudioUnitSetProperty(
-        audioUnit,
-        kAudioOutputUnitProperty_EnableIO,
-        kAudioUnitScope_Output,
-        RemoteIOBus.output,
-        &disable,
-        UInt32(MemoryLayout.size(ofValue: disable))
-      )
-      guard result == noErr else {
-        AudioComponentInstanceDispose(audioUnit)
-        throw Error.disableOutput(result)
+      guard AudioUnitSetProperty(audioUnit, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, RemoteIOBus.output, &deviceId, UInt32(MemoryLayout<AudioDeviceID>.size)) == noErr else {
+        return
       }
 
+      var deviceDataRequest: AudioObjectPropertyAddress = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyAvailableNominalSampleRates, mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMaster)
+      var deviceDataSize: UInt32 = 0
+      guard AudioObjectGetPropertyDataSize(deviceId, &deviceDataRequest, 0, nil, &deviceDataSize) == noErr else {
+        AudioComponentInstanceDispose(audioUnit)
+        return
+      }
+      let audioValueCount = deviceDataSize / UInt32(MemoryLayout<AudioValueRange>.size)
+      var table: [AudioValueRange] = Array<AudioValueRange>(repeating: AudioValueRange(), count: Int(audioValueCount))
+
+      guard AudioObjectGetPropertyData(deviceId, &deviceDataRequest, 0, nil, &deviceDataSize, &table) == noErr else {
+        AudioComponentInstanceDispose(audioUnit)
+        return
+      }
+
+      var inputSampleRate: AudioValueRange = table[0]
+      for i in 0 ..< Int(audioValueCount) {
+        if table[i].mMinimum == 48000 {
+          inputSampleRate = table[i]
+          break
+        }
+      }
+      deviceDataRequest.mSelector = kAudioDevicePropertyNominalSampleRate
+      guard AudioObjectSetPropertyData(deviceId, &deviceDataRequest, 0, nil, UInt32(MemoryLayout<AudioValueRange>.size), &inputSampleRate) == noErr else {
+        return
+      }
+
+      sampleRate = Int32(inputSampleRate.mMinimum)
+
+    #elseif os(iOS)
+      sampleRate = 16000
     #endif
+    debugPrint("sampleRate: \(sampleRate)")
+    let streamFormat = audioRecorderNativeStreamDescription(Float64(sampleRate))
+    self.writer = try OggOpusWriter(path: path, inputSampleRate: sampleRate)
 
     result = withUnsafePointer(to: streamFormat) { format -> OSStatus in
       AudioUnitSetProperty(
@@ -340,7 +384,7 @@ extension OggOpusRecorder {
       }
       self.close()
       let waveform = self.makeWaveform()
-      let duration = self.numberOfEncodedSamples * UInt(millisecondsPerSecond) / UInt(recordingSampleRate)
+      let duration = self.numberOfEncodedSamples * UInt(millisecondsPerSecond) / UInt(self.sampleRate)
       let metadata = AudioMetadata(duration: duration, waveform: waveform)
       DispatchQueue.main.async {
         self.delegate?.oggOpusRecorder(self, didFinishRecordingWithMetadata: metadata)
@@ -359,7 +403,7 @@ extension OggOpusRecorder {
       AudioOutputUnitStop(audioUnit)
       AudioComponentInstanceDispose(audioUnit)
     }
-    self.writer.close()
+    self.writer?.close()
     self.isRecording = false
   }
 
@@ -432,7 +476,7 @@ extension OggOpusRecorder {
                          count: size,
                          deallocator: .free)
       self.numberOfEncodedSamples += UInt(pcmData.count / 2)
-      self.writer.write(pcmData: pcmData)
+      self.writer?.write(pcmData: pcmData)
       self.processWaveformSamples(with: pcmData)
     }
     return result

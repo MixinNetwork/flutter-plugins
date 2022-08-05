@@ -44,7 +44,15 @@ abstract class OggOpusRecorder {
 
   void start();
 
-  void stop();
+  Future<void> stop();
 
   void dispose();
+
+  /// get the recorded audio waveform data.
+  /// must be called after [stop] is called.
+  Future<List<int>> getWaveformData();
+
+  /// get the recorded audio duration.
+  /// must be called after [stop] is called.
+  Future<double> duration();
 }
