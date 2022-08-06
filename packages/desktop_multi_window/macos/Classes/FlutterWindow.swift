@@ -41,9 +41,9 @@ class BaseFlutterWindow: NSObject {
 
   func resizable(resizable: Bool) {
     if (resizable) {
-      window.styleMask.remove(.resizable)
-    } else {
       window.styleMask.insert(.resizable)
+    } else {
+      window.styleMask.remove(.resizable)
     }
   }
 
