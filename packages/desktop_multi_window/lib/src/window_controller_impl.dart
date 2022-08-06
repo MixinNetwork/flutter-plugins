@@ -6,7 +6,7 @@ import 'channels.dart';
 import 'window_controller.dart';
 
 class WindowControllerMainImpl extends WindowController {
-  final MethodChannel _channel = miltiWindowChannel;
+  final MethodChannel _channel = multiWindowChannel;
 
   // the id of this window
   final int _id;
@@ -52,6 +52,14 @@ class WindowControllerMainImpl extends WindowController {
     return _channel.invokeMethod('setTitle', <String, dynamic>{
       'windowId': _id,
       'title': title,
+    });
+  }
+
+  @override
+  Future<void> resizable(bool resizable) {
+    return _channel.invokeMethod('resizable', <String, dynamic>{
+      'windowId': _id,
+      'resizable': resizable,
     });
   }
 

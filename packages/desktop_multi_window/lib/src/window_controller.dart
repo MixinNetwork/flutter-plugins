@@ -36,6 +36,9 @@ abstract class WindowController {
   /// Set the window's title.
   Future<void> setTitle(String title);
 
+  /// Whether the window can be resized.
+  Future<void> resizable(bool resizable);
+
   /// available only on macOS.
   Future<void> setFrameAutosaveName(String name);
 }
