@@ -36,7 +36,7 @@ abstract class WindowController {
   /// Set the window's title.
   Future<void> setTitle(String title);
 
-  /// Whether the window can be resized.
+  /// Whether the window can be resized. Available only on macOS.
   ///
   /// Most useful for ensuring windows *cannot* be resized. Windows are
   /// resizable by default, so there is no need to explicitly define a window
