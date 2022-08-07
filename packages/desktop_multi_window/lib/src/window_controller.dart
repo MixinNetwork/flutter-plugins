@@ -36,6 +36,13 @@ abstract class WindowController {
   /// Set the window's title.
   Future<void> setTitle(String title);
 
-  /// available only on macOS.
+  /// Whether the window can be resized. Available only on macOS.
+  ///
+  /// Most useful for ensuring windows *cannot* be resized. Windows are
+  /// resizable by default, so there is no need to explicitly define a window
+  /// as resizable by calling this function.
+  Future<void> resizable(bool resizable);
+
+  /// Available only on macOS.
   Future<void> setFrameAutosaveName(String name);
 }

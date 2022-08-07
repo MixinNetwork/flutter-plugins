@@ -45,12 +45,13 @@ class _ExampleMainWindowState extends State<_ExampleMainWindow> {
                   'args1': 'Sub window',
                   'args2': 100,
                   'args3': true,
-                  'bussiness': 'bussiness_test',
+                  'business': 'business_test',
                 }));
                 window
                   ..setFrame(const Offset(0, 0) & const Size(1280, 720))
                   ..center()
                   ..setTitle('Another window')
+                  ..resizable(false)
                   ..show();
               },
               child: const Text('Create a new World!'),
