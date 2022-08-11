@@ -1,3 +1,7 @@
+## 0.4.1
+
+[Linux] replace opus static libraries to release version.
+
 ## 0.4.0
 
 Support recording voice.
@@ -21,6 +25,7 @@ support macOS arm64
 ## 0.1.0
 
 break change: upgrade iOS min version from 10.0 to 12.0
+
 ## 0.0.1
 
 add iOS/ macOS support.
