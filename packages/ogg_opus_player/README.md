@@ -49,15 +49,17 @@ explaining to the user how the app uses this data.
 
 For example:
 
-```plist
-	<key>NSMicrophoneUsageDescription</key>
+```
+    <key>NSMicrophoneUsageDescription</key>
     <string>Example uses your microphone to record voice for test.</string>
 ```
 
 for macOS, you also need update your `DebugProfile.entitlements` and `ReleaseProfile.entitlements` with the following:
 
-```plist
+```
     <key>com.apple.security.device.microphone</key>
+    <true/>
+    <key>com.apple.security.device.audio-input</key>
     <true/>
 ```
 
