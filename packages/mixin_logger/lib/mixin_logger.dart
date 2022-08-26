@@ -64,14 +64,14 @@ extension _LogLevelExtension on _LogLevel {
   }
 }
 
-void initLogger(
+Future<void> initLogger(
   String logDir, {
   int maxFileCount = 10,
   int maxFileLength = 1024 * 1024 * 10, // 10 MB
-}) {
+}) async {
   assert(maxFileCount > 1, 'maxFileCount must be greater than 1');
   assert(maxFileLength > 10 * 1024, 'maxFileLength must be greater than 10 KB');
-  platform.initLogger(logDir, maxFileCount, maxFileLength);
+  await platform.initLogger(logDir, maxFileCount, maxFileLength);
 }
 
 void v(String message) {
