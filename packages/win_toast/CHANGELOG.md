@@ -1,7 +1,10 @@
-## 0.0.2 21/11/19
+## 0.1.0
+* fix notification wired name when app package as msix. [#142](https://github.com/MixinNetwork/flutter-plugins/issues/142) by [daniel-kane-everbridge-com](https://github.com/daniel-kane-everbridge-com)
+
+## 0.0.2
 
 * fix cause crash on Windows 7.
 
-## 0.0.1 21/9/27
+## 0.0.1
 
 * add basic functions.
