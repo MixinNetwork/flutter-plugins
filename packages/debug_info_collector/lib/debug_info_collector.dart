@@ -16,7 +16,7 @@ Future<void> collect() async {
       .listSync()
       .whereType<Directory>();
 
-  Future<void> _dumpToFile(String pdbPath, String dumpName) async {
+  Future<void> dumpToFile(String pdbPath, String dumpName) async {
     try {
       final ret = await _dump(executable, pdbPath);
       final file = File(context.join(outputPath, '$dumpName.sym'));
@@ -41,9 +41,31 @@ Future<void> collect() async {
           plugin.path, 'shared', 'Release', '${p.basename(plugin.path)}.pdb');
     }
     final dumpName = context.basenameWithoutExtension(pdbPath);
-    _dumpToFile(pdbPath, dumpName);
+    await dumpToFile(pdbPath, dumpName);
   }
 
+  // dump flutter
+  final flutterWrapperAppPath = context.join(
+      windowsBuildDir, 'flutter', 'Release', 'flutter_wrapper_app.pdb');
+  await dumpToFile(flutterWrapperAppPath, 'flutter_wrapper_app');
+  final flutterWrapperPluginPath = context.join(
+      windowsBuildDir, 'flutter', 'Release', 'flutter_wrapper_plugin.pdb');
+  await dumpToFile(flutterWrapperPluginPath, 'flutter_wrapper_plugin');
+
+  // dump runner app
+  final releaseRunnerDir = context.join(windowsBuildDir, 'runner', 'Release');
+  try {
+    final exeFile = Directory(releaseRunnerDir)
+        .listSync()
+        .firstWhere((element) => p.extension(element.path) == '.exe');
+    final runnerName = context.basenameWithoutExtension(exeFile.path);
+    final appPath =
+        context.join(windowsBuildDir, 'runner', 'Release', '$runnerName.pdb');
+    await dumpToFile(appPath, runnerName);
+  } catch (error, stacktrace) {
+    print('Error while finding exe file $error $stacktrace');
+    return;
+  }
 }
 
 Future<String> _dump(String executable, String pdb) async {
