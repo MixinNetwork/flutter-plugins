@@ -44,7 +44,7 @@ Future<void> collect() async {
     await dumpToFile(pdbPath, dumpName);
   }
 
-  // dump flutter
+  // dump flutter wrapper
   final flutterWrapperAppPath = context.join(
       windowsBuildDir, 'flutter', 'Release', 'flutter_wrapper_app.pdb');
   await dumpToFile(flutterWrapperAppPath, 'flutter_wrapper_app');
@@ -66,13 +66,18 @@ Future<void> collect() async {
     print('Error while finding exe file $error $stacktrace');
     return;
   }
+
+  // dump flutter windows
+  final flutterWindowsPath = context.join(
+      'windows', 'flutter', 'ephemeral', 'flutter_windows.dll.pdb');
+  await dumpToFile(flutterWindowsPath, 'flutter_windows');
 }
 
 Future<String> _dump(String executable, String pdb) async {
   final path = File(pdb).absolute.path;
   final result = await Process.run(executable, [path]);
   if (result.exitCode != 0) {
-    throw Exception('Failed to dump $path ${result.stderr}');
+    print('error to dump $path ${result.stderr}');
   }
   return result.stdout;
 }
