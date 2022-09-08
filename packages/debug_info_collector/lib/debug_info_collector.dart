@@ -70,7 +70,7 @@ Future<void> collect() async {
   // dump flutter windows
   final flutterWindowsPath = context.join(
       'windows', 'flutter', 'ephemeral', 'flutter_windows.dll.pdb');
-  await dumpToFile(flutterWindowsPath, 'flutter_windows');
+  await dumpToFile(flutterWindowsPath, 'flutter_windows.dll');
 }
 
 Future<String> _dump(String executable, String pdb) async {
