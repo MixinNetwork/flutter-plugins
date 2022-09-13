@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:path/path.dart' as Path;
+import 'package:uuid/uuid.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -63,6 +65,12 @@ class PasteboardPlatformIO implements PasteboardPlatform {
     }
     if (Platform.isIOS) {
       await _channel.invokeMethod<void>('writeImage', image);
+    } else if (Platform.isWindows) {
+      final file = await File(GetTempFileName()).create();
+      file.writeAsBytesSync(image);
+      await _channel
+          .invokeMethod<Object>('writeImage', {'fileName': file.path});
+      file.delete();
     }
   }
 
@@ -76,4 +84,20 @@ class PasteboardPlatformIO implements PasteboardPlatform {
   void writeText(String value) {
     Clipboard.setData(ClipboardData(text: value));
   }
+}
+
+String GetTempFileName() {
+  final dir = Directory.systemTemp;
+  String tempFileName;
+
+  var uuid = Uuid();
+
+  while (true) {
+    tempFileName = Path.join(dir.path, uuid.v1().toString());
+    if (!File(tempFileName).existsSync()) {
+      break;
+    }
+  }
+
+  return tempFileName;
 }
