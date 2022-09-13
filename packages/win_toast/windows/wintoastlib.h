@@ -201,6 +201,7 @@ namespace WinToastLib {
         virtual bool initialize(_Out_opt_ WinToastError* error = nullptr);
         virtual bool isInitialized() const;
         virtual bool hideToast(_In_ INT64 id);
+        virtual bool hasIdentity();
         virtual INT64 showToast(_In_ const WinToastTemplate& toast, _In_ std::unique_ptr<IWinToastHandler> handler, _Out_opt_ WinToastError* error = nullptr);
         virtual void clear();
         virtual enum ShortcutResult createShortcut();
@@ -228,7 +229,7 @@ namespace WinToastLib {
         HRESULT addActionHelper(_In_ IXmlDocument *xml, _In_ const std::wstring& action, _In_ const std::wstring& arguments);
         HRESULT addDurationHelper(_In_ IXmlDocument *xml, _In_ const std::wstring& duration);
         HRESULT addScenarioHelper(_In_ IXmlDocument *xml, _In_ const std::wstring& scenario);
-        ComPtr<IToastNotifier> notifier(_In_ bool* succeded) const;
+        ComPtr<IToastNotifier> notifier(_In_ bool* succeded);
         void setError(_Out_opt_ WinToastError* error, _In_ WinToastError value);
     };
 }

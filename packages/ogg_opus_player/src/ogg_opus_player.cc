@@ -11,6 +11,8 @@
 #include "dart_api_dl.h"
 #include "SDL.h"
 
+#include "ogg_opus_utils.h"
+
 //#define _OPUS_OGG_PLAYER_LOG
 
 namespace {
@@ -35,7 +37,7 @@ class OggOpusReader {
 
 };
 
-OggOpusReader::OggOpusReader(const char *file_path) : file_path_(file_path) {
+OggOpusReader::OggOpusReader(const char *file_path) : file_path_(file_path), opus_file_(nullptr) {
   int result;
   auto opus_file = op_open_file(file_path, &result);
   if (result == 0 && opus_file) {
@@ -167,11 +169,7 @@ void SdlOggOpusPlayer::ReadAudioData(Uint8 *stream, int len) {
 bool global_init = false;
 
 int SdlOggOpusPlayer::Initialize() {
-
-  if (!global_init) {
-    SDL_InitSubSystem(SDL_INIT_AUDIO);
-    global_init = true;
-  }
+  global_init_sdl2();
 
   SDL_AudioSpec wanted_spec, spec;
   wanted_spec.silence = 0;
@@ -224,6 +222,13 @@ double SdlOggOpusPlayer::CurrentTime() {
   return current_time_ + (double) time / 1000000000.0;
 }
 
+}
+
+void global_init_sdl2() {
+  if (!global_init) {
+    SDL_InitSubSystem(SDL_INIT_AUDIO);
+    global_init = true;
+  }
 }
 
 void *ogg_opus_player_create(const char *file_path, Dart_Port_DL send_port) {

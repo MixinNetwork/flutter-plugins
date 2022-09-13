@@ -1,6 +1,6 @@
 name: ogg_opus_player
-description: An ogg opus file player for flutter.
-version: 0.3.2
+description: An ogg opus file player and recorder for flutter.
+version: 0.4.1
 homepage: https://github.com/MixinNetwork/flutter-plugins/tree/main/packages/ogg_opus_player
 
 environment:
@@ -11,11 +11,11 @@ dependencies:
   flutter:
     sdk: flutter
   plugin_platform_interface: ^2.0.2
-  ffi: ^1.1.2
+  ffi: ^2.0.1
   system_clock: ^1.2.0
 
 dev_dependencies:
-  ffigen: ^4.1.2
+  ffigen: ^6.1.2
   flutter_test:
     sdk: flutter
   flutter_lints: ^1.0.0

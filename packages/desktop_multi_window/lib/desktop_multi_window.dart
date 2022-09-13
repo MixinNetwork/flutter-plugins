@@ -27,7 +27,7 @@ class DesktopMultiWindow {
   /// NOTE: [createWindow] will only create a new window, you need to call
   /// [WindowController.show] to show the window.
   static Future<WindowController> createWindow([String? arguments]) async {
-    final windowId = await miltiWindowChannel.invokeMethod<int>(
+    final windowId = await multiWindowChannel.invokeMethod<int>(
       'createWindow',
       arguments,
     );
@@ -73,12 +73,11 @@ class DesktopMultiWindow {
 
   /// Get all sub window id.
   static Future<List<int>> getAllSubWindowIds() async {
-    final result = await miltiWindowChannel
+    final result = await multiWindowChannel
         .invokeMethod<List<dynamic>>('getAllSubWindowIds');
     final ids = result?.cast<int>() ?? const [];
-    assert(ids.isNotEmpty);
-    assert(ids.every((id) => id > 0));
     assert(!ids.contains(0), 'ids must not contains main window id');
+    assert(ids.every((id) => id > 0), 'id must be greater than 0');
     return ids;
   }
 }

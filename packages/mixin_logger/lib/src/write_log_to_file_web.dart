@@ -4,8 +4,8 @@ void writeLog(String log) {
   // do nothing.
 }
 
-void initLogger(
+Future<void> initLogger(
   String logDir,
   int maxFileCount,
   int maxFileLength,
-) {}
+) async {}

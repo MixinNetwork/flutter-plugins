@@ -8,10 +8,10 @@ void writeLog(String log) {
   LogFileManager.instance?.write(log);
 }
 
-void initLogger(
+Future<void> initLogger(
   String logDir,
   int maxFileCount,
   int maxFileLength,
-) {
-  LogFileManager.init(logDir, maxFileCount, maxFileLength);
+) async {
+  await LogFileManager.init(logDir, maxFileCount, maxFileLength);
 }

@@ -94,6 +94,14 @@ class MultiWindowManager {
     window.setTitle(title: title)
   }
 
+  func resizable(windowId: Int64, resizable: Bool) {
+    guard let window = windows[windowId] else {
+      debugPrint("window \(windowId) not exists.")
+      return
+    }
+    window.resizable(resizable: resizable)
+  }
+
   func setFrameAutosaveName(windowId: Int64, name: String) {
     guard let window = windows[windowId] else {
       debugPrint("window \(windowId) not exists.")

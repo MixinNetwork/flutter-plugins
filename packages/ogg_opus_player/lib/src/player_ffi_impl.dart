@@ -7,7 +7,7 @@ import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart';
 import 'package:ogg_opus_player/src/player.dart';
 
-import 'ogg_opus_player_bindings_generated.dart';
+import 'ogg_opus_bindings_generated.dart';
 import 'player_state.dart';
 
 class OggOpusPlayerFfiImpl extends OggOpusPlayer {
@@ -103,4 +103,80 @@ final DynamicLibrary _dylib = () {
 }();
 
 /// The bindings to the native functions in [_dylib].
-final OggOpusPlayerBindings _bindings = OggOpusPlayerBindings(_dylib);
+final _bindings = OggOpusBindings(_dylib);
+
+class OggOpusRecorderFfiImpl extends OggOpusRecorder {
+  final String _path;
+
+  Pointer<Void> _recorderHandle = nullptr;
+  final ReceivePort _port;
+
+  OggOpusRecorderFfiImpl(this._path)
+      : _port = ReceivePort('OggOpusRecorderFfiImpl: $_path'),
+        super.create() {
+    _initializeDartApi();
+    _recorderHandle = _bindings.ogg_opus_recorder_create(
+        _path.toNativeUtf8().cast(), _port.sendPort.nativePort);
+  }
+
+  @override
+  void start() {
+    if (_recorderHandle != nullptr) {
+      _bindings.ogg_opus_recorder_start(_recorderHandle);
+    }
+  }
+
+  @override
+  Future<void> stop() {
+    if (_recorderHandle != nullptr) {
+      _bindings.ogg_opus_recorder_stop(_recorderHandle);
+    }
+    return Future.value();
+  }
+
+  @override
+  void dispose() {
+    if (_recorderHandle != nullptr) {
+      _bindings.ogg_opus_recorder_destroy(_recorderHandle);
+      _recorderHandle = nullptr;
+    }
+  }
+
+  @override
+  Future<double> duration() async {
+    if (_recorderHandle == nullptr) {
+      return 0;
+    }
+    return _bindings.ogg_opus_recorder_get_duration(_recorderHandle);
+  }
+
+  @override
+  Future<List<int>> getWaveformData() async {
+    if (_recorderHandle == nullptr) {
+      return Future.value([]);
+    }
+    final waveDataPointer = malloc<Pointer<Uint8>>();
+    final waveDataSizePointer = malloc<Int64>();
+    _bindings.ogg_opus_recorder_get_wave_data(
+      _recorderHandle,
+      waveDataPointer,
+      waveDataSizePointer,
+    );
+    assert(
+      waveDataPointer.value != nullptr,
+      'waveDataPointer.value != nullptr',
+    );
+    if (waveDataPointer.value == nullptr) {
+      return Future.value([]);
+    }
+    final waveData = waveDataPointer.value
+        .cast<Uint8>()
+        .asTypedList(
+          waveDataSizePointer.value.toInt(),
+        )
+        .toList();
+    malloc.free(waveDataPointer);
+    malloc.free(waveDataSizePointer);
+    return Future.value(waveData);
+  }
+}

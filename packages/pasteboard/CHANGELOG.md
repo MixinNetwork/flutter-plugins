@@ -1,3 +1,8 @@
+## 0.2.0
+
+* update docs. [@OutdatedGuy](https://github.com/OutdatedGuy)
+* fix js version dependency. [@alexkmbk](https://github.com/alexkmbk)
+
 ## 0.1.1
 
 * add `html` to get the html from clipboard. [@alexkmbk](https://github.com/alexkmbk)
