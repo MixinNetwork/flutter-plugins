@@ -23,10 +23,10 @@
 #include <assert.h>
 #include <unordered_map>
 #include <array>
-#include <appmodel.h>
 
 #pragma comment(lib,"shlwapi")
 #pragma comment(lib,"user32")
+
 
 #ifdef NDEBUG
     #define DEBUG_MSG(str) do { } while ( false )
@@ -61,12 +61,15 @@ namespace DllImporter {
     typedef PCWSTR(FAR STDAPICALLTYPE *f_WindowsGetStringRawBuffer)(_In_ HSTRING string, _Out_opt_ UINT32 *length);
     typedef HRESULT(FAR STDAPICALLTYPE *f_WindowsDeleteString)(_In_opt_ HSTRING string);
 
+    typedef HRESULT(FAR STDAPICALLTYPE *f_GetCurrentPackageFullName)(_Inout_ UINT32* packageFullNameLength, _Out_writes_opt_(*packageFullNameLength) PWSTR packageFullName);
+
     static f_SetCurrentProcessExplicitAppUserModelID    SetCurrentProcessExplicitAppUserModelID;
     static f_PropVariantToString                        PropVariantToString;
     static f_RoGetActivationFactory                     RoGetActivationFactory;
     static f_WindowsCreateStringReference               WindowsCreateStringReference;
     static f_WindowsGetStringRawBuffer                  WindowsGetStringRawBuffer;
     static f_WindowsDeleteString                        WindowsDeleteString;
+    static f_GetCurrentPackageFullName                  GetCurrentPackageFullName;
 
 
     template<class T>
@@ -91,9 +94,13 @@ namespace DllImporter {
 										&& SUCCEEDED(loadFunctionFromLibrary(LibComBase, "WindowsCreateStringReference", WindowsCreateStringReference))
 										&& SUCCEEDED(loadFunctionFromLibrary(LibComBase, "WindowsGetStringRawBuffer", WindowsGetStringRawBuffer))
 										&& SUCCEEDED(loadFunctionFromLibrary(LibComBase, "WindowsDeleteString", WindowsDeleteString));
-				return succeded ? S_OK : E_FAIL;
+				if (!succeded) {
+				    return E_FAIL;
+				}
             }
         }
+        HINSTANCE LibKernel32 = LoadLibraryW(L"KERNEL32.DLL");
+        hr = loadFunctionFromLibrary(LibKernel32, "GetCurrentPackageFullName", GetCurrentPackageFullName);
         return hr;
     }
 }
@@ -398,6 +405,9 @@ void WinToast::setShortcutPolicy(_In_ ShortcutPolicy shortcutPolicy) {
 
 bool WinToast::isCompatible() {
 	DllImporter::initialize();
+    if (DllImporter::GetCurrentPackageFullName == nullptr) {
+        return false;
+    }
     return !((DllImporter::SetCurrentProcessExplicitAppUserModelID == nullptr)
         || (DllImporter::PropVariantToString == nullptr)
         || (DllImporter::RoGetActivationFactory == nullptr)
@@ -641,7 +651,7 @@ HRESULT	WinToast::createShellLinkHelper() {
 
 bool WinToast::hasIdentity() {
     UINT32 length;
-    auto err = GetCurrentPackageFullName(&length, nullptr);
+    auto err = DllImporter::GetCurrentPackageFullName(&length, nullptr);
     if (err != ERROR_INSUFFICIENT_BUFFER) {
         return false;
     }
@@ -651,7 +661,7 @@ bool WinToast::hasIdentity() {
         return false;
     }
 
-    err = GetCurrentPackageFullName(&length, fullName);
+    err = DllImporter::GetCurrentPackageFullName(&length, fullName);
     if (err != ERROR_SUCCESS) {
         return  false;
     }
