@@ -12,6 +12,7 @@ class CreateConfiguration {
   final int titleBarTopPadding;
 
   final String userDataFolderWindows;
+  final bool useFullScreen;
 
   const CreateConfiguration({
     this.windowWidth = 1280,
@@ -20,6 +21,7 @@ class CreateConfiguration {
     this.titleBarHeight = 40,
     this.titleBarTopPadding = 0,
     this.userDataFolderWindows = 'webview_window_WebView2',
+    this.useFullScreen = false,
   });
 
   factory CreateConfiguration.platform() {
@@ -35,5 +37,6 @@ class CreateConfiguration {
         "titleBarHeight": titleBarHeight,
         "titleBarTopPadding": titleBarTopPadding,
         "userDataFolderWindows": userDataFolderWindows,
+        "useFullScreen": useFullScreen,
       };
 }

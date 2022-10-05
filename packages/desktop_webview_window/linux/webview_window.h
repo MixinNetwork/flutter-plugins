@@ -19,7 +19,8 @@ class WebviewWindow {
       int64_t window_id,
       std::function<void()> on_close_callback,
       const std::string &title, int width, int height,
-      int title_bar_height
+      int title_bar_height,
+      bool use_fullscreen
   );
 
   virtual ~WebviewWindow();
