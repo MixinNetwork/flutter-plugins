@@ -57,7 +57,8 @@ WebviewWindow::WebviewWindow(
     int width,
     int height,
     int title_bar_height,
-    bool use_fullscreen
+    bool use_fullscreen,
+    bool disable_title_bar
 ) : method_channel_(method_channel),
     window_id_(window_id),
     on_close_callback_(std::move(on_close_callback)),
@@ -90,8 +91,13 @@ WebviewWindow::WebviewWindow(
 
   // initial flutter_view
   g_autoptr(FlDartProject) project = fl_dart_project_new();
-  const char *args[] = {"web_view_title_bar", g_strdup_printf("%ld", window_id), nullptr};
-  fl_dart_project_set_dart_entrypoint_arguments(project, const_cast<char **>(args));
+  if (disable_title_bar) {
+    const char *args[] = {"web_view", g_strdup_printf("%ld", window_id), nullptr};
+    fl_dart_project_set_dart_entrypoint_arguments(project, const_cast<char **>(args));
+  } else {
+    const char *args[] = {"web_view_title_bar", g_strdup_printf("%ld", window_id), nullptr};
+    fl_dart_project_set_dart_entrypoint_arguments(project, const_cast<char **>(args));
+  }
   auto *title_bar = fl_view_new(project);
 
   g_autoptr(FlPluginRegistrar) desktop_webview_window_registrar =

@@ -13,6 +13,7 @@ class CreateConfiguration {
 
   final String userDataFolderWindows;
   final bool useFullScreen;
+  final bool disableTitleBar;
 
   const CreateConfiguration({
     this.windowWidth = 1280,
@@ -22,6 +23,7 @@ class CreateConfiguration {
     this.titleBarTopPadding = 0,
     this.userDataFolderWindows = 'webview_window_WebView2',
     this.useFullScreen = false,
+    this.disableTitleBar = false,
   });
 
   factory CreateConfiguration.platform() {
@@ -34,9 +36,10 @@ class CreateConfiguration {
         "windowWidth": windowWidth,
         "windowHeight": windowHeight,
         "title": title,
-        "titleBarHeight": titleBarHeight,
-        "titleBarTopPadding": titleBarTopPadding,
+        "titleBarHeight": disableTitleBar ? 0 : titleBarHeight,
+        "titleBarTopPadding": disableTitleBar ? 0 : titleBarTopPadding,
         "userDataFolderWindows": userDataFolderWindows,
         "useFullScreen": useFullScreen,
+        "disableTitleBar": disableTitleBar,
       };
 }
