@@ -39,3 +39,6 @@ flutter:
       ios:
         pluginClass: PasteboardPlugin
       web:
+      android:
+        package: one.mixin.pasteboard
+        pluginClass: PasteboardPlugin
