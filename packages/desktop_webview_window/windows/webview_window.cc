@@ -103,6 +103,7 @@ void WebviewWindow::CreateAndShow(const std::wstring &title, int height, int wid
   ShowWindow(web_view_handle, SW_SHOW);
 
   // Create the title bar view.
+  /*
   std::vector<std::string> args = {"web_view_title_bar", std::to_string(window_id_)};
   flutter_action_bar_ = std::make_unique<webview_window::FlutterView>(std::move(args));
   auto title_bar_handle = flutter_action_bar_->GetWindow();
@@ -114,6 +115,7 @@ void WebviewWindow::CreateAndShow(const std::wstring &title, int height, int wid
 
   ShowWindow(hwnd_.get(), SW_SHOW);
   UpdateWindow(hwnd_.get());
+  */
 
 }
 
