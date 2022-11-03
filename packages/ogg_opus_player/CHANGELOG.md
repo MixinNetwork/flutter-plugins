@@ -1,3 +1,7 @@
+## 0.5.0
+* [Linux] break change: remove libogg and libopus shared library, use system library instead.
+* [Linux] support aarch64
+
 ## 0.4.1
 
 [Linux] replace opus static libraries to release version.
