@@ -40,7 +40,7 @@ Show a webview window on your flutter deksktop application.
 ### **linux requirement**
 
 ```shell
-sudo apt install webkit2gtk-4.0
+sudo apt-get install webkit2gtk-4.0
 ```
 
 ### **Windows requirement**
