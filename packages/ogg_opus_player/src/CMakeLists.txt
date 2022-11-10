@@ -27,7 +27,7 @@ if (UNIX AND NOT APPLE)
     target_link_libraries(ogg_opus_player ${CMAKE_CURRENT_SOURCE_DIR}/libs/linux_amd64/libopusenc.a)
     target_link_libraries(ogg_opus_player ${CMAKE_CURRENT_SOURCE_DIR}/libs/linux_amd64/libopusfile.a)
   endif()
-  target_link_libraries(ogg_opus_player -lSDL2 -lopus)
+  target_link_libraries(ogg_opus_player -lSDL2 -lopus -logg)
 elseif (WIN32)
   add_library(ogg STATIC IMPORTED)
   set_target_properties(ogg PROPERTIES
