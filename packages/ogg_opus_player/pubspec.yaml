@@ -48,7 +48,7 @@ flutter:
       macos:
         pluginClass: OggOpusPlayerPlugin
       android:
-        package: one.mixin.ogg_opus_player
+        package: one.mixin.oggOpusPlayer
         pluginClass: OggOpusPlayerPlugin
 
   # To add assets to your plugin package, add an assets section, like this:

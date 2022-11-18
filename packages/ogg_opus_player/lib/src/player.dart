@@ -36,7 +36,7 @@ abstract class OggOpusRecorder {
   factory OggOpusRecorder(String path) {
     if (Platform.isLinux || Platform.isWindows) {
       return OggOpusRecorderFfiImpl(path);
-    } else if (Platform.isIOS || Platform.isMacOS) {
+    } else if (Platform.isIOS || Platform.isMacOS || Platform.isAndroid) {
       return OggOpusRecorderPluginImpl(path);
     }
     throw UnsupportedError('Platform not supported');

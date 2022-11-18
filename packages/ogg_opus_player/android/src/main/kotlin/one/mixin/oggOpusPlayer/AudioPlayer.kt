@@ -1,7 +1,6 @@
-package one.mixin.ogg_opus_player
+package one.mixin.oggOpusPlayer
 
 import android.content.Context
-import android.media.AudioManager
 import android.util.Log
 import com.google.android.exoplayer2.*
 import com.google.android.exoplayer2.audio.AudioAttributes

@@ -1,12 +1,14 @@
-package one.mixin.ogg_opus_player
+package one.mixin.oggOpusPlayer
 
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.SystemClock
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
+import java.io.File
 
 /** OggOpusPlayerPlugin */
 class OggOpusPlayerPlugin : FlutterPlugin, MethodCallHandler {
@@ -61,6 +63,59 @@ class OggOpusPlayerPlugin : FlutterPlugin, MethodCallHandler {
                 (call.arguments as? Int)?.let {
                     players[it]?.destroy()
                     players.remove(it)
+                }
+                result.success(null)
+            }
+            "createRecorder" -> {
+                val path = call.arguments as String
+                val id = generatePlayerId()
+                val recorder =
+                    OpusAudioRecorder(context, File(path), object : OpusAudioRecorder.Callback {
+                        override fun onCancel() {
+                            channel.invokeMethod(
+                                "onRecorderCanceled", mapOf(
+                                    "recorderId" to id,
+                                    "reason" to 0,
+                                )
+                            )
+                        }
+
+                        override fun sendAudio(file: File, duration: Long, waveForm: ByteArray) {
+                            channel.invokeMethod(
+                                "onRecorderFinished", mapOf(
+                                    "recorderId" to id,
+                                    "duration" to duration,
+                                    "waveform" to waveForm,
+                                )
+                            )
+                        }
+                    })
+                recorders[id] = recorder
+                result.success(id)
+            }
+            "startRecord" -> {
+                // check has permission
+                val hasPermission =
+                    context.checkCallingOrSelfPermission(android.Manifest.permission.RECORD_AUDIO)
+                if (hasPermission == PackageManager.PERMISSION_DENIED) {
+                    result.error("PERMISSION_DENIED", "RECORD_AUDIO", null)
+                    return
+                }
+                (call.arguments as? Int)?.let {
+                    recorders[it]?.startRecording()
+                }
+                result.success(null)
+            }
+            "stopRecord" -> {
+                (call.arguments as? Int)?.let {
+                    recorders[it]?.stopRecording(AudioEndStatus.SEND)
+                }
+                result.success(null)
+            }
+            "destroyRecorder" -> {
+                (call.arguments as? Int)?.let {
+                    recorders[it]?.stopRecording(AudioEndStatus.CANCEL)
+                    recorders.remove(it)
                 }
                 result.success(null)
             }

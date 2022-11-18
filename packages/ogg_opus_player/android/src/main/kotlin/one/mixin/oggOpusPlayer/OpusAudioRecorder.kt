@@ -1,4 +1,4 @@
-package one.mixin.ogg_opus_player
+package one.mixin.oggOpusPlayer
 
 import android.annotation.SuppressLint
 import android.content.Context
@@ -11,9 +11,10 @@ import android.telephony.PhoneStateListener
 import android.telephony.TelephonyManager
 import java.io.File
 
-class OpusAudioRecorder private constructor(
+class OpusAudioRecorder constructor(
     ctx: Context,
-    private val recordingAudioFile: File
+    private val recordingAudioFile: File,
+    private val callback: Callback? = null
 ) {
     companion object {
         private const val SAMPLE_RATE = 16000
@@ -26,6 +27,14 @@ class OpusAudioRecorder private constructor(
         private const val MAX_RECORD_DURATION = 60000
 
         var state: Int = STATE_NOT_INIT
+
+        init {
+            try {
+                System.loadLibrary("ogg_opus_player_plugin")
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
 
     }
 
@@ -55,7 +64,6 @@ class OpusAudioRecorder private constructor(
         }
     }
 
-    private var callback: Callback? = null
 
     init {
         try {
@@ -190,8 +198,7 @@ class OpusAudioRecorder private constructor(
         recordQueue.postRunnable(recordRunnable)
     }
 
-    fun startRecording(callback: Callback) {
-        this.callback = callback
+    fun startRecording() {
         recordQueue.postRunnable(recodeStartRunnable)
     }
 
@@ -215,7 +222,6 @@ class OpusAudioRecorder private constructor(
     }
 
     fun stop() {
-        callback = null
         stopRecording(AudioEndStatus.CANCEL)
     }
 
@@ -242,7 +248,6 @@ class OpusAudioRecorder private constructor(
                                 waveForm
                             )
                         }
-                        callback = null
                     }
                 }
             )
