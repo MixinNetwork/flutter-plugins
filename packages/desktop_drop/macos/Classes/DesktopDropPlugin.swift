@@ -1,10 +1,26 @@
 import Cocoa
 import FlutterMacOS
 
+private func findFlutterViewController(_ viewController: NSViewController?) -> FlutterViewController? {
+  guard let vc = viewController else {
+    return nil
+  }
+  if let fvc = vc as? FlutterViewController {
+    return fvc
+  }
+  for child in vc.children {
+    let fvc = findFlutterViewController(child)
+    if fvc != nil {
+      return fvc
+    }
+  }
+  return nil
+}
+
 public class DesktopDropPlugin: NSObject, FlutterPlugin {
   public static func register(with registrar: FlutterPluginRegistrar) {
     guard let app = NSApplication.shared.delegate as? FlutterAppDelegate else { return }
-    guard let vc = app.mainFlutterWindow.contentViewController else { return }
+    guard let vc = findFlutterViewController(app.mainFlutterWindow.contentViewController) else { return }
 
     let channel = FlutterMethodChannel(name: "desktop_drop", binaryMessenger: registrar.messenger)
     let instance = DesktopDropPlugin()
