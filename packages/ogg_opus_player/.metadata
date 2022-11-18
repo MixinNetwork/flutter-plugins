@@ -4,8 +4,8 @@
 # This file should be version controlled.
 
 version:
-  revision: 2015143fbf80a1fefd3a222f1d6a264b4d68003d
-  channel: master
+  revision: 52b3dc25f6471c27b2144594abb11c741cb88f57
+  channel: stable
 
 project_type: plugin_ffi
 
@@ -13,11 +13,23 @@ project_type: plugin_ffi
 migration:
   platforms:
     - platform: root
-      create_revision: 2015143fbf80a1fefd3a222f1d6a264b4d68003d
-      base_revision: 2015143fbf80a1fefd3a222f1d6a264b4d68003d
+      create_revision: 52b3dc25f6471c27b2144594abb11c741cb88f57
+      base_revision: 52b3dc25f6471c27b2144594abb11c741cb88f57
+    - platform: android
+      create_revision: 52b3dc25f6471c27b2144594abb11c741cb88f57
+      base_revision: 52b3dc25f6471c27b2144594abb11c741cb88f57
+    - platform: ios
+      create_revision: 52b3dc25f6471c27b2144594abb11c741cb88f57
+      base_revision: 52b3dc25f6471c27b2144594abb11c741cb88f57
     - platform: linux
-      create_revision: 2015143fbf80a1fefd3a222f1d6a264b4d68003d
-      base_revision: 2015143fbf80a1fefd3a222f1d6a264b4d68003d
+      create_revision: 52b3dc25f6471c27b2144594abb11c741cb88f57
+      base_revision: 52b3dc25f6471c27b2144594abb11c741cb88f57
+    - platform: macos
+      create_revision: 52b3dc25f6471c27b2144594abb11c741cb88f57
+      base_revision: 52b3dc25f6471c27b2144594abb11c741cb88f57
+    - platform: windows
+      create_revision: 52b3dc25f6471c27b2144594abb11c741cb88f57
+      base_revision: 52b3dc25f6471c27b2144594abb11c741cb88f57
 
   # User provided section
 

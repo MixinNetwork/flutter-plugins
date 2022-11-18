@@ -10,7 +10,7 @@ abstract class OggOpusPlayer {
   OggOpusPlayer.create();
 
   factory OggOpusPlayer(String path) {
-    if (Platform.isIOS || Platform.isMacOS) {
+    if (Platform.isIOS || Platform.isMacOS || Platform.isAndroid) {
       return OggOpusPlayerPluginImpl(path);
     } else if (Platform.isLinux || Platform.isWindows) {
       return OggOpusPlayerFfiImpl(path);

@@ -37,8 +37,8 @@ void _initChannelIfNeeded() {
   _channel.setMethodCallHandler((call) async {
     try {
       return await _handleMethodCall(call);
-    } catch (e) {
-      debugPrint("_handleMethodCall: $e");
+    } catch (error, stacktrace) {
+      debugPrint("_handleMethodCall: $error $stacktrace");
     }
   });
 }
@@ -109,8 +109,8 @@ class OggOpusPlayerPluginImpl extends OggOpusPlayer {
         _playerId = await _channel.invokeMethod("create", _path);
         _players[_playerId] = this;
         _playerState.value = PlayerState.paused;
-      } catch (e) {
-        debugPrint('create play failed. error: $e');
+      } catch (error, stacktrace) {
+        debugPrint('create play failed. error: $error $stacktrace');
         _playerState.value = PlayerState.error;
       }
       _createCompleter.complete();

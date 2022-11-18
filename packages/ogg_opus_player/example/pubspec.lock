@@ -127,7 +127,7 @@ packages:
       path: ".."
       relative: true
     source: path
-    version: "0.5.0"
+    version: "0.5.1"
   path:
     dependency: transitive
     description:
@@ -244,7 +244,7 @@ packages:
       name: system_clock
       url: "https://pub.dartlang.org"
     source: hosted
-    version: "1.2.0"
+    version: "2.0.0"
   term_glyph:
     dependency: transitive
     description:
