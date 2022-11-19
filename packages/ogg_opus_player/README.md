@@ -4,12 +4,13 @@
 
 a ogg opus file player for flutter.
 
-| platform  |       | required os version |
-|-----------|-------|---------------------|
-| iOS       | ✅     | 10.0                |
-| macOS     | ✅     | 10.12               |
-| Windows   | ✅     |                     |
-| Linux     | ✅     |                     |
+| platform |       | required os version |
+|----------|-------|---------------------|
+| iOS      | ✅     | 10.0                |
+| macOS    | ✅     | 10.12               |
+| Windows  | ✅     |                     |
+| Linux    | ✅     |                     |
+| Android  | ✅     | minSdk 21           |
 
 ## Getting Started
 
@@ -45,7 +46,7 @@ sudo apt-get install libopus-dev
 
 ## iOS/macOS required
 
-Record voice need update your app's Info.plist NSMicrophoneUsageDescription key with a string value 
+Record voice need update your app's Info.plist NSMicrophoneUsageDescription key with a string value
 explaining to the user how the app uses this data.
 
 For example:

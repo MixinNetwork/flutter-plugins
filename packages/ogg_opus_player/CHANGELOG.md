@@ -1,3 +1,6 @@
+## 0.6.0
+* add Android support
+
 ## 0.5.1
 * [Linux] libogg_opus_player.so add link to libogg
 
