@@ -4,6 +4,8 @@ This repo contains the source code for Flutter plugins which used
 in [Mixin Messenger Desktop](https://github.com/MixinNetwork/flutter-app). Check the `packages` directory for all
 plugins.
 
+Any questions join the [Mixin Flutter group](https://mixin.one/codes/f07808ed-552d-4d8c-9778-dd57e5caac34)
+
 ## Plugins
 
 | Plugin                                                      | Pub                                                                                                                        | Likes                                                                                                                      | Platforms                  |
