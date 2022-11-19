@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.4
+* [Android] update to later version of kotlin(1.5.2). [#155](https://github.com/MixinNetwork/flutter-plugins/pull/155) by [Cal Holloway](https://github.com/CalHoll)
+* [macOS] Fix broken gestures when used with modified MainFlutterWindow. [#162](https://github.com/MixinNetwork/flutter-plugins/pull/162) by [Josh Matthews](https://github.com/jmatth) 
+
 ## 0.3.3
 
 * Fix dragging multiple files at once from Apple Music does not work well. [#72](https://github.com/MixinNetwork/flutter-plugins/issues/72)
