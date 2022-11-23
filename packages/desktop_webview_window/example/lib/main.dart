@@ -28,6 +28,11 @@ class _MyAppState extends State<MyApp> {
 
   bool? _webviewAvailable;
 
+  late Webview webview;
+
+  final executeJavaScriptController = TextEditingController(text: "saySomethingNice('Something Nice :)')");
+  final webMessageController = TextEditingController(text: "ImportantValue 5");
+
   @override
   void initState() {
     super.initState();
@@ -118,7 +123,31 @@ class _MyAppState extends State<MyApp> {
                     debugPrint('clear complete');
                   },
                   child: const Text('Clear all'),
-                )
+                ),
+                const SizedBox(height: 16),
+                TextButton(
+                  onPressed: _executeJavaScript,
+                  child: const Text('execute JavaScript'),
+                ),
+                TextFormField(
+                  controller: executeJavaScriptController,
+                  decoration: const InputDecoration(
+                    border: UnderlineInputBorder(),
+                    labelText: 'Enter javascript command',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextButton(
+                  onPressed: _postWebMessage,
+                  child: const Text('post webmessage as string'),
+                ),
+                TextFormField(
+                  controller: webMessageController,
+                  decoration: const InputDecoration(
+                    border: UnderlineInputBorder(),
+                    labelText: 'Enter a webmessage',
+                  ),
+                ),
               ],
             ),
           ),
@@ -128,10 +157,12 @@ class _MyAppState extends State<MyApp> {
   }
 
   void _onTap() async {
-    final webview = await WebviewWindow.create(
+    //final webview = await WebviewWindow.create(
+    webview = await WebviewWindow.create(
       configuration: CreateConfiguration(
         userDataFolderWindows: await _getWebViewPath(),
         titleBarTopPadding: Platform.isMacOS ? 20 : 0,
+        title: "Pizza Hawai ist ein Vebrechen gegen die Menschlichkeit!",
       ),
     );
     webview
@@ -146,6 +177,9 @@ class _MyAppState extends State<MyApp> {
           webview.close();
         }
       })
+      ..addOnWebMessageReceivedCallback((msg) {
+        debugPrint('received web message: $msg');
+      })
       ..onClose.whenComplete(() {
         debugPrint("on close");
       });
@@ -158,6 +192,19 @@ class _MyAppState extends State<MyApp> {
         debugPrint('evaluateJavaScript error: $e \n $javaScript');
       }
     }
+  }
+
+  void _executeJavaScript() async {
+    var cmd = executeJavaScriptController.text.toString();
+    debugPrint('execute JavaScript at Website: $cmd');
+    var ret = await webview.evaluateJavaScript(cmd);
+    debugPrint('received Answer from Website: $ret');
+  }
+
+  void _postWebMessage() async {
+    var msg = webMessageController.text.toString();
+    debugPrint('send webmessage to Website: $msg');
+    webview.postWebMessageAsString(msg);
   }
 }
 
