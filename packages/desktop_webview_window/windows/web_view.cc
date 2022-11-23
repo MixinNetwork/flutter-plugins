@@ -291,10 +291,25 @@ void WebView::PostWebMessageAsString(const std::wstring &webmessage,
     if (webview_) {
         if (webview_->PostWebMessageAsString(
             webmessage.c_str()) == NOERROR) {
-            //completer->Success(flutter::EncodableValue(wide_to_utf8(L"Hat funktioniert")));
             completer->Success();
         } else {
             completer->Error("1000", "could not post webmessage as string");
+        }
+    }
+    else {
+        completer->Error("0", "webview not created");
+    }
+}
+
+void WebView::PostWebMessageAsJSON(const std::wstring& webmessage,
+    std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> completer) {
+    if (webview_) {
+        if (webview_->PostWebMessageAsJson(
+            webmessage.c_str()) == NOERROR) {
+            completer->Success();
+        }
+        else {
+            completer->Error("1000", "could not post webmessage as json");
         }
     }
     else {
