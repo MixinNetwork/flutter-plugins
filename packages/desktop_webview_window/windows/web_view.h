@@ -52,6 +52,9 @@ class WebView {
   void ExecuteJavaScript(const std::wstring &javaScript,
                          std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> completer);
 
+  void PostWebMessageAsString(const std::wstring& webmessage,
+          std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> completer);
+
  private:
   wil::unique_hwnd view_window_;
 

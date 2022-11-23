@@ -26,6 +26,8 @@ class WebviewImpl extends Webview {
 
   final Set<OnUrlRequestCallback> _onUrlRequestCallbacks = {};
 
+  final Set<OnWebMessageReceivedCallback> _onWebMessageReceivedCallbacks = {};
+
   WebviewImpl(this.viewId, this.channel);
 
   @override
@@ -61,6 +63,12 @@ class WebviewImpl extends Webview {
   void notifyUrlChanged(String url) {
     for (final callback in _onUrlRequestCallbacks) {
       callback(url);
+    }
+  }
+
+  void notifyWebMessageReceived(String message) {
+    for (final callback in _onWebMessageReceivedCallbacks) {
+      callback(message);
     }
   }
 
@@ -193,6 +201,16 @@ class WebviewImpl extends Webview {
   }
 
   @override
+  void addOnWebMessageReceivedCallback(OnWebMessageReceivedCallback callback) {
+    _onWebMessageReceivedCallbacks.add(callback);
+  }
+
+  @override
+  void removeOnWebMessageReceivedCallback(OnWebMessageReceivedCallback callback) {
+    _onWebMessageReceivedCallbacks.remove(callback);
+  }
+
+  @override
   void close() {
     if (_closed) {
       return;
@@ -210,5 +228,14 @@ class WebviewImpl extends Webview {
       return result;
     }
     return json.encode(result);
+  }
+
+  @override
+  void postWebMessageAsString(String msg) async {
+    //await channel.invokeMethod("postWebMessageAsString", {
+    channel.invokeMethod("postWebMessageAsString", {
+      "viewId": viewId,
+      "webMessageString": msg,
+    });
   }
 }

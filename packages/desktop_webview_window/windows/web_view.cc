@@ -94,6 +94,7 @@ void WebView::OnWebviewControllerCreated() {
   settings->put_IsZoomControlEnabled(false);
   settings->put_AreDefaultContextMenusEnabled(false);
   settings->put_IsStatusBarEnabled(false);
+  settings->put_IsWebMessageEnabled(true);
 
   ICoreWebView2Settings2 *settings2;
   auto hr = settings->QueryInterface(IID_PPV_ARGS(&settings2));
@@ -166,21 +167,27 @@ void WebView::OnWebviewControllerCreated() {
             return S_OK;
           }
       ).Get(), nullptr);
+  webview_->add_WebMessageReceived(
+      Callback<ICoreWebView2WebMessageReceivedEventHandler>(
+          [this](ICoreWebView2 *sender, ICoreWebView2WebMessageReceivedEventArgs *args) {
 
+            PWSTR msg;
+            args->TryGetWebMessageAsString(&msg);
+            /*std::wstring str(msg);
+            std::cout << "message: " << wide_to_utf8(str) << std::endl;*/
 
+            method_channel_->InvokeMethod(
+                "onWebMessageReceived",
+                std::make_unique<flutter::EncodableValue>(flutter::EncodableMap{
+                    {flutter::EncodableValue("id"), flutter::EncodableValue(web_view_id_)},
+                    {flutter::EncodableValue("msg"), flutter::EncodableValue(wide_to_utf8(std::wstring(msg)))},
+                    }));
 
-//  webview_->add_WebMessageReceived(
-//      Callback<ICoreWebView2WebMessageReceivedEventHandler>(
-//          [](ICoreWebView2 *webview, ICoreWebView2WebMessageReceivedEventArgs *args) {
-//            PWSTR message;
-//
-//            args->TryGetWebMessageAsString(&message);
-//            std::wstring str(message);
-//            std::cout << "message: " << wide_to_utf8(str) << std::endl;
-//            CoTaskMemFree(message);
-//            return S_OK;
-//          }
-//      ).Get(), nullptr);
+            CoTaskMemFree(msg);
+
+            return S_OK;
+          }
+      ).Get(), nullptr);
 
 }
 
@@ -277,6 +284,22 @@ void WebView::ExecuteJavaScript(const std::wstring &javaScript,
   } else {
     completer->Error("0", "webview not created");
   }
+}
+
+void WebView::PostWebMessageAsString(const std::wstring &webmessage,
+    std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> completer) {
+    if (webview_) {
+        if (webview_->PostWebMessageAsString(
+            webmessage.c_str()) == NOERROR) {
+            //completer->Success(flutter::EncodableValue(wide_to_utf8(L"Hat funktioniert")));
+            completer->Success();
+        } else {
+            completer->Error("1000", "could not post webmessage as string");
+        }
+    }
+    else {
+        completer->Error("0", "webview not created");
+    }
 }
 
 WebView::~WebView() {
