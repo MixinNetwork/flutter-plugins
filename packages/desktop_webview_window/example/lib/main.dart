@@ -31,7 +31,8 @@ class _MyAppState extends State<MyApp> {
   late Webview webview;
 
   final executeJavaScriptController = TextEditingController(text: "saySomethingNice('Something Nice :)')");
-  final webMessageController = TextEditingController(text: "ImportantValue 5");
+  final webMessageControllerString = TextEditingController(text: "ImportantValue 5");
+  final webMessageControllerJSON = TextEditingController(text: "{\"ImportantValue\": \"5\"}");
 
   @override
   void initState() {
@@ -138,14 +139,26 @@ class _MyAppState extends State<MyApp> {
                 ),
                 const SizedBox(height: 16),
                 TextButton(
-                  onPressed: _postWebMessage,
+                  onPressed: _postWebMessageAsString,
                   child: const Text('post webmessage as string'),
                 ),
                 TextFormField(
-                  controller: webMessageController,
+                  controller: webMessageControllerString,
                   decoration: const InputDecoration(
                     border: UnderlineInputBorder(),
-                    labelText: 'Enter a webmessage',
+                    labelText: 'Enter a webmessage as String',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextButton(
+                  onPressed: _postWebMessageAsJSON,
+                  child: const Text('post webmessage as JSON'),
+                ),
+                TextFormField(
+                  controller: webMessageControllerJSON,
+                  decoration: const InputDecoration(
+                    border: UnderlineInputBorder(),
+                    labelText: 'Enter a webmessage as JSON',
                   ),
                 ),
               ],
@@ -201,10 +214,16 @@ class _MyAppState extends State<MyApp> {
     debugPrint('received Answer from Website: $ret');
   }
 
-  void _postWebMessage() async {
-    var msg = webMessageController.text.toString();
-    debugPrint('send webmessage to Website: $msg');
+  void _postWebMessageAsString() async {
+    var msg = webMessageControllerString.text.toString();
+    debugPrint('send webmessage as String to Website: $msg');
     webview.postWebMessageAsString(msg);
+  }
+
+  void _postWebMessageAsJSON() async {
+    var msg = webMessageControllerJSON.text.toString();
+    debugPrint('send webmessage as JSON to Website: $msg');
+    webview.postWebMessageAsJSON(msg);
   }
 }
 
