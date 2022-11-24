@@ -23,7 +23,7 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   final TextEditingController _controller = TextEditingController(
-    text: 'https://example.com',
+    text: 'C:/Users/lheinze/Desktop/TestHTML/testHTML.html',
   );
 
   bool? _webviewAvailable;
