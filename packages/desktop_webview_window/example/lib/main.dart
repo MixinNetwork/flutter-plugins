@@ -5,6 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import 'package:win32/win32.dart';
+
+import 'package:ffi/ffi.dart';
+import 'dart:ffi' as ffi;
+
 void main(List<String> args) {
   debugPrint('args: $args');
   if (runWebViewTitleBarWidget(args)) {
@@ -161,6 +166,11 @@ class _MyAppState extends State<MyApp> {
                     labelText: 'Enter a webmessage as JSON',
                   ),
                 ),
+                const SizedBox(height: 16),
+                TextButton(
+                  onPressed: _hideMainWindow,
+                  child: const Text('Hide Main Window'),
+                ),
               ],
             ),
           ),
@@ -176,6 +186,7 @@ class _MyAppState extends State<MyApp> {
         userDataFolderWindows: await _getWebViewPath(),
         titleBarTopPadding: Platform.isMacOS ? 20 : 0,
         title: "Pizza Hawai ist ein Vebrechen gegen die Menschlichkeit!",
+        //titleBarHeight: 200,
       ),
     );
     webview
@@ -191,7 +202,12 @@ class _MyAppState extends State<MyApp> {
         }
       })
       ..addOnWebMessageReceivedCallback((msg) {
-        debugPrint('received web message: $msg');
+        if(msg == "ShowWindow") {
+          debugPrint('Show Main Window');
+          _showMainWindow();
+        } else {
+          debugPrint('received web message: $msg');
+        }
       })
       ..onClose.whenComplete(() {
         debugPrint("on close");
@@ -224,6 +240,20 @@ class _MyAppState extends State<MyApp> {
     var msg = webMessageControllerJSON.text.toString();
     debugPrint('send webmessage as JSON to Website: $msg');
     webview.postWebMessageAsJSON(msg);
+  }
+
+  void _hideMainWindow() async {
+    final hwnd = FindWindow(ffi.nullptr, 'webview_window_example'.toNativeUtf16());
+    //final hwnd = GetForegroundWindow();
+
+    ShowWindow(hwnd, SW_HIDE);
+  }
+
+  void _showMainWindow() async {
+    final hwnd = FindWindow(ffi.nullptr, 'webview_window_example'.toNativeUtf16());
+    //final hwnd = GetForegroundWindow();
+
+    ShowWindow(hwnd, SW_SHOW);
   }
 }
 
