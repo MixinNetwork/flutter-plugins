@@ -32,7 +32,7 @@ void main() {
     d('debug message');
     i('info message');
     w('warning message');
-    e('error message');
+    e('error message', "Error", StackTrace.current);
     wtf('wtf message');
   });
 

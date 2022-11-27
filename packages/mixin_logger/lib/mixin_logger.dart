@@ -90,8 +90,15 @@ void w(String message) {
   _print(message, _LogLevel.warning);
 }
 
-void e(String message) {
-  _print(message, _LogLevel.error);
+void e(String message, [Object? error, StackTrace? stackTrace]) {
+  var messageWithStack = message;
+  if (error != null) {
+    messageWithStack += ' ($error)';
+  }
+  if (stackTrace != null) {
+    messageWithStack += ':\n$stackTrace';
+  }
+  _print(messageWithStack, _LogLevel.error);
 }
 
 void wtf(String message) {
