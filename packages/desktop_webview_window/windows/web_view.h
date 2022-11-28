@@ -55,7 +55,7 @@ class WebView {
   void PostWebMessageAsString(const std::wstring &webmessage,
           std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> completer);
 
-  void PostWebMessageAsJSON(const std::wstring &webmessage,
+  void PostWebMessageAsJson(const std::wstring &webmessage,
       std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> completer);
 
  private:

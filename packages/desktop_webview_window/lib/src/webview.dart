@@ -15,7 +15,8 @@ typedef OnHistoryChangedCallback = void Function(
 typedef OnUrlRequestCallback = void Function(String url);
 
 /// Callback when WebView receives a web message
-typedef OnWebMessageReceivedCallback = void Function(String url);
+/// [message] constains the webmessage
+typedef OnWebMessageReceivedCallback = void Function(String message);
 
 abstract class Webview {
   Future<void> get onClose;
@@ -78,9 +79,9 @@ abstract class Webview {
   Future<String?> evaluateJavaScript(String javaScript);
 
   /// post a web message as String to the top level document in this WebView
-  void postWebMessageAsString(String msg);
+  void postWebMessageAsString(String webMessage);
 
   /// post a web message as JSON to the top level document in this WebView
-  void postWebMessageAsJSON(String msg);
+  void postWebMessageAsJson(String webMessage);
 
 }

@@ -170,15 +170,15 @@ void WebView::OnWebviewControllerCreated() {
   webview_->add_WebMessageReceived(
       Callback<ICoreWebView2WebMessageReceivedEventHandler>(
           [this](ICoreWebView2 *sender, ICoreWebView2WebMessageReceivedEventArgs *args) {
-            PWSTR msg;
-            args->TryGetWebMessageAsString(&msg);
+            PWSTR message;
+            args->TryGetWebMessageAsString(&message);
             method_channel_->InvokeMethod(
                 "onWebMessageReceived",
                 std::make_unique<flutter::EncodableValue>(flutter::EncodableMap{
                     {flutter::EncodableValue("id"), flutter::EncodableValue(web_view_id_)},
-                    {flutter::EncodableValue("msg"), flutter::EncodableValue(wide_to_utf8(std::wstring(msg)))},
+                    {flutter::EncodableValue("message"), flutter::EncodableValue(wide_to_utf8(std::wstring(message)))},
                     }));
-            CoTaskMemFree(msg);
+            CoTaskMemFree(message);
             return S_OK;
           }
       ).Get(), nullptr);
@@ -295,7 +295,7 @@ void WebView::PostWebMessageAsString(const std::wstring &webmessage,
     }
 }
 
-void WebView::PostWebMessageAsJSON(const std::wstring& webmessage,
+void WebView::PostWebMessageAsJson(const std::wstring& webmessage,
     std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> completer) {
     if (webview_) {
         if (webview_->PostWebMessageAsJson(
