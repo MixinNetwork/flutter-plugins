@@ -232,7 +232,7 @@ void WebviewWindowPlugin::HandleMethodCall(
           return;
       }
       windows_[window_id]->GetWebView()->PostWebMessageAsJSON(utf8_to_wide(webmessage), std::move(result));
-      } else {
+  } else {
     result->NotImplemented();
   }
 }
