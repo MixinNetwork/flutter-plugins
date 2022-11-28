@@ -145,6 +145,14 @@ class WebviewWindow {
           'url': url,
         });
         break;
+      case "onWebMessageReceived":
+        final msg = args['msg'] as String;
+        webview.notifyWebMessageReceived(msg);
+        await _otherIsolateMessageHandler.invokeMethod('onWebMessageReceived', {
+          'webViewId': viewId,
+          'msg': msg,
+        });
+        break;
       case "onNavigationCompleted":
         webview.onNavigationCompleted();
         await _otherIsolateMessageHandler
