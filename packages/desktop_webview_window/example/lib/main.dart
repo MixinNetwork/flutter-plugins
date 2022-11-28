@@ -1,14 +1,12 @@
+import 'dart:ffi' as ffi;
 import 'dart:io';
 
 import 'package:desktop_webview_window/desktop_webview_window.dart';
+import 'package:ffi/ffi.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
-
 import 'package:win32/win32.dart';
-
-import 'package:ffi/ffi.dart';
-import 'dart:ffi' as ffi;
 
 void main(List<String> args) {
   debugPrint('args: $args');
@@ -38,6 +36,8 @@ class _MyAppState extends State<MyApp> {
   final executeJavaScriptController = TextEditingController(text: "saySomethingNice('Something Nice :)')");
   final webMessageControllerString = TextEditingController(text: "ImportantValue 5");
   final webMessageControllerJSON = TextEditingController(text: "{\"ImportantValue\": \"5\"}");
+
+  bool hideMainWindow = false;
 
   @override
   void initState() {
@@ -115,6 +115,23 @@ class _MyAppState extends State<MyApp> {
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 TextField(controller: _controller),
+                Align(
+                  alignment: Alignment.center,
+                  child: Container(
+                    width: 200,
+                    child: CheckboxListTile(
+                      title: Text("hide main window"),
+                      tristate: false,
+                      value: hideMainWindow,
+                      onChanged: (newValue) {
+                        setState(() {
+                          hideMainWindow = newValue!;
+                        });
+                      },
+                      controlAffinity: ListTileControlAffinity.leading, //  <-- leading Checkbox
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 16),
                 TextButton(
                   onPressed: _webviewAvailable != true ? null : _onTap,
@@ -202,7 +219,7 @@ class _MyAppState extends State<MyApp> {
         }
       })
       ..addOnWebMessageReceivedCallback((msg) {
-        if(msg == "ShowWindow") {
+        if (msg == "ShowWindow") {
           debugPrint('Show Main Window');
           _showMainWindow();
         } else {
@@ -212,6 +229,14 @@ class _MyAppState extends State<MyApp> {
       ..onClose.whenComplete(() {
         debugPrint("on close");
       });
+
+    if(hideMainWindow) {
+      final hwnd = FindWindow(ffi.nullptr, 'webview_window_example'.toNativeUtf16());
+      //final hwnd = GetForegroundWindow();
+
+      ShowWindow(hwnd, SW_HIDE);
+    }
+
     await Future.delayed(const Duration(seconds: 2));
     for (final javaScript in _javaScriptToEval) {
       try {
