@@ -1,9 +1,12 @@
+import 'dart:ffi' as ffi;
 import 'dart:io';
 
 import 'package:desktop_webview_window/desktop_webview_window.dart';
+import 'package:ffi/ffi.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:win32/win32.dart';
 
 void main(List<String> args) {
   debugPrint('args: $args');
@@ -23,7 +26,7 @@ class MyApp extends StatefulWidget {
 
 class _MyAppState extends State<MyApp> {
   final TextEditingController _controller = TextEditingController(
-    text: 'https://example.com',
+    text: 'C:/Users/lheinze/Desktop/TestHTML/testHTML.html',
   );
 
   bool? _webviewAvailable;
@@ -33,6 +36,8 @@ class _MyAppState extends State<MyApp> {
   final executeJavaScriptController = TextEditingController(text: "saySomethingNice('Something Nice :)')");
   final webMessageControllerString = TextEditingController(text: "ImportantValue 5");
   final webMessageControllerJSON = TextEditingController(text: "{\"ImportantValue\": \"5\"}");
+
+  bool hideMainWindow = false;
 
   @override
   void initState() {
@@ -110,6 +115,23 @@ class _MyAppState extends State<MyApp> {
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 TextField(controller: _controller),
+                Align(
+                  alignment: Alignment.center,
+                  child: Container(
+                    width: 200,
+                    child: CheckboxListTile(
+                      title: Text("hide main window"),
+                      tristate: false,
+                      value: hideMainWindow,
+                      onChanged: (newValue) {
+                        setState(() {
+                          hideMainWindow = newValue!;
+                        });
+                      },
+                      controlAffinity: ListTileControlAffinity.leading, //  <-- leading Checkbox
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 16),
                 TextButton(
                   onPressed: _webviewAvailable != true ? null : _onTap,
@@ -151,7 +173,7 @@ class _MyAppState extends State<MyApp> {
                 ),
                 const SizedBox(height: 16),
                 TextButton(
-                  onPressed: _postWebMessageAsJSON,
+                  onPressed: _postWebMessageAsJson,
                   child: const Text('post webmessage as JSON'),
                 ),
                 TextFormField(
@@ -160,6 +182,11 @@ class _MyAppState extends State<MyApp> {
                     border: UnderlineInputBorder(),
                     labelText: 'Enter a webmessage as JSON',
                   ),
+                ),
+                const SizedBox(height: 16),
+                TextButton(
+                  onPressed: _hideMainWindow,
+                  child: const Text('Hide Main Window'),
                 ),
               ],
             ),
@@ -176,6 +203,7 @@ class _MyAppState extends State<MyApp> {
         userDataFolderWindows: await _getWebViewPath(),
         titleBarTopPadding: Platform.isMacOS ? 20 : 0,
         title: "Pizza Hawai ist ein Vebrechen gegen die Menschlichkeit!",
+        titleBarHeight: 0,
       ),
     );
     webview
@@ -191,11 +219,24 @@ class _MyAppState extends State<MyApp> {
         }
       })
       ..addOnWebMessageReceivedCallback((msg) {
-        debugPrint('received web message: $msg');
+        if (msg == "ShowWindow") {
+          debugPrint('Show Main Window');
+          _showMainWindow();
+        } else {
+          debugPrint('received web message: $msg');
+        }
       })
       ..onClose.whenComplete(() {
         debugPrint("on close");
       });
+
+    if(hideMainWindow) {
+      final hwnd = FindWindow(ffi.nullptr, 'webview_window_example'.toNativeUtf16());
+      //final hwnd = GetForegroundWindow();
+
+      ShowWindow(hwnd, SW_HIDE);
+    }
+
     await Future.delayed(const Duration(seconds: 2));
     for (final javaScript in _javaScriptToEval) {
       try {
@@ -220,10 +261,24 @@ class _MyAppState extends State<MyApp> {
     webview.postWebMessageAsString(msg);
   }
 
-  void _postWebMessageAsJSON() async {
+  void _postWebMessageAsJson() async {
     var msg = webMessageControllerJSON.text.toString();
     debugPrint('send webmessage as JSON to Website: $msg');
-    webview.postWebMessageAsJSON(msg);
+    webview.postWebMessageAsJson(msg);
+  }
+
+  void _hideMainWindow() async {
+    final hwnd = FindWindow(ffi.nullptr, 'webview_window_example'.toNativeUtf16());
+    //final hwnd = GetForegroundWindow();
+
+    ShowWindow(hwnd, SW_HIDE);
+  }
+
+  void _showMainWindow() async {
+    final hwnd = FindWindow(ffi.nullptr, 'webview_window_example'.toNativeUtf16());
+    //final hwnd = GetForegroundWindow();
+
+    ShowWindow(hwnd, SW_SHOW);
   }
 }
 

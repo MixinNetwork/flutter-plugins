@@ -288,13 +288,13 @@ packages:
     source: hosted
     version: "2.1.4"
   win32:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: win32
-      sha256: d13ac5deea7327f027b3b97ee19ee210f68256ecf3f1a304bcfb992ee947637c
+      sha256: "6b75ac2ddd42f5c226fdaf4498a2b04071c06f1f2b8f7ab1c3f77cc7f2285ff1"
       url: "https://pub.dev"
     source: hosted
-    version: "3.1.1"
+    version: "2.7.0"
   xdg_directories:
     dependency: transitive
     description:

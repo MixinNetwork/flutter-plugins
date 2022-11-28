@@ -146,11 +146,11 @@ class WebviewWindow {
         });
         break;
       case "onWebMessageReceived":
-        final msg = args['msg'] as String;
-        webview.notifyWebMessageReceived(msg);
+        final message = args['message'] as String;
+        webview.notifyWebMessageReceived(message);
         await _otherIsolateMessageHandler.invokeMethod('onWebMessageReceived', {
           'webViewId': viewId,
-          'msg': msg,
+          'message': message,
         });
         break;
       case "onNavigationCompleted":
