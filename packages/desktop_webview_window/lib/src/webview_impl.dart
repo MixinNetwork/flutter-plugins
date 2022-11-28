@@ -239,7 +239,7 @@ class WebviewImpl extends Webview {
   }
   @override
   void postWebMessageAsJson(String webMessage) async {
-    channel.invokeMethod("postWebMessageAsJSON", {
+    channel.invokeMethod("postWebMessageAsJson", {
       "viewId": viewId,
       "webMessage": webMessage,
     });

@@ -173,7 +173,7 @@ class _MyAppState extends State<MyApp> {
                 ),
                 const SizedBox(height: 16),
                 TextButton(
-                  onPressed: _postWebMessageAsJSON,
+                  onPressed: _postWebMessageAsJson,
                   child: const Text('post webmessage as JSON'),
                 ),
                 TextFormField(
@@ -261,10 +261,10 @@ class _MyAppState extends State<MyApp> {
     webview.postWebMessageAsString(msg);
   }
 
-  void _postWebMessageAsJSON() async {
+  void _postWebMessageAsJson() async {
     var msg = webMessageControllerJSON.text.toString();
     debugPrint('send webmessage as JSON to Website: $msg');
-    webview.postWebMessageAsJSON(msg);
+    webview.postWebMessageAsJson(msg);
   }
 
   void _hideMainWindow() async {
