@@ -203,7 +203,7 @@ class _MyAppState extends State<MyApp> {
         userDataFolderWindows: await _getWebViewPath(),
         titleBarTopPadding: Platform.isMacOS ? 20 : 0,
         title: "Pizza Hawai ist ein Vebrechen gegen die Menschlichkeit!",
-        //titleBarHeight: 200,
+        titleBarHeight: 0,
       ),
     );
     webview
