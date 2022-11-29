@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/foundation.dart';
 
 /// Handle custom message from JavaScript in your app.

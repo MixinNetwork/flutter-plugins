@@ -235,7 +235,7 @@ class _MyAppState extends State<MyApp> {
         debugPrint("on close");
       });
 
-    if(hideMainWindow) {
+    if (hideMainWindow) {
       final hwnd = FindWindow(ffi.nullptr, 'webview_window_example'.toNativeUtf16());
       //final hwnd = GetForegroundWindow();
 
