@@ -291,34 +291,31 @@ void WebView::ExecuteJavaScript(const std::wstring &javaScript,
 }
 
 void WebView::PostWebMessageAsString(const std::wstring &webmessage,
-    std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> completer) {
-    if (webview_) {
-        if (webview_->PostWebMessageAsString(
-            webmessage.c_str()) == NOERROR) {
-            completer->Success();
-        } else {
-            completer->Error("0", "Error posting webmessage as String");
-        }
+  std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> completer) {
+  if (webview_) {
+    if (webview_->PostWebMessageAsString(
+      webmessage.c_str()) == NOERROR) {
+      completer->Success();
+    } else {
+       completer->Error("0", "Error posting webmessage as String");
     }
-    else {
-        completer->Error("0", "webview not created");
-    }
+  } else {
+    completer->Error("0", "webview not created");
+  }
 }
 
 void WebView::PostWebMessageAsJson(const std::wstring& webmessage,
-    std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> completer) {
-    if (webview_) {
-        if (webview_->PostWebMessageAsJson(
-            webmessage.c_str()) == NOERROR) {
-            completer->Success();
-        }
-        else {
-            completer->Error("0", "Error posting webmessage as JSON");
-        }
+  std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> completer) {
+  if (webview_) {
+    if (webview_->PostWebMessageAsJson(
+      webmessage.c_str()) == NOERROR) {
+      completer->Success();
+    } else {
+      completer->Error("0", "Error posting webmessage as JSON");
     }
-    else {
-        completer->Error("0", "webview not created");
-    }
+  } else {
+    completer->Error("0", "webview not created");
+  }
 }
 
 WebView::~WebView() {

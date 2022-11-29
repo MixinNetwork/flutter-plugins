@@ -79,9 +79,8 @@ abstract class Webview {
   Future<String?> evaluateJavaScript(String javaScript);
 
   /// post a web message as String to the top level document in this WebView
-  void postWebMessageAsString(String webMessage);
+  Future<String?> postWebMessageAsString(String webMessage);
 
   /// post a web message as JSON to the top level document in this WebView
-  void postWebMessageAsJson(String webMessage);
-
+  Future<String?> postWebMessageAsJson(String webMessage);
 }
