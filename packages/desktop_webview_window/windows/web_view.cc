@@ -173,8 +173,7 @@ void WebView::OnWebviewControllerCreated() {
             wil::unique_cotaskmem_string messageRaw;
             HRESULT hrString = args->TryGetWebMessageAsString(&messageRaw);
             if (FAILED(hrString)) {
-                if (hrString == E_INVALIDARG)
-                {
+                if (hrString == E_INVALIDARG) {
                     // web message was not a string --> should only happen if it was a JSON object
                     HRESULT hrJson = args->get_WebMessageAsJson(&messageRaw);
                     if (FAILED(hrJson)) {
