@@ -218,8 +218,7 @@ void WebviewWindowPlugin::HandleMethodCall(
       return;
     }
     windows_[window_id]->GetWebView()->PostWebMessageAsString(utf8_to_wide(webmessage), std::move(result));
-      }
-  else if (method_call.method_name() == "postWebMessageAsJson") {
+  } else if (method_call.method_name() == "postWebMessageAsJson") {
     auto* arguments = std::get_if<flutter::EncodableMap>(method_call.arguments());
     auto window_id = arguments->at(flutter::EncodableValue("viewId")).LongValue();
     auto webmessage = std::get<std::string>(arguments->at(flutter::EncodableValue("webMessage")));
