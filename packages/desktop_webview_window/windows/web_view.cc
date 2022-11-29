@@ -170,15 +170,26 @@ void WebView::OnWebviewControllerCreated() {
   webview_->add_WebMessageReceived(
       Callback<ICoreWebView2WebMessageReceivedEventHandler>(
           [this](ICoreWebView2 *sender, ICoreWebView2WebMessageReceivedEventArgs *args) {
-            PWSTR message;
-            args->TryGetWebMessageAsString(&message);
+            wil::unique_cotaskmem_string messageRaw;
+            HRESULT hrString = args->TryGetWebMessageAsString(&messageRaw);
+            if (FAILED(hrString)) {
+                if (hrString == E_INVALIDARG)
+                {
+                    // web message was not a string --> should only happen if it was a JSON object
+                    HRESULT hrJson = args->get_WebMessageAsJson(&messageRaw);
+                    if (FAILED(hrJson)) {
+                        return hrJson;
+                    }
+                } else {
+                    return hrString;
+                }
+            }
             method_channel_->InvokeMethod(
                 "onWebMessageReceived",
                 std::make_unique<flutter::EncodableValue>(flutter::EncodableMap{
                     {flutter::EncodableValue("id"), flutter::EncodableValue(web_view_id_)},
-                    {flutter::EncodableValue("message"), flutter::EncodableValue(wide_to_utf8(std::wstring(message)))},
+                    {flutter::EncodableValue("message"), flutter::EncodableValue(wide_to_utf8(std::wstring(messageRaw.get())))},
                     }));
-            CoTaskMemFree(message);
             return S_OK;
           }
       ).Get(), nullptr);
