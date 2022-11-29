@@ -170,7 +170,6 @@ void WebView::OnWebviewControllerCreated() {
   webview_->add_WebMessageReceived(
       Callback<ICoreWebView2WebMessageReceivedEventHandler>(
           [this](ICoreWebView2 *sender, ICoreWebView2WebMessageReceivedEventArgs *args) {
-            //PWSTR message;
             wil::unique_cotaskmem_string messageRaw;
             HRESULT hrString = args->TryGetWebMessageAsString(&messageRaw);
             if (FAILED(hrString)) {
@@ -191,7 +190,6 @@ void WebView::OnWebviewControllerCreated() {
                     {flutter::EncodableValue("id"), flutter::EncodableValue(web_view_id_)},
                     {flutter::EncodableValue("message"), flutter::EncodableValue(wide_to_utf8(std::wstring(messageRaw.get())))},
                     }));
-            //CoTaskMemFree(message);
             return S_OK;
           }
       ).Get(), nullptr);
