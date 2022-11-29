@@ -170,33 +170,28 @@ void WebView::OnWebviewControllerCreated() {
   webview_->add_WebMessageReceived(
       Callback<ICoreWebView2WebMessageReceivedEventHandler>(
           [this](ICoreWebView2 *sender, ICoreWebView2WebMessageReceivedEventArgs *args) {
-            PWSTR message;
-            std::cout << "try receiving webmessage" << std::endl;
-            HRESULT hrString = args->TryGetWebMessageAsString(&message);
+            //PWSTR message;
+            wil::unique_cotaskmem_string messageRaw;
+            HRESULT hrString = args->TryGetWebMessageAsString(&messageRaw);
             if (FAILED(hrString)) {
                 if (hrString == E_INVALIDARG)
                 {
-                    // Was not a string message. Ignore.
-                    std::cout << "received message was not a String message: " << std::endl;
-                    HRESULT hrJson = args->get_WebMessageAsJson(&message);
-                    std::cout << "message as json: " << wide_to_utf8(message) << std::endl;
+                    // web message was not a string --> should only happen if it was a JSON object
+                    HRESULT hrJson = args->get_WebMessageAsJson(&messageRaw);
                     if (FAILED(hrJson)) {
-                        std::cout << "get_WebMessageAsJson failed" << std::endl;
                         return hrJson;
                     }
                 } else {
                     return hrString;
                 }
             }
-            
-            std::cout << "received message before: " << wide_to_utf8(message) << std::endl;
             method_channel_->InvokeMethod(
                 "onWebMessageReceived",
                 std::make_unique<flutter::EncodableValue>(flutter::EncodableMap{
                     {flutter::EncodableValue("id"), flutter::EncodableValue(web_view_id_)},
-                    {flutter::EncodableValue("message"), flutter::EncodableValue(wide_to_utf8(std::wstring(message)))},
+                    {flutter::EncodableValue("message"), flutter::EncodableValue(wide_to_utf8(std::wstring(messageRaw.get())))},
                     }));
-            CoTaskMemFree(message);
+            //CoTaskMemFree(message);
             return S_OK;
           }
       ).Get(), nullptr);
