@@ -188,6 +188,11 @@ class _MyAppState extends State<MyApp> {
                   onPressed: _hideMainWindow,
                   child: const Text('Hide Main Window'),
                 ),
+                const SizedBox(height: 16),
+                TextButton(
+                  onPressed: _openDevTools,
+                  child: const Text('Open Dev Tools'),
+                ),
               ],
             ),
           ),
@@ -279,6 +284,10 @@ class _MyAppState extends State<MyApp> {
     //final hwnd = GetForegroundWindow();
 
     ShowWindow(hwnd, SW_SHOW);
+  }
+
+  void _openDevTools() async {
+    webview.openDevTools();
   }
 }
 

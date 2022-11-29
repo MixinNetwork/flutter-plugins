@@ -7,8 +7,7 @@ typedef JavaScriptMessageHandler = void Function(String name, dynamic body);
 
 typedef PromptHandler = String Function(String prompt, String defaultText);
 
-typedef OnHistoryChangedCallback = void Function(
-    bool canGoBack, bool canGoForward);
+typedef OnHistoryChangedCallback = void Function(bool canGoBack, bool canGoForward);
 
 /// Callback when WebView start to load a URL.
 /// [url] is the URL string.
@@ -27,8 +26,7 @@ abstract class Webview {
   /// Install a message handler that you can call from your Javascript code.
   ///
   /// available: macOS (10.10+)
-  void registerJavaScriptMessageHandler(
-      String name, JavaScriptMessageHandler handler);
+  void registerJavaScriptMessageHandler(String name, JavaScriptMessageHandler handler);
 
   /// available: macOS
   void unregisterJavaScriptMessageHandler(String name);
@@ -61,6 +59,9 @@ abstract class Webview {
   /// Stop all navigations and pending resource fetches.
   Future<void> stop();
 
+  /// Opens the Browser DevTools in a separate window
+  Future<void> openDevTools();
+
   /// Register a callback that will be invoked when the webview history changes.
   void setOnHistoryChangedCallback(OnHistoryChangedCallback? callback);
 
@@ -79,9 +80,8 @@ abstract class Webview {
   Future<String?> evaluateJavaScript(String javaScript);
 
   /// post a web message as String to the top level document in this WebView
-  void postWebMessageAsString(String webMessage);
+  Future<String?> postWebMessageAsString(String webMessage);
 
   /// post a web message as JSON to the top level document in this WebView
-  void postWebMessageAsJson(String webMessage);
-
+  Future<String?> postWebMessageAsJson(String webMessage);
 }

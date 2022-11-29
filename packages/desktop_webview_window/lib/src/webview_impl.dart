@@ -186,6 +186,11 @@ class WebviewImpl extends Webview {
   }
 
   @override
+  Future<void> openDevTools() {
+    return channel.invokeMethod('openDevTools', {"viewId": viewId});
+  }
+
+  @override
   void setOnHistoryChangedCallback(OnHistoryChangedCallback? callback) {
     _onHistoryChanged = callback;
   }
@@ -231,15 +236,16 @@ class WebviewImpl extends Webview {
   }
 
   @override
-  void postWebMessageAsString(String webMessage) async {
-    channel.invokeMethod("postWebMessageAsString", {
+  Future<String?> postWebMessageAsString(String webMessage) async {
+    return channel.invokeMethod("postWebMessageAsString", {
       "viewId": viewId,
       "webMessage": webMessage,
     });
   }
+
   @override
-  void postWebMessageAsJson(String webMessage) async {
-    channel.invokeMethod("postWebMessageAsJson", {
+  Future<String?> postWebMessageAsJson(String webMessage) async {
+    return channel.invokeMethod("postWebMessageAsJson", {
       "viewId": viewId,
       "webMessage": webMessage,
     });
