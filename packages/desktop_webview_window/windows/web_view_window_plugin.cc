@@ -205,6 +205,32 @@ void WebviewWindowPlugin::HandleMethodCall(
       return;
     }
     windows_[window_id]->GetWebView()->ExecuteJavaScript(utf8_to_wide(javascript), std::move(result));
+  } else if (method_call.method_name() == "postWebMessageAsString") {
+    auto* arguments = std::get_if<flutter::EncodableMap>(method_call.arguments());
+    auto window_id = arguments->at(flutter::EncodableValue("viewId")).LongValue();
+    auto webmessage = std::get<std::string>(arguments->at(flutter::EncodableValue("webMessage")));
+    if (!windows_.count(window_id)) {
+      result->Error("0", "can not find webview window for id");
+      return;
+    }
+    if (!windows_[window_id]->GetWebView()) {
+      result->Error("0", "webview window not ready");
+      return;
+    }
+    windows_[window_id]->GetWebView()->PostWebMessageAsString(utf8_to_wide(webmessage), std::move(result));
+  } else if (method_call.method_name() == "postWebMessageAsJson") {
+    auto* arguments = std::get_if<flutter::EncodableMap>(method_call.arguments());
+    auto window_id = arguments->at(flutter::EncodableValue("viewId")).LongValue();
+    auto webmessage = std::get<std::string>(arguments->at(flutter::EncodableValue("webMessage")));
+    if (!windows_.count(window_id)) {
+      result->Error("0", "can not find webview window for id");
+      return;
+    }
+    if (!windows_[window_id]->GetWebView()) {
+      result->Error("0", "webview window not ready");
+      return;
+    }
+    windows_[window_id]->GetWebView()->PostWebMessageAsJson(utf8_to_wide(webmessage), std::move(result));
   } else {
     result->NotImplemented();
   }
