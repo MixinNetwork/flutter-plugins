@@ -1,5 +1,9 @@
 # bring_window_to_front
 
+| Linux | other |
+|-------|-------|
+| ✅     | ❌     |
+
 A package for linux to help bring window to front.
 
 On wayland, if gtk window was covered by other window, it will not be brought to front by call `gtk_window_present`.
