@@ -158,7 +158,7 @@ WinToastPlugin::WinToastPlugin(std::shared_ptr<FlutterMethodChannel> channel, HW
 }
 
 WinToastPlugin::~WinToastPlugin() {
-  WinToast::instance()->clear();
+
 }
 
 void WinToastPlugin::OnNotificationStatusChanged(flutter::EncodableMap map) {

@@ -23,10 +23,13 @@
 #include <assert.h>
 #include <unordered_map>
 #include <array>
+#include <notificationactivationcallback.h>
+#include <wrl.h>
 
 #pragma comment(lib,"shlwapi")
 #pragma comment(lib,"user32")
-
+#pragma comment(lib,"runtimeobject")
+#pragma comment(lib, "propsys.lib")
 
 #ifdef NDEBUG
     #define DEBUG_MSG(str) do { } while ( false )
@@ -490,6 +493,111 @@ enum WinToast::ShortcutResult WinToast::createShortcut() {
     return SUCCEEDED(hr) ? SHORTCUT_WAS_CREATED : SHORTCUT_CREATE_FAILED;
 }
 
+
+// The GUID must be unique to your app. Create a new GUID if copying this code.
+class DECLSPEC_UUID("70FB08CA-C631-4C12-AA71-B6D1C2983205") NotificationActivator WrlSealed WrlFinal
+    : public RuntimeClass<RuntimeClassFlags<ClassicCom>, INotificationActivationCallback>
+{
+public: 
+    virtual HRESULT STDMETHODCALLTYPE Activate(
+        _In_ LPCWSTR appUserModelId,
+        _In_ LPCWSTR invokedArgs,
+        _In_reads_(dataCount) const NOTIFICATION_USER_INPUT_DATA* data,
+        ULONG dataCount) override
+    {
+        std::wstring arguments(invokedArgs);
+        HRESULT hr = S_OK;
+
+        // Background: Quick reply to the conversation
+        if (arguments.find(L"action=reply") == 0)
+        {
+            // Get the response user typed.
+            // We know this is first and only user input since our toasts only have one input
+            LPCWSTR response = data[0].Value;
+
+            printf_s("User replied with: %ls \r ", response);
+        }
+
+        else
+        {
+            wprintf_s(L"--------------------------------notification clicked %s \n", invokedArgs);
+          
+        }
+
+        if (FAILED(hr))
+        {
+            // Log failed HRESULT
+        }
+
+        return S_OK;
+    }
+
+    ~NotificationActivator()
+    {
+            printf_s("~NotificationActivator");
+        // If we don't have window open
+        // if (!DesktopToastsApp::GetInstance()->HasWindow())
+        // {
+        //     // Exit (this is for background activation scenarios)
+        //     exit(0);
+        // }
+    }
+};
+
+// Flag class as COM creatable
+CoCreatableClass(NotificationActivator);
+
+
+
+HRESULT RegisterActivator()
+{
+    // Module<OutOfProc> needs a callback registered before it can be used.
+    // Since we don't care about when it shuts down, we'll pass an empty lambda here.
+    Module<OutOfProc>::Create([] {});
+
+    // If a local server process only hosts the COM object then COM expects
+    // the COM server host to shutdown when the references drop to zero.
+    // Since the user might still be using the program after activating the notification,
+    // we don't want to shutdown immediately.  Incrementing the object count tells COM that
+    // we aren't done yet.
+    Module<OutOfProc>::GetModule().IncrementObjectCount();
+
+    Module<OutOfProc>::GetModule().RegisterObjects();
+
+    return S_OK;
+}
+
+
+HRESULT RegisterComServer(GUID clsid, const wchar_t exePath[])
+    {
+        // Turn the GUID into a string
+        OLECHAR* clsidOlechar;
+        StringFromCLSID(clsid, &clsidOlechar);
+        std::wstring clsidStr(clsidOlechar);
+        ::CoTaskMemFree(clsidOlechar);
+
+        // Create the subkey
+        // Something like SOFTWARE\Classes\CLSID\{23A5B06E-20BB-4E7E-A0AC-6982ED6A6041}\LocalServer32
+        std::wstring subKey = LR"(SOFTWARE\Classes\CLSID\)" + clsidStr + LR"(\LocalServer32)";
+
+        // Include -ToastActivated launch args on the exe
+        std::wstring exePathStr(exePath);
+        exePathStr = L"\"" + exePathStr + L"\"-ToastActivated\"";
+
+        // We don't need to worry about overflow here as ::GetModuleFileName won't
+        // return anything bigger than the max file system path (much fewer than max of DWORD).
+        DWORD dataSize = static_cast<DWORD>((exePathStr.length() + 1) * sizeof(WCHAR));
+
+        // Register the EXE for the COM server
+        return HRESULT_FROM_WIN32(::RegSetKeyValue(
+            HKEY_CURRENT_USER,
+            subKey.c_str(),
+            nullptr,
+            REG_SZ,
+            reinterpret_cast<const BYTE*>(exePathStr.c_str()),
+            dataSize));
+}
+
 bool WinToast::initialize(_Out_opt_ WinToastError* error) {
     _isInitialized = false;
     setError(error, WinToastError::NoError);
@@ -522,6 +630,15 @@ bool WinToast::initialize(_Out_opt_ WinToastError* error) {
             return false;
         }
     }
+
+
+         // Get the EXE path
+    wchar_t exePath[MAX_PATH];
+    DWORD charWritten = ::GetModuleFileName(nullptr, exePath, ARRAYSIZE(exePath));
+
+    // Register the COM server
+    RegisterComServer(__uuidof(NotificationActivator), exePath);
+    RegisterActivator();
 
     _isInitialized = true;
     return _isInitialized;
@@ -629,6 +746,9 @@ HRESULT	WinToast::createShellLinkHelper() {
                         hr = InitPropVariantFromString(_aumi.c_str(), &appIdPropVar);
                         if (SUCCEEDED(hr)) {
                             hr = propertyStore->SetValue(PKEY_AppUserModel_ID, appIdPropVar);
+                            PROPVARIANT toastCLSID;
+                            InitPropVariantFromCLSID(__uuidof(NotificationActivator), &toastCLSID);
+                            propertyStore->SetValue(INIT_PKEY_AppUserModel_ToastActivatorCLSID, toastCLSID);
                             if (SUCCEEDED(hr)) {
                                 hr = propertyStore->Commit();
                                 if (SUCCEEDED(hr)) {
@@ -640,6 +760,7 @@ HRESULT	WinToast::createShellLinkHelper() {
                                 }
                             }
                             PropVariantClear(&appIdPropVar);
+                            PropVariantClear(&toastCLSID);
                         }
                     }
                 }
@@ -753,12 +874,12 @@ INT64 WinToast::showToast(_In_ const WinToastTemplate& toast, _In_  std::unique_
                                     hr = notification->put_ExpirationTime(&expirationDateTime);
                                 }
 
-                                if (SUCCEEDED(hr)) {
-                                    hr = Util::setEventHandlers(notification.Get(), std::move(handler), expiration);
-                                    if (FAILED(hr)) {
-                                        setError(error, WinToastError::InvalidHandler);
-                                    }
-                                }
+                        //       if (SUCCEEDED(hr)) {
+                        //           hr = Util::setEventHandlers(notification.Get(), std::move(handler), expiration);
+                        //           if (FAILED(hr)) {
+                        //               setError(error, WinToastError::InvalidHandler);
+                        //           }
+                        //       }
 
                                 if (SUCCEEDED(hr)) {
                                     GUID guid;

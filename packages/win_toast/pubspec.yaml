@@ -16,8 +16,3 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^1.0.0
 
-flutter:
-  plugin:
-    platforms:
-      windows:
-        pluginClass: WinToastPlugin

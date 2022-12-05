@@ -28,3 +28,5 @@
 .packages
 build/
 .fvm
+
+.vscode
