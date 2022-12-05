@@ -12,6 +12,9 @@ add_executable(${BINARY_NAME} WIN32
   win_toast_plugin.cpp
   wintoastlib.cpp
   wintoastlib.h
+  pch.h
+  DesktopNotificationManagerCompat.h
+  DesktopNotificationManagerCompat.cpp
   )
 apply_standard_settings(${BINARY_NAME})
 target_compile_definitions(${BINARY_NAME} PRIVATE "NOMINMAX")
