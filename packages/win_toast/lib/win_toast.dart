@@ -91,7 +91,7 @@ class WinToast {
       _winToast = WinToast._private();
       _channel.setMethodCallHandler((call) async {
         try {
-          return await _winToast!._handleMethodcall(call);
+          return await _winToast!._handleMethodCall(call);
         } catch (e, s) {
           debugPrint('error: $e $s');
         }
@@ -104,46 +104,31 @@ class WinToast {
 
   final _activatedStream = StreamController<Event>.broadcast();
 
-  Future<dynamic> _handleMethodcall(MethodCall call) async {
-    if (call.method != 'OnNotificationStatusChanged') {
-      return;
-    }
-    final String action = call.arguments['action'];
-    final int id = call.arguments['id'];
-    assert(id != -1);
+  void _onNotificationActivated(
+      String argument, Map<String, String> userInput) {
+    debugPrint('onNotificationActivated: $argument $userInput');
+  }
 
-    switch (action) {
-      case 'activated':
-        _activatedStream.add(
-          ActivatedEvent(call.arguments['actionIndex'], id),
-        );
-        break;
-      case 'dismissed':
-        final int reason = call.arguments['reason'];
-        assert(const [0, 1, 2].contains(reason));
-        _activatedStream.add(DissmissedEvent(id, DismissReason.values[reason]));
-        break;
-      case 'failed':
-        _activatedStream.add(FailedEvent(id));
-        break;
-      case 'end':
-        _activatedStream.add(_EndEvent(id));
-        break;
-      default:
+  Future<dynamic> _handleMethodCall(MethodCall call) async {
+    switch (call.method) {
+      case 'OnNotificationActivated':
+        final argument = call.arguments['argument'];
+        final userInput = call.arguments['user_input'] as Map;
+        _onNotificationActivated(argument, userInput.cast());
         break;
     }
   }
 
   Future<bool> initialize({
-    required String appName,
-    required String productName,
-    required String companyName,
+    required String aumId,
+    required String displayName,
+    required String iconPath,
   }) async {
     try {
       _supportToast = await _channel.invokeMethod("initialize", {
-        'app_name': appName,
-        'product_name': productName,
-        'company_name': companyName,
+        'aumid': aumId,
+        'display_name': displayName,
+        'icon_path': iconPath,
       });
     } catch (e) {
       debugPrint(e.toString());
@@ -153,6 +138,10 @@ class WinToast {
       debugPrint('did not support toast');
     }
     return _supportToast;
+  }
+
+  Future<void> showCustomToast() async {
+    await _channel.invokeMethod("showCustomToast");
   }
 
   /// return notification id. -1 meaning failed to show.

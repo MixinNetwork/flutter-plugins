@@ -22,9 +22,10 @@ class _MyAppState extends State<MyApp> {
     super.initState();
     scheduleMicrotask(() async {
       final ret = await WinToast.instance().initialize(
-          appName: 'win_toast_example',
-          productName: 'win_toast_example',
-          companyName: 'mixin');
+        aumId: 'one.mixin.example_application',
+        displayName: 'Example Application',
+        iconPath: '',
+      );
       assert(ret);
       setState(() {
         initialzied = true;
@@ -64,9 +65,10 @@ class _MainPageState extends State<MainPage> {
       children: [
         TextButton(
           onPressed: () async {
-            final toast = await WinToast.instance().showToast(
-                type: ToastType.text01, title: "Hello ${_toastCount++}");
-            assert(toast != null);
+            await WinToast.instance().showCustomToast();
+            // final toast = await WinToast.instance().showToast(
+            //     type: ToastType.text01, title: "Hello ${_toastCount++}");
+            // assert(toast != null);
           },
           child: const Text('one line'),
         ),
