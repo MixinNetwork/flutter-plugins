@@ -22,9 +22,15 @@ dev_dependencies:
   msix: ^3.7.0
 
 flutter:
-
   uses-material-design: true
-
   assets:
     - assets/image.png
 
+msix_config:
+  display_name: WinToastExample
+  identity_name: one.mixin.WinToastExample
+  toast_activator:
+    clsid: "9914995E-3B9A-4E86-A7AA-B2759C147211"
+    arguments: "-ToastActivated"
+    display_name: "WinToastExample"
+  msix_version: 1.0.4.0
