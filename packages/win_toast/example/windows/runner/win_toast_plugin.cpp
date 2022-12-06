@@ -17,9 +17,9 @@
 
 namespace {
 
-inline std::wstring string2wString(const std::string &s) {
-  return utf8_to_wide(s);
-}
+using namespace winrt;
+using namespace Windows::Data::Xml::Dom;
+using namespace Windows::UI::Notifications;
 
 class WinToastPlugin : public flutter::Plugin {
  public:
@@ -41,7 +41,9 @@ class WinToastPlugin : public flutter::Plugin {
 
   void OnNotificationStatusChanged(flutter::EncodableMap map);
 
-  void OnNotificationActivated(DesktopNotificationActivatedEventArgsCompat args);
+  void OnNotificationActivated(DesktopNotificationActivatedEventArgsCompat data);
+
+  void OnNotificationDismissed(const ToastNotification &sender, const ToastDismissedEventArgs &args);
 };
 
 // static
@@ -85,6 +87,26 @@ void WinToastPlugin::OnNotificationActivated(DesktopNotificationActivatedEventAr
   channel_->InvokeMethod("OnNotificationActivated", std::make_unique<flutter::EncodableValue>(map));
 }
 
+void WinToastPlugin::OnNotificationDismissed(const ToastNotification &sender, const ToastDismissedEventArgs &args) {
+  auto reason = args.Reason();
+  if (reason == ToastDismissalReason::UserCanceled) {
+    std::wcout << L"The user dismissed this toast." << sender.Tag().c_str() << std::endl;
+  } else if (reason == ToastDismissalReason::ApplicationHidden) {
+    std::wcout << L"The application hid the toast using ToastNotifier.hide()" << std::endl;
+  } else if (reason == ToastDismissalReason::TimedOut) {
+    std::wcout << L"The toast has timed out." << std::endl;
+  }
+  flutter::EncodableMap map = {
+      {flutter::EncodableValue("tag"), flutter::EncodableValue(wide_to_utf8(sender.Tag().c_str()))},
+      {flutter::EncodableValue("group"), flutter::EncodableValue(wide_to_utf8(sender.Group().c_str()))},
+      {flutter::EncodableValue("reason"), flutter::EncodableValue(static_cast<int>(reason))},
+  };
+  channel_->InvokeMethod(
+      "OnNotificationDismissed",
+      std::make_unique<flutter::EncodableValue>(map)
+  );
+}
+
 void WinToastPlugin::HandleMethodCall(
     const flutter::MethodCall<flutter::EncodableValue> &method_call,
     std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
@@ -93,81 +115,62 @@ void WinToastPlugin::HandleMethodCall(
     return;
   }
 
-  using namespace winrt;
-  using namespace Windows::Data::Xml::Dom;
-  using namespace Windows::UI::Notifications;
-
   if (method_call.method_name() == "initialize") {
     auto *arguments = std::get_if<flutter::EncodableMap>(method_call.arguments());
     auto aumid = std::get<std::string>(arguments->at(flutter::EncodableValue("aumid")));
     auto display_name = std::get<std::string>(arguments->at(flutter::EncodableValue("display_name")));
     auto icon_path = std::get<std::string>(arguments->at(flutter::EncodableValue("icon_path")));
-    DesktopNotificationManagerCompat::Register(string2wString(aumid), string2wString(display_name),
-                                               string2wString(icon_path));
+    DesktopNotificationManagerCompat::Register(utf8_to_wide(aumid), utf8_to_wide(display_name),
+                                               utf8_to_wide(icon_path));
     DesktopNotificationManagerCompat::OnActivated([this](DesktopNotificationActivatedEventArgsCompat data) {
       this->OnNotificationActivated(std::move(data));
     });
     result->Success(flutter::EncodableValue(true));
   } else if (method_call.method_name() == "showCustomToast") {
+    auto *arguments = std::get_if<flutter::EncodableMap>(method_call.arguments());
+    auto xml = std::get<std::string>(arguments->at(flutter::EncodableValue("xml")));
+    auto tag = std::get<std::string>(arguments->at(flutter::EncodableValue("tag")));
+    auto group = std::get<std::string>(arguments->at(flutter::EncodableValue("group")));
+    auto expiration = std::get<int>(arguments->at(flutter::EncodableValue("expiration")));
+    auto expiration_on_reboot = std::get<bool>(arguments->at(flutter::EncodableValue("expiration_on_reboot")));
+
     // Construct the toast template
     XmlDocument doc;
-    doc.LoadXml(L"<toast>\
-    <visual>\
-        <binding template=\"ToastGeneric\">\
-            <text></text>\
-            <text></text>\
-            <image placement=\"appLogoOverride\" hint-crop=\"circle\"/>\
-            <image/>\
-        </binding>\
-    </visual>\
-    <actions>\
-        <input\
-            id=\"tbReply\"\
-            type=\"text\"\
-            placeHolderContent=\"Type a reply\"/>\
-        <action\
-            content=\"Reply\"\
-            activationType=\"background\"/>\
-        <action\
-            content=\"Like\"\
-            activationType=\"background\"/>\
-        <action\
-            content=\"View\"\
-            activationType=\"background\"/>\
-    </actions>\
-</toast>");
+    doc.LoadXml(utf8_to_wide(xml));
 
-    // Populate with text and values
-    doc.DocumentElement().SetAttribute(L"launch", L"action=viewConversation&conversationId=9813");
-    doc.SelectSingleNode(L"//text[1]").InnerText(L"Andrew sent you a picture");
-    doc.SelectSingleNode(L"//text[2]").InnerText(L"Check this out, Happy Canyon in Utah!");
-    doc.SelectSingleNode(L"//image[1]").as<XmlElement>().SetAttribute(L"src", L"https://unsplash.it/64?image=1005");
-    doc.SelectSingleNode(L"//image[2]").as<XmlElement>().SetAttribute(L"src",
-                                                                      L"https://picsum.photos/364/202?image=883");
-    doc.SelectSingleNode(L"//action[1]").as<XmlElement>().SetAttribute(L"arguments",
-                                                                       L"action=reply&conversationId=9813");
-    doc.SelectSingleNode(L"//action[2]").as<XmlElement>().SetAttribute(L"arguments",
-                                                                       L"action=like&conversationId=9813");
-    doc.SelectSingleNode(L"//action[3]").as<XmlElement>().SetAttribute(L"arguments",
-                                                                       L"action=viewImage&imageUrl=https://picsum.photos/364/202?image=883");
     // Construct the notification
-    ToastNotification notif{doc};
-    notif.Dismissed([](ToastNotification const &sender, ToastDismissedEventArgs const &args) {
-      auto reason = args.Reason();
-      if (reason == ToastDismissalReason::UserCanceled) {
-        std::wcout << L"The user dismissed this toast." << sender.Tag().c_str() << std::endl;
-      } else if (reason == ToastDismissalReason::ApplicationHidden) {
-        std::wcout << L"The application hid the toast using ToastNotifier.hide()" << std::endl;
-      } else if (reason == ToastDismissalReason::TimedOut) {
-        std::wcout << L"The toast has timed out." << std::endl;
-      }
+    ToastNotification notification{doc};
+
+    if (!tag.empty()) {
+      notification.Tag(utf8_to_wide(tag));
+    }
+    if (!group.empty()) {
+      notification.Group(utf8_to_wide(group));
+    }
+
+    if (expiration != 0) {
+      Windows::Foundation::DateTime
+          expiration_time = Windows::Foundation::DateTime() + Windows::Foundation::TimeSpan(expiration);
+      std::cout << "expiration_time: "
+                << std::chrono::duration_cast<std::chrono::milliseconds>(expiration_time.time_since_epoch()).count()
+                << std::endl;
+      notification.ExpirationTime(expiration_time);
+    }
+
+    notification.ExpiresOnReboot(expiration_on_reboot);
+
+    notification.Dismissed([this](const ToastNotification &sender, const ToastDismissedEventArgs &args) {
+      this->OnNotificationDismissed(sender, args);
     });
 
     // And send it!
-    DesktopNotificationManagerCompat::CreateToastNotifier().Show(notif);
+    DesktopNotificationManagerCompat::CreateToastNotifier().Show(notification);
     result->Success(flutter::EncodableValue(1));
-  } else if (method_call.method_name() == "remove") {
-    auto id = std::get_if<int64_t>(method_call.arguments());
+  } else if (method_call.method_name() == "dismiss") {
+    auto *arguments = std::get_if<flutter::EncodableMap>(method_call.arguments());
+    auto tag = std::get<std::string>(arguments->at(flutter::EncodableValue("tag")));
+    auto group = std::get<std::string>(arguments->at(flutter::EncodableValue("group")));
+    DesktopNotificationManagerCompat::History().Remove(utf8_to_wide(tag), utf8_to_wide(group));
     result->Success();
   } else if (method_call.method_name() == "clear") {
     DesktopNotificationManagerCompat::History().Clear();

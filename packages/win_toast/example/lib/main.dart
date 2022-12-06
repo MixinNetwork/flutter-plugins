@@ -15,7 +15,9 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  bool initialzied = false;
+  bool _initialized = false;
+
+  final _navigatorKey = GlobalKey<NavigatorState>();
 
   @override
   void initState() {
@@ -28,7 +30,46 @@ class _MyAppState extends State<MyApp> {
       );
       assert(ret);
       setState(() {
-        initialzied = true;
+        _initialized = true;
+      });
+    });
+    WinToast.instance().setActivatedCallback((event) {
+      debugPrint('onNotificationActivated: $event');
+      showDialog(
+          context: _navigatorKey.currentState!.context,
+          builder: (context) {
+            return AlertDialog(
+              title: const Text('onNotificationActivated'),
+              content: Text(event.toString()),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                  },
+                  child: const Text('OK'),
+                ),
+              ],
+            );
+          });
+
+      WinToast.instance().setDismissedCallback((event) {
+        debugPrint('onNotificationDismissed: $event');
+        showDialog(
+            context: _navigatorKey.currentState!.context,
+            builder: (context) {
+              return AlertDialog(
+                title: const Text('onNotificationDismissed'),
+                content: Text(event.toString()),
+                actions: [
+                  TextButton(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                    },
+                    child: const Text('OK'),
+                  ),
+                ],
+              );
+            });
       });
     });
   }
@@ -36,12 +77,13 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: _navigatorKey,
       home: Scaffold(
         appBar: AppBar(
           title: const Text('Plugin example app'),
         ),
-        body: !initialzied
-            ? const Center(child: Text('inilizing...'))
+        body: !_initialized
+            ? const Center(child: Text('initializing...'))
             : const Center(child: MainPage()),
       ),
     );
@@ -56,8 +98,6 @@ class MainPage extends StatefulWidget {
 }
 
 class _MainPageState extends State<MainPage> {
-  var _toastCount = 0;
-
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -65,51 +105,29 @@ class _MainPageState extends State<MainPage> {
       children: [
         TextButton(
           onPressed: () async {
-            await WinToast.instance().showCustomToast();
-            // final toast = await WinToast.instance().showToast(
-            //     type: ToastType.text01, title: "Hello ${_toastCount++}");
-            // assert(toast != null);
+            const xml = """
+<?xml version="1.0" encoding="UTF-8"?>
+<toast launch="action=viewConversation&amp;conversationId=9813">
+   <visual>
+      <binding template="ToastGeneric">
+         <text>Andrew sent you a picture</text>
+         <text>Check this out, Happy Canyon in Utah!</text>
+         <image placement="appLogoOverride" hint-crop="circle" src="https://unsplash.it/64?image=1005" />
+         <image src="https://picsum.photos/364/202?image=883" />
+      </binding>
+   </visual>
+   <actions>
+      <input id="tbReply" type="text" placeHolderContent="Type a reply" />
+      <action content="Reply" activationType="background" arguments="action=reply&amp;conversationId=9813" />
+      <action content="Like" activationType="background" arguments="action=like&amp;conversationId=9813" />
+      <action content="View" activationType="background" arguments="action=viewImage&amp;imageUrl=https://picsum.photos/364/202?image=883" />
+   </actions>
+</toast>
+            """;
+            await WinToast.instance().showCustomToast(xml: xml);
           },
           child: const Text('one line'),
         ),
-        TextButton(
-          onPressed: () async {
-            final toast = await WinToast.instance().showToast(
-              type: ToastType.text02,
-              title: "Hello ${_toastCount++}",
-              subtitle: '中文',
-            );
-            assert(toast != null);
-          },
-          child: const Text('two line'),
-        ),
-        TextButton(
-          onPressed: () async {
-            final toast = await WinToast.instance().showToast(
-              type: ToastType.imageAndText01,
-              title: "Hello",
-              imagePath: '',
-            );
-            assert(toast != null);
-          },
-          child: const Text('image'),
-        ),
-        TextButton(
-            onPressed: () async {
-              final toast = await WinToast.instance().showToast(
-                type: ToastType.imageAndText01,
-                title: "Hello",
-                actions: ["Close"],
-              );
-              assert(toast != null);
-              toast?.eventStream.listen((event) {
-                debugPrint('stream: $event');
-                if (event is ActivatedEvent) {
-                  WinToast.instance().bringWindowToFront();
-                }
-              });
-            },
-            child: const Text('action')),
       ],
     );
   }
