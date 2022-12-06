@@ -1,7 +1,7 @@
 #ifndef FLUTTER_PLUGIN_WIN_TOAST_PLUGIN_H_
 #define FLUTTER_PLUGIN_WIN_TOAST_PLUGIN_H_
 
-#include "flutter/ephemeral/flutter_plugin_registrar.h"
+#include <flutter_plugin_registrar.h>
 
 #ifdef FLUTTER_PLUGIN_IMPL
 #define FLUTTER_PLUGIN_EXPORT __declspec(dllexport)

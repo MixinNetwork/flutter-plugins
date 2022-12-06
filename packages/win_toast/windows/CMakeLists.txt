@@ -7,10 +7,10 @@ project(${PROJECT_NAME} LANGUAGES CXX)
 set(PLUGIN_NAME "win_toast_plugin")
 
 add_library(${PLUGIN_NAME} SHARED
-        "win_toast_plugin.cpp"
-        "wintoastlib.h"
-        "wintoastlib.cpp"
-        "strconv.h"
+        win_toast_plugin.cpp
+        pch.h
+        DesktopNotificationManagerCompat.h
+        DesktopNotificationManagerCompat.cpp
         )
 apply_standard_settings(${PLUGIN_NAME})
 set_target_properties(${PLUGIN_NAME} PROPERTIES
