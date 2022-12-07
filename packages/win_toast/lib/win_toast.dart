@@ -2,82 +2,50 @@ import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
-import 'package:win_toast/src/toast_type.dart';
 
 export 'src/toast_type.dart';
 
 enum DismissReason {
-  userCanceld,
+  userCanceled,
   applicationHidden,
   timeout,
 }
 
-class Toast {
-  Toast(this.id, this._client) {
-    final stream = _client._activatedStream.stream;
-    _subscription = stream.listen((event) {
-      if (event._id != id) {
-        return;
-      }
-      debugPrint('event: $event');
-      if (event is _EndEvent) {
-        _eventController.close();
-        return;
-      }
-      _eventController.add(event);
-      _subscription?.cancel();
-    });
-  }
+class ActivatedEvent {
+  ActivatedEvent({
+    required this.argument,
+    required this.userInput,
+  });
 
-  final int id;
-  final WinToast _client;
-
-  Stream<Event> get eventStream => _eventController.stream;
-
-  final _eventController = StreamController<Event>.broadcast();
-
-  StreamSubscription? _subscription;
-
-  void dismiss() {
-    _client._dismiss(id);
-  }
-}
-
-class Event {
-  final int _id;
-
-  Event(this._id);
-}
-
-class ActivatedEvent extends Event {
-  ActivatedEvent(this.actionIndex, int id) : super(id);
-
-  final int? actionIndex;
+  final String argument;
+  final Map<String, String> userInput;
 
   @override
   String toString() {
-    return 'ActivatedEvent{actionIndex: $actionIndex}';
+    return 'ActivatedEvent{argument: $argument, userInput: $userInput}';
   }
 }
 
-class DissmissedEvent extends Event {
-  DissmissedEvent(int id, this.dismissReason) : super(id);
-
+class DismissedEvent {
   final DismissReason dismissReason;
+  final String tag;
+  final String group;
+
+  DismissedEvent({
+    required this.dismissReason,
+    required this.tag,
+    required this.group,
+  });
 
   @override
   String toString() {
-    return 'DissmissedEvent{dismissReason: $dismissReason}';
+    return 'DismissedEvent{dismissReason: $dismissReason, tag: $tag, group: $group}';
   }
 }
 
-class FailedEvent extends Event {
-  FailedEvent(int id) : super(id);
-}
+typedef ToastActivatedCallback = void Function(ActivatedEvent event);
 
-class _EndEvent extends Event {
-  _EndEvent(int id) : super(id);
-}
+typedef ToastDismissedCallback = void Function(DismissedEvent event);
 
 class WinToast {
   WinToast._private();
@@ -91,7 +59,7 @@ class WinToast {
       _winToast = WinToast._private();
       _channel.setMethodCallHandler((call) async {
         try {
-          return await _winToast!._handleMethodcall(call);
+          return await _winToast!._handleMethodCall(call);
         } catch (e, s) {
           debugPrint('error: $e $s');
         }
@@ -102,48 +70,62 @@ class WinToast {
 
   bool _supportToast = false;
 
-  final _activatedStream = StreamController<Event>.broadcast();
+  ToastActivatedCallback? _activatedCallback;
 
-  Future<dynamic> _handleMethodcall(MethodCall call) async {
-    if (call.method != 'OnNotificationStatusChanged') {
-      return;
-    }
-    final String action = call.arguments['action'];
-    final int id = call.arguments['id'];
-    assert(id != -1);
+  void setActivatedCallback(ToastActivatedCallback? callback) {
+    _activatedCallback = callback;
+  }
 
-    switch (action) {
-      case 'activated':
-        _activatedStream.add(
-          ActivatedEvent(call.arguments['actionIndex'], id),
-        );
+  ToastDismissedCallback? _dismissedCallback;
+
+  void setDismissedCallback(ToastDismissedCallback? callback) {
+    _dismissedCallback = callback;
+  }
+
+  void _onNotificationActivated(
+    String argument,
+    Map<String, String> userInput,
+  ) {
+    _activatedCallback?.call(ActivatedEvent(
+      argument: argument,
+      userInput: userInput,
+    ));
+  }
+
+  void _onNotificationDismissed(String tag, String group, int reason) {
+    _dismissedCallback?.call(DismissedEvent(
+      tag: tag,
+      group: group,
+      dismissReason: DismissReason.values[reason],
+    ));
+  }
+
+  Future<dynamic> _handleMethodCall(MethodCall call) async {
+    switch (call.method) {
+      case 'OnNotificationActivated':
+        final argument = call.arguments['argument'];
+        final userInput = call.arguments['user_input'] as Map;
+        _onNotificationActivated(argument, userInput.cast());
         break;
-      case 'dismissed':
-        final int reason = call.arguments['reason'];
-        assert(const [0, 1, 2].contains(reason));
-        _activatedStream.add(DissmissedEvent(id, DismissReason.values[reason]));
-        break;
-      case 'failed':
-        _activatedStream.add(FailedEvent(id));
-        break;
-      case 'end':
-        _activatedStream.add(_EndEvent(id));
-        break;
-      default:
+      case 'OnNotificationDismissed':
+        final group = call.arguments['group'];
+        final tag = call.arguments['tag'];
+        final reason = call.arguments['reason'];
+        _onNotificationDismissed(group, tag, reason);
         break;
     }
   }
 
   Future<bool> initialize({
-    required String appName,
-    required String productName,
-    required String companyName,
+    required String aumId,
+    required String displayName,
+    required String iconPath,
   }) async {
     try {
       _supportToast = await _channel.invokeMethod("initialize", {
-        'app_name': appName,
-        'product_name': productName,
-        'company_name': companyName,
+        'aumid': aumId,
+        'display_name': displayName,
+        'icon_path': iconPath,
       });
     } catch (e) {
       debugPrint(e.toString());
@@ -155,42 +137,37 @@ class WinToast {
     return _supportToast;
   }
 
-  /// return notification id. -1 meaning failed to show.
-  Future<Toast?> showToast({
-    required ToastType type,
-    required String title,
-    String subtitle = '',
-    String imagePath = '',
-    List<String> actions = const <String>[],
+  Future<int> showCustomToast({
+    required String xml,
+    Duration? expiration,
+    bool expirationOnReboot = false,
+    String? tag,
+    String? group,
   }) async {
     if (!_supportToast) {
-      return null;
+      return -1;
     }
-    assert(title.isNotEmpty);
-    assert(type.textFiledCount() > 1 || subtitle.isEmpty);
-    final id = await _channel.invokeMethod('showToast', {
-      'type': type.index,
-      'title': title,
-      'subtitle': subtitle,
-      'imagePath': imagePath,
-      'actions': actions,
+    final ret = await _channel.invokeMethod<int>("showCustomToast", {
+      'xml': xml,
+      'tag': tag ?? '',
+      'group': group ?? '',
+      'expiration': expiration?.inMilliseconds ?? 0,
+      'expiration_on_reboot': expirationOnReboot,
     });
-    debugPrint('id: $id');
-    if (id == -1 || id == null) {
-      return null;
-    }
-    return Toast(id, this);
+    return ret ?? -1;
   }
 
   Future<void> clear() {
     return _channel.invokeMethod('clear');
   }
 
-  Future<void> _dismiss(int id) {
-    return _channel.invokeMethod('hide', id);
-  }
-
-  Future<void> bringWindowToFront() {
-    return _channel.invokeMethod('bringWindowToFront');
+  Future<void> dismiss({
+    required String tag,
+    required String group,
+  }) {
+    return _channel.invokeMethod('dismiss', {
+      'tag': tag,
+      'group': group,
+    });
   }
 }
