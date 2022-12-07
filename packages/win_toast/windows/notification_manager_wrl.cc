@@ -52,7 +52,7 @@ class DECLSPEC_UUID("936C39FC-6BBC-4A57-B8F8-7C627E401B2F") NotificationActivato
 };
 
 // Flag class as COM creatable
-CoCreatableClass(NotificationActivator);
+CoCreatableClass(NotificationActivator)
 
 #define RETURN_IF_FAILED(hr) do { HRESULT _hrTemp = hr; if (FAILED(_hrTemp)) { return _hrTemp; } } while (false)
 

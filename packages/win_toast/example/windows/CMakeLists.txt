@@ -44,7 +44,7 @@ endfunction()
 
 set(FLUTTER_MANAGED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/flutter")
 
-set(WIN_TOAST_ENABLE_WIN_RT OFF)
+set(WIN_TOAST_ENABLE_WIN_RT ON)
 set(WIN_TOAST_ENABLE_WRL ON)
 
 # Flutter library and tool build rules.

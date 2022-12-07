@@ -30,8 +30,8 @@ flutter:
     - assets/image.png
 
 msix_config:
-  display_name: WinToastExample1
-  identity_name: one.mixin.WinToastExample1
+  display_name: WinToastExample
+  identity_name: one.mixin.WinToastExample
   toast_activator:
     clsid: "936C39FC-6BBC-4A57-B8F8-7C627E401B2F"
     arguments: "-ToastActivated"
