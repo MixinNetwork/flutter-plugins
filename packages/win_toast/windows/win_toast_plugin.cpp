@@ -16,7 +16,49 @@
 #include <map>
 #include <memory>
 
+#ifdef WIN_TOAST_ENABLE_WRL
+#include "wrl.h"
+#include "NotificationActivationCallback.h"
+#endif // WIN_TOAST_ENABLE_WRL
+
 namespace {
+
+#ifdef WIN_TOAST_ENABLE_WRL
+
+using namespace ABI::Windows::Foundation;
+using namespace Microsoft::WRL;
+
+class DECLSPEC_UUID(WIN_TOAST_WRL_ACTIVATOR_CLSID) NotificationActivator : public RuntimeClass<
+    RuntimeClassFlags<ClassicCom>,
+    INotificationActivationCallback> {
+ public:
+  virtual HRESULT STDMETHODCALLTYPE Activate(
+      _In_ LPCWSTR appUserModelId,
+      _In_ LPCWSTR invokedArgs,
+      _In_reads_(dataCount) const NOTIFICATION_USER_INPUT_DATA *data,
+      ULONG dataCount
+  ) override {
+    std::wstring arguments(invokedArgs);
+
+    std::map<std::wstring, std::wstring> inputs;
+    for (int i = 0; i < dataCount; i++) {
+      inputs[data[i].Key] = data[i].Value;
+    }
+
+    auto *instance = NotificationManagerWrl::GetInstance();
+    instance->DispatchActivatedEvent(arguments, inputs);
+
+    return S_OK;
+  }
+
+  ~NotificationActivator() {
+  }
+};
+
+// Flag class as COM creatable
+CoCreatableClass(NotificationActivator)
+
+#endif // WIN_TOAST_ENABLE_WRL
 
 class WinToastPlugin : public flutter::Plugin {
  public:
@@ -30,7 +72,7 @@ class WinToastPlugin : public flutter::Plugin {
 
  private:
   std::shared_ptr<FlutterMethodChannel> channel_;
-  NotificationManager* manager_;
+  NotificationManager *manager_;
 
   // Called when a method is called on this plugin's channel from Dart.
   void HandleMethodCall(
@@ -110,7 +152,6 @@ void WinToastPlugin::OnNotificationDismissed(const std::wstring &tag, const std:
       std::make_unique<flutter::EncodableValue>(map)
   );
 }
-
 
 void WinToastPlugin::HandleMethodCall(
     const flutter::MethodCall<flutter::EncodableValue> &method_call,

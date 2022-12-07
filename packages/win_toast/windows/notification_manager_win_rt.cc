@@ -8,6 +8,7 @@
 
 #include "DesktopNotificationManagerCompat.h"
 #include <winrt/Windows.Data.Xml.Dom.h>
+#include <iostream>
 
 using namespace winrt;
 using namespace Windows::Data::Xml::Dom;
@@ -37,48 +38,66 @@ HRESULT NotificationManagerWinRT::ShowToast(
     std::wstring group,
     int64_t expiration_time
 ) {
+  try {
 
-  // Construct the toast template
-  XmlDocument doc;
-  doc.LoadXml(xml);
+    // Construct the toast template
+    XmlDocument doc;
+    doc.LoadXml(xml);
 
-  // Construct the notification
-  ToastNotification notification{doc};
+    // Construct the notification
+    ToastNotification notification{doc};
 
-  if (!tag.empty()) {
-    notification.Tag(tag);
-  }
-  if (!group.empty()) {
-    notification.Group(group);
-  }
-
-  if (expiration_time != 0) {
-    Windows::Foundation::TimeSpan millis(expiration_time);
-    notification.ExpirationTime(Windows::Foundation::DateTime(millis));
-  }
-
-  notification.Dismissed([this](const ToastNotification &sender, const ToastDismissedEventArgs &args) {
-    if (!dismissed_callback_) {
-      return;
+    if (!tag.empty()) {
+      notification.Tag(tag);
     }
-    dismissed_callback_(
-        sender.Tag().c_str(),
-        sender.Group().c_str(),
-        static_cast<int>(args.Reason())
-    );
-  });
+    if (!group.empty()) {
+      notification.Group(group);
+    }
 
-  DesktopNotificationManagerCompat::CreateToastNotifier().Show(notification);
+    if (expiration_time != 0) {
+      Windows::Foundation::TimeSpan millis(expiration_time);
+      notification.ExpirationTime(Windows::Foundation::DateTime(millis));
+    }
 
+    notification.Dismissed([this](const ToastNotification &sender, const ToastDismissedEventArgs &args) {
+      if (!dismissed_callback_) {
+        return;
+      }
+      dismissed_callback_(
+          sender.Tag().c_str(),
+          sender.Group().c_str(),
+          static_cast<int>(args.Reason())
+      );
+    });
+
+    DesktopNotificationManagerCompat::CreateToastNotifier().Show(notification);
+  } catch (hresult_error const &e) {
+    std::wcout << "show failed: " << e.message().c_str() << std::endl;
+    return e.code();
+  }
   return S_OK;
 }
 
 void NotificationManagerWinRT::Clear() {
-  DesktopNotificationManagerCompat::History().Clear();
+  try {
+    DesktopNotificationManagerCompat::History().Clear();
+  } catch (const hresult_error &e) {
+    std::cout << "Clear failed: " << e.message().c_str() << std::endl;
+  }
 }
 
 void NotificationManagerWinRT::Remove(std::wstring tag, std::wstring group) {
-  DesktopNotificationManagerCompat::History().Remove(tag, group);
+  try {
+    if (!tag.empty() && !group.empty()) {
+      DesktopNotificationManagerCompat::History().Remove(tag, group);
+    } else if (!group.empty()) {
+      DesktopNotificationManagerCompat::History().RemoveGroup(group);
+    } else if (!tag.empty()) {
+      DesktopNotificationManagerCompat::History().Remove(tag);
+    }
+  } catch (hresult_error const &e) {
+    std::wcout << "Remove failed: " << e.code() << "error: " << e.message().c_str() << std::endl;
+  }
 }
 
 #endif //WIN_TOAST_ENABLE_WIN_RT
