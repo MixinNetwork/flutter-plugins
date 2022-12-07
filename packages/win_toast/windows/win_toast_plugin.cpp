@@ -17,7 +17,7 @@
 #include <memory>
 
 #ifdef WIN_TOAST_ENABLE_WRL
-#include "wrl.h"
+#include "wrl_compat.h"
 #include "NotificationActivationCallback.h"
 #endif // WIN_TOAST_ENABLE_WRL
 
@@ -41,7 +41,7 @@ class DECLSPEC_UUID(WIN_TOAST_WRL_ACTIVATOR_CLSID) NotificationActivator : publi
     std::wstring arguments(invokedArgs);
 
     std::map<std::wstring, std::wstring> inputs;
-    for (int i = 0; i < dataCount; i++) {
+    for (unsigned int i = 0; i < dataCount; i++) {
       inputs[data[i].Key] = data[i].Value;
     }
 

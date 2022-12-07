@@ -108,7 +108,7 @@ void DesktopNotificationManagerCompat::Uninstall() {
       // Remove all scheduled notifications (do this first before clearing current notifications)
       auto notifier = CreateToastNotifier();
       auto scheduled = notifier.GetScheduledToastNotifications();
-      for (int i = 0; i < scheduled.Size(); i++) {
+      for (unsigned int i = 0; i < scheduled.Size(); i++) {
         try {
           notifier.RemoveFromSchedule(scheduled.GetAt(i));
         }
@@ -136,8 +136,6 @@ void DesktopNotificationManagerCompat::Uninstall() {
 
 std::wstring GenerateGuid(std::wstring name) {
   // From https://stackoverflow.com/a/41622689/1454643
-  wchar_t const *bytes = name.c_str();
-
   if (name.length() <= 16) {
     wchar_t guid[36];
     swprintf_s(
@@ -209,7 +207,7 @@ struct callback : implements<callback, INotificationActivationCallback> {
 
       StringMap userInput;
 
-      for (int i = 0; i < dataCount; i++) {
+      for (unsigned int i = 0; i < dataCount; i++) {
         userInput.Insert(data[i].Key, data[i].Value);
       }
 
@@ -249,7 +247,7 @@ std::wstring CreateAndRegisterActivator() {
   winrt::check_hresult(::CLSIDFromString((L"{" + clsidStr + L"}").c_str(), &clsid));
 
   // Register callback
-  auto result = CoRegisterClassObject(
+  CoRegisterClassObject(
       clsid,
       make<callback_factory>().get(),
       CLSCTX_LOCAL_SERVER,

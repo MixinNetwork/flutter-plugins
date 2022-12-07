@@ -9,9 +9,8 @@
 #include "Windows.h"
 #include "notification_manager_wrl.h"
 
-#include <wrl.h>
+#include "wrl_compat.h"
 #include <windows.ui.notifications.h>
-#include <NotificationActivationCallback.h>
 #include "DesktopNotificationManagerCompat2.h"
 
 #include <string>
@@ -23,7 +22,6 @@ using namespace ABI::Windows::Data::Xml::Dom;
 using namespace ABI::Windows::UI::Notifications;
 using namespace ABI::Windows::Foundation;
 using namespace Microsoft::WRL;
-
 
 
 #define RETURN_IF_FAILED(hr) do { HRESULT _hrTemp = hr; if (FAILED(_hrTemp)) { return _hrTemp; } } while (false)
@@ -50,7 +48,7 @@ HRESULT NotificationManagerWrl::ShowToast(
       ComPtr<IToastNotification> toast;
       hr = DesktopNotificationManagerCompat::CreateToastNotification(doc.Get(), &toast);
       if (SUCCEEDED(hr)) {
-        EventRegistrationToken activatedToken, dismissedToken, failedToken;
+        EventRegistrationToken dismissedToken;
         hr = toast->add_Dismissed(
             Callback<Implements<RuntimeClassFlags<ClassicCom>,
                                 ITypedEventHandler<ToastNotification *, ToastDismissedEventArgs * >>>(

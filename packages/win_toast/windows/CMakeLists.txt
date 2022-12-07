@@ -22,7 +22,7 @@ add_library(${PLUGIN_NAME} SHARED
   notification_manager_win_rt.h
   DesktopNotificationManagerCompat2.h
   DesktopNotificationManagerCompat2.cpp
-  )
+  wrl_compat.h)
 
 
 if (WIN_TOAST_ENABLE_WIN_RT)
