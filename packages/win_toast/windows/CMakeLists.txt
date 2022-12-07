@@ -6,7 +6,7 @@ project(${PROJECT_NAME} LANGUAGES CXX)
 # not be changed
 set(PLUGIN_NAME "win_toast_plugin")
 
-option(WIN_TOAST_ENABLE_WIN_RT "enable win_rt toast" OFF)
+option(WIN_TOAST_ENABLE_WIN_RT "enable win_rt toast" ON)
 option(WIN_TOAST_ENABLE_WRL "enable wrl toast" OFF)
 
 add_library(${PLUGIN_NAME} SHARED
