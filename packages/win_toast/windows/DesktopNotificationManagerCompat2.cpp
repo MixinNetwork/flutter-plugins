@@ -13,6 +13,7 @@
 #ifdef WIN_TOAST_ENABLE_WRL
 
 
+#include "pch.h"
 #include "DesktopNotificationManagerCompat2.h"
 #include <appmodel.h>
 #include <wrl\wrappers\corewrappers.h>

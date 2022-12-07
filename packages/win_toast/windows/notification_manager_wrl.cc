@@ -4,9 +4,9 @@
 
 #ifdef WIN_TOAST_ENABLE_WRL
 
+#include "Windows.h"
 #include "notification_manager_wrl.h"
 
-#include "Windows.h"
 #include "wrl.h"
 #include "NotificationActivationCallback.h"
 #include "DesktopNotificationManagerCompat2.h"
@@ -27,7 +27,7 @@ using namespace Microsoft::WRL;
 #define RETURN_IF_FAILED(hr) do { HRESULT _hrTemp = hr; if (FAILED(_hrTemp)) { return _hrTemp; } } while (false)
 
 // The GUID must be unique to your app. Create a new GUID if copying this code.
-class DECLSPEC_UUID("9914995E-3B9A-4E86-A7AA-B2759C147211") NotificationActivator WrlSealed WrlFinal
+class DECLSPEC_UUID("936C39FC-6BBC-4A57-B8F8-7C627E401B2F") NotificationActivator WrlSealed WrlFinal
     : public RuntimeClass<RuntimeClassFlags<ClassicCom>, INotificationActivationCallback> {
  public:
   virtual HRESULT STDMETHODCALLTYPE Activate(
@@ -53,8 +53,8 @@ class DECLSPEC_UUID("9914995E-3B9A-4E86-A7AA-B2759C147211") NotificationActivato
 CoCreatableClass(NotificationActivator);
 
 void NotificationManagerWrl::Register(std::wstring aumId, std::wstring displayName, std::wstring icon_path) {
-  DesktopNotificationManagerCompat::RegisterActivator();
   DesktopNotificationManagerCompat::RegisterAumidAndComServer(aumId.c_str(), __uuidof(NotificationActivator));
+  DesktopNotificationManagerCompat::RegisterActivator();
 }
 
 HRESULT NotificationManagerWrl::ShowToast(
@@ -64,67 +64,39 @@ HRESULT NotificationManagerWrl::ShowToast(
     int64_t expiration_time
 ) {
 
-  HRESULT hr;
-  // Construct XML
-  ComPtr<IXmlDocument> doc;
-  hr = DesktopNotificationManagerCompat::CreateXmlDocumentFromString(
-      L"<toast><visual><binding template='ToastGeneric'><text>Hello world</text></binding></visual></toast>",
-      &doc);
-  if (SUCCEEDED(hr))
-  {
-    // See full code sample to learn how to inject dynamic text, buttons, and more
 
-    // Create the notifier
-    // Desktop apps must use the compat method to create the notifier.
+  HRESULT hr;
+
+  ComPtr<IXmlDocument> doc;
+  hr = DesktopNotificationManagerCompat::CreateXmlDocumentFromString(xml.c_str(), &doc);
+  if (SUCCEEDED(hr)) {
     ComPtr<IToastNotifier> notifier;
     hr = DesktopNotificationManagerCompat::CreateToastNotifier(&notifier);
-    if (SUCCEEDED(hr))
-    {
-      // Create the notification itself (using helper method from compat library)
+    if (SUCCEEDED(hr)) {
       ComPtr<IToastNotification> toast;
       hr = DesktopNotificationManagerCompat::CreateToastNotification(doc.Get(), &toast);
-      if (SUCCEEDED(hr))
-      {
-        // And show it!
+      if (SUCCEEDED(hr)) {
+        EventRegistrationToken activatedToken, dismissedToken, failedToken;
+        hr = toast->add_Dismissed(
+            Callback<Implements<RuntimeClassFlags<ClassicCom>,
+                                ITypedEventHandler<ToastNotification *, ToastDismissedEventArgs * >>>(
+                [this, tag, group](
+                    IToastNotification *sender,
+                    IToastDismissedEventArgs *args) -> HRESULT {
+                  if (!dismissed_callback_) {
+                    return S_OK;
+                  }
+                  ToastDismissalReason reason;
+                  args->get_Reason(&reason);
+                  dismissed_callback_(tag, group, reason);
+                  return S_OK;
+                }).Get(),
+            &dismissedToken);
         hr = notifier->Show(toast.Get());
       }
     }
   }
-
   return hr;
-
-//  HRESULT hr;
-//
-//  ComPtr<IXmlDocument> doc;
-//  hr = DesktopNotificationManagerCompat::CreateXmlDocumentFromString(xml.c_str(), &doc);
-//  if (SUCCEEDED(hr)) {
-//    ComPtr<IToastNotifier> notifier;
-//    hr = DesktopNotificationManagerCompat::CreateToastNotifier(&notifier);
-//    if (SUCCEEDED(hr)) {
-//      ComPtr<IToastNotification> toast;
-//      hr = DesktopNotificationManagerCompat::CreateToastNotification(doc.Get(), &toast);
-//      if (SUCCEEDED(hr)) {
-//        EventRegistrationToken activatedToken, dismissedToken, failedToken;
-//        hr = toast->add_Dismissed(
-//            Callback<Implements<RuntimeClassFlags<ClassicCom>,
-//                                ITypedEventHandler<ToastNotification *, ToastDismissedEventArgs * >>>(
-//                [this, tag, group](
-//                    IToastNotification *sender,
-//                    IToastDismissedEventArgs *args) -> HRESULT {
-//                  if (!dismissed_callback_) {
-//                    return S_OK;
-//                  }
-//                  ToastDismissalReason reason;
-//                  args->get_Reason(&reason);
-//                  dismissed_callback_(tag, group, reason);
-//                  return S_OK;
-//                }).Get(),
-//            &dismissedToken);
-//        hr = notifier->Show(toast.Get());
-//      }
-//    }
-//  }
-
 }
 
 void NotificationManagerWrl::Clear() {
