@@ -59,7 +59,8 @@ HRESULT NotificationManagerWrl::ShowToast(
 
   if (!tag.empty()) {
     HSTRING tag_hstring;
-    hr = ::WindowsCreateString(tag.c_str(), tag.length(), &tag_hstring);
+
+    hr = ::WindowsCreateString(tag.c_str(), static_cast<UINT32>(tag.length()), &tag_hstring);
     RETURN_IF_FAILED(hr);
     hr = toast2->put_Tag(tag_hstring);
     RETURN_IF_FAILED(hr);
@@ -68,12 +69,11 @@ HRESULT NotificationManagerWrl::ShowToast(
 
   if (!group.empty()) {
     HSTRING group_hstring;
-    hr = ::WindowsCreateString(group.c_str(), group.length(), &group_hstring);
+    hr = ::WindowsCreateString(group.c_str(), static_cast<UINT32>(group.length()), &group_hstring);
     RETURN_IF_FAILED(hr);
     hr = toast2->put_Group(group_hstring);
     RETURN_IF_FAILED(hr);
   }
-
 
   EventRegistrationToken dismissedToken;
   hr = toast->add_Dismissed(
