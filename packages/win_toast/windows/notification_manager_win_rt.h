@@ -12,6 +12,12 @@
 class NotificationManagerWinRT : public NotificationManager {
 
  public:
+
+  static NotificationManagerWinRT *GetInstance() {
+    static NotificationManagerWinRT instance;
+    return &instance;
+  }
+
   void Register(std::wstring aumId, std::wstring displayName, std::wstring icon_path) override;
   HRESULT ShowToast(std::wstring xml, std::wstring tag, std::wstring group, int64_t expiration_time) override;
   void Clear() override;

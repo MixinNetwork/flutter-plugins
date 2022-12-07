@@ -1,7 +1,7 @@
 #include "include/win_toast/win_toast_plugin.h"
 
 // This must be included before many other Windows headers.
-#include <windows.h>
+#include <Windows.h>
 #include <VersionHelpers.h>
 
 #include "strconv.h"
@@ -30,7 +30,7 @@ class WinToastPlugin : public flutter::Plugin {
 
  private:
   std::shared_ptr<FlutterMethodChannel> channel_;
-  std::unique_ptr<NotificationManager> manager_;
+  NotificationManager* manager_;
 
   // Called when a method is called on this plugin's channel from Dart.
   void HandleMethodCall(
@@ -59,7 +59,7 @@ void WinToastPlugin::RegisterWithRegistrar(
 }
 
 WinToastPlugin::WinToastPlugin(std::shared_ptr<FlutterMethodChannel> channel)
-    : channel_(std::move(channel)) {
+    : channel_(std::move(channel)), manager_(nullptr) {
 
   if (IsWindows10OrGreater()) {
     std::cout << "NotificationManagerWin" << std::endl;
@@ -67,13 +67,13 @@ WinToastPlugin::WinToastPlugin(std::shared_ptr<FlutterMethodChannel> channel)
 #ifdef WIN_TOAST_ENABLE_WRL
     std::cout << "WIN_TOAST_ENABLE_WRL" << std::endl;
     if (NotificationManager::HasIdentity()) {
-      manager_ = std::make_unique<NotificationManagerWrl>();
+      manager_ = NotificationManagerWrl::GetInstance();
     }
 #endif
 #ifdef WIN_TOAST_ENABLE_WIN_RT
     std::cout << "WIN_TOAST_ENABLE_WINRT" << std::endl;
     if (!NotificationManager::HasIdentity()) {
-      manager_ = std::make_unique<NotificationManagerWinRT>();
+      manager_ = NotificationManagerWinRT::GetInstance();
     }
 #endif
   }
@@ -110,6 +110,7 @@ void WinToastPlugin::OnNotificationDismissed(const std::wstring &tag, const std:
       std::make_unique<flutter::EncodableValue>(map)
   );
 }
+
 
 void WinToastPlugin::HandleMethodCall(
     const flutter::MethodCall<flutter::EncodableValue> &method_call,

@@ -7,10 +7,10 @@
 #include "Windows.h"
 #include "notification_manager_wrl.h"
 
-#include "wrl.h"
-#include "NotificationActivationCallback.h"
-#include "DesktopNotificationManagerCompat2.h"
+#include <wrl.h>
 #include <windows.ui.notifications.h>
+#include <NotificationActivationCallback.h>
+#include "DesktopNotificationManagerCompat2.h"
 
 #include <string>
 #include <exception>
@@ -23,8 +23,6 @@ using namespace ABI::Windows::Data::Xml::Dom;
 using namespace ABI::Windows::UI::Notifications;
 using namespace ABI::Windows::Foundation;
 using namespace Microsoft::WRL;
-
-#define RETURN_IF_FAILED(hr) do { HRESULT _hrTemp = hr; if (FAILED(_hrTemp)) { return _hrTemp; } } while (false)
 
 // The GUID must be unique to your app. Create a new GUID if copying this code.
 class DECLSPEC_UUID("936C39FC-6BBC-4A57-B8F8-7C627E401B2F") NotificationActivator WrlSealed WrlFinal
@@ -52,8 +50,10 @@ class DECLSPEC_UUID("936C39FC-6BBC-4A57-B8F8-7C627E401B2F") NotificationActivato
 // Flag class as COM creatable
 CoCreatableClass(NotificationActivator);
 
+#define RETURN_IF_FAILED(hr) do { HRESULT _hrTemp = hr; if (FAILED(_hrTemp)) { return _hrTemp; } } while (false)
+
+
 void NotificationManagerWrl::Register(std::wstring aumId, std::wstring displayName, std::wstring icon_path) {
-  DesktopNotificationManagerCompat::RegisterAumidAndComServer(aumId.c_str(), __uuidof(NotificationActivator));
   DesktopNotificationManagerCompat::RegisterActivator();
 }
 
@@ -63,7 +63,6 @@ HRESULT NotificationManagerWrl::ShowToast(
     std::wstring group,
     int64_t expiration_time
 ) {
-
 
   HRESULT hr;
 
@@ -115,6 +114,5 @@ void NotificationManagerWrl::Remove(std::wstring tag, std::wstring group) {
     hr = history->RemoveGroupedTag(tag.c_str(), group.c_str());
   }
 }
-
 
 #endif // WIN_TOAST_ENABLE_WRL
