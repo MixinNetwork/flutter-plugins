@@ -13,8 +13,8 @@
 #ifdef WIN_TOAST_ENABLE_WRL
 
 #include "DesktopNotificationManagerCompat2.h"
-#include <appmodel.h>
 #include <wrl\wrappers\corewrappers.h>
+#include "notification_manager.h"
 
 #define RETURN_IF_FAILED(hr) do { HRESULT _hrTemp = hr; if (FAILED(_hrTemp)) { return _hrTemp; } } while (false)
 
@@ -31,8 +31,6 @@ namespace DesktopNotificationManagerCompat
     bool s_registeredAumidAndComServer = false;
     std::wstring s_aumid;
     bool s_registeredActivator = false;
-    bool s_hasCheckedIsRunningAsUwp = false;
-    bool s_isRunningAsUwp = false;
 
     HRESULT RegisterAumidAndComServer(const wchar_t *aumid, GUID clsid)
     {
@@ -208,17 +206,7 @@ namespace DesktopNotificationManagerCompat
 
     bool IsRunningAsUwp()
     {
-        if (!s_hasCheckedIsRunningAsUwp)
-        {
-            // https://stackoverflow.com/questions/39609643/determine-if-c-application-is-running-as-a-uwp-app-in-desktop-bridge-project
-            UINT32 length;
-            wchar_t packageFamilyName[PACKAGE_FAMILY_NAME_MAX_LENGTH + 1];
-            LONG result = GetPackageFamilyName(GetCurrentProcess(), &length, packageFamilyName);
-            s_isRunningAsUwp = result == ERROR_SUCCESS;
-            s_hasCheckedIsRunningAsUwp = true;
-        }
-
-        return s_isRunningAsUwp;
+        return NotificationManager::HasIdentity();
     }
 }
 

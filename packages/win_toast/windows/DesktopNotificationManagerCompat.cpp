@@ -16,7 +16,7 @@
 
 #include <winrt/Windows.ApplicationModel.h>
 #include <Windows.h>
-#include <appmodel.h>
+#include "notification_manager.h"
 #include "NotificationActivationCallback.h"
 #include <winrt/Windows.Storage.h>
 #include <winrt/Windows.Foundation.Collections.h>
@@ -345,20 +345,8 @@ bool IsContainerized() {
   return _isContainerized;
 }
 
-bool _checkedHasIdentity;
-bool _hasIdentity;
 bool HasIdentity() {
-  if (!_checkedHasIdentity) {
-    // https://stackoverflow.com/questions/39609643/determine-if-c-application-is-running-as-a-uwp-app-in-desktop-bridge-project
-    UINT32 length;
-    wchar_t packageFamilyName[PACKAGE_FAMILY_NAME_MAX_LENGTH + 1];
-    LONG result = GetPackageFamilyName(GetCurrentProcess(), &length, packageFamilyName);
-    _hasIdentity = result == ERROR_SUCCESS;
-
-    _checkedHasIdentity = true;
-  }
-
-  return false;
+  return NotificationManager::HasIdentity();
 }
 
 DesktopNotificationHistoryCompat DesktopNotificationManagerCompat::History() {

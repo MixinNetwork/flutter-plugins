@@ -15,8 +15,6 @@
 #include <string>
 #include <exception>
 
-#pragma comment(lib, "shlwapi")
-#pragma comment(lib, "user32")
 #pragma comment(lib, "runtimeobject")
 
 using namespace ABI::Windows::Data::Xml::Dom;

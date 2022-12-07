@@ -24,6 +24,7 @@ add_library(${PLUGIN_NAME} SHARED
   DesktopNotificationManagerCompat2.cpp
   )
 
+
 if(WIN_TOAST_ENABLE_WIN_RT)
   TARGET_COMPILE_DEFINITIONS(${PLUGIN_NAME} PRIVATE  WIN_TOAST_ENABLE_WIN_RT=1)
   message("enable win_rt toast")
