@@ -7,6 +7,8 @@
 
 #ifdef WIN_TOAST_ENABLE_WRL
 
+#include <utility>
+
 #include "notification_manager.h"
 
 class NotificationManagerWrl : public NotificationManager {
@@ -25,6 +27,12 @@ class NotificationManagerWrl : public NotificationManager {
   void Clear() override;
 
   void Remove(std::wstring tag, std::wstring group) override;
+
+  void DispatchActivatedEvent(std::wstring arguments, std::map<std::wstring, std::wstring> inputs) {
+    if (activated_callback_) {
+      activated_callback_(std::move(arguments), std::move(inputs));
+    }
+  }
 
 };
 

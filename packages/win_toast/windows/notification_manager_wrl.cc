@@ -32,13 +32,17 @@ class DECLSPEC_UUID("936C39FC-6BBC-4A57-B8F8-7C627E401B2F") NotificationActivato
       _In_ LPCWSTR appUserModelId,
       _In_ LPCWSTR invokedArgs,
       _In_reads_(dataCount) const NOTIFICATION_USER_INPUT_DATA *data,
-      ULONG dataCount) override {
+      ULONG dataCount
+  ) override {
     std::wstring arguments(invokedArgs);
-    HRESULT hr = S_OK;
 
-    if (FAILED(hr)) {
-// Log failed HRESULT
+    std::map<std::wstring, std::wstring> inputs;
+    for (int i = 0; i < dataCount; i++) {
+      inputs[data[i].Key] = data[i].Value;
     }
+
+    auto *instance = NotificationManagerWrl::GetInstance();
+    instance->DispatchActivatedEvent(arguments, inputs);
 
     return S_OK;
   }
@@ -51,7 +55,6 @@ class DECLSPEC_UUID("936C39FC-6BBC-4A57-B8F8-7C627E401B2F") NotificationActivato
 CoCreatableClass(NotificationActivator);
 
 #define RETURN_IF_FAILED(hr) do { HRESULT _hrTemp = hr; if (FAILED(_hrTemp)) { return _hrTemp; } } while (false)
-
 
 void NotificationManagerWrl::Register(std::wstring aumId, std::wstring displayName, std::wstring icon_path) {
   DesktopNotificationManagerCompat::RegisterActivator();
