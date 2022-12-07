@@ -4,7 +4,7 @@ description: Demonstrates how to use the win_toast plugin.
 publish_to: 'none'
 
 environment:
-  sdk: ">=2.18.0 <3.0.0"
+  sdk: ">=2.17.0 <3.0.0"
 
 dependencies:
   flutter:
@@ -13,7 +13,10 @@ dependencies:
   win_toast:
     path: ../
   cupertino_icons: ^1.0.2
-  xml: ^6.2.2
+  xml: 6.1.0
+  mixin_logger: ^0.0.2
+  path_provider: ^2.0.11
+  path: 1.8.2
 
 dev_dependencies:
   flutter_test:
@@ -32,5 +35,5 @@ msix_config:
   toast_activator:
     clsid: "9914995E-3B9A-4E86-A7AA-B2759C147211"
     arguments: "-ToastActivated"
-    display_name: "WinToastExample"
+    display_name: "Example Application"
   msix_version: 1.0.4.0

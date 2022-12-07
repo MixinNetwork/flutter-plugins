@@ -1,9 +1,16 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:mixin_logger/mixin_logger.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:win_toast/win_toast.dart';
 
-void main() {
+void main() async {
+  final dir = await getApplicationDocumentsDirectory();
+  final logPath = p.join(dir.path, 'log');
+  await initLogger(logPath);
+  i('logPath: $logPath');
   runApp(const MyApp());
 }
 
@@ -24,17 +31,17 @@ class _MyAppState extends State<MyApp> {
     super.initState();
     scheduleMicrotask(() async {
       final ret = await WinToast.instance().initialize(
-        aumId: 'one.mixin.example_application',
+        aumId: 'one.mixin.WinToastExample',
         displayName: 'Example Application',
         iconPath: '',
       );
       assert(ret);
       setState(() {
-        _initialized = true;
+        _initialized = ret;
       });
     });
     WinToast.instance().setActivatedCallback((event) {
-      debugPrint('onNotificationActivated: $event');
+      i('onNotificationActivated: $event');
       showDialog(
           context: _navigatorKey.currentState!.context,
           builder: (context) {
@@ -53,7 +60,7 @@ class _MyAppState extends State<MyApp> {
           });
 
       WinToast.instance().setDismissedCallback((event) {
-        debugPrint('onNotificationDismissed: $event');
+        i('onNotificationDismissed: $event');
         showDialog(
             context: _navigatorKey.currentState!.context,
             builder: (context) {
@@ -112,8 +119,6 @@ class _MainPageState extends State<MainPage> {
       <binding template="ToastGeneric">
          <text>Andrew sent you a picture</text>
          <text>Check this out, Happy Canyon in Utah!</text>
-         <image placement="appLogoOverride" hint-crop="circle" src="https://unsplash.it/64?image=1005" />
-         <image src="https://picsum.photos/364/202?image=883" />
       </binding>
    </visual>
    <actions>
@@ -124,7 +129,8 @@ class _MainPageState extends State<MainPage> {
    </actions>
 </toast>
             """;
-            await WinToast.instance().showCustomToast(xml: xml);
+            final ret = await WinToast.instance().showCustomToast(xml: xml);
+            i('showCustomToast: $ret');
           },
           child: const Text('one line'),
         ),

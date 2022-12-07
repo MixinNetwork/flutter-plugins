@@ -9,12 +9,15 @@
 // TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH
 // THE CODE OR THE USE OR OTHER DEALINGS IN THE CODE.
 // ******************************************************************
+#ifdef WIN_TOAST_ENABLE_WIN_RT
 
 #pragma once
 #include <functional>
 #include <winrt/Windows.UI.Notifications.h>
 #include <winrt/Windows.Foundation.Collections.h>
 #define TOAST_ACTIVATED_LAUNCH_ARG "-ToastActivated"
+
+namespace notification_rt {
 
 class DesktopNotificationManagerCompat;
 class DesktopNotificationActivatedEventArgsCompat;
@@ -66,3 +69,7 @@ class DesktopNotificationHistoryCompat
     _history = winrt::Windows::UI::Notifications::ToastNotificationManager::History();
   }
 };
+
+} // namespace notification_rt
+
+#endif //WIN_TOAST_ENABLE_WIN_RT

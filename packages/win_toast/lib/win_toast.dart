@@ -137,7 +137,7 @@ class WinToast {
     return _supportToast;
   }
 
-  Future<void> showCustomToast({
+  Future<int> showCustomToast({
     required String xml,
     Duration? expiration,
     bool expirationOnReboot = false,
@@ -145,15 +145,16 @@ class WinToast {
     String? group,
   }) async {
     if (!_supportToast) {
-      return;
+      return -1;
     }
-    await _channel.invokeMethod("showCustomToast", {
+    final ret = await _channel.invokeMethod<int>("showCustomToast", {
       'xml': xml,
       'tag': tag ?? '',
       'group': group ?? '',
       'expiration': expiration?.inMilliseconds ?? 0,
       'expiration_on_reboot': expirationOnReboot,
     });
+    return ret ?? -1;
   }
 
   Future<void> clear() {
