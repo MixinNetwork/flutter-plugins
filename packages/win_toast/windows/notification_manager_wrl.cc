@@ -23,7 +23,6 @@ using namespace ABI::Windows::UI::Notifications;
 using namespace ABI::Windows::Foundation;
 using namespace Microsoft::WRL;
 
-
 #define RETURN_IF_FAILED(hr) do { HRESULT _hrTemp = hr; if (FAILED(_hrTemp)) { return _hrTemp; } } while (false)
 
 void NotificationManagerWrl::Register(std::wstring aumId, std::wstring displayName, std::wstring icon_path) {
@@ -41,33 +40,59 @@ HRESULT NotificationManagerWrl::ShowToast(
 
   ComPtr<IXmlDocument> doc;
   hr = DesktopNotificationManagerCompat::CreateXmlDocumentFromString(xml.c_str(), &doc);
-  if (SUCCEEDED(hr)) {
-    ComPtr<IToastNotifier> notifier;
-    hr = DesktopNotificationManagerCompat::CreateToastNotifier(&notifier);
-    if (SUCCEEDED(hr)) {
-      ComPtr<IToastNotification> toast;
-      hr = DesktopNotificationManagerCompat::CreateToastNotification(doc.Get(), &toast);
-      if (SUCCEEDED(hr)) {
-        EventRegistrationToken dismissedToken;
-        hr = toast->add_Dismissed(
-            Callback<Implements<RuntimeClassFlags<ClassicCom>,
-                                ITypedEventHandler<ToastNotification *, ToastDismissedEventArgs * >>>(
-                [this, tag, group](
-                    IToastNotification *sender,
-                    IToastDismissedEventArgs *args) -> HRESULT {
-                  if (!dismissed_callback_) {
-                    return S_OK;
-                  }
-                  ToastDismissalReason reason;
-                  args->get_Reason(&reason);
-                  dismissed_callback_(tag, group, reason);
-                  return S_OK;
-                }).Get(),
-            &dismissedToken);
-        hr = notifier->Show(toast.Get());
-      }
-    }
+  RETURN_IF_FAILED(hr);
+
+  ComPtr<IToastNotifier> notifier;
+  hr = DesktopNotificationManagerCompat::CreateToastNotifier(&notifier);
+  RETURN_IF_FAILED(hr);
+
+  ComPtr<IToastNotification> toast;
+  hr = DesktopNotificationManagerCompat::CreateToastNotification(doc.Get(), &toast);
+  RETURN_IF_FAILED(hr);
+
+  IToastNotification2 *toast2_ptr;
+  hr = toast->QueryInterface(&toast2_ptr);
+  RETURN_IF_FAILED(hr);
+
+  ComPtr<IToastNotification2> toast2;
+  toast2.Attach(toast2_ptr);
+
+  if (!tag.empty()) {
+    HSTRING tag_hstring;
+    hr = ::WindowsCreateString(tag.c_str(), tag.length(), &tag_hstring);
+    RETURN_IF_FAILED(hr);
+    hr = toast2->put_Tag(tag_hstring);
+    RETURN_IF_FAILED(hr);
+    ::WindowsDeleteString(tag_hstring);
   }
+
+  if (!group.empty()) {
+    HSTRING group_hstring;
+    hr = ::WindowsCreateString(group.c_str(), group.length(), &group_hstring);
+    RETURN_IF_FAILED(hr);
+    hr = toast2->put_Group(group_hstring);
+    RETURN_IF_FAILED(hr);
+  }
+
+
+  EventRegistrationToken dismissedToken;
+  hr = toast->add_Dismissed(
+      Callback<Implements<RuntimeClassFlags<ClassicCom>,
+                          ITypedEventHandler<ToastNotification *, ToastDismissedEventArgs * >>>(
+          [this, tag, group](
+              IToastNotification *sender,
+              IToastDismissedEventArgs *args) -> HRESULT {
+            if (!dismissed_callback_) {
+              return S_OK;
+            }
+            ToastDismissalReason reason;
+            args->get_Reason(&reason);
+            dismissed_callback_(tag, group, reason);
+            return S_OK;
+          }).Get(),
+      &dismissedToken);
+  RETURN_IF_FAILED(hr);
+  hr = notifier->Show(toast.Get());
   return hr;
 }
 
