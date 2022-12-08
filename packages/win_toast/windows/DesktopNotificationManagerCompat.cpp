@@ -261,7 +261,6 @@ void RegisterActivatorWithClsid(std::wstring clsidStr) {
 
 std::wstring CreateAndRegisterActivator() {
 
-  DWORD registration{};
   std::wstring clsidStr = GenerateGuid(_win32Aumid);
 
   RegisterActivatorWithClsid(clsidStr);
