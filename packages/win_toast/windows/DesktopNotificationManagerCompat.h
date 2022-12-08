@@ -9,7 +9,6 @@
 // TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH
 // THE CODE OR THE USE OR OTHER DEALINGS IN THE CODE.
 // ******************************************************************
-#ifdef WIN_TOAST_ENABLE_WIN_RT
 
 #pragma once
 #include <functional>
@@ -23,10 +22,9 @@ class DesktopNotificationManagerCompat;
 class DesktopNotificationActivatedEventArgsCompat;
 class DesktopNotificationHistoryCompat;
 
-class DesktopNotificationManagerCompat
-{
+class DesktopNotificationManagerCompat {
  public:
-  static void Register(std::wstring aumid, std::wstring displayName, std::wstring iconPath);
+  static void Register(std::wstring aumid, std::wstring displayName, std::wstring iconPath, std::wstring clsid);
   static void OnActivated(std::function<void(DesktopNotificationActivatedEventArgsCompat)> callback);
 
   static winrt::Windows::UI::Notifications::ToastNotifier CreateToastNotifier();
@@ -35,8 +33,7 @@ class DesktopNotificationManagerCompat
   static void Uninstall();
 };
 
-class DesktopNotificationActivatedEventArgsCompat
-{
+class DesktopNotificationActivatedEventArgsCompat {
   std::wstring _argument;
   winrt::Windows::Foundation::Collections::StringMap _userInput;
 
@@ -44,15 +41,14 @@ class DesktopNotificationActivatedEventArgsCompat
   std::wstring Argument() { return _argument; }
   winrt::Windows::Foundation::Collections::StringMap UserInput() { return _userInput; }
 
-  DesktopNotificationActivatedEventArgsCompat(std::wstring argument, winrt::Windows::Foundation::Collections::StringMap userInput)
-  {
+  DesktopNotificationActivatedEventArgsCompat(std::wstring argument,
+                                              winrt::Windows::Foundation::Collections::StringMap userInput) {
     _argument = argument;
     _userInput = userInput;
   }
 };
 
-class DesktopNotificationHistoryCompat
-{
+class DesktopNotificationHistoryCompat {
   std::wstring _win32Aumid;
   winrt::Windows::UI::Notifications::ToastNotificationHistory _history = nullptr;
 
@@ -63,8 +59,7 @@ class DesktopNotificationHistoryCompat
   void Remove(std::wstring tag, std::wstring group);
   void RemoveGroup(std::wstring group);
 
-  DesktopNotificationHistoryCompat(std::wstring win32Aumid)
-  {
+  DesktopNotificationHistoryCompat(std::wstring win32Aumid) {
     _win32Aumid = win32Aumid;
     _history = winrt::Windows::UI::Notifications::ToastNotificationManager::History();
   }
@@ -72,4 +67,3 @@ class DesktopNotificationHistoryCompat
 
 } // namespace notification_rt
 
-#endif //WIN_TOAST_ENABLE_WIN_RT

@@ -20,7 +20,8 @@ class NotificationManager {
   virtual void Register(
       std::wstring aumId,
       std::wstring displayName,
-      std::wstring icon_path
+      std::wstring icon_path,
+      std::wstring clsid
   ) = 0;
 
   virtual HRESULT ShowToast(

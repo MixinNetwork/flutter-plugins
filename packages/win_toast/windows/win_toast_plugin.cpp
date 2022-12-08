@@ -7,7 +7,6 @@
 #include "strconv.h"
 #include "notification_manager.h"
 #include "notification_manager_win_rt.h"
-#include "notification_manager_wrl.h"
 #include "dll_importer.h"
 
 #include <flutter/method_channel.h>
@@ -16,68 +15,6 @@
 
 #include <map>
 #include <memory>
-
-#if 0
-#include "pch.h"
-#include "NotificationActivationCallback.h"
-#include "winrt/windows.foundation.h"
-#else
-#include "pch.h"
-#include "wrl/module.h"
-#include "NotificationActivationCallback.h"
-#endif // WIN_TOAST_ENABLE_WRL
-
-#if 0
-
-#pragma comment(lib, "runtimeobject")
-
-using namespace winrt;
-using namespace Windows::Foundation;
-
-std::wstring const this_app_name{L"ToastAndCallback"};
-
-struct callback : winrt::implements<callback, INotificationActivationCallback> {
-  HRESULT __stdcall Activate(
-      LPCWSTR app,
-      LPCWSTR args,
-      [[maybe_unused]] NOTIFICATION_USER_INPUT_DATA const *data,
-      [[maybe_unused]] ULONG count) noexcept final {
-    try {
-      std::wcout << this_app_name << L" has been called back from a notification." << std::endl;
-      std::wcout << L"Value of the 'app' parameter is '" << app << L"'." << std::endl;
-      std::wcout << L"Value of the 'args' parameter is '" << args << L"'." << std::endl;
-      return S_OK;
-    }
-    catch (...) {
-      return winrt::to_hresult();
-    }
-  }
-};
-
-struct __declspec(uuid(WIN_TOAST_WRL_ACTIVATOR_CLSID)) callback_factory : implements<callback_factory, IClassFactory> {
-  HRESULT __stdcall CreateInstance(
-      IUnknown *outer,
-      GUID const &iid,
-      void **result) noexcept final {
-    *result = nullptr;
-
-    std::wcout << this_app_name << L" callback_factory." << std::endl;
-
-    if (outer) {
-      return CLASS_E_NOAGGREGATION;
-    }
-
-    return make<callback>()->QueryInterface(iid, result);
-  }
-
-  HRESULT __stdcall LockServer(BOOL) noexcept final {
-    return S_OK;
-  }
-};
-#else
-
-
-#endif // WIN_TOAST_ENABLE_WRL
 
 namespace {
 
@@ -130,26 +67,7 @@ WinToastPlugin::WinToastPlugin(std::shared_ptr<FlutterMethodChannel> channel)
       std::wcout << L"Failed to initialize DllImporter." << std::endl;
       return;
     }
-    NotificationManagerWrl::GetInstance();
     manager_ = NotificationManagerWinRT::GetInstance();
-#if 0
-#ifdef WIN_TOAST_ENABLE_WRL
-    if (NotificationManager::HasIdentity()) {
-      std::wcout << L"NotificationManager has identity." << std::endl;
-      manager_ = NotificationManagerWrl::GetInstance();
-      if (FAILED(hr)) {
-        std::wcout << L"Failed to register activator." << std::endl;
-      } else {
-        std::wcout << L"Activator registered." << std::endl;
-      }
-    }
-#endif
-#ifdef WIN_TOAST_ENABLE_WIN_RT
-    if (!NotificationManager::HasIdentity()) {
-      manager_ = NotificationManagerWinRT::GetInstance();
-    }
-#endif
-#endif
   }
 }
 
@@ -198,7 +116,8 @@ void WinToastPlugin::HandleMethodCall(
     auto aumid = std::get<std::string>(arguments->at(flutter::EncodableValue("aumid")));
     auto display_name = std::get<std::string>(arguments->at(flutter::EncodableValue("display_name")));
     auto icon_path = std::get<std::string>(arguments->at(flutter::EncodableValue("icon_path")));
-    manager_->Register(utf8_to_wide(aumid), utf8_to_wide(display_name), utf8_to_wide(icon_path));
+    auto clsid = std::get<std::string>(arguments->at(flutter::EncodableValue("clsid")));
+    manager_->Register(utf8_to_wide(aumid), utf8_to_wide(display_name), utf8_to_wide(icon_path), utf8_to_wide(clsid));
     manager_->OnActivated([this](const std::wstring &argument, const std::map<std::wstring, std::wstring> &user_input) {
       OnNotificationActivated(argument, user_input);
     });
@@ -238,48 +157,4 @@ void WinToastPluginRegisterWithRegistrar(
       flutter::PluginRegistrarManager::GetInstance()
           ->GetRegistrar<flutter::PluginRegistrarWindows>(registrar));
 
-#if 0
-  // register callback
-  DWORD registration{};
-  std::wstring clsidStr(L"936C39FC-6BBC-4A57-B8F8-7C627E401B2F");
-  GUID clsid;
-
-  winrt::check_hresult(::CLSIDFromString((L"{" + clsidStr + L"}").c_str(), &clsid));
-
-  // Register callback
-  winrt::check_hresult(CoRegisterClassObject(
-      clsid,
-      make<callback_factory>().get(),
-      CLSCTX_LOCAL_SERVER,
-      REGCLS_MULTIPLEUSE,
-      &registration)
-  );
-
-#endif
-
 }
-#if 0
-
-HRESULT __stdcall DllGetClassObject(GUID const &clsid, GUID const &iid, void **result) {
-  try {
-    *result = nullptr;
-
-    std::cout << "DllGetClassObject" << std::endl;
-
-    if (clsid == __uuidof(callback_factory)) {
-      std::cout << "DllGetClassObject callback_factory" << std::endl;
-      return winrt::make<callback_factory>()->QueryInterface(iid, result);
-    }
-
-#ifdef _WRL_MODULE_H_
-    return ::Microsoft::WRL::Module<::Microsoft::WRL::InProc>::GetModule().GetClassObject(clsid, iid, result);
-#else
-    return winrt::hresult_class_not_available().to_abi();
-#endif
-  }
-  catch (...) {
-    return winrt::to_hresult();
-  }
-}
-
-#endif
