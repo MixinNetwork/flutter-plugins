@@ -4,6 +4,7 @@
 
 #include <Windows.h>
 #include <hstring.h>
+#include <minappmodel.h>
 
 #include "notification_manager.h"
 #include "dll_importer.h"
@@ -14,31 +15,18 @@ bool _checkedHasIdentity = false;
 bool _hasIdentity = false;
 
 bool hasIdentity() {
+  // https://stackoverflow.com/questions/39609643/determine-if-c-application-is-running-as-a-uwp-app-in-desktop-bridge-project
   UINT32 length;
-  auto err = DllImporter::GetCurrentPackageFullName(&length, nullptr);
-  if (err != ERROR_INSUFFICIENT_BUFFER) {
-    return false;
-  }
-
-  auto fullName = (PWSTR) malloc(length * sizeof(PWSTR));
-  if (fullName == nullptr) {
-    return false;
-  }
-
-  err = DllImporter::GetCurrentPackageFullName(&length, fullName);
-  if (err != ERROR_SUCCESS) {
-    return false;
-  }
-
-  free(fullName);
-  return true;
+  wchar_t packageFamilyName[PACKAGE_FAMILY_NAME_MAX_LENGTH + 1];
+  LONG result = DllImporter::GetPackageFamilyName(GetCurrentProcess(), &length, packageFamilyName);
+  return result == ERROR_SUCCESS;
 }
 
 }
 
 bool NotificationManager::HasIdentity() {
   if (!_checkedHasIdentity) {
-    _hasIdentity = true;
+    _hasIdentity = hasIdentity();
     _checkedHasIdentity = true;
   }
 

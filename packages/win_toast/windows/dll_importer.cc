@@ -24,6 +24,8 @@ HRESULT LoadFunctions() {
 
   RETURN_IF_FAILED(loadFunctionFromLibrary(LibKernel32, "GetCurrentPackageFullName",
                                            DllImporter::GetCurrentPackageFullName));
+  RETURN_IF_FAILED(loadFunctionFromLibrary(LibKernel32, "GetPackageFamilyName",
+                                           DllImporter::GetPackageFamilyName));
 
   HINSTANCE LibShell32 = LoadLibraryW(L"SHELL32.DLL");
   RETURN_IF_FAILED(loadFunctionFromLibrary(LibShell32, "SetCurrentProcessExplicitAppUserModelID",
@@ -55,6 +57,8 @@ DllImporter::f_WindowsDeleteString DllImporter::WindowsDeleteString;
 DllImporter::f_GetCurrentPackageFullName DllImporter::GetCurrentPackageFullName;
 DllImporter::f_SetCurrentProcessExplicitAppUserModelID DllImporter::SetCurrentProcessExplicitAppUserModelID;
 DllImporter::f_PropVariantToString DllImporter::PropVariantToString;
+DllImporter::f_GetPackageFamilyName DllImporter::GetPackageFamilyName;
+
 
 HRESULT DllImporter::Initialize() {
   if (is_dll_load_called) {

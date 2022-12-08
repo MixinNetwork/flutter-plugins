@@ -33,6 +33,12 @@ class DllImporter {
   typedef HRESULT(FAR STDAPICALLTYPE *f_GetCurrentPackageFullName)
       (_Inout_ UINT32 *packageFullNameLength, _Out_writes_opt_(*packageFullNameLength) PWSTR packageFullName);
 
+  typedef HRESULT(FAR STDAPICALLTYPE *f_GetPackageFamilyName)
+      (_In_ HANDLE hProcess,
+       _Inout_ UINT32 *packageFamilyNameLength,
+       _Out_writes_opt_(*packageFamilyNameLength) PWSTR packageFamilyName
+      );
+
   static f_GetCurrentPackageFullName GetCurrentPackageFullName;
   static f_SetCurrentProcessExplicitAppUserModelID SetCurrentProcessExplicitAppUserModelID;
   static f_PropVariantToString PropVariantToString;
@@ -40,6 +46,7 @@ class DllImporter {
   static f_WindowsCreateStringReference WindowsCreateStringReference;
   static f_WindowsGetStringRawBuffer WindowsGetStringRawBuffer;
   static f_WindowsDeleteString WindowsDeleteString;
+  static f_GetPackageFamilyName GetPackageFamilyName;
 
   static HRESULT Initialize();
 
