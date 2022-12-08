@@ -12,24 +12,108 @@
 #include "wrl_compat.h"
 #include <windows.ui.notifications.h>
 #include "DesktopNotificationManagerCompat2.h"
+#include "dll_importer.h"
 
 #include <string>
 #include <exception>
+#include <iostream>
 
-#pragma comment(lib, "runtimeobject")
+#include "NotificationActivationCallback.h"
+#include "wrl/module.h"
+
+#pragma comment(lib, "runtimeobject.lib")
 
 using namespace ABI::Windows::Data::Xml::Dom;
 using namespace ABI::Windows::UI::Notifications;
 using namespace ABI::Windows::Foundation;
 using namespace Microsoft::WRL;
 
-#define RETURN_IF_FAILED(hr) do { HRESULT _hrTemp = hr; if (FAILED(_hrTemp)) { return _hrTemp; } } while (false)
+static DWORD cookies_[1] = {0};
 
-void NotificationManagerWrl::Register(std::wstring aumId, std::wstring displayName, std::wstring icon_path) {
-  DesktopNotificationManagerCompat::RegisterActivator();
+class DECLSPEC_UUID(WIN_TOAST_WRL_ACTIVATOR_CLSID) NotificationActivator : public RuntimeClass<
+    RuntimeClassFlags<ClassicCom>,
+    INotificationActivationCallback> {
+ public:
+
+  static HRESULT Register() {
+    auto &module = Module<OutOfProc>::Create();
+
+    unsigned int flags = ModuleType::OutOfProcDisableCaching;
+
+    ComPtr<IUnknown> factory;
+    HRESULT hr = Details::CreateClassFactory<SimpleClassFactory<NotificationActivator>>(
+        &flags, nullptr, __uuidof(IClassFactory), &factory);
+    RETURN_IF_FAILED(hr);
+
+    ComPtr<IClassFactory> factory_factory;
+    hr = factory.As(&factory_factory);
+    RETURN_IF_FAILED(hr);
+
+    IClassFactory *class_factories[] = {factory_factory.Get()};
+    IID class_ids[] = {__uuidof(NotificationActivator)};
+
+    hr = module.RegisterCOMObject(nullptr, class_ids, class_factories,
+                                  cookies_, std::extent<decltype(cookies_)>());
+    RETURN_IF_FAILED(hr);
+
+    return S_OK;
+  }
+
+  virtual HRESULT STDMETHODCALLTYPE Activate(
+      _In_ LPCWSTR appUserModelId,
+      _In_ LPCWSTR invokedArgs,
+      _In_reads_(dataCount) const NOTIFICATION_USER_INPUT_DATA *data,
+      ULONG dataCount
+  ) override {
+    std::wstring arguments(invokedArgs);
+
+    std::map<std::wstring, std::wstring> inputs;
+    for (unsigned int i = 0; i < dataCount; i++) {
+      inputs[data[i].Key] = data[i].Value;
+    }
+
+    std::wcout << L"arguments" << arguments << L"." << std::endl;
+
+//    auto *instance = NotificationManagerWrl::GetInstance();
+//    instance->DispatchActivatedEvent(arguments, inputs);
+
+    return S_OK;
+  }
+
+  ~NotificationActivator() {
+  }
+};
+
+// Flag class as COM creatable
+//CoCreatableClass(NotificationActivator)
+
+class NotificationManagerWrlImpl : public NotificationManagerWrl {
+
+ public:
+
+  void Register(std::wstring aumId, std::wstring displayName, std::wstring icon_path) override;
+
+  HRESULT ShowToast(std::wstring xml, std::wstring tag, std::wstring group, int64_t expiration_time) override;
+
+  void Clear() override;
+
+  void Remove(std::wstring tag, std::wstring group) override;
+
+};
+
+// static
+NotificationManagerWrl *NotificationManagerWrl::GetInstance() {
+  static NotificationManagerWrlImpl instance;
+  return &instance;
 }
 
-HRESULT NotificationManagerWrl::ShowToast(
+void NotificationManagerWrlImpl::Register(std::wstring aumId, std::wstring displayName, std::wstring icon_path) {
+  NotificationActivator::Register();
+
+//  DesktopNotificationManagerCompat::RegisterActivator();
+}
+
+HRESULT NotificationManagerWrlImpl::ShowToast(
     std::wstring xml,
     std::wstring tag,
     std::wstring group,
@@ -96,7 +180,7 @@ HRESULT NotificationManagerWrl::ShowToast(
   return hr;
 }
 
-void NotificationManagerWrl::Clear() {
+void NotificationManagerWrlImpl::Clear() {
   std::unique_ptr<DesktopNotificationHistoryCompat> history;
   auto hr = DesktopNotificationManagerCompat::get_History(&history);
   if (SUCCEEDED(hr)) {
@@ -105,7 +189,7 @@ void NotificationManagerWrl::Clear() {
   }
 }
 
-void NotificationManagerWrl::Remove(std::wstring tag, std::wstring group) {
+void NotificationManagerWrlImpl::Remove(std::wstring tag, std::wstring group) {
   std::unique_ptr<DesktopNotificationHistoryCompat> history;
   auto hr = DesktopNotificationManagerCompat::get_History(&history);
   if (SUCCEEDED(hr)) {

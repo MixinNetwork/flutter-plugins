@@ -8,6 +8,7 @@
 #include "notification_manager.h"
 #include "notification_manager_win_rt.h"
 #include "notification_manager_wrl.h"
+#include "dll_importer.h"
 
 #include <flutter/method_channel.h>
 #include <flutter/plugin_registrar_windows.h>
@@ -16,49 +17,69 @@
 #include <map>
 #include <memory>
 
-#ifdef WIN_TOAST_ENABLE_WRL
-#include "wrl_compat.h"
+#if 0
+#include "pch.h"
+#include "NotificationActivationCallback.h"
+#include "winrt/windows.foundation.h"
+#else
+#include "pch.h"
+#include "wrl/module.h"
 #include "NotificationActivationCallback.h"
 #endif // WIN_TOAST_ENABLE_WRL
 
-namespace {
+#if 0
 
-#ifdef WIN_TOAST_ENABLE_WRL
+#pragma comment(lib, "runtimeobject")
 
-using namespace ABI::Windows::Foundation;
-using namespace Microsoft::WRL;
+using namespace winrt;
+using namespace Windows::Foundation;
 
-class DECLSPEC_UUID(WIN_TOAST_WRL_ACTIVATOR_CLSID) NotificationActivator : public RuntimeClass<
-    RuntimeClassFlags<ClassicCom>,
-    INotificationActivationCallback> {
- public:
-  virtual HRESULT STDMETHODCALLTYPE Activate(
-      _In_ LPCWSTR appUserModelId,
-      _In_ LPCWSTR invokedArgs,
-      _In_reads_(dataCount) const NOTIFICATION_USER_INPUT_DATA *data,
-      ULONG dataCount
-  ) override {
-    std::wstring arguments(invokedArgs);
+std::wstring const this_app_name{L"ToastAndCallback"};
 
-    std::map<std::wstring, std::wstring> inputs;
-    for (unsigned int i = 0; i < dataCount; i++) {
-      inputs[data[i].Key] = data[i].Value;
+struct callback : winrt::implements<callback, INotificationActivationCallback> {
+  HRESULT __stdcall Activate(
+      LPCWSTR app,
+      LPCWSTR args,
+      [[maybe_unused]] NOTIFICATION_USER_INPUT_DATA const *data,
+      [[maybe_unused]] ULONG count) noexcept final {
+    try {
+      std::wcout << this_app_name << L" has been called back from a notification." << std::endl;
+      std::wcout << L"Value of the 'app' parameter is '" << app << L"'." << std::endl;
+      std::wcout << L"Value of the 'args' parameter is '" << args << L"'." << std::endl;
+      return S_OK;
     }
-
-    auto *instance = NotificationManagerWrl::GetInstance();
-    instance->DispatchActivatedEvent(arguments, inputs);
-
-    return S_OK;
-  }
-
-  ~NotificationActivator() {
+    catch (...) {
+      return winrt::to_hresult();
+    }
   }
 };
 
-// Flag class as COM creatable
-CoCreatableClass(NotificationActivator)
+struct __declspec(uuid(WIN_TOAST_WRL_ACTIVATOR_CLSID)) callback_factory : implements<callback_factory, IClassFactory> {
+  HRESULT __stdcall CreateInstance(
+      IUnknown *outer,
+      GUID const &iid,
+      void **result) noexcept final {
+    *result = nullptr;
+
+    std::wcout << this_app_name << L" callback_factory." << std::endl;
+
+    if (outer) {
+      return CLASS_E_NOAGGREGATION;
+    }
+
+    return make<callback>()->QueryInterface(iid, result);
+  }
+
+  HRESULT __stdcall LockServer(BOOL) noexcept final {
+    return S_OK;
+  }
+};
+#else
+
 
 #endif // WIN_TOAST_ENABLE_WRL
+
+namespace {
 
 class WinToastPlugin : public flutter::Plugin {
  public:
@@ -104,19 +125,30 @@ WinToastPlugin::WinToastPlugin(std::shared_ptr<FlutterMethodChannel> channel)
     : channel_(std::move(channel)), manager_(nullptr) {
 
   if (IsWindows10OrGreater()) {
-    std::cout << "NotificationManagerWin" << std::endl;
-
+    HRESULT hr = DllImporter::Initialize();
+    if (FAILED(hr)) {
+      std::wcout << L"Failed to initialize DllImporter." << std::endl;
+      return;
+    }
+    NotificationManagerWrl::GetInstance();
+    manager_ = NotificationManagerWinRT::GetInstance();
+#if 0
 #ifdef WIN_TOAST_ENABLE_WRL
-    std::cout << "WIN_TOAST_ENABLE_WRL" << std::endl;
     if (NotificationManager::HasIdentity()) {
+      std::wcout << L"NotificationManager has identity." << std::endl;
       manager_ = NotificationManagerWrl::GetInstance();
+      if (FAILED(hr)) {
+        std::wcout << L"Failed to register activator." << std::endl;
+      } else {
+        std::wcout << L"Activator registered." << std::endl;
+      }
     }
 #endif
 #ifdef WIN_TOAST_ENABLE_WIN_RT
-    std::cout << "WIN_TOAST_ENABLE_WINRT" << std::endl;
     if (!NotificationManager::HasIdentity()) {
       manager_ = NotificationManagerWinRT::GetInstance();
     }
+#endif
 #endif
   }
 }
@@ -205,4 +237,49 @@ void WinToastPluginRegisterWithRegistrar(
   WinToastPlugin::RegisterWithRegistrar(
       flutter::PluginRegistrarManager::GetInstance()
           ->GetRegistrar<flutter::PluginRegistrarWindows>(registrar));
+
+#if 0
+  // register callback
+  DWORD registration{};
+  std::wstring clsidStr(L"936C39FC-6BBC-4A57-B8F8-7C627E401B2F");
+  GUID clsid;
+
+  winrt::check_hresult(::CLSIDFromString((L"{" + clsidStr + L"}").c_str(), &clsid));
+
+  // Register callback
+  winrt::check_hresult(CoRegisterClassObject(
+      clsid,
+      make<callback_factory>().get(),
+      CLSCTX_LOCAL_SERVER,
+      REGCLS_MULTIPLEUSE,
+      &registration)
+  );
+
+#endif
+
 }
+#if 0
+
+HRESULT __stdcall DllGetClassObject(GUID const &clsid, GUID const &iid, void **result) {
+  try {
+    *result = nullptr;
+
+    std::cout << "DllGetClassObject" << std::endl;
+
+    if (clsid == __uuidof(callback_factory)) {
+      std::cout << "DllGetClassObject callback_factory" << std::endl;
+      return winrt::make<callback_factory>()->QueryInterface(iid, result);
+    }
+
+#ifdef _WRL_MODULE_H_
+    return ::Microsoft::WRL::Module<::Microsoft::WRL::InProc>::GetModule().GetClassObject(clsid, iid, result);
+#else
+    return winrt::hresult_class_not_available().to_abi();
+#endif
+  }
+  catch (...) {
+    return winrt::to_hresult();
+  }
+}
+
+#endif

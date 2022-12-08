@@ -15,18 +15,7 @@ class NotificationManagerWrl : public NotificationManager {
 
  public:
 
-  static NotificationManagerWrl *GetInstance() {
-    static NotificationManagerWrl instance;
-    return &instance;
-  }
-
-  void Register(std::wstring aumId, std::wstring displayName, std::wstring icon_path) override;
-
-  HRESULT ShowToast(std::wstring xml, std::wstring tag, std::wstring group, int64_t expiration_time) override;
-
-  void Clear() override;
-
-  void Remove(std::wstring tag, std::wstring group) override;
+  static NotificationManagerWrl *GetInstance();
 
   void DispatchActivatedEvent(std::wstring arguments, std::map<std::wstring, std::wstring> inputs) {
     if (activated_callback_) {

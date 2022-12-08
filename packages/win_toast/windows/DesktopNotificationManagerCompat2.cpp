@@ -30,7 +30,7 @@ namespace DesktopNotificationManagerCompat
 
     bool s_registeredAumidAndComServer = false;
     std::wstring s_aumid;
-    bool s_registeredActivator = false;
+    bool s_registeredActivator = true;
 
     HRESULT RegisterAumidAndComServer(const wchar_t *aumid, GUID clsid)
     {
