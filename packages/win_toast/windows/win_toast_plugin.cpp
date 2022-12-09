@@ -18,6 +18,7 @@
 
 #include <map>
 #include <memory>
+#include <inspectable.h>
 
 namespace {
 
@@ -175,6 +176,10 @@ void WinToastPlugin::HandleMethodCall(
             sender.Group().c_str(),
             static_cast<int>(args.Reason())
         );
+      });
+
+      notification.Activated([this](const ToastNotification &sender, Windows::Foundation::IInspectable args) {
+
       });
 
       DesktopNotificationManagerCompat::CreateToastNotifier().Show(notification);

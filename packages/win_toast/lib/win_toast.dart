@@ -2,8 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
+import 'package:win_toast/src/templates.dart';
 
-export 'src/toast_type.dart';
+export 'src/templates.dart';
 
 enum DismissReason {
   userCanceled,
@@ -171,6 +172,18 @@ class WinToast {
       'tag': tag ?? '',
       'group': group ?? '',
     });
+  }
+
+  Future<void> showToast({
+    required Toast toast,
+    String? tag,
+    String? group,
+  }) {
+    return showCustomToast(
+      xml: toast.toXmlString(),
+      tag: tag,
+      group: group,
+    );
   }
 
   /// Clear all notifications.
