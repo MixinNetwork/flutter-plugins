@@ -116,6 +116,17 @@ class WinToast {
     }
   }
 
+  /// Initialize the WinToast.
+  ///
+  /// [aumId], [displayName], [iconPath] is config for normal exe application,
+  /// wouldn't have any effect if the application is a UWP application.
+  /// [clsid] is config for UWP application, wouldn't have effect for normal exe application.
+  ///
+  /// [aumId] application user model id.
+  /// [displayName] toast application display name.
+  /// [clsid] notification activator clsid, must be a valid guid string and the
+  ///           same as the one in the manifest file. it's format is like this:
+  ///           '00000000-0000-0000-0000-000000000000'
   Future<bool> initialize({
     required String aumId,
     required String displayName,
@@ -139,9 +150,19 @@ class WinToast {
     return _supportToast;
   }
 
+  /// Show a toast notification.
+  /// [xml] is the raw XML content of win toast. schema can be found here:
+  ///       https://learn.microsoft.com/en-us/uwp/schemas/tiles/toastschema/schema-root
+  ///
+  /// [tag] notification tag, you can use this to remove the notification.
+  ///
+  /// [group] notification group, you can use this to remove the notification.
+  ///         Maybe this string needs to be max 16 characters to work on Windows
+  ///         10 prior to applying Creators Update (build 15063).
+  ///         see here: https://chromium.googlesource.com/chromium/src/+/1f65ad79494a05653e7478202e221ec229d9ed01/chrome/browser/notifications/notification_platform_bridge_win.cc#56
   Future<int> showCustomToast({
     required String xml,
-    Duration? expiration,
+    DateTime? expiration,
     bool expirationOnReboot = false,
     String? tag,
     String? group,
@@ -153,16 +174,18 @@ class WinToast {
       'xml': xml,
       'tag': tag ?? '',
       'group': group ?? '',
-      'expiration': expiration?.inMilliseconds ?? 0,
+      'expiration': expiration?.millisecondsSinceEpoch ?? 0,
       'expiration_on_reboot': expirationOnReboot,
     });
     return ret ?? -1;
   }
 
+  /// Clear all notifications.
   Future<void> clear() {
     return _channel.invokeMethod('clear');
   }
 
+  /// Clear a notification by tag, group.
   Future<void> dismiss({
     required String tag,
     required String group,
