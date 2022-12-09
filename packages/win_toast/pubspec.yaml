@@ -1,5 +1,5 @@
 name: win_toast
-description: a plugin help flutter app show toast on windows platform.
+description: a flutter plugin that allows users to create and display toast notifications to notification center on the Windows operating system.
 version: 0.2.0
 homepage: https://github.com/MixinNetwork/flutter-plugins/tree/main/packages/win_toast
 
