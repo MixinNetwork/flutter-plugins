@@ -34,6 +34,7 @@ class _MyAppState extends State<MyApp> {
         aumId: 'one.mixin.WinToastExample',
         displayName: 'Example Application',
         iconPath: '',
+        clsid: '936C39FC-6BBC-4A57-B8F8-7C627E401B2F',
       );
       assert(ret);
       setState(() {

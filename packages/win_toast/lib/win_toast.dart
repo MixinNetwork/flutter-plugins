@@ -120,12 +120,14 @@ class WinToast {
     required String aumId,
     required String displayName,
     required String iconPath,
+    required String clsid,
   }) async {
     try {
       _supportToast = await _channel.invokeMethod("initialize", {
         'aumid': aumId,
         'display_name': displayName,
         'icon_path': iconPath,
+        'clsid': clsid,
       });
     } catch (e) {
       debugPrint(e.toString());

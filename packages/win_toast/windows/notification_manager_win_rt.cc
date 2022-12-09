@@ -2,7 +2,6 @@
 // Created by yangbin on 2022/12/6.
 //
 
-#ifdef WIN_TOAST_ENABLE_WIN_RT
 
 #include "notification_manager_win_rt.h"
 
@@ -17,8 +16,8 @@ using namespace notification_rt;
 
 void NotificationManagerWinRT::Register(
     std::wstring aumId, std::wstring displayName,
-    std::wstring icon_path) {
-  DesktopNotificationManagerCompat::Register(aumId, displayName, icon_path);
+    std::wstring icon_path, std::wstring clsid) {
+  DesktopNotificationManagerCompat::Register(aumId, displayName, icon_path, clsid);
   DesktopNotificationManagerCompat::OnActivated([this](DesktopNotificationActivatedEventArgsCompat data) {
     if (!activated_callback_) {
       return;
@@ -100,4 +99,3 @@ void NotificationManagerWinRT::Remove(std::wstring tag, std::wstring group) {
   }
 }
 
-#endif //WIN_TOAST_ENABLE_WIN_RT

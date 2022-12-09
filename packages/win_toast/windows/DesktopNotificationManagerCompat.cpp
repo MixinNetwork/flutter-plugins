@@ -9,7 +9,6 @@
 // TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH
 // THE CODE OR THE USE OR OTHER DEALINGS IN THE CODE.
 // ******************************************************************
-#ifdef WIN_TOAST_ENABLE_WIN_RT
 
 #include "pch.h"
 #include "DesktopNotificationManagerCompat.h"
@@ -43,14 +42,22 @@ void EnsureRegistered();
 std::wstring CreateAndRegisterActivator();
 std::wstring GenerateGuid(std::wstring name);
 std::wstring get_module_path();
+void RegisterActivatorWithClsid(std::wstring clsidStr);
 
 std::wstring _win32Aumid;
 std::function<void(DesktopNotificationActivatedEventArgsCompat)> _onActivated = nullptr;
 
-void DesktopNotificationManagerCompat::Register(std::wstring aumid, std::wstring displayName, std::wstring iconPath) {
+void DesktopNotificationManagerCompat::Register(
+    std::wstring aumid,
+    std::wstring displayName,
+    std::wstring iconPath,
+    std::wstring clsid
+) {
   // If has identity
   if (HasIdentity()) {
+    RegisterActivatorWithClsid(clsid);
     // No need to do anything additional, already registered through manifest
+    // register callback
     return;
   }
 
@@ -237,22 +244,26 @@ struct callback_factory : implements<callback_factory, IClassFactory> {
   }
 };
 
-std::wstring CreateAndRegisterActivator() {
-  // Need to initialize the thread
-  // winrt::check_hresult(CoInitializeEx(NULL, COINIT_MULTITHREADED));
-
+void RegisterActivatorWithClsid(std::wstring clsidStr) {
   DWORD registration{};
-  std::wstring clsidStr = GenerateGuid(_win32Aumid);
   GUID clsid;
   winrt::check_hresult(::CLSIDFromString((L"{" + clsidStr + L"}").c_str(), &clsid));
 
   // Register callback
-  CoRegisterClassObject(
+  winrt::check_hresult(CoRegisterClassObject(
       clsid,
       make<callback_factory>().get(),
       CLSCTX_LOCAL_SERVER,
       REGCLS_MULTIPLEUSE,
-      &registration);
+      &registration)
+  );
+}
+
+std::wstring CreateAndRegisterActivator() {
+
+  std::wstring clsidStr = GenerateGuid(_win32Aumid);
+
+  RegisterActivatorWithClsid(clsidStr);
 
   // Create launch path+args
   // Include a flag so we know this was a toast activation and should wait for COM to process
@@ -396,4 +407,3 @@ void DesktopNotificationHistoryCompat::RemoveGroup(std::wstring group) {
 
 }
 
-#endif //WIN_TOAST_ENABLE_WIN_RT

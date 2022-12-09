@@ -6,27 +6,6 @@ show a toast notification on your Windows Notification center.
 
 ## Getting Started
 
-### Attention
-
-There are two implementation to pop up a toast notification by this package.
-1. [WinRT][win_rt_url]: for normal exe app.
-
-    the winrt implementation is enabled default, you can use it directly.
-
-2. [WRL][wrl_url]: for UWP app which packaged to msix.
-
-    the wrl implementation is **disabled default**, you can enable it by add flowing config to your app `windows/CmakeLists.txt`.
-    ```
-    set(WIN_TOAST_ENABLE_WRL ON)
-    set(WIN_TOAST_WRL_ACTIVATOR_CLSID "your-g-u-id-7C627E401B2F")
-    ```
-    if wrl is enabled, the built exe will not compatible on Windows7.
-  
-
-[win_rt_url]: https://learn.microsoft.com/en-us/windows/apps/design/shell/tiles-and-notifications/toast-desktop-apps
-[wrl_url]: https://learn.microsoft.com/en-us/windows/apps/design/shell/tiles-and-notifications/send-local-toast-desktop-cpp-wrl
-
-
 ### Initialize
 
 ```dart
@@ -36,14 +15,30 @@ void initialize() {
     aumId: 'one.mixin.WinToastExample',
     displayName: 'Example Application',
     iconPath: '',
+    clsid: 'your-notification-activator-guid-2EB1AE5198B7',
   );
 }
 ```
+   * AUMID
+        
+      [Pick a unique AUMID that will identify your Win32 app](https://docs.microsoft.com/en-us/windows/apps/design/shell/tiles-and-notifications/send-local-toast-desktop-cpp-wrl#classic-win32)
 
-[Pick a unique AUMID that will identify your Win32 app](https://docs.microsoft.com/en-us/windows/apps/design/shell/tiles-and-notifications/send-local-toast-desktop-cpp-wrl#classic-win32)
+      > This is typically in the form of [CompanyName].[AppName], but you want to ensure this is unique across all apps (feel free to add some digits at the end).
+   
+   * MSIX
 
-This is typically in the form of [CompanyName].[AppName], but you want to ensure this is unique across all apps (feel
-free to add some digits at the end).
+     if Your app is packaged as [MSIX](https://pub.dev/packages/msix), you need to provide a `clsid` parameter to `WinToast.instance().initialize` to make it work.
+     
+     And Also you need to doing flowing `msix_config`
+     
+     ```yaml
+     msix_config:
+       display_name: WinToastExample
+       toast_activator:
+         clsid: "your-notification-activator-guid-2EB1AE5198B7"
+         arguments: "-ToastActivated"
+         display_name: "YouAppDisplayName"
+     ```
 
 ### Show
 

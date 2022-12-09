@@ -1,4 +1,12 @@
+## 0.3.0
+
+**BREAKING CHANGES**
+
+* remove wrl implementation
+* `WinToast.instance().initialize` required a `clsid` parameter to works on msix
+
 ## 0.2.0
+
 * **BREAKING CHANGE** please read README.md for how to use.
 * fix the notification which in notification center can not be clicked.
 * fix wired behavior when click the notification.
