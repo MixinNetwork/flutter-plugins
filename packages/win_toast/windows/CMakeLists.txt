@@ -21,13 +21,13 @@ add_library(${PLUGIN_NAME} SHARED
 
 
 if (WIN_TOAST_ENABLE_WIN_RT)
-  message(warning "WIN_TOAST_ENABLE_WIN_RT is unnecessary. already dropped in version 0.4.0")
+  message(warning "WIN_TOAST_ENABLE_WIN_RT is unnecessary. removed since 0.3.0")
 endif ()
 if (DEFINED WIN_TOAST_WRL_ACTIVATOR_CLSID)
-  message(warning "WIN_TOAST_WRL_ACTIVATOR_CLSID is unnecessary. already dropped in version 0.4.0")
+  message(warning "WIN_TOAST_WRL_ACTIVATOR_CLSID is unnecessary. removed since 0.3.0")
 endif ()
 if (WIN_TOAST_ENABLE_WRL)
-  message(warning "WIN_TOAST_ENABLE_WRL is unnecessary. already dropped in version 0.4.0")
+  message(warning "WIN_TOAST_ENABLE_WRL is unnecessary. removed since 0.3.0")
 endif ()
 
 apply_standard_settings(${PLUGIN_NAME})
