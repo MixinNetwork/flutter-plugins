@@ -5,18 +5,27 @@
 #include <VersionHelpers.h>
 
 #include "strconv.h"
-#include "notification_manager.h"
-#include "notification_manager_win_rt.h"
 #include "dll_importer.h"
 
 #include <flutter/method_channel.h>
 #include <flutter/plugin_registrar_windows.h>
 #include <flutter/standard_method_codec.h>
 
+#include "DesktopNotificationManagerCompat.h"
+#include <winrt/Windows.Data.Xml.Dom.h>
+#include <iostream>
+#include <utility>
+
 #include <map>
 #include <memory>
+#include <inspectable.h>
 
 namespace {
+
+using namespace winrt;
+using namespace Windows::Data::Xml::Dom;
+using namespace Windows::UI::Notifications;
+using namespace notification_rt;
 
 class WinToastPlugin : public flutter::Plugin {
  public:
@@ -30,7 +39,8 @@ class WinToastPlugin : public flutter::Plugin {
 
  private:
   std::shared_ptr<FlutterMethodChannel> channel_;
-  NotificationManager *manager_;
+
+  bool is_supported_;
 
   // Called when a method is called on this plugin's channel from Dart.
   void HandleMethodCall(
@@ -59,7 +69,7 @@ void WinToastPlugin::RegisterWithRegistrar(
 }
 
 WinToastPlugin::WinToastPlugin(std::shared_ptr<FlutterMethodChannel> channel)
-    : channel_(std::move(channel)), manager_(nullptr) {
+    : channel_(std::move(channel)), is_supported_(false) {
 
   if (IsWindows10OrGreater()) {
     HRESULT hr = DllImporter::Initialize();
@@ -67,7 +77,7 @@ WinToastPlugin::WinToastPlugin(std::shared_ptr<FlutterMethodChannel> channel)
       std::wcout << L"Failed to initialize DllImporter." << std::endl;
       return;
     }
-    manager_ = NotificationManagerWinRT::GetInstance();
+    is_supported_ = true;
   }
 }
 
@@ -103,47 +113,99 @@ void WinToastPlugin::OnNotificationDismissed(const std::wstring &tag, const std:
   );
 }
 
+#define WIN_TOAST_RESULT_START try {
+#define WIN_TOAST_RESULT_END \
+  } catch (hresult_error const &e) { \
+    result->Error(std::to_string(e.code()), wide_to_utf8(e.message().c_str())); \
+  } catch (...) { \
+    result->Error("error", "Unknown error"); \
+  }
+
 void WinToastPlugin::HandleMethodCall(
     const flutter::MethodCall<flutter::EncodableValue> &method_call,
     std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
-  if (!manager_) {
+  if (!is_supported_) {
     result->Error("1", "Error, your system in not supported!");
     return;
   }
 
   if (method_call.method_name() == "initialize") {
-    auto *arguments = std::get_if<flutter::EncodableMap>(method_call.arguments());
-    auto aumid = std::get<std::string>(arguments->at(flutter::EncodableValue("aumid")));
-    auto display_name = std::get<std::string>(arguments->at(flutter::EncodableValue("display_name")));
-    auto icon_path = std::get<std::string>(arguments->at(flutter::EncodableValue("icon_path")));
-    auto clsid = std::get<std::string>(arguments->at(flutter::EncodableValue("clsid")));
-    manager_->Register(utf8_to_wide(aumid), utf8_to_wide(display_name), utf8_to_wide(icon_path), utf8_to_wide(clsid));
-    manager_->OnActivated([this](const std::wstring &argument, const std::map<std::wstring, std::wstring> &user_input) {
-      OnNotificationActivated(argument, user_input);
-    });
-    manager_->OnDismissed([this](const auto &tag, const auto &group, const auto &reason) {
-      OnNotificationDismissed(tag, group, reason);
-    });
-    result->Success(flutter::EncodableValue(true));
-  } else if (method_call.method_name() == "showCustomToast") {
-    auto *arguments = std::get_if<flutter::EncodableMap>(method_call.arguments());
-    auto xml = std::get<std::string>(arguments->at(flutter::EncodableValue("xml")));
-    auto tag = std::get<std::string>(arguments->at(flutter::EncodableValue("tag")));
-    auto group = std::get<std::string>(arguments->at(flutter::EncodableValue("group")));
-    auto expiration = std::get<int>(arguments->at(flutter::EncodableValue("expiration")));
+    WIN_TOAST_RESULT_START
+      auto *arguments = std::get_if<flutter::EncodableMap>(method_call.arguments());
+      auto aumid = std::get<std::string>(arguments->at(flutter::EncodableValue("aumid")));
+      auto display_name = std::get<std::string>(arguments->at(flutter::EncodableValue("display_name")));
+      auto icon_path = std::get<std::string>(arguments->at(flutter::EncodableValue("icon_path")));
+      auto clsid = std::get<std::string>(arguments->at(flutter::EncodableValue("clsid")));
 
-    auto hr = manager_->ShowToast(utf8_to_wide(xml), utf8_to_wide(tag),
-                                  utf8_to_wide(group), expiration);
-    result->Success(flutter::EncodableValue(int64_t(hr)));
+      DesktopNotificationManagerCompat::Register(utf8_to_wide(aumid), utf8_to_wide(display_name),
+                                                 utf8_to_wide(icon_path), utf8_to_wide(clsid));
+      DesktopNotificationManagerCompat::OnActivated([this](DesktopNotificationActivatedEventArgsCompat data) {
+        std::wstring tag = data.Argument();
+        std::map<std::wstring, std::wstring> user_inputs;
+        for (auto &&input : data.UserInput()) {
+          user_inputs[input.Key().c_str()] = input.Value().c_str();
+        }
+        OnNotificationActivated(tag, user_inputs);
+      });
+      result->Success();
+    WIN_TOAST_RESULT_END
+  } else if (method_call.method_name() == "showCustomToast") {
+    WIN_TOAST_RESULT_START
+      auto *arguments = std::get_if<flutter::EncodableMap>(method_call.arguments());
+      auto xml = std::get<std::string>(arguments->at(flutter::EncodableValue("xml")));
+      auto tag = std::get<std::string>(arguments->at(flutter::EncodableValue("tag")));
+      auto group = std::get<std::string>(arguments->at(flutter::EncodableValue("group")));
+
+      // Construct the toast template
+      XmlDocument doc;
+      doc.LoadXml(utf8_to_wide(xml));
+
+      // Construct the notification
+      ToastNotification notification{doc};
+
+      if (!tag.empty()) {
+        notification.Tag(utf8_to_wide(tag));
+      }
+      if (!group.empty()) {
+        notification.Group(utf8_to_wide(group));
+      }
+
+      notification.Dismissed([this](const ToastNotification &sender, const ToastDismissedEventArgs &args) {
+        OnNotificationDismissed(
+            sender.Tag().c_str(),
+            sender.Group().c_str(),
+            static_cast<int>(args.Reason())
+        );
+      });
+
+      notification.Activated([this](const ToastNotification &sender, Windows::Foundation::IInspectable args) {
+
+      });
+
+      DesktopNotificationManagerCompat::CreateToastNotifier().Show(notification);
+      result->Success();
+    WIN_TOAST_RESULT_END
   } else if (method_call.method_name() == "dismiss") {
-    auto *arguments = std::get_if<flutter::EncodableMap>(method_call.arguments());
-    auto tag = std::get<std::string>(arguments->at(flutter::EncodableValue("tag")));
-    auto group = std::get<std::string>(arguments->at(flutter::EncodableValue("group")));
-    manager_->Remove(utf8_to_wide(tag), utf8_to_wide(group));
-    result->Success();
+    WIN_TOAST_RESULT_START
+      auto *arguments = std::get_if<flutter::EncodableMap>(method_call.arguments());
+      auto tagString = std::get<std::string>(arguments->at(flutter::EncodableValue("tag")));
+      auto groupString = std::get<std::string>(arguments->at(flutter::EncodableValue("group")));
+      auto tag = utf8_to_wide(tagString);
+      auto group = utf8_to_wide(groupString);
+      if (!tag.empty() && !group.empty()) {
+        DesktopNotificationManagerCompat::History().Remove(tag, group);
+      } else if (!group.empty()) {
+        DesktopNotificationManagerCompat::History().RemoveGroup(group);
+      } else if (!tag.empty()) {
+        DesktopNotificationManagerCompat::History().Remove(tag);
+      }
+      result->Success();
+    WIN_TOAST_RESULT_END
   } else if (method_call.method_name() == "clear") {
-    manager_->Clear();
-    result->Success();
+    WIN_TOAST_RESULT_START
+      DesktopNotificationManagerCompat::History().Clear();
+      result->Success();
+    WIN_TOAST_RESULT_END
   } else {
     result->NotImplemented();
   }

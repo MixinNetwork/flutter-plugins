@@ -32,3 +32,4 @@ bool NotificationManager::HasIdentity() {
 
   return _hasIdentity;
 }
+

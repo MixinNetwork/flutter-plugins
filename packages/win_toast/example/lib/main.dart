@@ -109,7 +109,7 @@ class _MainPageState extends State<MainPage> {
   @override
   Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.end,
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
         TextButton(
           onPressed: () async {
@@ -130,10 +130,51 @@ class _MainPageState extends State<MainPage> {
    </actions>
 </toast>
             """;
-            final ret = await WinToast.instance().showCustomToast(xml: xml);
-            i('showCustomToast: $ret');
+            try {
+              await WinToast.instance().showCustomToast(xml: xml);
+            } catch (error, stacktrace) {
+              i('showCustomToast error: $error, $stacktrace');
+            }
           },
-          child: const Text('one line'),
+          child: const Text('show custom'),
+        ),
+        TextButton(
+          onPressed: () async {
+            try {
+              await WinToast.instance().showToast(
+                toast: Toast(
+                  duration: ToastDuration.short,
+                  launch: 'action=viewConversation&conversationId=9813',
+                  children: [
+                    ToastChildAudio(source: ToastAudioSource.defaultSound),
+                    ToastChildVisual(
+                      binding: ToastVisualBinding(
+                        children: [
+                          ToastVisualBindingChildText(
+                            text: 'HelloWorld',
+                            id: 1,
+                          ),
+                          ToastVisualBindingChildText(
+                            text: 'by win_toast',
+                            id: 2,
+                          ),
+                        ],
+                      ),
+                    ),
+                    ToastChildActions(children: [
+                      ToastAction(
+                        content: "Close",
+                        arguments: "close_argument",
+                      )
+                    ]),
+                  ],
+                ),
+              );
+            } catch (error, stacktrace) {
+              i('showTextToast error: $error, $stacktrace');
+            }
+          },
+          child: const Text('show with builder'),
         ),
       ],
     );

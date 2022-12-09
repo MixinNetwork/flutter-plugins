@@ -2,8 +2,13 @@
 
 **BREAKING CHANGES**
 
-* remove wrl implementation
+* remove wrl implementation. `WIN_TOAST_ENABLE_WIN_RT`, `WIN_TOAST_WRL_ACTIVATOR_CLSID`, `WIN_TOAST_ENABLE_WRL` cmake configs
+  do not work anymore.
 * `WinToast.instance().initialize` required a `clsid` parameter to works on msix
+
+**NEW FEATURES**
+
+* add `WinToast.instance().showToast` to show toast from template.
 
 ## 0.2.0
 

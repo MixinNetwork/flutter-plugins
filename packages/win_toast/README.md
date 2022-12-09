@@ -2,7 +2,7 @@
 
 [![Pub](https://img.shields.io/pub/v/win_toast.svg)](https://pub.dev/packages/win_toast)
 
-show a toast notification on your Windows Notification center.
+a flutter plugin that allows users to create and display toast notifications to notification center on the Windows operating system
 
 ## Getting Started
 
