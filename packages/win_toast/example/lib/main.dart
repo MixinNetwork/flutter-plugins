@@ -130,8 +130,11 @@ class _MainPageState extends State<MainPage> {
    </actions>
 </toast>
             """;
-            final ret = await WinToast.instance().showCustomToast(xml: xml);
-            i('showCustomToast: $ret');
+            try {
+              await WinToast.instance().showCustomToast(xml: xml);
+            } catch (error, stacktrace) {
+              i('showCustomToast error: $error, $stacktrace');
+            }
           },
           child: const Text('one line'),
         ),

@@ -13,8 +13,6 @@ add_library(${PLUGIN_NAME} SHARED
   DesktopNotificationManagerCompat.cpp
   notification_manager.h
   notification_manager.cc
-  notification_manager_win_rt.cc
-  notification_manager_win_rt.h
   dll_importer.cc
   dll_importer.h
   )

@@ -134,18 +134,16 @@ class WinToast {
     required String clsid,
   }) async {
     try {
-      _supportToast = await _channel.invokeMethod("initialize", {
+      await _channel.invokeMethod("initialize", {
         'aumid': aumId,
         'display_name': displayName,
         'icon_path': iconPath,
         'clsid': clsid,
       });
+      _supportToast = true;
     } catch (e) {
-      debugPrint(e.toString());
+      debugPrint('initialize: ${e.toString()}');
       _supportToast = false;
-    }
-    if (!_supportToast) {
-      debugPrint('did not support toast');
     }
     return _supportToast;
   }
@@ -160,24 +158,19 @@ class WinToast {
   ///         Maybe this string needs to be max 16 characters to work on Windows
   ///         10 prior to applying Creators Update (build 15063).
   ///         see here: https://chromium.googlesource.com/chromium/src/+/1f65ad79494a05653e7478202e221ec229d9ed01/chrome/browser/notifications/notification_platform_bridge_win.cc#56
-  Future<int> showCustomToast({
+  Future<void> showCustomToast({
     required String xml,
-    DateTime? expiration,
-    bool expirationOnReboot = false,
     String? tag,
     String? group,
   }) async {
     if (!_supportToast) {
-      return -1;
+      return;
     }
-    final ret = await _channel.invokeMethod<int>("showCustomToast", {
+    await _channel.invokeMethod<int>("showCustomToast", {
       'xml': xml,
       'tag': tag ?? '',
       'group': group ?? '',
-      'expiration': expiration?.millisecondsSinceEpoch ?? 0,
-      'expiration_on_reboot': expirationOnReboot,
     });
-    return ret ?? -1;
   }
 
   /// Clear all notifications.

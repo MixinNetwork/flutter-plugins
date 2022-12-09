@@ -17,19 +17,23 @@ class NotificationManager {
 
   static bool HasIdentity();
 
-  virtual void Register(
+  NotificationManager();
+
+  ~NotificationManager();
+
+  void Register(
       std::wstring aumId,
       std::wstring displayName,
       std::wstring icon_path,
       std::wstring clsid
-  ) = 0;
+  );
 
-  virtual HRESULT ShowToast(
-      std::wstring xml,
-      std::wstring tag,
-      std::wstring group,
+  void ShowToast(
+      const std::wstring& xml,
+      const std::wstring& tag,
+      const std::wstring& group,
       int64_t expiration_time
-  ) = 0;
+  );
 
   using ActivatedCallback = std::function<void(std::wstring, std::map<std::wstring, std::wstring>)>;
 
@@ -42,16 +46,16 @@ class NotificationManager {
     dismissed_callback_ = std::move(callback);
   }
 
-  virtual void Clear() = 0;
+  void Clear();
 
-  virtual void Remove(std::wstring tag, std::wstring group) = 0;
+  void Remove(std::wstring tag, std::wstring group);
 
-  virtual ~NotificationManager() = default;
-
- protected:
+ private:
 
   ActivatedCallback activated_callback_;
   DismissedCallback dismissed_callback_;
+
+  bool registered_ = false;
 };
 
 #endif //WIN_TOAST_WINDOWS_NOTIFICATION_MANAGER_H_
