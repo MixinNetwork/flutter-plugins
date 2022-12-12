@@ -184,8 +184,8 @@ class WebviewImpl extends Webview {
   }
 
   @override
-  Future<void> openDevTools() {
-    return channel.invokeMethod('openDevTools', {"viewId": viewId});
+  Future<void> openDevToolsWindow() {
+    return channel.invokeMethod('openDevToolsWindow', {"viewId": viewId});
   }
 
   @override

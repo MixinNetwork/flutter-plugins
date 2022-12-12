@@ -58,7 +58,7 @@ abstract class Webview {
   Future<void> stop();
 
   /// Opens the Browser DevTools in a separate window
-  Future<void> openDevTools();
+  Future<void> openDevToolsWindow();
 
   /// Register a callback that will be invoked when the webview history changes.
   void setOnHistoryChangedCallback(OnHistoryChangedCallback? callback);

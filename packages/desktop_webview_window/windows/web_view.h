@@ -49,7 +49,7 @@ class WebView {
 
   void Stop();
 
-  void openDevTools();
+  void openDevToolsWindow();
 
   void ExecuteJavaScript(const std::wstring &javaScript,
                          std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> completer);

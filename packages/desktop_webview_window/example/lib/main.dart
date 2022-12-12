@@ -287,7 +287,7 @@ class _MyAppState extends State<MyApp> {
   }
 
   void _openDevTools() async {
-    webview.openDevTools();
+    webview.openDevToolsWindow();
   }
 }
 

@@ -253,7 +253,7 @@ void WebView::Stop() {
   }
 }
 
-void WebView::openDevTools() {
+void WebView::openDevToolsWindow() {
   if (webview_) {
     webview_->OpenDevToolsWindow();
   }

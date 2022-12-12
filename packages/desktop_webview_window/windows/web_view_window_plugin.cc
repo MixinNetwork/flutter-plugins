@@ -231,8 +231,7 @@ void WebviewWindowPlugin::HandleMethodCall(
       return;
     }
     windows_[window_id]->GetWebView()->PostWebMessageAsJson(utf8_to_wide(webmessage), std::move(result));
-  } else if (method_call.method_name() == "openDevTools") {
-    std::cout << "openDev Tool c++ 1 " << std::endl;
+  } else if (method_call.method_name() == "openDevToolsWindow") {
     auto* arguments = std::get_if<flutter::EncodableMap>(method_call.arguments());
     auto window_id = arguments->at(flutter::EncodableValue("viewId")).LongValue();
     if (!windows_.count(window_id)) {
@@ -245,9 +244,7 @@ void WebviewWindowPlugin::HandleMethodCall(
       result->Error("0", "webview window not ready");
       return;
     }
-    std::cout << "openDev Tool c++ 2" << std::endl;
-    windows_[window_id]->GetWebView()->openDevTools();
-    std::cout << "openDev Tool c++ 3" << std::endl;
+    windows_[window_id]->GetWebView()->openDevToolsWindow();
     result->Success();
   } else {
     result->NotImplemented();
