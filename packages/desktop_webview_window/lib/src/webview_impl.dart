@@ -45,7 +45,8 @@ class WebviewImpl extends Webview {
     handler?.call(name, body);
   }
 
-  String onRunJavaScriptTextInputPanelWithPrompt(String prompt, String defaultText) {
+  String onRunJavaScriptTextInputPanelWithPrompt(
+      String prompt, String defaultText) {
     assert(!_closed);
     return _promptHandler?.call(prompt, defaultText) ?? defaultText;
   }
@@ -79,7 +80,8 @@ class WebviewImpl extends Webview {
   ValueListenable<bool> get isNavigating => _isNaivgating;
 
   @override
-  void registerJavaScriptMessageHandler(String name, JavaScriptMessageHandler handler) {
+  void registerJavaScriptMessageHandler(
+      String name, JavaScriptMessageHandler handler) {
     if (!Platform.isMacOS) {
       return;
     }

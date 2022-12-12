@@ -75,7 +75,9 @@ class WebviewWindow {
 
   static Future<dynamic> _handleOtherIsolateMethodCall(MethodCall call) async {
     final webViewId = call.arguments['webViewId'] as int;
-    final webView = _webviews.cast<WebviewImpl?>().firstWhere((w) => w?.viewId == webViewId, orElse: () => null);
+    final webView = _webviews
+        .cast<WebviewImpl?>()
+        .firstWhere((w) => w?.viewId == webViewId, orElse: () => null);
     if (webView == null) {
       return;
     }
@@ -101,7 +103,9 @@ class WebviewWindow {
   static Future<dynamic> _handleMethodCall(MethodCall call) async {
     final args = call.arguments as Map;
     final viewId = args['id'] as int;
-    final webview = _webviews.cast<WebviewImpl?>().firstWhere((e) => e?.viewId == viewId, orElse: () => null);
+    final webview = _webviews
+        .cast<WebviewImpl?>()
+        .firstWhere((e) => e?.viewId == viewId, orElse: () => null);
     assert(webview != null);
     if (webview == null) {
       return;
@@ -151,7 +155,8 @@ class WebviewWindow {
         break;
       case "onNavigationCompleted":
         webview.onNavigationCompleted();
-        await _otherIsolateMessageHandler.invokeMethod('onNavigationCompleted', {
+        await _otherIsolateMessageHandler
+            .invokeMethod('onNavigationCompleted', {
           'webViewId': viewId,
         });
         break;
@@ -173,7 +178,8 @@ class WebviewWindow {
       if (p.isAbsolute(userDataFolderWindows)) {
         webview2Dir = Directory(userDataFolderWindows);
       } else {
-        webview2Dir = Directory(p.join(p.dirname(Platform.resolvedExecutable), userDataFolderWindows));
+        webview2Dir = Directory(p.join(
+            p.dirname(Platform.resolvedExecutable), userDataFolderWindows));
       }
 
       if (await (webview2Dir.exists())) {
