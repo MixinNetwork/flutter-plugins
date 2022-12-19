@@ -27,6 +27,8 @@ FFI_PLUGIN_EXPORT void ogg_opus_player_dispose(void *player);
 
 FFI_PLUGIN_EXPORT double ogg_opus_player_get_current_time(void *player);
 
+FFI_PLUGIN_EXPORT void ogg_opus_player_set_playback_rate(void *player, double rate);
+
 FFI_PLUGIN_EXPORT void ogg_opus_player_initialize_dart(void *native_port);
 
 #ifdef __cplusplus

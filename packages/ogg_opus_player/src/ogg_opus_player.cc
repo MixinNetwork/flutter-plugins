@@ -92,6 +92,8 @@ class Player {
   virtual ~Player();
 
   virtual double CurrentTime() = 0;
+
+  virtual void SetPlaybackRate(double rate) = 0;
 };
 
 Player::~Player() = default;
@@ -110,6 +112,8 @@ class SdlOggOpusPlayer : public Player {
   void Pause() override;
   double CurrentTime() override;
 
+  void SetPlaybackRate(double rate) override;
+
  private:
   std::unique_ptr<OggOpusReader> reader_;
 
@@ -123,9 +127,11 @@ class SdlOggOpusPlayer : public Player {
 
   Dart_Port_DL dart_port_dl_;
 
+  double play_rate_ = 1.0;
+
   int Initialize();
 
-  void ReadAudioData(Uint8 *stream, int len);
+  void ReadAudioData(uint16_t *stream, int len);
 
 };
 
@@ -154,11 +160,36 @@ void SdlOggOpusPlayer::Pause() {
   }
 }
 
-void SdlOggOpusPlayer::ReadAudioData(Uint8 *stream, int len) {
-  auto read = reader_->ReadPcmData(reinterpret_cast<opus_int16 *>(stream), len / 2) * 2;
-  if (read < len) {
-    memset(stream + read, 0, len - read);
+void SdlOggOpusPlayer::ReadAudioData(uint16_t *stream, int len) {
+
+  auto buffer_size = int(len * play_rate_);
+  auto *buffer = static_cast<opus_int16 *>(malloc(buffer_size * sizeof(opus_int16)));
+  auto read = reader_->ReadPcmData(buffer, buffer_size);
+  auto expected_read_size = int(read / play_rate_);
+
+  // copy buffer data to stream
+  int last_filled_index = -1;
+  for (auto i = 0; i < expected_read_size; i++) {
+    auto buffer_index = int(i * play_rate_);
+    if (last_filled_index == buffer_index) {
+      stream[i] = 0;
+      continue;
+    }
+    if (buffer_index < 0 || buffer_index >= buffer_size) {
+      std::cout << "buffer index out of range" << std::endl;
+      stream[i] = 0;
+      continue;
+    }
+    last_filled_index = buffer_index;
+    stream[i] = buffer[buffer_index];
   }
+  free(buffer);
+
+  // fill the rest with 0
+  if (expected_read_size < len) {
+    memset(stream + expected_read_size, 0, (len - expected_read_size) * sizeof(uint16_t));
+  }
+
   current_time_ = current_time_ + read / (48000.0 * 2);
   last_update_time_ = std::chrono::system_clock::now().time_since_epoch().count();
   if (read <= 0) {
@@ -179,7 +210,8 @@ int SdlOggOpusPlayer::Initialize() {
   wanted_spec.freq = 48000;
   wanted_spec.callback = [](void *userdata, Uint8 *stream, int len) {
     auto *player = static_cast<SdlOggOpusPlayer *>(userdata);
-    player->ReadAudioData(stream, len);
+    auto *data = reinterpret_cast<Uint16 *>(stream);
+    player->ReadAudioData(data, len / 2);
   };
   wanted_spec.userdata = this;
 
@@ -219,7 +251,11 @@ double SdlOggOpusPlayer::CurrentTime() {
     return current_time_;
   }
   auto time = std::chrono::system_clock::now().time_since_epoch().count() - last_update_time_;
-  return current_time_ + (double) time / 1000000000.0;
+  return current_time_ + ((double) time / 1000000000.0) * play_rate_;
+}
+
+void SdlOggOpusPlayer::SetPlaybackRate(double rate) {
+  play_rate_ = rate;
 }
 
 }
@@ -258,4 +294,9 @@ double ogg_opus_player_get_current_time(void *player) {
 
 void ogg_opus_player_initialize_dart(void *native_port) {
   Dart_InitializeApiDL(native_port);
+}
+
+void ogg_opus_player_set_playback_rate(void *player, double rate) {
+  auto *p = static_cast<Player *>(player);
+  p->SetPlaybackRate(rate);
 }
