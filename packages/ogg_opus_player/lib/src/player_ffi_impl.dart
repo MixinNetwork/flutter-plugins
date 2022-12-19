@@ -66,6 +66,11 @@ class OggOpusPlayerFfiImpl extends OggOpusPlayer {
   }
 
   @override
+  void setPlaybackRate(double speed) {
+    throw UnimplementedError();
+  }
+
+  @override
   void dispose() {
     _portSubscription?.cancel();
     if (_playerHandle != nullptr) {

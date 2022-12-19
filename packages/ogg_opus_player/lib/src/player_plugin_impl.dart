@@ -50,6 +50,7 @@ Future<dynamic> _handleMethodCall(MethodCall call) async {
       final position = call.arguments['position'] as double;
       final playerId = call.arguments['playerId'] as int;
       final updateTime = call.arguments['updateTime'] as int;
+      final speed = call.arguments['speed'] as double?;
       final player = _players[playerId];
       if (player == null) {
         return;
@@ -57,6 +58,7 @@ Future<dynamic> _handleMethodCall(MethodCall call) async {
       player._playerState.value = _convertFromRawValue(state);
       player._lastUpdateTimeStamp = updateTime;
       player._position = position;
+      player._playbackRate = speed ?? 1.0;
       break;
     case "onRecorderCanceled":
       final recorderId = call.arguments['recorderId'] as int;
@@ -130,6 +132,8 @@ class OggOpusPlayerPluginImpl extends OggOpusPlayer {
   // [_position] updated timestamp, in milliseconds.
   int _lastUpdateTimeStamp = -1;
 
+  double _playbackRate = 1.0;
+
   @override
   double get currentPosition {
     if (_lastUpdateTimeStamp == -1) {
@@ -144,7 +148,7 @@ class OggOpusPlayerPluginImpl extends OggOpusPlayer {
       return _position;
     }
 
-    return _position + offset / 1000.0;
+    return _position + (offset / 1000.0) * _playbackRate;
   }
 
   @override
@@ -167,6 +171,14 @@ class OggOpusPlayerPluginImpl extends OggOpusPlayer {
       return;
     }
     _channel.invokeMethod("pause", _playerId);
+  }
+
+  @override
+  void setPlaybackRate(double speed) {
+    _channel.invokeMethod('setPlaybackSpeed', {
+      'playerId': _playerId,
+      'speed': speed,
+    });
   }
 
   @override
