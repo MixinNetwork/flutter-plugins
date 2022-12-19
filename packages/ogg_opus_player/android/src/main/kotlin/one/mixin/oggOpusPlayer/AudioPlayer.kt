@@ -52,6 +52,15 @@ class AudioPlayer(
             return Status.Paused
         }
 
+    private var _playbackRate: Double = 1.0
+    var playbackRate: Double
+        set(value) {
+            _playbackRate = value
+            player.setPlaybackSpeed(value.toFloat())
+        }
+        get() = _playbackRate
+
+
     init {
         val mediaItem = MediaItem.fromUri(path)
         val datasource = ProgressiveMediaSource.Factory(DefaultDataSource.Factory(context))
