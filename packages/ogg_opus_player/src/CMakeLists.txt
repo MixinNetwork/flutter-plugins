@@ -12,6 +12,7 @@ add_library(ogg_opus_player SHARED
   "ogg_opus_player.cc"
   "dart/dart_api_dl.c"
   "ogg_opus_recorder.cc"
+  "sonic.c"
   )
 
 set_target_properties(ogg_opus_player PROPERTIES

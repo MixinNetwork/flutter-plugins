@@ -12,6 +12,7 @@
 #include "SDL.h"
 
 #include "ogg_opus_utils.h"
+#include "sonic.h"
 
 //#define _OPUS_OGG_PLAYER_LOG
 
@@ -127,7 +128,7 @@ class SdlOggOpusPlayer : public Player {
 
   Dart_Port_DL dart_port_dl_;
 
-  double play_rate_ = 1.0;
+  sonicStream sonic_stream_;
 
   int Initialize();
 
@@ -137,7 +138,8 @@ class SdlOggOpusPlayer : public Player {
 
 SdlOggOpusPlayer::SdlOggOpusPlayer(const char *file_path, Dart_Port_DL send_port)
     : reader_(std::make_unique<OggOpusReader>(file_path)),
-      dart_port_dl_(send_port) {
+      dart_port_dl_(send_port),
+      sonic_stream_(nullptr) {
 #ifdef _OPUS_OGG_PLAYER_LOG
   std::cout << "SdlOggOpusPlayer: " << file_path << " port: " << send_port << std::endl;
 #endif
@@ -161,36 +163,34 @@ void SdlOggOpusPlayer::Pause() {
 }
 
 void SdlOggOpusPlayer::ReadAudioData(uint16_t *stream, int len) {
-
-  auto buffer_size = int(len * play_rate_);
-  auto *buffer = static_cast<opus_int16 *>(malloc(buffer_size * sizeof(opus_int16)));
-  auto read = reader_->ReadPcmData(buffer, buffer_size);
-  auto expected_read_size = int(read / play_rate_);
-
-  // copy buffer data to stream
-  int last_filled_index = -1;
-  for (auto i = 0; i < expected_read_size; i++) {
-    auto buffer_index = int(i * play_rate_);
-    if (last_filled_index == buffer_index) {
-      stream[i] = 0;
-      continue;
-    }
-    if (buffer_index < 0 || buffer_index >= buffer_size) {
-      std::cout << "buffer index out of range" << std::endl;
-      stream[i] = 0;
-      continue;
-    }
-    last_filled_index = buffer_index;
-    stream[i] = buffer[buffer_index];
-  }
-  free(buffer);
-
-  // fill the rest with 0
-  if (expected_read_size < len) {
-    memset(stream + expected_read_size, 0, (len - expected_read_size) * sizeof(uint16_t));
+  if (!sonic_stream_) {
+    memset(stream, 0, len * sizeof(uint16_t));
+    return;
   }
 
-  current_time_ = current_time_ + read / (48000.0 * 2);
+  auto read = 0;
+  auto pcm_read = 0;
+  while (read < len) {
+    auto result = sonicReadShortFromStream(
+        sonic_stream_, reinterpret_cast<short *>(stream + read),
+        len - read
+    );
+    if (result > 0) {
+      read += result;
+    } else if (result == 0) {
+      auto buffer = static_cast<opus_int16 *>(malloc(len * sizeof(opus_int16)));
+      auto data = reader_->ReadPcmData(buffer, 500);
+      if (data > 0) {
+        sonicWriteShortToStream(sonic_stream_, buffer, data);
+        pcm_read += data;
+      } else {
+        break;
+      }
+      free(buffer);
+    }
+  }
+
+  current_time_ = current_time_ + pcm_read / 48000.0;
   last_update_time_ = std::chrono::system_clock::now().time_since_epoch().count();
   if (read <= 0) {
     Dart_PostInteger_DL(dart_port_dl_, PLAYER_REACH_ENDED);
@@ -223,6 +223,8 @@ int SdlOggOpusPlayer::Initialize() {
     return -1;
   }
 
+  sonic_stream_ = sonicCreateStream(spec.freq, spec.channels);
+
   if (spec.format != AUDIO_S16SYS) {
     std::cout << "SDL_OpenAudioDevice failed: spec format" << std::endl;
     return -1;
@@ -244,6 +246,9 @@ SdlOggOpusPlayer::~SdlOggOpusPlayer() {
   if (audio_device_id_ > 0) {
     SDL_CloseAudioDevice(audio_device_id_);
   }
+  if (sonic_stream_) {
+    sonicDestroyStream(sonic_stream_);
+  }
 }
 
 double SdlOggOpusPlayer::CurrentTime() {
@@ -251,11 +256,14 @@ double SdlOggOpusPlayer::CurrentTime() {
     return current_time_;
   }
   auto time = std::chrono::system_clock::now().time_since_epoch().count() - last_update_time_;
-  return current_time_ + ((double) time / 1000000000.0) * play_rate_;
+  auto speed = sonic_stream_ ? sonicGetSpeed(sonic_stream_) : 1.0f;
+  return current_time_ + ((double) time / 1000000000.0) * speed;
 }
 
 void SdlOggOpusPlayer::SetPlaybackRate(double rate) {
-  play_rate_ = rate;
+  if (sonic_stream_) {
+    sonicSetSpeed(sonic_stream_, float(rate));
+  }
 }
 
 }
