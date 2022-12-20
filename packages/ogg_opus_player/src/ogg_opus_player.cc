@@ -12,6 +12,7 @@
 #include "SDL.h"
 
 #include "ogg_opus_utils.h"
+#include "sonic.h"
 
 //#define _OPUS_OGG_PLAYER_LOG
 
@@ -92,6 +93,8 @@ class Player {
   virtual ~Player();
 
   virtual double CurrentTime() = 0;
+
+  virtual void SetPlaybackRate(double rate) = 0;
 };
 
 Player::~Player() = default;
@@ -110,6 +113,8 @@ class SdlOggOpusPlayer : public Player {
   void Pause() override;
   double CurrentTime() override;
 
+  void SetPlaybackRate(double rate) override;
+
  private:
   std::unique_ptr<OggOpusReader> reader_;
 
@@ -123,15 +128,18 @@ class SdlOggOpusPlayer : public Player {
 
   Dart_Port_DL dart_port_dl_;
 
+  sonicStream sonic_stream_;
+
   int Initialize();
 
-  void ReadAudioData(Uint8 *stream, int len);
+  void ReadAudioData(uint16_t *stream, int len);
 
 };
 
 SdlOggOpusPlayer::SdlOggOpusPlayer(const char *file_path, Dart_Port_DL send_port)
     : reader_(std::make_unique<OggOpusReader>(file_path)),
-      dart_port_dl_(send_port) {
+      dart_port_dl_(send_port),
+      sonic_stream_(nullptr) {
 #ifdef _OPUS_OGG_PLAYER_LOG
   std::cout << "SdlOggOpusPlayer: " << file_path << " port: " << send_port << std::endl;
 #endif
@@ -154,12 +162,35 @@ void SdlOggOpusPlayer::Pause() {
   }
 }
 
-void SdlOggOpusPlayer::ReadAudioData(Uint8 *stream, int len) {
-  auto read = reader_->ReadPcmData(reinterpret_cast<opus_int16 *>(stream), len / 2) * 2;
-  if (read < len) {
-    memset(stream + read, 0, len - read);
+void SdlOggOpusPlayer::ReadAudioData(uint16_t *stream, int len) {
+  if (!sonic_stream_) {
+    memset(stream, 0, len * sizeof(uint16_t));
+    return;
   }
-  current_time_ = current_time_ + read / (48000.0 * 2);
+
+  auto read = 0;
+  auto pcm_read = 0;
+  while (read < len) {
+    auto result = sonicReadShortFromStream(
+        sonic_stream_, reinterpret_cast<short *>(stream + read),
+        len - read
+    );
+    if (result > 0) {
+      read += result;
+    } else if (result == 0) {
+      auto buffer = static_cast<opus_int16 *>(malloc(len * sizeof(opus_int16)));
+      auto data = reader_->ReadPcmData(buffer, 500);
+      if (data > 0) {
+        sonicWriteShortToStream(sonic_stream_, buffer, data);
+        pcm_read += data;
+      } else {
+        break;
+      }
+      free(buffer);
+    }
+  }
+
+  current_time_ = current_time_ + pcm_read / 48000.0;
   last_update_time_ = std::chrono::system_clock::now().time_since_epoch().count();
   if (read <= 0) {
     Dart_PostInteger_DL(dart_port_dl_, PLAYER_REACH_ENDED);
@@ -179,7 +210,8 @@ int SdlOggOpusPlayer::Initialize() {
   wanted_spec.freq = 48000;
   wanted_spec.callback = [](void *userdata, Uint8 *stream, int len) {
     auto *player = static_cast<SdlOggOpusPlayer *>(userdata);
-    player->ReadAudioData(stream, len);
+    auto *data = reinterpret_cast<Uint16 *>(stream);
+    player->ReadAudioData(data, len / 2);
   };
   wanted_spec.userdata = this;
 
@@ -190,6 +222,8 @@ int SdlOggOpusPlayer::Initialize() {
     std::cout << "SDL_OpenAudioDevice failed: " << SDL_GetError() << std::endl;
     return -1;
   }
+
+  sonic_stream_ = sonicCreateStream(spec.freq, spec.channels);
 
   if (spec.format != AUDIO_S16SYS) {
     std::cout << "SDL_OpenAudioDevice failed: spec format" << std::endl;
@@ -212,6 +246,9 @@ SdlOggOpusPlayer::~SdlOggOpusPlayer() {
   if (audio_device_id_ > 0) {
     SDL_CloseAudioDevice(audio_device_id_);
   }
+  if (sonic_stream_) {
+    sonicDestroyStream(sonic_stream_);
+  }
 }
 
 double SdlOggOpusPlayer::CurrentTime() {
@@ -219,7 +256,14 @@ double SdlOggOpusPlayer::CurrentTime() {
     return current_time_;
   }
   auto time = std::chrono::system_clock::now().time_since_epoch().count() - last_update_time_;
-  return current_time_ + (double) time / 1000000000.0;
+  auto speed = sonic_stream_ ? sonicGetSpeed(sonic_stream_) : 1.0f;
+  return current_time_ + ((double) time / 1000000000.0) * speed;
+}
+
+void SdlOggOpusPlayer::SetPlaybackRate(double rate) {
+  if (sonic_stream_) {
+    sonicSetSpeed(sonic_stream_, float(rate));
+  }
 }
 
 }
@@ -258,4 +302,9 @@ double ogg_opus_player_get_current_time(void *player) {
 
 void ogg_opus_player_initialize_dart(void *native_port) {
   Dart_InitializeApiDL(native_port);
+}
+
+void ogg_opus_player_set_playback_rate(void *player, double rate) {
+  auto *p = static_cast<Player *>(player);
+  p->SetPlaybackRate(rate);
 }

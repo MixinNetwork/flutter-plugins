@@ -27,7 +27,7 @@ class OggOpusBindings {
       : _lookup = lookup;
 
   ffi.Pointer<ffi.Void> ogg_opus_player_create(
-    ffi.Pointer<ffi.Int8> file_path,
+    ffi.Pointer<ffi.Char> file_path,
     int send_port,
   ) {
     return _ogg_opus_player_create(
@@ -39,9 +39,9 @@ class OggOpusBindings {
   late final _ogg_opus_player_createPtr = _lookup<
       ffi.NativeFunction<
           ffi.Pointer<ffi.Void> Function(
-              ffi.Pointer<ffi.Int8>, ffi.Int64)>>('ogg_opus_player_create');
+              ffi.Pointer<ffi.Char>, ffi.Int64)>>('ogg_opus_player_create');
   late final _ogg_opus_player_create = _ogg_opus_player_createPtr
-      .asFunction<ffi.Pointer<ffi.Void> Function(ffi.Pointer<ffi.Int8>, int)>();
+      .asFunction<ffi.Pointer<ffi.Void> Function(ffi.Pointer<ffi.Char>, int)>();
 
   void ogg_opus_player_pause(
     ffi.Pointer<ffi.Void> player,
@@ -100,6 +100,24 @@ class OggOpusBindings {
       _ogg_opus_player_get_current_timePtr
           .asFunction<double Function(ffi.Pointer<ffi.Void>)>();
 
+  void ogg_opus_player_set_playback_rate(
+    ffi.Pointer<ffi.Void> player,
+    double rate,
+  ) {
+    return _ogg_opus_player_set_playback_rate(
+      player,
+      rate,
+    );
+  }
+
+  late final _ogg_opus_player_set_playback_ratePtr = _lookup<
+      ffi.NativeFunction<
+          ffi.Void Function(ffi.Pointer<ffi.Void>,
+              ffi.Double)>>('ogg_opus_player_set_playback_rate');
+  late final _ogg_opus_player_set_playback_rate =
+      _ogg_opus_player_set_playback_ratePtr
+          .asFunction<void Function(ffi.Pointer<ffi.Void>, double)>();
+
   void ogg_opus_player_initialize_dart(
     ffi.Pointer<ffi.Void> native_port,
   ) {
@@ -116,7 +134,7 @@ class OggOpusBindings {
           .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
 
   ffi.Pointer<ffi.Void> ogg_opus_recorder_create(
-    ffi.Pointer<ffi.Int8> file_path,
+    ffi.Pointer<ffi.Char> file_path,
     int send_port,
   ) {
     return _ogg_opus_recorder_create(
@@ -128,9 +146,9 @@ class OggOpusBindings {
   late final _ogg_opus_recorder_createPtr = _lookup<
       ffi.NativeFunction<
           ffi.Pointer<ffi.Void> Function(
-              ffi.Pointer<ffi.Int8>, ffi.Int64)>>('ogg_opus_recorder_create');
+              ffi.Pointer<ffi.Char>, ffi.Int64)>>('ogg_opus_recorder_create');
   late final _ogg_opus_recorder_create = _ogg_opus_recorder_createPtr
-      .asFunction<ffi.Pointer<ffi.Void> Function(ffi.Pointer<ffi.Int8>, int)>();
+      .asFunction<ffi.Pointer<ffi.Void> Function(ffi.Pointer<ffi.Char>, int)>();
 
   void ogg_opus_recorder_start(
     ffi.Pointer<ffi.Void> recoder,

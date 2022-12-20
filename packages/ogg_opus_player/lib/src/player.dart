@@ -28,6 +28,10 @@ abstract class OggOpusPlayer {
 
   /// Current playing position, in seconds.
   double get currentPosition;
+
+  /// Set playback rate, in the range 0.5 through 2.0.
+  /// 1.0 is normal speed (default).
+  void setPlaybackRate(double speed);
 }
 
 abstract class OggOpusRecorder {

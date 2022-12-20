@@ -101,6 +101,10 @@ class _OpusOggPlayerWidgetState extends State<_OpusOggPlayerWidget> {
 
   double _playingPosition = 0;
 
+  static const _kPlaybackSpeedSteps = [0.5, 1.0, 1.5, 2.0];
+
+  int _speedIndex = 1;
+
   @override
   void initState() {
     super.initState();
@@ -138,6 +142,7 @@ class _OpusOggPlayerWidgetState extends State<_OpusOggPlayerWidget> {
             IconButton(
               onPressed: () {
                 _player?.dispose();
+                _speedIndex = 1;
                 _player = OggOpusPlayer(widget.path);
                 _player?.play();
                 _player?.state.addListener(() {
@@ -159,6 +164,17 @@ class _OpusOggPlayerWidgetState extends State<_OpusOggPlayerWidget> {
             },
             icon: const Icon(Icons.stop),
           ),
+          if (_player != null)
+            TextButton(
+              onPressed: () {
+                _speedIndex++;
+                if (_speedIndex >= _kPlaybackSpeedSteps.length) {
+                  _speedIndex = 0;
+                }
+                _player?.setPlaybackRate(_kPlaybackSpeedSteps[_speedIndex]);
+              },
+              child: Text('X${_kPlaybackSpeedSteps[_speedIndex]}'),
+            ),
         ],
       ),
     );

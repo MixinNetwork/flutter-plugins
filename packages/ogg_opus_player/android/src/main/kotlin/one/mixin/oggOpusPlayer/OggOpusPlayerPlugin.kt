@@ -66,6 +66,16 @@ class OggOpusPlayerPlugin : FlutterPlugin, MethodCallHandler {
                 }
                 result.success(null)
             }
+            "setPlaybackSpeed" -> {
+                val playerId = call.argument<Int>("playerId")
+                val speed = call.argument<Double>("speed")
+                val player = players[playerId]
+                if (player != null && speed != null) {
+                    player.playbackRate = speed
+                    handlePlayerStateChanged(playerId!!, player)
+                }
+                result.success(null)
+            }
             "createRecorder" -> {
                 val path = call.arguments as String
                 val id = generatePlayerId()
@@ -131,7 +141,8 @@ class OggOpusPlayerPlugin : FlutterPlugin, MethodCallHandler {
                 "state" to player.state.ordinal,
                 "playerId" to id,
                 "updateTime" to SystemClock.uptimeMillis(),
-                "position" to player.position
+                "position" to player.position,
+                "speed" to player.playbackRate,
             )
         )
     }
