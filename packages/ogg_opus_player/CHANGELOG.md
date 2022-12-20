@@ -1,10 +1,17 @@
+## 0.6.1
+
+* add `OggOpusPlayer.setPlaybackRate` method.
+
 ## 0.6.0
+
 * add Android support
 
 ## 0.5.1
+
 * [Linux] libogg_opus_player.so add link to libogg
 
 ## 0.5.0
+
 * [Linux] break change: remove libogg and libopus shared library, use system library instead.
 * [Linux] support aarch64
 
