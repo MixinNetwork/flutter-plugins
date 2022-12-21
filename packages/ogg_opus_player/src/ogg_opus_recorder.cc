@@ -180,14 +180,17 @@ void SdlOggOpusRecorder::Start() const {
 }
 
 void SdlOggOpusRecorder::Stop() {
+  SDL_LockAudioDevice(device_id_);
   SDL_PauseAudioDevice(device_id_, 1);
+  writer_ = nullptr;
+  SDL_UnlockAudioDevice(device_id_);
   SDL_CloseAudioDevice(device_id_);
   device_id_ = 0;
 }
 
 SdlOggOpusRecorder::~SdlOggOpusRecorder() {
   if (device_id_ > 0) {
-    SDL_CloseAudioDevice(device_id_);
+    Stop();
   }
 }
 

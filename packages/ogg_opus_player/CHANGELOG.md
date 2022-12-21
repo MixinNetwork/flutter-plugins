@@ -1,3 +1,8 @@
+## 0.6.4
+
+* [Windows] fix audio recorder sometimes makes invalid ogg file.
+* [Windows] upgrade SDL2 to 2.26.1.
+
 ## 0.6.3
 
 * [Windows] bump libopusenc to the latest version. which has the fix stream assertion on Windows.
