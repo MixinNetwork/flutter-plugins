@@ -174,8 +174,12 @@ class OggOpusPlayerPluginImpl extends OggOpusPlayer {
   }
 
   @override
-  void setPlaybackRate(double speed) {
-    _channel.invokeMethod('setPlaybackSpeed', {
+  Future<void> setPlaybackRate(double speed) async {
+    await _createCompleter.future;
+    if (_playerId <= 0) {
+      return;
+    }
+    await _channel.invokeMethod('setPlaybackSpeed', {
       'playerId': _playerId,
       'speed': speed,
     });
