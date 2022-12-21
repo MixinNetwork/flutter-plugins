@@ -44,7 +44,7 @@ OggOpusReader::OggOpusReader(const char *file_path) : file_path_(file_path), opu
   if (result == 0 && opus_file) {
     opus_file_ = opus_file;
   } else {
-    std::cerr << "open opus file failed" << std::endl;
+    std::cerr << "open opus file failed" << result << std::endl;
   }
 }
 

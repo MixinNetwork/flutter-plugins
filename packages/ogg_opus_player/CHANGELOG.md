@@ -1,3 +1,7 @@
+## 0.6.3
+
+* [Windows] bump libopusenc to the latest version. which has the fix stream assertion on Windows.
+
 ## 0.6.2
 
 * fix setPlaybackRate on plugin didn't wait player initialized.
