@@ -1,3 +1,7 @@
+## 0.6.2
+
+* fix setPlaybackRate on plugin didn't wait player initialized.
+
 ## 0.6.1
 
 * add `OggOpusPlayer.setPlaybackRate` method.
