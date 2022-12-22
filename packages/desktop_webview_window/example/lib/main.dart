@@ -202,15 +202,25 @@ class _MyAppState extends State<MyApp> {
   }
 
   void _onTap() async {
-    //final webview = await WebviewWindow.create(
+    final hwnd = FindWindow(ffi.nullptr, 'webview_window_example'.toNativeUtf16());
+    final rect = calloc<RECT>();
+    GetWindowRect(hwnd, rect);
+    debugPrint("[" + rect.ref.left.toString() + ", " + rect.ref.right.toString() + "] - [" + rect.ref.top.toString() + ", " + rect.ref.bottom.toString() + "]");
     webview = await WebviewWindow.create(
       configuration: CreateConfiguration(
         userDataFolderWindows: await _getWebViewPath(),
         titleBarTopPadding: Platform.isMacOS ? 20 : 0,
         title: "Pizza Hawai ist ein Vebrechen gegen die Menschlichkeit!",
         titleBarHeight: 0,
+        usePluginDefaultBehaviour: false,
+        windowWidth: rect.ref.right-rect.ref.left,
+        windowHeight: rect.ref.bottom-rect.ref.top,
+        windowPosX: rect.ref.left,
+        windowPosY: rect.ref.top,
+        openMaximized: false,
       ),
     );
+    free(rect);
     webview
       ..setBrightness(Brightness.dark)
       ..setApplicationNameForUserAgent("WebviewExample/1.0.0")
@@ -273,14 +283,16 @@ class _MyAppState extends State<MyApp> {
   }
 
   void _hideMainWindow() async {
-    final hwnd = FindWindow(ffi.nullptr, 'webview_window_example'.toNativeUtf16());
+    //final hwnd = FindWindow(ffi.nullptr, TEXT('webview_window_example'));
+    final hwnd = FindWindow(TEXT('FLUTTER_RUNNER_WIN32_WINDOW'), TEXT('webview_window_example'));
     //final hwnd = GetForegroundWindow();
 
     ShowWindow(hwnd, SW_HIDE);
   }
 
   void _showMainWindow() async {
-    final hwnd = FindWindow(ffi.nullptr, 'webview_window_example'.toNativeUtf16());
+    //final hwnd = FindWindow(ffi.nullptr, TEXT('webview_window_example'));
+    final hwnd = FindWindow(TEXT('FLUTTER_RUNNER_WIN32_WINDOW'), TEXT('webview_window_example'));
     //final hwnd = GetForegroundWindow();
 
     ShowWindow(hwnd, SW_SHOW);
