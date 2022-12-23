@@ -246,7 +246,7 @@ void WebviewWindowPlugin::HandleMethodCall(
     }
     windows_[window_id]->GetWebView()->openDevToolsWindow();
     result->Success();
-  }else {
+  } else {
     result->NotImplemented();
   }
 }
