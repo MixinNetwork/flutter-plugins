@@ -253,6 +253,12 @@ void WebView::Stop() {
   }
 }
 
+void WebView::openDevToolsWindow() {
+  if (webview_) {
+    webview_->OpenDevToolsWindow();
+  }
+}
+
 bool WebView::CanGoBack() const {
   if (webview_) {
     BOOL can_go_back;

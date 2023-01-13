@@ -186,6 +186,11 @@ class WebviewImpl extends Webview {
   }
 
   @override
+  Future<void> openDevToolsWindow() {
+    return channel.invokeMethod('openDevToolsWindow', {"viewId": viewId});
+  }
+
+  @override
   void setOnHistoryChangedCallback(OnHistoryChangedCallback? callback) {
     _onHistoryChanged = callback;
   }
