@@ -1,6 +1,6 @@
 ---
 name: Issues report
-about: omething looks wrong.
+about: Something looks wrong.
 title: ''
 labels: ''
 assignees: ''
