@@ -235,12 +235,10 @@ void WebviewWindowPlugin::HandleMethodCall(
     auto* arguments = std::get_if<flutter::EncodableMap>(method_call.arguments());
     auto window_id = arguments->at(flutter::EncodableValue("viewId")).LongValue();
     if (!windows_.count(window_id)) {
-      std::cout << "webview window id not found" << std::endl;
       result->Error("0", "can not find webview window for id");
       return;
     }
     if (!windows_[window_id]->GetWebView()) {
-      std::cout << "Webview not ready" << std::endl;
       result->Error("0", "webview window not ready");
       return;
     }
