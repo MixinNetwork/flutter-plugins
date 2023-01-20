@@ -236,7 +236,7 @@ class WebviewImpl extends Webview {
   }
 
   @override
-  Future<String?> postWebMessageAsString(String webMessage) async {
+  Future<void> postWebMessageAsString(String webMessage) async {
     return channel.invokeMethod("postWebMessageAsString", {
       "viewId": viewId,
       "webMessage": webMessage,
@@ -244,7 +244,7 @@ class WebviewImpl extends Webview {
   }
 
   @override
-  Future<String?> postWebMessageAsJson(String webMessage) async {
+  Future<void> postWebMessageAsJson(String webMessage) async {
     return channel.invokeMethod("postWebMessageAsJson", {
       "viewId": viewId,
       "webMessage": webMessage,
