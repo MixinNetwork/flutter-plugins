@@ -52,7 +52,7 @@ WebviewWindow::~WebviewWindow() {
 
 void WebviewWindow::CreateAndShow(const std::wstring &title, int height, int width,
                                   const std::wstring &userDataFolder,
-                                  int windowPosX, int windowPosY, bool usePluginDefaultBehaviour,
+                                  int windowPosX, int windowPosY, bool useWindowPositionAndSize,
                                   bool openMaximized, CreateCallback callback) {
 
   RegisterWindowClass(kWebViewWindowClassName, WebviewWindow::WndProc);
@@ -65,22 +65,23 @@ void WebviewWindow::CreateAndShow(const std::wstring &title, int height, int wid
   UINT dpi = FlutterDesktopGetDpiForMonitor(monitor);
   double scale_factor = dpi / 96.0;
 
-  if (usePluginDefaultBehaviour) {
-    hwnd_ = wil::unique_hwnd(::CreateWindow(
-      kWebViewWindowClassName, title.c_str(),
-      WS_OVERLAPPEDWINDOW | WS_VISIBLE,
-      CW_USEDEFAULT, CW_USEDEFAULT,
-      Scale(width, scale_factor), Scale(height, scale_factor),
-      nullptr, nullptr, GetModuleHandle(nullptr), this));
-  } else {
-    DWORD dwStyle = WS_OVERLAPPEDWINDOW | WS_VISIBLE;
-    if (openMaximized)
-      dwStyle |= WS_MAXIMIZE;
+  DWORD dwStyle = WS_OVERLAPPEDWINDOW | WS_VISIBLE;
+  if (openMaximized)
+    dwStyle |= WS_MAXIMIZE;
+
+  if (useWindowPositionAndSize) {
     hwnd_ = wil::unique_hwnd(::CreateWindow(
       kWebViewWindowClassName, title.c_str(),
       dwStyle,
       windowPosX, windowPosY,
       width, height,
+      nullptr, nullptr, GetModuleHandle(nullptr), this));
+  } else {
+    hwnd_ = wil::unique_hwnd(::CreateWindow(
+      kWebViewWindowClassName, title.c_str(),
+      dwStyle,
+      CW_USEDEFAULT, CW_USEDEFAULT,
+      Scale(width, scale_factor), Scale(height, scale_factor),
       nullptr, nullptr, GetModuleHandle(nullptr), this));
   }
   if (!hwnd_) {
@@ -91,7 +92,7 @@ void WebviewWindow::CreateAndShow(const std::wstring &title, int height, int wid
   // Centered window on screen.
   RECT rc;
   GetClientRect(hwnd_.get(), &rc);
-  if (usePluginDefaultBehaviour) {
+  if (!useWindowPositionAndSize && !openMaximized) {
     ClipOrCenterRectToMonitor(&rc, MONITOR_CENTER);
     SetWindowPos(hwnd_.get(), nullptr, rc.left, rc.top, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
   }

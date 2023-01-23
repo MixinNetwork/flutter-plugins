@@ -56,7 +56,7 @@ void WebviewWindowPlugin::HandleMethodCall(
     auto title = std::get<std::string>(arguments->at(flutter::EncodableValue("title")));
     auto titleBarHeight = arguments->at(flutter::EncodableValue("titleBarHeight")).LongValue();
     auto userDataFolder = std::get<std::string>(arguments->at(flutter::EncodableValue("userDataFolderWindows")));
-    auto usePluginDefaultBehaviour = std::get<bool>(arguments->at(flutter::EncodableValue("usePluginDefaultBehaviour")));
+    auto useWindowPositionAndSize = std::get<bool>(arguments->at(flutter::EncodableValue("useWindowPositionAndSize")));
     auto openMaximized = std::get<bool>(arguments->at(flutter::EncodableValue("openMaximized")));
     auto windowPosX = arguments->at(flutter::EncodableValue("windowPosX")).LongValue();
     auto windowPosY = arguments->at(flutter::EncodableValue("windowPosY")).LongValue();
@@ -70,7 +70,7 @@ void WebviewWindowPlugin::HandleMethodCall(
     std::shared_ptr<flutter::MethodResult<flutter::EncodableValue>> result2(std::move(result));
     window->CreateAndShow(
         utf8_to_wide(title), int(height), int(width), utf8_to_wide(userDataFolder),
-        int(windowPosX), int(windowPosY), usePluginDefaultBehaviour, openMaximized,
+        int(windowPosX), int(windowPosY), useWindowPositionAndSize, openMaximized,
         [this, window_id, result(result2)](bool succeed) mutable {
           if (!succeed) {
             result->Error("0", "failed to show window");

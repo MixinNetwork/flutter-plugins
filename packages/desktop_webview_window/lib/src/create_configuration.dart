@@ -17,7 +17,7 @@ class CreateConfiguration {
 
   final String userDataFolderWindows;
 
-  final bool usePluginDefaultBehaviour;
+  final bool useWindowPositionAndSize;
   final bool openMaximized;
 
   const CreateConfiguration({
@@ -29,7 +29,7 @@ class CreateConfiguration {
     this.titleBarHeight = 40,
     this.titleBarTopPadding = 0,
     this.userDataFolderWindows = 'webview_window_WebView2',
-    this.usePluginDefaultBehaviour = true,
+    this.useWindowPositionAndSize = false,
     this.openMaximized = false,
   });
 
@@ -48,7 +48,7 @@ class CreateConfiguration {
         "titleBarHeight": titleBarHeight,
         "titleBarTopPadding": titleBarTopPadding,
         "userDataFolderWindows": userDataFolderWindows,
-        "usePluginDefaultBehaviour": usePluginDefaultBehaviour,
+        "useWindowPositionAndSize": useWindowPositionAndSize,
         "openMaximized": openMaximized,
       };
 }

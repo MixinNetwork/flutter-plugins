@@ -5,7 +5,6 @@
 #include <windows.h>
 #include <tchar.h>
 #include <cassert>
-#include <iostream>
 #include <utility>
 #include <thread>
 
