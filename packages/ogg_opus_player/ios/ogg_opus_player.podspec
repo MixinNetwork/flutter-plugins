@@ -16,7 +16,8 @@ A new flutter plugin project.
   s.source_files = 'Classes/**/*', 'Headers/**/*'
   s.dependency 'Flutter'
   s.platform = :ios, '12.0'
-  s.ios.vendored_libraries = 'Libs/libogg.a', 'Libs/libopus.a', 'Libs/libopusenc.a', 'Libs/libopusfile.a'
+
+  s.ios.vendored_frameworks= 'Frameworks/libogg.xcframework', 'Frameworks/libopus.xcframework', 'Frameworks/libopusenc.xcframework', 'Frameworks/libopusfile.xcframework'
 
   # Flutter.framework does not contain a i386 slice.
   s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES', 'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'i386', 'ENABLE_BITCODE' => 'NO' }
