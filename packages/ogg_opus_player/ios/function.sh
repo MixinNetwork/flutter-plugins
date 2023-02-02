@@ -1,7 +1,5 @@
 #!/bin/bash
 
-ARCHS="arm64-iPhoneSimulator arm64-iPhoneOS x86_64-iPhoneSimulator"
-
 # by default, we won't build for debugging purposes
 if [ "${DEBUG}" == "true" ]; then
   echo "Compiling for debugging ..."
@@ -38,7 +36,11 @@ OPTION_CONFIG=""
 function build_library() {
   ARCH=$1
   PLATFORM=$2
-  EXTRA_CFLAGS="-arch ${ARCH}"
+
+  EXTRA_CFLAGS="-arch ${ARCH} -target ${arch}-apple-ios${MINIOSVERSION}"
+  if [ "${PLATFORM}" == "iPhoneSimulator" ]; then
+    EXTRA_CFLAGS="${EXTRA_CFLAGS}-simulator"
+  fi
 
   if [ "${ARCH}" == "i386" ] || [ "${ARCH}" == "x86_64" ]; then
     EXTRA_CONFIG="--host=x86_64-apple-darwin"
@@ -55,7 +57,7 @@ function build_library() {
     fi
   done
 
-  echo "Building ${PLATFORM} ${ARCH} ${external_ldflags}..."
+  echo "Building ${PLATFORM} ${ARCH}..."
 
   mkdir -p "${INTERDIR}/${PLATFORM}${SDKVERSION}-${ARCH}.sdk"
 

@@ -29,7 +29,7 @@
 #  xcodebuild -showsdks to check currently-installed iOS SDK.
 VERSION="1.3.5"
 SDKVERSION="16.2"
-MINIOSVERSION="12.0"
+MINIOSVERSION="10.0"
 
 source function.sh
 
@@ -62,6 +62,7 @@ set -e # back to regular "bail out on error" mode
 
 export ORIGINALPATH=$PATH
 
+OPTION_CONFIG="${OPTION_CONFIG} --disable-examples"
 
 build_arch_library
 

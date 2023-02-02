@@ -2,7 +2,7 @@
 #  xcodebuild -showsdks to check currently-installed iOS SDK.
 VERSION="0.12"
 SDKVERSION="16.2"
-MINIOSVERSION="12.0"
+MINIOSVERSION="10.0"
 
 source function.sh
 
