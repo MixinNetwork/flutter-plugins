@@ -17,8 +17,11 @@ jobs:
       # Checkout repository
       - uses: actions/checkout@v3
 
-      # Setup Dart SDK with JWT token
-      - uses: dart-lang/setup-dart@a57a6c04cf7d4840e88432aad6281d1e125f0d46
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - run: flutter --version
 
       # parse package from tag: ogg_opus_player-v1.0.0
       - name: Parse package name
@@ -33,14 +36,14 @@ jobs:
 
       # Minimal package setup and dry run checks.
       - name: Install dependencies
-        run: dart pub get
+        run: flutter pub get
         working-directory: 'packages/${{ steps.parse.outputs.result }}'
 
       - name: Publish - dry run
-        run: dart pub publish --dry-run
+        run: flutter pub publish --dry-run
         working-directory: 'packages/${{ steps.parse.outputs.result }}'
 
       # Publishing...
 #      - name: Publish to pub.dev
-#        run: dart pub publish -f
-#        working-directory: ${{ inputs.working-directory }}
+#        run: flutter pub publish -f
+#        working-directory: 'packages/${{ steps.parse.outputs.result }}'
