@@ -31,7 +31,7 @@ jobs:
 
       - run: flutter --version
 
-      # parse package from tag: ogg_opus_player-v1.0.0
+      # Parse package from tag, e.g.: ogg_opus_player-v1.0.0
       - name: Parse package name
         id: parse
         uses: actions/github-script@v6
