@@ -25,20 +25,20 @@ jobs:
         id: parse
         uses: actions/github-script@v6
         with:
-        script: |
-          const tag = context.ref.replace('refs/tags/', '')
-          const package = tag.split('-')[0]
-          core.setOutput('package', package)
-          core.setOutput('tag', tag)
+          result-encoding: string
+          script: |
+            const tag = context.ref.replace('refs/tags/', '')
+            const package = tag.split('-')[0]
+            return package
 
       # Minimal package setup and dry run checks.
       - name: Install dependencies
         run: dart pub get
-        working-directory: 'packages/${{ steps.parse.outputs.package }}'
+        working-directory: 'packages/${{ steps.parse.outputs.result }}'
 
       - name: Publish - dry run
         run: dart pub publish --dry-run
-        working-directory: 'packages/${{ steps.parse.outputs.package }}'
+        working-directory: 'packages/${{ steps.parse.outputs.result }}'
 
       # Publishing...
 #      - name: Publish to pub.dev
