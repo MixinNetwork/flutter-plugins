@@ -1,3 +1,7 @@
+## 0.7.0
+
+* [iOS] support arm64 x86_64 simulator.
+
 ## 0.6.4
 
 * [Windows] fix audio recorder sometimes makes invalid ogg file.
