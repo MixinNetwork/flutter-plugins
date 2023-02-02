@@ -44,6 +44,6 @@ jobs:
         working-directory: 'packages/${{ steps.parse.outputs.result }}'
 
       # Publishing...
-#      - name: Publish to pub.dev
-#        run: flutter pub publish -f
-#        working-directory: 'packages/${{ steps.parse.outputs.result }}'
+      - name: Publish to pub.dev
+        run: flutter pub publish -f
+        working-directory: 'packages/${{ steps.parse.outputs.result }}'
