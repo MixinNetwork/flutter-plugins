@@ -1,0 +1,46 @@
+name: Publish to pub.dev
+
+on:
+  push:
+    tags:
+      - 'ogg_opus_player-v[0-9]+.[0-9]+.[0-9]+*'
+
+jobs:
+  publish:
+
+    name: 'Publish to pub.dev'
+    environment: 'pub.dev'
+    permissions:
+      id-token: write # This is required for requesting the JWT
+    runs-on: ubuntu-latest
+    steps:
+      # Checkout repository
+      - uses: actions/checkout@v3
+
+      # Setup Dart SDK with JWT token
+      - uses: dart-lang/setup-dart@a57a6c04cf7d4840e88432aad6281d1e125f0d46
+
+      # parse package from tag: ogg_opus_player-v1.0.0
+      - name: Parse package name
+        id: parse
+        uses: actions/github-script@v6
+        with:
+        script: |
+          const tag = context.ref.replace('refs/tags/', '')
+          const package = tag.split('-')[0]
+          core.setOutput('package', package)
+          core.setOutput('tag', tag)
+
+      # Minimal package setup and dry run checks.
+      - name: Install dependencies
+        run: dart pub get
+        working-directory: 'packages/${{ steps.parse.outputs.package }}'
+
+      - name: Publish - dry run
+        run: dart pub publish --dry-run
+        working-directory: 'packages/${{ steps.parse.outputs.package }}'
+
+      # Publishing...
+#      - name: Publish to pub.dev
+#        run: dart pub publish -f
+#        working-directory: ${{ inputs.working-directory }}
