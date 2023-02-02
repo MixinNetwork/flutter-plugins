@@ -31,6 +31,9 @@ jobs:
 
       - run: flutter --version
 
+      # Setup Dart SDK with JWT token
+      - uses: dart-lang/setup-dart@a57a6c04cf7d4840e88432aad6281d1e125f0d46
+
       # Parse package from tag, e.g.: ogg_opus_player-v1.0.0
       - name: Parse package name
         id: parse
