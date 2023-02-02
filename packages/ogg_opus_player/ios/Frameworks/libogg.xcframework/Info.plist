@@ -6,14 +6,15 @@
 	<array>
 		<dict>
 			<key>HeadersPath</key>
-			<string>ogg</string>
+			<string>Headers</string>
 			<key>LibraryIdentifier</key>
-			<string>ios-arm64-simulator</string>
+			<string>ios-arm64_x86_64-simulator</string>
 			<key>LibraryPath</key>
 			<string>libogg.a</string>
 			<key>SupportedArchitectures</key>
 			<array>
 				<string>arm64</string>
+				<string>x86_64</string>
 			</array>
 			<key>SupportedPlatform</key>
 			<string>ios</string>
@@ -22,7 +23,7 @@
 		</dict>
 		<dict>
 			<key>HeadersPath</key>
-			<string>ogg</string>
+			<string>Headers</string>
 			<key>LibraryIdentifier</key>
 			<string>ios-arm64</string>
 			<key>LibraryPath</key>
