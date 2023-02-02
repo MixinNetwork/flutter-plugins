@@ -1,6 +1,14 @@
 name: Publish to pub.dev
 
 on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: "package"
+        required: true
+        type: choice
+        options:
+          - ogg_opus_player
   push:
     tags:
       - 'ogg_opus_player-v[0-9]+.[0-9]+.[0-9]+*'
@@ -30,9 +38,14 @@ jobs:
         with:
           result-encoding: string
           script: |
-            const tag = context.ref.replace('refs/tags/', '')
-            const package = tag.split('-')[0]
-            return package
+            if (context.ref.startsWith('refs/tags/')) {
+              const tag = context.ref.replace('refs/tags/', '')
+              const package = tag.split('-')[0]
+              console.log(`Tag found, using ${package}`)
+              return package
+            }
+            console.log(`No tag found, using input ${context.payload.inputs.package}`)
+            return context.payload.inputs.package
 
       # Minimal package setup and dry run checks.
       - name: Install dependencies
