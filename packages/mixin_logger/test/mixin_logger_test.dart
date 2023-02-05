@@ -117,7 +117,6 @@ void main() {
     expect(fileContent, equals('test\n'));
   });
 
-
   test('test write on other isolate', () async {
     await LogFileManager.init(dir, 10, 1024 * 1024 * 10);
     final manger = LogFileManager.instance!;
@@ -137,7 +136,6 @@ void main() {
     final fileContent = File(p.join(dir, 'log_0.log')).readAsStringSync();
     expect(fileContent, contains('after initLogger\n'));
   });
-
 }
 
 void _writeLog(String message) {

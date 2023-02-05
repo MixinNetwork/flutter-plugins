@@ -2,8 +2,8 @@ library mixin_logger;
 
 import 'package:ansicolor/ansicolor.dart';
 import 'package:flutter/foundation.dart';
-import 'package:intl/intl.dart';
 
+import 'src/format.dart';
 import 'src/write_log_to_file_web.dart'
     if (dart.library.io) 'src/write_log_to_file_io.dart' as platform;
 
@@ -107,12 +107,17 @@ void wtf(String message) {
 
 void _print(String message, _LogLevel level) {
   final logToFile = kLogMode || level.index > _LogLevel.debug.index;
-  if (logToFile && !kIsWeb) {
-    final now = DateTime.now();
-    final date = DateFormat('yyyy-MM-dd HH:mm:ss.SSS').format(now);
-    platform.writeLog('$date ${level.prefix} $message');
+
+  if (!logToFile && !kLogMode) {
+    return;
   }
-  if (!kLogMode) return;
-  // ignore: avoid_print
-  print(level.colorize('${level.prefix} $message'));
+
+  final output = '${formatDateTime(DateTime.now())} ${level.prefix} $message';
+  if (logToFile && !kIsWeb) {
+    platform.writeLog(output);
+  }
+  if (kLogMode) {
+    // ignore: avoid_print
+    print(level.colorize(output));
+  }
 }
