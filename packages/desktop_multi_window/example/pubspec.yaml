@@ -30,6 +30,11 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.2
   desktop_lifecycle: ^0.1.0
+  window_plus:
+    git:
+      url: https://github.com/alexmercerind/window_plus
+      ref: 54de18b64814ef3cf90551e997ab26545862902f
+
 
 dev_dependencies:
   flutter_test:

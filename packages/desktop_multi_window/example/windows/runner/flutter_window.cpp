@@ -6,7 +6,6 @@
 #include "flutter/generated_plugin_registrant.h"
 
 #include "desktop_multi_window/desktop_multi_window_plugin.h"
-#include "desktop_lifecycle/desktop_lifecycle_plugin.h"
 
 FlutterWindow::FlutterWindow(const flutter::DartProject &project)
     : project_(project) {}
@@ -32,9 +31,7 @@ bool FlutterWindow::OnCreate() {
   DesktopMultiWindowSetWindowCreatedCallback([](void *controller) {
     auto *flutter_view_controller =
         reinterpret_cast<flutter::FlutterViewController *>(controller);
-    auto *registry = flutter_view_controller->engine();
-    DesktopLifecyclePluginRegisterWithRegistrar(
-        registry->GetRegistrarForPlugin("DesktopLifecyclePlugin"));
+    RegisterPlugins(flutter_view_controller->engine());
   });
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
   return true;

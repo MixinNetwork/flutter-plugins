@@ -8,6 +8,7 @@
 
 #include <desktop_lifecycle/desktop_lifecycle_plugin.h>
 #include <desktop_multi_window/desktop_multi_window_plugin.h>
+#include <window_plus/window_plus_plugin.h>
 
 void fl_register_plugins(FlPluginRegistry* registry) {
   g_autoptr(FlPluginRegistrar) desktop_lifecycle_registrar =
@@ -16,4 +17,7 @@ void fl_register_plugins(FlPluginRegistry* registry) {
   g_autoptr(FlPluginRegistrar) desktop_multi_window_registrar =
       fl_plugin_registry_get_registrar_for_plugin(registry, "DesktopMultiWindowPlugin");
   desktop_multi_window_plugin_register_with_registrar(desktop_multi_window_registrar);
+  g_autoptr(FlPluginRegistrar) window_plus_registrar =
+      fl_plugin_registry_get_registrar_for_plugin(registry, "WindowPlusPlugin");
+  window_plus_plugin_register_with_registrar(window_plus_registrar);
 }
