@@ -9,9 +9,11 @@ on:
         type: choice
         options:
           - ogg_opus_player
+          - mixin_logger
   push:
     tags:
       - 'ogg_opus_player-v[0-9]+.[0-9]+.[0-9]+*'
+      - 'mixin_logger-v[0-9]+.[0-9]+.[0-9]+*'
 
 jobs:
   publish:
