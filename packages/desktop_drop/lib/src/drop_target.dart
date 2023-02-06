@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:cross_file/cross_file.dart';
 import 'package:flutter/widgets.dart';
 
@@ -11,8 +13,10 @@ class DropDoneDetails {
     required this.files,
     required this.localPosition,
     required this.globalPosition,
+    this.extraMacosBookmark,
   });
 
+  final List<Uint8List?>? extraMacosBookmark;
   final List<XFile> files;
   final Offset localPosition;
   final Offset globalPosition;
@@ -164,6 +168,7 @@ class _DropTargetState extends State<DropTarget> {
       );
       widget.onDragDone?.call(DropDoneDetails(
         files: event.files,
+        extraMacosBookmark: event.extraMacosBookmark,
         localPosition: position,
         globalPosition: globalPosition,
       ));

@@ -90,7 +90,9 @@ class DropTarget: NSView {
   }()
 
   override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
-    var urls = [String]()
+
+    
+    var items: [[String: Any]] = [];
 
     let searchOptions: [NSPasteboard.ReadingOptionKey: Any] = [
       .urlReadingFileURLsOnly: true,
@@ -107,7 +109,15 @@ class DropTarget: NSView {
             if let error = error {
               debugPrint("error: \(error)")
             } else {
-              urls.append(fileURL.path)
+              var item  : [String: Any] = ["path":fileURL.path];
+              do {
+                item["bookmark"] = try fileURL.bookmarkData(
+                options: [ .withSecurityScope ],
+                includingResourceValuesForKeys: nil,
+                relativeTo: nil)
+              }catch{ 
+              }
+              items.append(item)
             }
             group.leave()
           }
@@ -120,13 +130,22 @@ class DropTarget: NSView {
 
     pasteboardObjects?.forEach({ item in
       if let fileURL = item as? URL {
-        urls.append(fileURL.path)
+          var item : [String: Any] = ["path":fileURL.path];
+            do {
+              item["bookmark"] = try fileURL.bookmarkData(
+              options: [ .withSecurityScope ],
+              includingResourceValuesForKeys: nil,
+              relativeTo: nil)
+            }catch{ 
+            }
+            items.append(item)
         return
       }
     })
 
+  
     group.notify(queue: .main) {
-      self.channel.invokeMethod("performOperation", arguments: urls)
+      self.channel.invokeMethod("performOperation_macos", arguments: items)
     }
     return true
   }

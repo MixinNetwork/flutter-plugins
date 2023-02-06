@@ -1,5 +1,7 @@
 import 'package:cross_file/cross_file.dart';
 import 'package:flutter/painting.dart';
+import 'dart:typed_data';
+import 'package:meta/meta.dart';
 
 abstract class DropEvent {
   Offset location;
@@ -26,10 +28,12 @@ class DropUpdateEvent extends DropEvent {
 
 class DropDoneEvent extends DropEvent {
   final List<XFile> files;
+  final List<Uint8List?>? extraMacosBookmark; //macos : Uint8List//
 
   DropDoneEvent({
     required Offset location,
     required this.files,
+    this.extraMacosBookmark,
   }) : super(location);
 
   @override
