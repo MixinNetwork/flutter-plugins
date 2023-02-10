@@ -136,7 +136,7 @@ class _MyAppState extends State<MyApp> {
     );
     webview
       ..setBrightness(Brightness.dark)
-      ..setApplicationNameForUserAgent("WebviewExample/1.0.0")
+      ..setApplicationNameForUserAgent(" WebviewExample/1.0.0")
       ..launch(_controller.text)
       ..addOnUrlRequestCallback((url) {
         debugPrint('url: $url');

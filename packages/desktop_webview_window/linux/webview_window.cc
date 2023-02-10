@@ -17,8 +17,7 @@ gboolean on_load_failed_with_tls_errors(
     GTlsCertificateFlags errors,
     gpointer user_data) {
   auto *webview = static_cast<WebviewWindow *>(user_data);
-  auto *uri = soup_uri_new(failing_uri);
-  g_critical("on_load_failed_with_tls_errors: %s %p error= %d", uri->host, webview, errors);
+  g_critical("on_load_failed_with_tls_errors: %s %p error= %d", failing_uri, webview, errors);
   // TODO allow certificate for some certificate ?
   // maybe we can use the pem from https://source.chromium.org/chromium/chromium/src/+/master:net/data/ssl/ev_roots/
 //  webkit_web_context_allow_tls_certificate_for_host(webkit_web_view_get_context(web_view), certificate, uri->host);

@@ -2,12 +2,12 @@
 
 [![Pub](https://img.shields.io/pub/v/desktop_webview_window.svg)](https://pub.dev/packages/desktop_webview_window)
 
-Show a webview window on your flutter deksktop application.
+Show a webview window on your flutter desktop application.
 
 |          |       |     |
 | -------- | ------- | ---- |
 | Windows  | ✅     | [Webview2](https://www.nuget.org/packages/Microsoft.Web.WebView2) 1.0.992.28 |
-| Linux    | ✅    |  [WebKitGTK](https://webkitgtk.org/reference/webkit2gtk/stable/index.html)
+| Linux    | ✅    |  [WebKitGTK-4.1](https://webkitgtk.org/reference/webkit2gtk/stable/index.html) |
 | macOS    | ✅     |  WKWebview |
 
 ## Getting Started
@@ -40,7 +40,7 @@ Show a webview window on your flutter deksktop application.
 ### **linux requirement**
 
 ```shell
-sudo apt-get install webkit2gtk-4.0
+sudo apt-get install webkit2gtk-4.1
 ```
 
 ### **Windows requirement**
@@ -53,7 +53,6 @@ it may not installed on Windows10 devices. So you need consider how to distribut
 See more: https://docs.microsoft.com/en-us/microsoft-edge/webview2/concepts/distribution
 
 For convenience, you can use `WebviewWindow.isWebviewAvailable()` check whether the WebView2 is available.
-
 
 ## License
 
