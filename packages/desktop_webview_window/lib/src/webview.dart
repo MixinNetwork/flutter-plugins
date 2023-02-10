@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/foundation.dart';
 
 /// Handle custom message from JavaScript in your app.
@@ -73,7 +71,8 @@ abstract class Webview {
 
   void addOnWebMessageReceivedCallback(OnWebMessageReceivedCallback callback);
 
-  void removeOnWebMessageReceivedCallback(OnWebMessageReceivedCallback callback);
+  void removeOnWebMessageReceivedCallback(
+      OnWebMessageReceivedCallback callback);
 
   /// Close the web view window.
   void close();
