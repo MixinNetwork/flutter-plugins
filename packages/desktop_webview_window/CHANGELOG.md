@@ -1,3 +1,7 @@
+## 0.2.0
+
+* BREAK CHANGE: bump linux webkit2gtk version to 4.1
+
 ## 0.1.6
 
 * fix WebView render area wrong offset on Windows.
