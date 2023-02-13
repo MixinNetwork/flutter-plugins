@@ -10,4 +10,4 @@ build/
 
 *.iml
 
-pubspec.lock
+/pubspec.lock
