@@ -28,17 +28,9 @@ public class DesktopDropPlugin: NSObject, FlutterPlugin {
     let d = DropTarget(frame: vc.view.bounds, channel: channel)
     d.autoresizingMask = [.width, .height]
 
-    var dragTypes = [NSPasteboard.PasteboardType]()
+    d.registerForDraggedTypes(NSFilePromiseReceiver.readableDraggedTypes.map { NSPasteboard.PasteboardType($0) })
+    d.registerForDraggedTypes([NSPasteboard.PasteboardType.fileURL])
 
-    if #available(macOS 10.12, *) {
-      dragTypes.append(contentsOf: NSFilePromiseReceiver.readableDraggedTypes.map { NSPasteboard.PasteboardType($0) })
-    }
-
-    if #available(macOS 10.13, *) {
-      dragTypes.append(.fileURL)
-    }
-    dragTypes.append(.filePromise)
-    d.registerForDraggedTypes(dragTypes)
     vc.view.addSubview(d)
 
     registrar.addMethodCallDelegate(instance, channel: channel)
@@ -98,32 +90,24 @@ class DropTarget: NSView {
 
     let group = DispatchGroup()
 
-    if #available(macOS 10.12, *) {
-      // retrieve NSFilePromise.
-      sender.enumerateDraggingItems(options: [], for: nil, classes: [NSFilePromiseReceiver.self], searchOptions: searchOptions) { draggingItem, _, _ in
-        if let filePromiseReceiver = draggingItem.item as? NSFilePromiseReceiver {
-          group.enter()
-          filePromiseReceiver.receivePromisedFiles(atDestination: self.destinationURL, options: [:], operationQueue: self.workQueue) { fileURL, error in
-            if let error = error {
-              debugPrint("error: \(error)")
-            } else {
-              urls.append(fileURL.path)
-            }
-            group.leave()
+    // retrieve NSFilePromise.
+    sender.enumerateDraggingItems(options: [], for: nil, classes: [NSFilePromiseReceiver.self, NSURL.self], searchOptions: searchOptions) { draggingItem, _, _ in
+      switch draggingItem.item {
+      case let filePromiseReceiver as NSFilePromiseReceiver:
+        group.enter()
+        filePromiseReceiver.receivePromisedFiles(atDestination: self.destinationURL, options: [:], operationQueue: self.workQueue) { fileURL, error in
+          if let error = error {
+            debugPrint("error: \(error)")
+          } else {
+            urls.append(fileURL.path)
           }
-          return
+          group.leave()
         }
+      case let fileURL as URL:
+        urls.append(fileURL.path)
+      default: break
       }
     }
-
-    let pasteboardObjects = sender.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: searchOptions)
-
-    pasteboardObjects?.forEach({ item in
-      if let fileURL = item as? URL {
-        urls.append(fileURL.path)
-        return
-      }
-    })
 
     group.notify(queue: .main) {
       self.channel.invokeMethod("performOperation", arguments: urls)

@@ -96,7 +96,7 @@ class _ExampleDragTargetState extends State<ExampleDragTarget> {
                 alignment: Alignment.topRight,
                 child: Text(
                   '$offset',
-                  style: Theme.of(context).textTheme.caption,
+                  style: Theme.of(context).textTheme.bodySmall,
                 ),
               )
           ],
