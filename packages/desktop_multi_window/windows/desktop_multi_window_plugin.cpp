@@ -52,7 +52,7 @@ void DesktopMultiWindowPlugin::HandleMethodCall(
     std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
   if (method_call.method_name() == "createWindow") {
     auto args = std::get_if<std::string>(method_call.arguments());
-    auto window_id = MultiWindowManager::Instance()->Create(*args);
+    auto window_id = MultiWindowManager::Instance()->Create(args != nullptr ? *args : "");
     result->Success(flutter::EncodableValue(window_id));
     return;
   } else if (method_call.method_name() == "show") {
