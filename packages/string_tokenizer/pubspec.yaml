@@ -1,0 +1,23 @@
+name: string_tokenizer
+description: A new Flutter FFI plugin project.
+version: 0.0.1
+homepage: https://github.com/MixinNetwork/flutter-plugins
+
+environment:
+  sdk: '>=2.17.0 <3.0.0'
+  flutter: ">=3.0.0"
+
+platforms:
+  macos:
+  ios:
+
+dependencies:
+  flutter:
+    sdk: flutter
+  ffi: ^2.0.1
+
+dev_dependencies:
+  ffigen: ^7.2.9
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0
