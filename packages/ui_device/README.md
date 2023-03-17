@@ -1,92 +1,41 @@
 # ui_device
 
-A new Flutter FFI plugin project.
+A Flutter plugin for accessing UIDevice information on iOS.
 
-## Getting Started
+## Usage
 
-This project is a starting point for a Flutter
-[FFI plugin](https://docs.flutter.dev/development/platform-integration/c-interop),
-a specialized package that includes native code directly invoked with Dart FFI.
-
-## Project stucture
-
-This template uses the following structure:
-
-* `src`: Contains the native source code, and a CmakeFile.txt file for building
-  that source code into a dynamic library.
-
-* `lib`: Contains the Dart code that defines the API of the plugin, and which
-  calls into the native code using `dart:ffi`.
-
-* platform folders (`android`, `ios`, `windows`, etc.): Contains the build files
-  for building and bundling the native code library with the platform application.
-
-## Buidling and bundling native code
-
-The `pubspec.yaml` specifies FFI plugins as follows:
+To use this plugin, add `ui_device` as a [dependency in your pubspec.yaml file](https://flutter.dev/docs/development/packages-and-plugins/using-packages).
 
 ```yaml
-  plugin:
-    platforms:
-      some_platform:
-        ffiPlugin: true
+dependencies:
+  ui_device:
+    git:
+      url: https://github.com/MixinNetwork/flutter-plugins.git
+      path: packages/ui_device
 ```
 
-This configuration invokes the native build for the various target platforms
-and bundles the binaries in Flutter applications using these FFI plugins.
+Then import the package:
 
-This can be combined with dartPluginClass, such as when FFI is used for the
-implementation of one platform in a federated plugin:
-
-```yaml
-  plugin:
-    implements: some_other_plugin
-    platforms:
-      some_platform:
-        dartPluginClass: SomeClass
-        ffiPlugin: true
+```dart
+import 'package:ui_device/ui_device.dart' as ui_device;
 ```
 
-A plugin can have both FFI and method channels:
+### Getting Device Information
 
-```yaml
-  plugin:
-    platforms:
-      some_platform:
-        pluginClass: SomeName
-        ffiPlugin: true
+`ui_device` provides a single method `current` which returns a `DeviceInfo` object containing various properties of the device.
+
+```dart
+final current = ui_device.current;
+print(current.systemName); // e.g. "iOS"
+print(current.systemVersion); // e.g. "14.4.1"
+print(current.name); // e.g. "iPhone XS Max"
+print(current.model); // e.g. "iPhone11,6"
 ```
 
-The native build systems that are invoked by FFI (and method channel) plugins are:
+You can also get additional information such as the `localizedModel`, `identifierForVendor`, and `isPhysicalDevice`.
 
-* For Android: Gradle, which invokes the Android NDK for native builds.
-  * See the documentation in android/build.gradle.
-* For iOS and MacOS: Xcode, via CocoaPods.
-  * See the documentation in ios/ui_device.podspec.
-  * See the documentation in macos/ui_device.podspec.
-* For Linux and Windows: CMake.
-  * See the documentation in linux/CMakeLists.txt.
-  * See the documentation in windows/CMakeLists.txt.
-
-## Binding to native code
-
-To use the native code, bindings in Dart are needed.
-To avoid writing these by hand, they are generated from the header file
-(`src/ui_device.h`) by `package:ffigen`.
-Regenerate the bindings by running `flutter pub run ffigen --config ffigen.yaml`.
-
-## Invoking native code
-
-Very short-running native functions can be directly invoked from any isolate.
-For example, see `sum` in `lib/ui_device.dart`.
-
-Longer-running functions should be invoked on a helper isolate to avoid
-dropping frames in Flutter applications.
-For example, see `sumAsync` in `lib/ui_device.dart`.
-
-## Flutter help
-
-For help getting started with Flutter, view our
-[online documentation](https://flutter.dev/docs), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
-
+```dart
+final current = ui_device.current;
+print(current.localizedModel); // e.g. "iPhone"
+print(current.identifierForVendor); // a unique identifier for a device, persisted across app installs
+```

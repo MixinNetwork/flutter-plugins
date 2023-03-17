@@ -1,11 +1,14 @@
 name: ui_device
-description: A new Flutter FFI plugin project.
+description: A Flutter plugin for accessing UIDevice information on iOS.
 version: 0.0.1
 homepage: https://github.com/MixinNetwork/flutter-plugins
 
 environment:
   sdk: '>=2.17.0 <3.0.0'
   flutter: ">=3.0.0"
+
+platforms:
+  ios:
 
 dependencies:
   flutter:
