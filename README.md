@@ -20,6 +20,8 @@ Any questions join the [Mixin Flutter group][mixin_group_url]
 | [fts5_simple](./packages/fts5_simple)                       | [![pub package][fts5_simple_version]][fts5_simple_pub]                       | [![likes][fts5_simple_likes]][fts5_simple_score]                       | Windows, Linux, macOS      |
 | [desktop_multi_window](./packages/desktop_multi_window)     | [![pub package][desktop_multi_window_version]][desktop_multi_window_pub]     | [![likes][desktop_multi_window_likes]][desktop_multi_window_score]     | Windows, Linux, macOS      |
 | [mixin_logger](./packages/mixin_logger)                     | [![pub package][mixin_logger_version]][mixin_logger_pub]                     | [![likes][mixin_logger_likes]][mixin_logger_score]                     | All Platforms              |
+| [ui_device](./packages/ui_device)                           | NONE                                                                         | NONE                                                                   | macOS, iOS                 |
+| [string_tokenizer](./packages/string_tokenizer)             | NONE                                                                         | NONE                                                                   | macOS, iOS                 |
 
 [desktop_drop_version]: https://img.shields.io/pub/v/desktop_drop.svg
 
