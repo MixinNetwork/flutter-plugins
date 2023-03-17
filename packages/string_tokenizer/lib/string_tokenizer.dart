@@ -8,6 +8,7 @@ final DynamicLibrary _dylib = DynamicLibrary.process();
 
 final _bindings = binding.CFStringTokenizer(_dylib);
 
+/// see https://developer.apple.com/documentation/corefoundation/1588024-tokenization_modifiers?language=objc
 enum TokenizerUnit {
   word,
   sentence,
@@ -39,6 +40,9 @@ extension _TokenizerUnitExtension on TokenizerUnit {
   }
 }
 
+/// Tokenize a string into a list of tokens.
+///
+/// [options] empty meanings [TokenizerUnit.word].
 List<String> tokenize(
   String string, {
   List<TokenizerUnit> options = const [],
