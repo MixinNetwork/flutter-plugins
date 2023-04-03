@@ -8,7 +8,10 @@ import 'drop_item.dart';
 import 'events.dart';
 import 'utils/platform.dart' if (dart.library.html) 'utils/platform_web.dart';
 
-typedef RawDropListener = void Function(DropEvent);
+abstract class RawDropListener {
+  void onEvent(DropEvent event);
+  bool isInBounds(DropEvent event);
+}
 
 class DesktopDrop {
   static const MethodChannel _channel = MethodChannel('desktop_drop');
@@ -19,22 +22,24 @@ class DesktopDrop {
 
   final _listeners = <RawDropListener>{};
 
-  var _inited = false;
+  var _initialized = false;
 
   Offset? _offset;
 
   void init() {
-    if (_inited) {
+    if (_initialized) {
       return;
     }
-    _inited = true;
-    _channel.setMethodCallHandler((call) async {
-      try {
-        return await _handleMethodChannel(call);
-      } catch (e, s) {
-        debugPrint('_handleMethodChannel: $e $s');
-      }
-    });
+    _initialized = true;
+    _channel.setMethodCallHandler(
+      (call) async {
+        try {
+          return await _handleMethodChannel(call);
+        } catch (e, s) {
+          debugPrint('_handleMethodChannel: $e $s');
+        }
+      },
+    );
   }
 
   Future<void> _handleMethodChannel(MethodCall call) async {
@@ -45,15 +50,14 @@ class DesktopDrop {
         _notifyEvent(DropEnterEvent(location: _offset!));
         break;
       case "updated":
-        if (_offset == null && Platform.isLinux) {
-          final position = (call.arguments as List).cast<double>();
-          _offset = Offset(position[0], position[1]);
-          _notifyEvent(DropEnterEvent(location: _offset!));
-          return;
-        }
         final position = (call.arguments as List).cast<double>();
+        final previousOffset = _offset;
         _offset = Offset(position[0], position[1]);
-        _notifyEvent(DropUpdateEvent(location: _offset!));
+        if (previousOffset == null) {
+          _notifyEvent(DropEnterEvent(location: _offset!));
+        } else {
+          _notifyEvent(DropUpdateEvent(location: _offset!));
+        }
         break;
       case "exited":
         _notifyEvent(DropExitEvent(location: _offset ?? Offset.zero));
@@ -109,9 +113,19 @@ class DesktopDrop {
   }
 
   void _notifyEvent(DropEvent event) {
-    for (final listener in _listeners) {
-      listener(event);
+    final reversedListeners = _listeners.toList(growable: false).reversed;
+    var foundTargetListener = false;
+    for (final listener in reversedListeners) {
+      final isInBounds = listener.isInBounds(event);
+      if (isInBounds && !foundTargetListener) {
+        foundTargetListener = true;
+        listener.onEvent(event);
+      } else {
+        listener.onEvent(DropExitEvent(location: event.location));
+      }
     }
+
+    _channel.invokeMethod('updateDroppableStatus', foundTargetListener);
   }
 
   void addRawDropEventListener(RawDropListener listener) {

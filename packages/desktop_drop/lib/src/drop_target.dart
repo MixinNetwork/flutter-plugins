@@ -1,4 +1,5 @@
 import 'package:cross_file/cross_file.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
 import 'channel.dart';
@@ -77,26 +78,25 @@ enum _DragTargetStatus {
   idle,
 }
 
-class _DropTargetState extends State<DropTarget> {
+class _DropTargetState extends State<DropTarget> implements RawDropListener {
   _DragTargetStatus _status = _DragTargetStatus.idle;
+  Offset? _latestGlobalPosition;
+  Offset? _latestLocalPosition;
 
   @override
   void initState() {
     super.initState();
     DesktopDrop.instance.init();
     if (widget.enable) {
-      DesktopDrop.instance.addRawDropEventListener(_onDropEvent);
+      DesktopDrop.instance.addRawDropEventListener(this);
     }
   }
 
   @override
   void didUpdateWidget(DropTarget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.enable && !oldWidget.enable) {
-      DesktopDrop.instance.addRawDropEventListener(_onDropEvent);
-    } else if (!widget.enable && oldWidget.enable) {
-      DesktopDrop.instance.removeRawDropEventListener(_onDropEvent);
-      if (_status != _DragTargetStatus.idle) {
+    if (widget.enable != oldWidget.enable) {
+      if (!widget.enable) {
         _updateStatus(
           _DragTargetStatus.idle,
           localLocation: Offset.zero,
@@ -106,17 +106,67 @@ class _DropTargetState extends State<DropTarget> {
     }
   }
 
-  void _onDropEvent(DropEvent event) {
+  void _updateStatus(
+    _DragTargetStatus status, {
+    bool debugRequiredStatus = true,
+    required Offset localLocation,
+    required Offset globalLocation,
+  }) {
+    _status = status;
+    final details = DropEventDetails(
+      localPosition: localLocation,
+      globalPosition: globalLocation,
+    );
+    switch (_status) {
+      case _DragTargetStatus.enter:
+        widget.onDragEntered?.call(details);
+        break;
+      case _DragTargetStatus.update:
+        widget.onDragUpdated?.call(details);
+        break;
+      case _DragTargetStatus.idle:
+        _latestGlobalPosition = null;
+        _latestLocalPosition = null;
+        widget.onDragExited?.call(details);
+        break;
+    }
+  }
+
+  @override
+  void dispose() {
+    if (widget.enable) {
+      DesktopDrop.instance.removeRawDropEventListener(this);
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+
+  @override
+  bool isInBounds(DropEvent event) {
     final renderBox = context.findRenderObject() as RenderBox?;
-    if (renderBox == null) {
+    if (renderBox == null || !widget.enable) {
+      return false;
+    }
+    final globalPosition = _scaleHoverPoint(event.location);
+    final position = renderBox.globalToLocal(globalPosition);
+    _latestGlobalPosition = globalPosition;
+    _latestLocalPosition = position;
+
+    return renderBox.hitTest(BoxHitTestResult(), position: position);
+  }
+
+  @override
+  void onEvent(DropEvent event) {
+    final inBounds = isInBounds(event);
+    final position = _latestLocalPosition;
+    final globalPosition = _latestGlobalPosition;
+    if (position == null || globalPosition == null) {
       return;
     }
-    final globalPosition = _scaleHoverPoint(context, event.location);
-    final position = renderBox.globalToLocal(globalPosition);
-    bool inBounds = renderBox.paintBounds.contains(position);
     if (event is DropEnterEvent) {
       if (!inBounds) {
-        assert(_status == _DragTargetStatus.idle);
       } else {
         _updateStatus(
           _DragTargetStatus.enter,
@@ -131,9 +181,7 @@ class _DropTargetState extends State<DropTarget> {
           globalLocation: globalPosition,
           localLocation: position,
         );
-      } else if ((_status == _DragTargetStatus.enter ||
-              _status == _DragTargetStatus.update) &&
-          inBounds) {
+      } else if ((_status == _DragTargetStatus.enter || _status == _DragTargetStatus.update) && inBounds) {
         _updateStatus(
           _DragTargetStatus.update,
           globalLocation: globalPosition,
@@ -153,9 +201,7 @@ class _DropTargetState extends State<DropTarget> {
         globalLocation: globalPosition,
         localLocation: position,
       );
-    } else if (event is DropDoneEvent &&
-        (_status != _DragTargetStatus.idle || Platform.isLinux) &&
-        inBounds) {
+    } else if (event is DropDoneEvent && (_status != _DragTargetStatus.idle || Platform.isLinux) && inBounds) {
       _updateStatus(
         _DragTargetStatus.idle,
         debugRequiredStatus: false,
@@ -170,51 +216,12 @@ class _DropTargetState extends State<DropTarget> {
     }
   }
 
-  void _updateStatus(
-    _DragTargetStatus status, {
-    bool debugRequiredStatus = true,
-    required Offset localLocation,
-    required Offset globalLocation,
-  }) {
-    assert(!debugRequiredStatus || _status != status);
-    _status = status;
-    final details = DropEventDetails(
-      localPosition: localLocation,
-      globalPosition: globalLocation,
-    );
-    switch (_status) {
-      case _DragTargetStatus.enter:
-        widget.onDragEntered?.call(details);
-        break;
-      case _DragTargetStatus.update:
-        widget.onDragUpdated?.call(details);
-        break;
-      case _DragTargetStatus.idle:
-        widget.onDragExited?.call(details);
-        break;
+  Offset _scaleHoverPoint(Offset point) {
+    if (Platform.isWindows || Platform.isAndroid) {
+      final pixelRatio = MediaQuery.of(context).devicePixelRatio;
+      final scaleAmount = 1 / pixelRatio;
+      return point.scale(scaleAmount, scaleAmount);
     }
+    return point;
   }
-
-  @override
-  void dispose() {
-    if (widget.enable) {
-      DesktopDrop.instance.removeRawDropEventListener(_onDropEvent);
-    }
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return widget.child;
-  }
-}
-
-Offset _scaleHoverPoint(BuildContext context, Offset point) {
-  if (Platform.isWindows || Platform.isAndroid) {
-    return point.scale(
-      1 / MediaQuery.of(context).devicePixelRatio,
-      1 / MediaQuery.of(context).devicePixelRatio,
-    );
-  }
-  return point;
 }
