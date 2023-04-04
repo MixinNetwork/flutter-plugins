@@ -25,7 +25,18 @@ class DesktopDropWeb {
     pluginInstance._registerEvents();
   }
 
-  html.DataTransfer? _dataTransfer;
+  html.DataTransfer? __dataTransfer;
+
+  html.DataTransfer? get _dataTransfer => __dataTransfer;
+
+  set _dataTransfer(html.DataTransfer? newValue) {
+    if (__dataTransfer != newValue) {
+      if (__dataTransfer != null) {
+        newValue?.dropEffect = __dataTransfer!.dropEffect;
+      }
+      __dataTransfer = newValue;
+    }
+  }
 
   void _registerEvents() {
     html.window.onDragEnter.listen(
@@ -103,7 +114,7 @@ class DesktopDropWeb {
         final enable = call.arguments as bool;
         final current = _dataTransfer?.dropEffect;
         final newValue = enable ? 'copy' : 'move';
-        if (current !=  newValue) {
+        if (current != newValue) {
           _dataTransfer?.dropEffect = newValue;
         }
         return;

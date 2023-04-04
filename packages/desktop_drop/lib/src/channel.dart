@@ -137,6 +137,7 @@ class DesktopDrop {
           ),
         );
       }
+      _channel.invokeMethod('updateDroppableStatus', target != null);
     }
     if (target != null) {
       final position = target.globalToLocalOffset(event.location);
@@ -147,7 +148,6 @@ class DesktopDrop {
       }
     }
     _currentTargetListener = target;
-    _channel.invokeMethod('updateDroppableStatus', target != null);
   }
 
   void _notifyDoneEvent(DropDoneEvent event) {
