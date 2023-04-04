@@ -1,16 +1,19 @@
 import 'dart:convert';
 
+import 'package:collection/collection.dart';
 import 'package:cross_file/cross_file.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import 'drop_item.dart';
 import 'events.dart';
-import 'utils/platform.dart' if (dart.library.html) 'utils/platform_web.dart';
 
 abstract class RawDropListener {
-  void onEvent(DropEvent event);
-  bool isInBounds(DropEvent event);
+  /// Returns true if event was handled, false otherwise
+  bool handleDropEvent(DropEvent event);
+
+  Offset globalToLocalOffset(Offset global);
 }
 
 class DesktopDrop {
@@ -20,10 +23,9 @@ class DesktopDrop {
 
   static final instance = DesktopDrop._();
 
-  final _listeners = <RawDropListener>{};
-
   var _initialized = false;
 
+  RawDropListener? _currentTargetListener;
   Offset? _offset;
 
   void init() {
@@ -47,25 +49,25 @@ class DesktopDrop {
       case "entered":
         final position = (call.arguments as List).cast<double>();
         _offset = Offset(position[0], position[1]);
-        _notifyEvent(DropEnterEvent(location: _offset!));
+        _notifyPositionEvent(DropEnterEvent(location: _offset!));
         break;
       case "updated":
         final position = (call.arguments as List).cast<double>();
         final previousOffset = _offset;
         _offset = Offset(position[0], position[1]);
         if (previousOffset == null) {
-          _notifyEvent(DropEnterEvent(location: _offset!));
+          _notifyPositionEvent(DropEnterEvent(location: _offset!));
         } else {
-          _notifyEvent(DropUpdateEvent(location: _offset!));
+          _notifyPositionEvent(DropUpdateEvent(location: _offset!));
         }
         break;
       case "exited":
-        _notifyEvent(DropExitEvent(location: _offset ?? Offset.zero));
+        _notifyPositionEvent(DropExitEvent(location: _offset ?? Offset.zero));
         _offset = null;
         break;
       case "performOperation":
         final paths = (call.arguments as List).cast<String>();
-        _notifyEvent(
+        _notifyDoneEvent(
           DropDoneEvent(
             location: _offset ?? Offset.zero,
             files: paths.map((e) => XFile(e)).toList(),
@@ -85,10 +87,12 @@ class DesktopDrop {
           }
           return '';
         }).where((e) => e.isNotEmpty);
-        _notifyEvent(DropDoneEvent(
-          location: Offset(offset[0], offset[1]),
-          files: paths.map((e) => XFile(e)).toList(),
-        ));
+        _notifyDoneEvent(
+          DropDoneEvent(
+            location: Offset(offset[0], offset[1]),
+            files: paths.map((e) => XFile(e)).toList(),
+          ),
+        );
         break;
       case "performOperation_web":
         final results = (call.arguments as List)
@@ -102,7 +106,7 @@ class DesktopDrop {
                   mimeType: e.type,
                 ))
             .toList();
-        _notifyEvent(
+        _notifyDoneEvent(
           DropDoneEvent(location: _offset ?? Offset.zero, files: results),
         );
         _offset = null;
@@ -112,29 +116,62 @@ class DesktopDrop {
     }
   }
 
-  void _notifyEvent(DropEvent event) {
-    final reversedListeners = _listeners.toList(growable: false).reversed;
-    var foundTargetListener = false;
-    for (final listener in reversedListeners) {
-      final isInBounds = listener.isInBounds(event);
-      if (isInBounds && !foundTargetListener) {
-        foundTargetListener = true;
-        listener.onEvent(event);
-      } else {
-        listener.onEvent(DropExitEvent(location: event.location));
-      }
+  void _notifyPositionEvent(DropEvent event) {
+    final RawDropListener? target;
+
+    if (event is DropExitEvent) {
+      target = null;
+    } else {
+      final result = BoxHitTestResult();
+      WidgetsBinding.instance.renderView.hitTest(result, position: event.location);
+
+      target = result.path.firstWhereOrNull((entry) => entry.target is RawDropListener)?.target as RawDropListener?;
     }
 
-    _channel.invokeMethod('updateDroppableStatus', foundTargetListener);
+    if (_currentTargetListener != target) {
+      final previous = _currentTargetListener;
+      if (previous != null) {
+        previous.handleDropEvent(
+          DropExitEvent(
+            location: previous.globalToLocalOffset(event.location),
+          ),
+        );
+      }
+    }
+    if (target != null) {
+      final position = target.globalToLocalOffset(event.location);
+      if (_currentTargetListener == null) {
+        target.handleDropEvent(DropEnterEvent(location: position));
+      } else {
+        target.handleDropEvent(DropUpdateEvent(location: position));
+      }
+    }
+    _currentTargetListener = target;
+    _channel.invokeMethod('updateDroppableStatus', target != null);
   }
 
-  void addRawDropEventListener(RawDropListener listener) {
-    assert(!_listeners.contains(listener));
-    _listeners.add(listener);
-  }
+  void _notifyDoneEvent(DropDoneEvent event) {
+    final result = BoxHitTestResult();
+    WidgetsBinding.instance.renderView.hitTest(result, position: event.location);
 
-  void removeRawDropEventListener(RawDropListener listener) {
-    assert(_listeners.contains(listener));
-    _listeners.remove(listener);
+    final target = result.path.firstWhereOrNull((entry) => entry.target is RawDropListener)?.target as RawDropListener?;
+    final previous = _currentTargetListener;
+    if (previous != null) {
+      previous.handleDropEvent(
+        DropExitEvent(
+          location: previous.globalToLocalOffset(event.location),
+        ),
+      );
+      _currentTargetListener = null;
+    }
+    if (target != null) {
+      target.handleDropEvent(
+        DropDoneEvent(
+          location: target.globalToLocalOffset(event.location),
+          files: event.files,
+        ),
+      );
+    }
+    _channel.invokeMethod('updateDroppableStatus', false);
   }
 }

@@ -4,7 +4,7 @@ version: 0.4.4
 homepage: https://github.com/MixinNetwork/flutter-plugins/tree/main/packages/desktop_drop
 
 environment:
-  sdk: ">=2.12.0 <3.0.0"
+  sdk: ">=2.17.0 <3.0.0"
   flutter: ">=1.20.0"
 
 dependencies:
@@ -13,6 +13,7 @@ dependencies:
   flutter_web_plugins:
     sdk: flutter
   cross_file: ^0.3.3+4
+  collection: any
 
 dev_dependencies:
   flutter_test:

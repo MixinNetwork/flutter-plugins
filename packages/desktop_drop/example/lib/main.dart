@@ -51,28 +51,28 @@ class _ExampleDragTargetState extends State<ExampleDragTarget> {
   @override
   Widget build(BuildContext context) {
     return DropTarget(
-      onDragDone: (detail) async {
+      onDragDone: (files, location) async {
         setState(() {
-          _list.addAll(detail.files);
+          _list.addAll(files);
         });
 
         debugPrint('onDragDone:');
-        for (final file in detail.files) {
+        for (final file in files) {
           debugPrint('  ${file.path} ${file.name}'
               '  ${await file.lastModified()}'
               '  ${await file.length()}'
               '  ${file.mimeType}');
         }
       },
-      onDragUpdated: (details) {
+      onDragUpdated: (localPosition) {
         setState(() {
-          offset = details.localPosition;
+          offset = localPosition;
         });
       },
-      onDragEntered: (detail) {
+      onDragEntered: (localPosition) {
         setState(() {
           _dragging = true;
-          offset = detail.localPosition;
+          offset = localPosition;
         });
       },
       onDragExited: (detail) {
@@ -87,10 +87,7 @@ class _ExampleDragTargetState extends State<ExampleDragTarget> {
         color: _dragging ? Colors.blue.withOpacity(0.4) : Colors.black26,
         child: Stack(
           children: [
-            if (_list.isEmpty)
-              const Center(child: Text("Drop here"))
-            else
-              Text(_list.map((e) => e.path).join("\n")),
+            if (_list.isEmpty) const Center(child: Text("Drop here")) else Text(_list.map((e) => e.path).join("\n")),
             if (offset != null)
               Align(
                 alignment: Alignment.topRight,
