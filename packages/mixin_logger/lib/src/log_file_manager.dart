@@ -36,6 +36,10 @@ class LogFileManager {
       [receiver.sendPort, logDir, maxFileCount, maxFileLength],
     );
     final sendPort = await receiver.first as SendPort;
+    final removed = IsolateNameServer.removePortNameMapping(_logPortName);
+    if (removed) {
+      debugPrint('Removed old logger isolate. this is ok if hot restarted app');
+    }
     IsolateNameServer.registerPortWithName(sendPort, _logPortName);
   }
 
