@@ -1,3 +1,7 @@
+## 0.0.4
+
+* Fix write to file not working after hot restarted.
+
 ## 0.0.3
 
 * Improve log dateTime format performance.
