@@ -4,13 +4,13 @@
 
 a ogg opus file player for flutter.
 
-| platform |       | required os version |
-|----------|-------|---------------------|
-| iOS      | ✅     | 10.0                |
-| macOS    | ✅     | 10.12               |
-| Windows  | ✅     |                     |
-| Linux    | ✅     |                     |
-| Android  | ✅     | minSdk 21           |
+| platform |   | required os version |
+|----------|---|---------------------|
+| iOS      | ✅ | 10.0                |
+| macOS    | ✅ | 10.12               |
+| Windows  | ✅ |                     |
+| Linux    | ✅ |                     |
+| Android  | ✅ | minSdk 21           |
 
 ## Getting Started
 
@@ -34,6 +34,12 @@ a ogg opus file player for flutter.
       player.dipose();
     }
     ```
+
+## AudioSession
+
+For android/iOS platform, you need to manage audio session by yourself.
+
+It is recommended to use [audio_session](https://pub.dev/packages/audio_session) to manage audio session.
 
 ## Linux required
 
