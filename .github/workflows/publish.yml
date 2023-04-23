@@ -12,12 +12,14 @@ on:
           - mixin_logger
           - desktop_webview_window
           - desktop_drop
+          - desktop_lifecycle
   push:
     tags:
       - 'ogg_opus_player-v[0-9]+.[0-9]+.[0-9]+*'
       - 'mixin_logger-v[0-9]+.[0-9]+.[0-9]+*'
       - 'desktop_webview_window-v[0-9]+.[0-9]+.[0-9]+*'
       - 'desktop_drop-v[0-9]+.[0-9]+.[0-9]+*'
+      - 'desktop_lifecycle-v[0-9]+.[0-9]+.[0-9]+*'
 
 jobs:
   publish:
