@@ -14,3 +14,5 @@ example/.idea/
 .vscode
 
 desktop_lifecycle.iml
+
+pubspec.lock
