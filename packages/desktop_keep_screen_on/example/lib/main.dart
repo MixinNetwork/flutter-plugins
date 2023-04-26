@@ -15,18 +15,33 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  String _platformVersion = 'Unknown';
-  final _desktopKeepScreenOnPlugin = DesktopKeepScreenOn();
+  var _duration = Duration.zero;
+  Timer? _timer;
 
   @override
   void initState() {
     super.initState();
-    initPlatformState();
   }
 
-  // Platform messages are asynchronous, so we initialize in an async method.
-  Future<void> initPlatformState() async {
+  void _keepScreenOn() {
+    DesktopKeepScreenOn.setPreventSleep(true);
+    _timer?.cancel();
+    setState(() {
+      _duration = Duration.zero;
+    });
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      setState(() {
+        _duration = _duration + const Duration(seconds: 1);
+      });
+    });
+  }
 
+  void _disableScreenOn() {
+    _timer?.cancel();
+    setState(() {
+      _duration = Duration.zero;
+    });
+    DesktopKeepScreenOn.setPreventSleep(false);
   }
 
   @override
@@ -36,8 +51,24 @@ class _MyAppState extends State<MyApp> {
         appBar: AppBar(
           title: const Text('Plugin example app'),
         ),
-        body: Center(
-          child: Text('Running on: $_platformVersion\n'),
+        body: Column(
+          children: [
+            const Spacer(),
+            Center(
+              child: Text('Current Time: $_duration\n'),
+            ),
+            const Spacer(),
+            ElevatedButton(
+              onPressed: _keepScreenOn,
+              child: const Text('Keep Screen On'),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: _disableScreenOn,
+              child: const Text('Disable Screen On'),
+            ),
+            const SizedBox(height: 40),
+          ],
         ),
       ),
     );

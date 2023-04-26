@@ -8,7 +8,7 @@
 import 'desktop_keep_screen_on_platform_interface.dart';
 
 class DesktopKeepScreenOn {
-  Future<void> setPreventSleep(bool preventSleep) {
+  static Future<void> setPreventSleep(bool preventSleep) {
     return DesktopKeepScreenOnPlatform.instance.setPreventSleep(preventSleep);
   }
 }
