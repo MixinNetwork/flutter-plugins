@@ -64,6 +64,7 @@ class InhibitCookie {
   InhibitCookie(this.api, this.cookie);
 }
 
+/// https://source.chromium.org/chromium/chromium/src/+/main:services/device/wake_lock/power_save_blocker/power_save_blocker_linux.cc
 class DesktopKeepScreenOnLinux extends DesktopKeepScreenOnPlatform {
   static void registerWith() {
     DesktopKeepScreenOnPlatform.instance = DesktopKeepScreenOnLinux();
