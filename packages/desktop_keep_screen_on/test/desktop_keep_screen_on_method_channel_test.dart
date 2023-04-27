@@ -1,6 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:desktop_keep_screen_on/desktop_keep_screen_on_method_channel.dart';
+import 'package:desktop_keep_screen_on/src/desktop_keep_screen_on_method_channel.dart';
 
 void main() {
   MethodChannelDesktopKeepScreenOn platform = MethodChannelDesktopKeepScreenOn();
