@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 import 'dart:ffi';
+
 import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 
@@ -71,7 +72,7 @@ String? getApplicationId() {
     return null;
   }
   final Pointer<Utf8> appId = gio.gApplicationGetApplicationId(app);
-  if (appId == null || appId == nullptr) {
+  if (appId == nullptr) {
     return null;
   }
   return appId.toDartString();

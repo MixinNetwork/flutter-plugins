@@ -13,6 +13,7 @@ dependencies:
   plugin_platform_interface: ^2.0.2
   dbus: ^0.7.8
   synchronized: ^3.0.0
+  ffi: ^2.0.0
 
 dev_dependencies:
   flutter_test:
