@@ -22,3 +22,5 @@ flutter:
     platforms:
       macos:
         pluginClass: DesktopKeepScreenOnPlugin
+      windows:
+        pluginClass: DesktopKeepScreenOnPluginCApi

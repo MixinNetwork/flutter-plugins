@@ -48,6 +48,7 @@ void DesktopKeepScreenOnPlugin::HandleMethodCall(
     } else {
       SetThreadExecutionState(ES_CONTINUOUS);
     }
+    result->Success();
   } else {
     result->NotImplemented();
   }
