@@ -83,4 +83,10 @@ abstract class Webview {
 
   /// post a web message as JSON to the top level document in this WebView
   Future<void> postWebMessageAsJson(String webMessage);
+
+  /// block all website navigations not triggered by webview.launch()
+  Future<void> blockNavigations(bool block);
+
+  /// webview.launch() doesnt trigger OnUrlRequest event
+  Future<void> triggerUrlRequestEventOnDartTriggeredLaunch(bool value);
 }

@@ -145,14 +145,25 @@ void WebView::OnWebviewControllerCreated() {
                 std::make_unique<flutter::EncodableValue>(flutter::EncodableMap{
                     {flutter::EncodableValue("id"), flutter::EncodableValue(web_view_id_)},
                 }));
-            LPWSTR uri;
-            args->get_Uri(&uri);
-            method_channel_->InvokeMethod(
+            if (!dartTriggeredLaunch || triggerUrlRequestEventOnDartTriggeredLaunch) {
+              LPWSTR uri;
+              args->get_Uri(&uri);
+              method_channel_->InvokeMethod(
                 "onUrlRequested",
                 std::make_unique<flutter::EncodableValue>(flutter::EncodableMap{
                     {flutter::EncodableValue("id"), flutter::EncodableValue(web_view_id_)},
                     {flutter::EncodableValue("url"), flutter::EncodableValue(wide_to_utf8(std::wstring(uri)))},
-                }));
+                  }));
+            }
+            if (blockNavigations) {
+              if (dartTriggeredLaunch) {
+                args->put_Cancel(false);
+                dartTriggeredLaunch = false;
+              }
+              else {
+                args->put_Cancel(true);
+              }
+            }
             return S_OK;
           }
       ).Get(), nullptr);
@@ -322,6 +333,18 @@ void WebView::PostWebMessageAsJson(const std::wstring& webmessage,
   } else {
     completer->Error("0", "webview not created");
   }
+}
+
+void WebView::setBlockNavigations(const bool value) {
+  this->blockNavigations = value;
+}
+
+void WebView::setTriggerUrlRequestEventOnDartTriggeredLaunch(const bool value) {
+  this->triggerUrlRequestEventOnDartTriggeredLaunch = value;
+}
+
+void WebView::setDartTriggeredLaunch(const bool value) {
+  this->dartTriggeredLaunch = value;
 }
 
 WebView::~WebView() {
