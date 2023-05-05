@@ -221,16 +221,15 @@ class _MyAppState extends State<MyApp> {
       ),
     );
     free(rect);
+    await webview.blockNavigations(true);
+    await webview.triggerUrlRequestEventOnDartTriggeredLaunch(false);
     webview
       ..setBrightness(Brightness.dark)
       ..setApplicationNameForUserAgent(" WebviewExample/1.0.0")
-      ..launch(_controller.text)
       ..addOnUrlRequestCallback((url) {
-        debugPrint('url: $url');
-        final uri = Uri.parse(url);
-        if (uri.path == '/login_success') {
-          debugPrint('login success. token: ${uri.queryParameters['token']}');
-          webview.close();
+        debugPrint('url requested: $url');
+        if(url == 'https://www.youtube.com/watch?v=hvYBFl5Tb1s&t=506s') {
+          webview.launch('https://www.youtube.com/watch?v=hvYBFl5Tb1s&t=506s');
         }
       })
       ..addOnWebMessageReceivedCallback((msg) {
@@ -243,7 +242,8 @@ class _MyAppState extends State<MyApp> {
       })
       ..onClose.whenComplete(() {
         debugPrint("on close");
-      });
+      })
+      ..launch(_controller.text);
 
     if (hideMainWindow) {
       final hwnd = FindWindow(ffi.nullptr, 'webview_window_example'.toNativeUtf16());

@@ -248,4 +248,20 @@ class WebviewImpl extends Webview {
       "webMessage": webMessage,
     });
   }
+
+  @override
+  Future<void> blockNavigations(bool block) async {
+    return channel.invokeMethod("blockNavigations", {
+      "viewId": viewId,
+      "block": block,
+    });
+  }
+
+  @override
+  Future<void> triggerUrlRequestEventOnDartTriggeredLaunch(bool value) async {
+    return channel.invokeMethod("triggerUrlRequestEventOnDartTriggeredLaunch", {
+      "viewId": viewId,
+      "value": value,
+    });
+  }
 }

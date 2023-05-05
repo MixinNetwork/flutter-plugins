@@ -60,6 +60,10 @@ class WebView {
   void PostWebMessageAsJson(const std::wstring &webmessage,
       std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> completer);
 
+  void setBlockNavigations(const bool value);
+  void setTriggerUrlRequestEventOnDartTriggeredLaunch(const bool value);
+  void setDartTriggeredLaunch(const bool value);
+
  private:
   wil::unique_hwnd view_window_;
 
@@ -78,6 +82,10 @@ class WebView {
   std::function<void(HRESULT)> on_web_view_created_callback_;
 
   std::wstring user_data_folder_;
+
+  bool blockNavigations{false};
+  bool triggerUrlRequestEventOnDartTriggeredLaunch{true};
+  bool dartTriggeredLaunch{true};
 
   void OnWebviewControllerCreated();
 

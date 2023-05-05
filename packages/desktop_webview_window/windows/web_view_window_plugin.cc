@@ -95,6 +95,7 @@ void WebviewWindowPlugin::HandleMethodCall(
       result->Error("0", "webview window not ready");
       return;
     }
+    windows_[window_id]->GetWebView()->setDartTriggeredLaunch(true);
     windows_[window_id]->GetWebView()->Navigate(utf8_to_wide(url));
     result->Success();
   } else if (method_call.method_name() == "addScriptToExecuteOnDocumentCreated") {
@@ -236,6 +237,34 @@ void WebviewWindowPlugin::HandleMethodCall(
       return;
     }
     windows_[window_id]->GetWebView()->PostWebMessageAsJson(utf8_to_wide(webmessage), std::move(result));
+  } else if (method_call.method_name() == "blockNavigations") {
+    auto* arguments = std::get_if<flutter::EncodableMap>(method_call.arguments());
+    auto window_id = arguments->at(flutter::EncodableValue("viewId")).LongValue();
+    auto block = std::get<bool>(arguments->at(flutter::EncodableValue("block")));
+    if (!windows_.count(window_id)) {
+      result->Error("0", "can not find webview window for id");
+      return;
+    }
+    if (!windows_[window_id]->GetWebView()) {
+      result->Error("0", "webview window not ready");
+      return;
+    }
+    windows_[window_id]->GetWebView()->setBlockNavigations(block);
+    result->Success();
+  } else if (method_call.method_name() == "triggerUrlRequestEventOnDartTriggeredLaunch") {
+    auto* arguments = std::get_if<flutter::EncodableMap>(method_call.arguments());
+    auto window_id = arguments->at(flutter::EncodableValue("viewId")).LongValue();
+    auto value = std::get<bool>(arguments->at(flutter::EncodableValue("value")));
+    if (!windows_.count(window_id)) {
+      result->Error("0", "can not find webview window for id");
+      return;
+    }
+    if (!windows_[window_id]->GetWebView()) {
+      result->Error("0", "webview window not ready");
+      return;
+    }
+    windows_[window_id]->GetWebView()->setTriggerUrlRequestEventOnDartTriggeredLaunch(value);
+    result->Success();
   } else if (method_call.method_name() == "openDevToolsWindow") {
     auto* arguments = std::get_if<flutter::EncodableMap>(method_call.arguments());
     auto window_id = arguments->at(flutter::EncodableValue("viewId")).LongValue();
