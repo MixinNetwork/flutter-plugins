@@ -226,7 +226,6 @@ class _MyAppState extends State<MyApp> {
     webview
       ..setBrightness(Brightness.dark)
       ..setApplicationNameForUserAgent(" WebviewExample/1.0.0")
-      ..launch(_controller.text)
       ..addOnUrlRequestCallback((url) {
         debugPrint('url requested: $url');
         if(url == 'https://www.youtube.com/watch?v=hvYBFl5Tb1s&t=506s') {
@@ -243,7 +242,8 @@ class _MyAppState extends State<MyApp> {
       })
       ..onClose.whenComplete(() {
         debugPrint("on close");
-      });
+      })
+      ..launch(_controller.text);
 
     if (hideMainWindow) {
       final hwnd = FindWindow(ffi.nullptr, 'webview_window_example'.toNativeUtf16());
