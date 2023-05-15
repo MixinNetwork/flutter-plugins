@@ -40,7 +40,6 @@ class DesktopDrop {
   Future<void> _handleMethodChannel(MethodCall call) async {
     switch (call.method) {
       case "entered":
-        assert(_offset == null);
         final position = (call.arguments as List).cast<double>();
         _offset = Offset(position[0], position[1]);
         _notifyEvent(DropEnterEvent(location: _offset!));
@@ -52,18 +51,15 @@ class DesktopDrop {
           _notifyEvent(DropEnterEvent(location: _offset!));
           return;
         }
-        assert(_offset != null);
         final position = (call.arguments as List).cast<double>();
         _offset = Offset(position[0], position[1]);
         _notifyEvent(DropUpdateEvent(location: _offset!));
         break;
       case "exited":
-        assert(_offset != null);
         _notifyEvent(DropExitEvent(location: _offset ?? Offset.zero));
         _offset = null;
         break;
       case "performOperation":
-        assert(_offset != null);
         final paths = (call.arguments as List).cast<String>();
         _notifyEvent(
           DropDoneEvent(
@@ -75,10 +71,8 @@ class DesktopDrop {
         break;
       case "performOperation_linux":
         // gtk notify 'exit' before 'performOperation'.
-        assert(_offset == null);
         final text = (call.arguments as List<dynamic>)[0] as String;
-        final offset = ((call.arguments as List<dynamic>)[1] as List<dynamic>)
-            .cast<double>();
+        final offset = ((call.arguments as List<dynamic>)[1] as List<dynamic>).cast<double>();
         final paths = const LineSplitter().convert(text).map((e) {
           try {
             return Uri.tryParse(e)?.toFilePath() ?? '';
@@ -93,7 +87,6 @@ class DesktopDrop {
         ));
         break;
       case "performOperation_web":
-        assert(_offset != null);
         final results = (call.arguments as List)
             .cast<Map>()
             .map((e) => WebDropItem.fromJson(e.cast<String, dynamic>()))
