@@ -8,9 +8,7 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
-class LogFileManager {
-  LogFileManager._(this._sendPort);
-
+abstract class LogFileManager {
   static LogFileManager? _instance;
 
   static LogFileManager? get instance => _instance ??= _fromOtherIsolate();
@@ -20,36 +18,63 @@ class LogFileManager {
   static LogFileManager? _fromOtherIsolate() {
     final sendPort = IsolateNameServer.lookupPortByName(_logPortName);
     if (sendPort == null) {
+      debugPrint('[mixin_logger] no logger isolate found');
       return null;
     }
-    return LogFileManager._(sendPort);
+    return _LogFileMangerForOtherIsolate(sendPort);
   }
 
   static Future<void> init(
     String logDir,
     int maxFileCount,
-    int maxFileLength,
-  ) async {
+    int maxFileLength, {
+    String? fileLeading,
+  }) async {
     final receiver = ReceivePort();
     await Isolate.spawn(
       _logIsolate,
-      [receiver.sendPort, logDir, maxFileCount, maxFileLength],
+      [
+        receiver.sendPort,
+        logDir,
+        maxFileCount,
+        maxFileLength,
+        fileLeading,
+      ],
     );
-    final sendPort = await receiver.first as SendPort;
-    final removed = IsolateNameServer.removePortNameMapping(_logPortName);
-    if (removed) {
-      debugPrint('Removed old logger isolate. this is ok if hot restarted app');
-    }
-    IsolateNameServer.registerPortWithName(sendPort, _logPortName);
-  }
+    final completer = Completer<void>();
+    receiver.listen((message) {
+      if (message is SendPort) {
+        final sendPort = message;
+        final removed = IsolateNameServer.removePortNameMapping(_logPortName);
+        if (removed) {
+          debugPrint(
+              'Removed old logger isolate. this is ok if hot restarted app');
+        }
+        IsolateNameServer.registerPortWithName(sendPort, _logPortName);
+        completer.complete();
+      } else {
+        assert(false, 'unknown message: $message');
+      }
+    });
 
-  final SendPort _sendPort;
+    return completer.future;
+  }
 
   static Future<void> _logIsolate(List<dynamic> args) async {
     final responsePort = args[0] as SendPort;
     final messageReceiver = ReceivePort();
     final dir = args[1] as String;
-    final logFileHandler = LogFileHandler(dir);
+    final maxFileCount = args[2] as int;
+    final maxFileLength = args[3] as int;
+    final fileLeading = args[4] as String?;
+
+    final logFileHandler = LogFileHandler(
+      dir,
+      maxFileCount: maxFileCount,
+      maxFileLength: maxFileLength,
+      fileLeading: fileLeading,
+    );
+    LogFileManager._instance = _LogFileManagerForLogIsolate(logFileHandler);
     messageReceiver.listen((message) {
       if (message is String) {
         logFileHandler.write(message);
@@ -58,8 +83,29 @@ class LogFileManager {
     responsePort.send(messageReceiver.sendPort);
   }
 
+  Future<void> write(String message);
+}
+
+class _LogFileMangerForOtherIsolate implements LogFileManager {
+  _LogFileMangerForOtherIsolate(this._sendPort);
+
+  final SendPort _sendPort;
+
+  @override
   Future<void> write(String message) async {
     _sendPort.send(message);
+  }
+}
+
+class _LogFileManagerForLogIsolate implements LogFileManager {
+  _LogFileManagerForLogIsolate(this.handler);
+
+  final LogFileHandler handler;
+
+  @override
+  Future<void> write(String message) {
+    handler.write(message);
+    return Future.value();
   }
 }
 
@@ -73,6 +119,7 @@ class LogFileHandler {
     this.directory, {
     this.maxFileCount = 10,
     this.maxFileLength = 1024 * 1024 * 10, // 10 MB
+    this.fileLeading,
   })  : assert(maxFileCount >= 1),
         assert(maxFileLength >= 0) {
     final dir = Directory(directory);
@@ -108,10 +155,12 @@ class LogFileHandler {
 
   void _prepareOutputFile() {
     final File outputFile;
+    var newFileCreated = false;
     if (files.isEmpty) {
       final file = File(p.join(directory, _generateFileName(0)));
       files[0] = file;
       outputFile = file;
+      newFileCreated = true;
     } else {
       final max = files.keys.reduce(math.max);
       final file = files[max];
@@ -123,6 +172,7 @@ class LogFileHandler {
         final file = File(p.join(directory, _generateFileName(nextIndex)));
         files[nextIndex] = file;
         outputFile = file;
+        newFileCreated = true;
       }
       if (files.length > maxFileCount) {
         final min = files.keys.reduce(math.min);
@@ -142,6 +192,10 @@ class LogFileHandler {
     }
     _logFile = outputFile;
     _currentFileLength = outputFile.lengthSync();
+    if (newFileCreated && fileLeading != null) {
+      write(fileLeading!);
+      write('\n');
+    }
   }
 
   final String directory;
@@ -154,6 +208,8 @@ class LogFileHandler {
   final int maxFileCount;
 
   final int maxFileLength;
+
+  final String? fileLeading;
 
   void write(String message) {
     assert(_logFile != null, 'Log file is null');

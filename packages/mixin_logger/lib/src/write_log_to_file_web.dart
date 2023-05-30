@@ -8,4 +8,5 @@ Future<void> initLogger(
   String logDir,
   int maxFileCount,
   int maxFileLength,
+  String? fileLeading,
 ) async {}
