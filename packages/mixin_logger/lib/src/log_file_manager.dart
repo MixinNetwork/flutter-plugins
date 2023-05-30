@@ -8,6 +8,13 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
+@immutable
+class _UpdateFileLeading {
+  const _UpdateFileLeading(this.content);
+
+  final String? content;
+}
+
 abstract class LogFileManager {
   static LogFileManager? _instance;
 
@@ -78,12 +85,18 @@ abstract class LogFileManager {
     messageReceiver.listen((message) {
       if (message is String) {
         logFileHandler.write(message);
+      } else if (message is _UpdateFileLeading) {
+        logFileHandler.fileLeading = message.content;
+      } else {
+        assert(false, 'unknown message: $message');
       }
     });
     responsePort.send(messageReceiver.sendPort);
   }
 
   Future<void> write(String message);
+
+  void setLoggerFileLeading(String? fileLeading);
 }
 
 class _LogFileMangerForOtherIsolate implements LogFileManager {
@@ -94,6 +107,11 @@ class _LogFileMangerForOtherIsolate implements LogFileManager {
   @override
   Future<void> write(String message) async {
     _sendPort.send(message);
+  }
+
+  @override
+  void setLoggerFileLeading(String? fileLeading) {
+    _sendPort.send(_UpdateFileLeading(fileLeading));
   }
 }
 
@@ -106,6 +124,11 @@ class _LogFileManagerForLogIsolate implements LogFileManager {
   Future<void> write(String message) {
     handler.write(message);
     return Future.value();
+  }
+
+  @override
+  void setLoggerFileLeading(String? fileLeading) {
+    handler.fileLeading = fileLeading;
   }
 }
 
@@ -209,7 +232,7 @@ class LogFileHandler {
 
   final int maxFileLength;
 
-  final String? fileLeading;
+  String? fileLeading;
 
   void write(String message) {
     assert(_logFile != null, 'Log file is null');

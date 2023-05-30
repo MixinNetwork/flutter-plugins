@@ -21,3 +21,8 @@ Future<void> initLogger(
     fileLeading: fileLeading,
   );
 }
+
+void setLoggerFileLeading(String? fileLeading) {
+  assert(LogFileManager.instance != null, 'Logger is not initialized');
+  LogFileManager.instance?.setLoggerFileLeading(fileLeading);
+}

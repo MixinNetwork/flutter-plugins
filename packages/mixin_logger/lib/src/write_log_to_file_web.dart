@@ -10,3 +10,5 @@ Future<void> initLogger(
   int maxFileLength,
   String? fileLeading,
 ) async {}
+
+void setLoggerFileLeading(String? fileLeading) {}

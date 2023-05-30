@@ -84,6 +84,10 @@ Future<void> initLogger(
   await platform.initLogger(logDir, maxFileCount, maxFileLength, fileLeading);
 }
 
+void setLoggerFileLeading(String? leading) {
+  platform.setLoggerFileLeading(leading);
+}
+
 void v(String message) {
   _print(message, _LogLevel.verbose);
 }
