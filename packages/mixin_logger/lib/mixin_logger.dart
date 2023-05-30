@@ -84,26 +84,35 @@ Future<void> initLogger(
   await platform.initLogger(logDir, maxFileCount, maxFileLength, fileLeading);
 }
 
+/// Set the leading of log file content, it will be written
+/// to the first line of each log file.
 void setLoggerFileLeading(String? leading) {
   platform.setLoggerFileLeading(leading);
 }
 
+/// verbose log
 void v(String message) {
   _print(message, _LogLevel.verbose);
 }
 
+/// debug log
 void d(String message) {
   _print(message, _LogLevel.debug);
 }
 
+/// info log
 void i(String message) {
   _print(message, _LogLevel.info);
 }
 
+/// warning log
 void w(String message) {
   _print(message, _LogLevel.warning);
 }
 
+/// error log
+/// [error] the error object
+/// [stackTrace] the stack trace of the error
 void e(String message, [Object? error, StackTrace? stackTrace]) {
   var messageWithStack = message;
   if (error != null) {
@@ -115,6 +124,7 @@ void e(String message, [Object? error, StackTrace? stackTrace]) {
   _print(messageWithStack, _LogLevel.error);
 }
 
+/// wtf log
 void wtf(String message) {
   _print(message, _LogLevel.wtf);
 }

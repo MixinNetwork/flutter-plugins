@@ -1,3 +1,7 @@
+## 0.0.6
+
+* add `setLoggerFileLeading` api.
+
 ## 0.0.5
 
 * support config new log file content leading.
