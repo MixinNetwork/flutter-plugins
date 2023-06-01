@@ -1,5 +1,6 @@
 import Cocoa
 import FlutterMacOS
+import AppKit
 
 public class PasteboardPlugin: NSObject, FlutterPlugin {
   public static func register(with registrar: FlutterPluginRegistrar) {
@@ -20,9 +21,22 @@ public class PasteboardPlugin: NSObject, FlutterPlugin {
       } else {
         result(FlutterError(code: "0", message: "arguments is not String list.", details: nil))
       }
+    case "writeImage":
+      if let data = call.arguments as? FlutterStandardTypedData {
+        writeImageToPasteboard(data.data, result: result)
+      } else {
+        result(FlutterError(code: "0", message: "arguments is not data", details: nil))
+      }
     default:
       result(FlutterMethodNotImplemented)
     }
+  }
+
+  private func writeImageToPasteboard(_ data: Data, result: FlutterResult) {
+    let image = NSImage(data: data) ?? NSImage()
+    NSPasteboard.general.clearContents()
+    NSPasteboard.general.writeObjects([image as NSImage])
+    result(nil)
   }
 
   private func image(result: FlutterResult) {
