@@ -110,90 +110,107 @@ class _MyAppState extends State<MyApp> {
         body: Center(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                TextField(controller: _controller),
-                Align(
-                  alignment: Alignment.center,
-                  child: Container(
-                    width: 200,
-                    child: CheckboxListTile(
-                      title: Text("hide main window"),
-                      tristate: false,
-                      value: hideMainWindow,
-                      onChanged: (newValue) {
-                        setState(() {
-                          hideMainWindow = newValue!;
-                        });
-                      },
-                      controlAffinity: ListTileControlAffinity.leading, //  <-- leading Checkbox
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  TextField(controller: _controller),
+                  Align(
+                    alignment: Alignment.center,
+                    child: Container(
+                      width: 200,
+                      child: CheckboxListTile(
+                        title: Text("hide main window"),
+                        tristate: false,
+                        value: hideMainWindow,
+                        onChanged: (newValue) {
+                          setState(() {
+                            hideMainWindow = newValue!;
+                          });
+                        },
+                        controlAffinity: ListTileControlAffinity.leading, //  <-- leading Checkbox
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                TextButton(
-                  onPressed: _webviewAvailable != true ? null : _onTap,
-                  child: const Text('Open'),
-                ),
-                const SizedBox(height: 20),
-                TextButton(
-                  onPressed: () async {
-                    await WebviewWindow.clearAll(
-                      userDataFolderWindows: await _getWebViewPath(),
-                    );
-                    debugPrint('clear complete');
-                  },
-                  child: const Text('Clear all'),
-                ),
-                const SizedBox(height: 16),
-                TextButton(
-                  onPressed: _executeJavaScript,
-                  child: const Text('execute JavaScript'),
-                ),
-                TextFormField(
-                  controller: executeJavaScriptController,
-                  decoration: const InputDecoration(
-                    border: UnderlineInputBorder(),
-                    labelText: 'Enter javascript command',
+                  const SizedBox(height: 16),
+                  TextButton(
+                    onPressed: _webviewAvailable != true ? null : _onTap,
+                    child: const Text('Open'),
                   ),
-                ),
-                const SizedBox(height: 16),
-                TextButton(
-                  onPressed: _postWebMessageAsString,
-                  child: const Text('post webmessage as string'),
-                ),
-                TextFormField(
-                  controller: webMessageControllerString,
-                  decoration: const InputDecoration(
-                    border: UnderlineInputBorder(),
-                    labelText: 'Enter a webmessage as String',
+                  const SizedBox(height: 20),
+                  TextButton(
+                    onPressed: () async {
+                      await WebviewWindow.clearAll(
+                        userDataFolderWindows: await _getWebViewPath(),
+                      );
+                      debugPrint('clear complete');
+                    },
+                    child: const Text('Clear all'),
                   ),
-                ),
-                const SizedBox(height: 16),
-                TextButton(
-                  onPressed: _postWebMessageAsJson,
-                  child: const Text('post webmessage as JSON'),
-                ),
-                TextFormField(
-                  controller: webMessageControllerJSON,
-                  decoration: const InputDecoration(
-                    border: UnderlineInputBorder(),
-                    labelText: 'Enter a webmessage as JSON',
+                  const SizedBox(height: 16),
+                  TextButton(
+                    onPressed: _executeJavaScript,
+                    child: const Text('execute JavaScript'),
                   ),
-                ),
-                const SizedBox(height: 16),
-                TextButton(
-                  onPressed: _hideMainWindow,
-                  child: const Text('Hide Main Window'),
-                ),
-                const SizedBox(height: 16),
-                TextButton(
-                  onPressed: _openDevTools,
-                  child: const Text('Open Dev Tools'),
-                ),
-              ],
+                  TextFormField(
+                    controller: executeJavaScriptController,
+                    decoration: const InputDecoration(
+                      border: UnderlineInputBorder(),
+                      labelText: 'Enter javascript command',
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextButton(
+                    onPressed: _postWebMessageAsString,
+                    child: const Text('post webmessage as string'),
+                  ),
+                  TextFormField(
+                    controller: webMessageControllerString,
+                    decoration: const InputDecoration(
+                      border: UnderlineInputBorder(),
+                      labelText: 'Enter a webmessage as String',
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextButton(
+                    onPressed: _postWebMessageAsJson,
+                    child: const Text('post webmessage as JSON'),
+                  ),
+                  TextFormField(
+                    controller: webMessageControllerJSON,
+                    decoration: const InputDecoration(
+                      border: UnderlineInputBorder(),
+                      labelText: 'Enter a webmessage as JSON',
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextButton(
+                    onPressed: _hideMainWindow,
+                    child: const Text('Hide Main Window'),
+                  ),
+                  const SizedBox(height: 16),
+                  TextButton(
+                    onPressed: _showMainWindow,
+                    child: const Text('Show Main Window'),
+                  ),
+                  const SizedBox(height: 16),
+                  TextButton(
+                    onPressed: _hideWebviewWindow,
+                    child: const Text('Hide Webview Window'),
+                  ),
+                  const SizedBox(height: 16),
+                  TextButton(
+                    onPressed: _showWebviewWindow,
+                    child: const Text('Show Webview Window'),
+                  ),
+                  const SizedBox(height: 16),
+                  TextButton(
+                    onPressed: _openDevTools,
+                    child: const Text('Open Dev Tools'),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -213,8 +230,8 @@ class _MyAppState extends State<MyApp> {
         title: "Pizza Hawai ist ein Vebrechen gegen die Menschlichkeit!",
         titleBarHeight: 0,
         usePluginDefaultBehaviour: false,
-        windowWidth: rect.ref.right-rect.ref.left,
-        windowHeight: rect.ref.bottom-rect.ref.top,
+        windowWidth: rect.ref.right - rect.ref.left,
+        windowHeight: rect.ref.bottom - rect.ref.top,
         windowPosX: rect.ref.left,
         windowPosY: rect.ref.top,
         openMaximized: false,
@@ -228,7 +245,7 @@ class _MyAppState extends State<MyApp> {
       ..setApplicationNameForUserAgent(" WebviewExample/1.0.0")
       ..addOnUrlRequestCallback((url) {
         debugPrint('url requested: $url');
-        if(url == 'https://www.youtube.com/watch?v=hvYBFl5Tb1s&t=506s') {
+        if (url == 'https://www.youtube.com/watch?v=hvYBFl5Tb1s&t=506s') {
           webview.launch('https://www.youtube.com/watch?v=hvYBFl5Tb1s&t=506s');
         }
       })
@@ -288,6 +305,14 @@ class _MyAppState extends State<MyApp> {
     //final hwnd = GetForegroundWindow();
 
     ShowWindow(hwnd, SW_HIDE);
+  }
+
+  void _hideWebviewWindow() async {
+    webview.showWebviewWindow(false);
+  }
+
+  void _showWebviewWindow() async {
+    webview.showWebviewWindow(true);
   }
 
   void _showMainWindow() async {
