@@ -171,6 +171,14 @@ class WebviewImpl extends Webview {
   }
 
   @override
+  Future<void> showWebviewWindow(bool show) {
+    return channel.invokeMethod("showWebviewWindow", {
+      "viewId": viewId,
+      "show": show,
+    });
+  }
+
+  @override
   Future<void> back() {
     return channel.invokeMethod("back", {"viewId": viewId});
   }

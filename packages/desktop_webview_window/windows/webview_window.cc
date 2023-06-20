@@ -136,6 +136,14 @@ void WebviewWindow::CreateAndShow(const std::wstring &title, int height, int wid
 void WebviewWindow::SetBrightness(int brightness) {
 }
 
+void WebviewWindow::ShowWebviewWindow(bool show)
+{
+  if(show)
+    ::ShowWindow(hwnd_.get(), SW_SHOW);
+  else
+    ::ShowWindow(hwnd_.get(), SW_HIDE);
+}
+
 // static
 LRESULT CALLBACK
 WebviewWindow::WndProc(
