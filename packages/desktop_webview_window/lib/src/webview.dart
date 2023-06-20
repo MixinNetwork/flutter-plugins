@@ -59,6 +59,9 @@ abstract class Webview {
   /// Move and Resize the webview window
   Future<void> moveWebviewWindow(int left, int top, int width, int height);
 
+  /// get position, extents and maximization info of the webview window
+  Future<Map<dynamic,dynamic>?> getPositionalParameters();
+
   /// Activates the webview window (giving it the focus)
   Future<void> bringToForeground();
 
