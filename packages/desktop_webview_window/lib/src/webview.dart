@@ -56,6 +56,9 @@ abstract class Webview {
   /// Show or hide webview window
   Future<void> setWebviewWindowVisibility(bool visible);
 
+  /// Activates the webview window (giving it the focus)
+  Future<void> bringToForeground();
+
   /// Reload the current page.
   Future<void> reload();
 
