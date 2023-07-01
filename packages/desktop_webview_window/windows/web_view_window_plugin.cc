@@ -176,6 +176,23 @@ void WebviewWindowPlugin::HandleMethodCall(
     }
     windows_[window_id]->setVisibility(visible);
     result->Success();
+  } else if (method_call.method_name() == "moveWebviewWindow") {
+    auto* arguments = std::get_if<flutter::EncodableMap>(method_call.arguments());
+    auto window_id = arguments->at(flutter::EncodableValue("viewId")).LongValue();
+    auto left = std::get<int>(arguments->at(flutter::EncodableValue("left")));
+    auto top = std::get<int>(arguments->at(flutter::EncodableValue("top")));
+    auto width = std::get<int>(arguments->at(flutter::EncodableValue("width")));
+    auto height = std::get<int>(arguments->at(flutter::EncodableValue("height")));
+    if (!windows_.count(window_id)) {
+      result->Error("0", "can not find webview window for id");
+      return;
+    }
+    if (!windows_[window_id]->GetWebView()) {
+      result->Error("0", "webview window not ready");
+      return;
+    }
+    windows_[window_id]->moveWebviewWindow(left, top, width, height);
+    result->Success();
   } else if (method_call.method_name() == "bringToForeground") {
     auto* arguments = std::get_if<flutter::EncodableMap>(method_call.arguments());
     auto window_id = arguments->at(flutter::EncodableValue("viewId")).LongValue();

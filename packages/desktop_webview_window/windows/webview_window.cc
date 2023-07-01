@@ -144,8 +144,11 @@ void WebviewWindow::setVisibility(bool visible)
     ::ShowWindow(hwnd_.get(), SW_HIDE);
 }
 
-void WebviewWindow::bringToForeground()
-{
+void WebviewWindow::moveWebviewWindow(int left, int top, int width, int height) {
+  ::SetWindowPos(hwnd_.get(), nullptr, left, top, width, height, SWP_NOZORDER | SWP_NOACTIVATE);
+}
+
+void WebviewWindow::bringToForeground() {
   SetForegroundWindow(hwnd_.get());
 }
 
