@@ -19,9 +19,8 @@ final CommonCryptoBindings bindings = CommonCryptoBindings(_dylib);
 extension Uint8ListPointer on Uint8List {
   Pointer<Uint8> get pointer {
     final pointer = malloc<Uint8>(length);
-    for (var i = 0; i < length; i++) {
-      pointer[i] = this[i];
-    }
+    final data = pointer.asTypedList(length);
+    data.setAll(0, this);
     return pointer;
   }
 }
