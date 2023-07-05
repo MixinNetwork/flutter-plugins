@@ -6,16 +6,6 @@ import 'package:ffi/ffi.dart';
 import 'common_crypto_bindings_generated.dart';
 import 'tools.dart';
 
-extension _Uint8ListPointer on Uint8List {
-  Pointer<Uint8> get pointer {
-    final pointer = malloc<Uint8>(length);
-    for (var i = 0; i < length; i++) {
-      pointer[i] = this[i];
-    }
-    return pointer;
-  }
-}
-
 Uint8List _aesCrypt({
   required Uint8List key,
   required Uint8List data,
