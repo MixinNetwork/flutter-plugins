@@ -17,8 +17,7 @@ gboolean on_load_failed_with_tls_errors(
     GTlsCertificateFlags errors,
     gpointer user_data) {
   auto *webview = static_cast<WebviewWindow *>(user_data);
-  auto *uri = soup_uri_new(failing_uri);
-  g_critical("on_load_failed_with_tls_errors: %s %p error= %d", uri->host, webview, errors);
+  g_critical("on_load_failed_with_tls_errors: %s %p error= %d", failing_uri, webview, errors);
   // TODO allow certificate for some certificate ?
   // maybe we can use the pem from https://source.chromium.org/chromium/chromium/src/+/master:net/data/ssl/ev_roots/
 //  webkit_web_context_allow_tls_certificate_for_host(webkit_web_view_get_context(web_view), certificate, uri->host);
@@ -228,17 +227,17 @@ gboolean WebviewWindow::DecidePolicy(WebKitPolicyDecision *decision, WebKitPolic
 }
 
 void WebviewWindow::EvaluateJavaScript(const char *java_script, FlMethodCall *call) {
-  webkit_web_view_run_javascript(
-      WEBKIT_WEB_VIEW(webview_), java_script, nullptr,
+  webkit_web_view_evaluate_javascript(
+      WEBKIT_WEB_VIEW(webview_), java_script,-1,nullptr,nullptr, nullptr,
       [](GObject *object, GAsyncResult *result, gpointer user_data) {
         auto *call = static_cast<FlMethodCall *>(user_data);
         GError *error = nullptr;
-        auto *js_result = webkit_web_view_run_javascript_finish(WEBKIT_WEB_VIEW(object), result, &error);
+        auto *js_result = webkit_web_view_evaluate_javascript_finish(WEBKIT_WEB_VIEW(object), result, &error);
         if (!js_result) {
           fl_method_call_respond_error(call, "failed to evaluate javascript.", error->message, nullptr, nullptr);
           g_error_free(error);
         } else {
-          auto *js_value = jsc_value_to_json(webkit_javascript_result_get_js_value(js_result), 0);
+          auto *js_value = jsc_value_to_json(js_result, 0);
           fl_method_call_respond_success(call, js_value ? fl_value_new_string(js_value) : nullptr, nullptr);
         }
         g_object_unref(call);

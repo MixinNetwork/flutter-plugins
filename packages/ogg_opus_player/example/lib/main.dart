@@ -1,17 +1,21 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:audio_session/audio_session.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:ogg_opus_player/ogg_opus_player.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+late AudioSession session;
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final tempDir = await getTemporaryDirectory();
   final workDir = p.join(tempDir.path, 'ogg_opus_player');
   debugPrint('workDir: $workDir');
+  session = await AudioSession.instance;
   runApp(
     MaterialApp(
       home: Scaffold(
@@ -101,6 +105,10 @@ class _OpusOggPlayerWidgetState extends State<_OpusOggPlayerWidget> {
 
   double _playingPosition = 0;
 
+  static const _kPlaybackSpeedSteps = [0.5, 1.0, 1.5, 2.0];
+
+  int _speedIndex = 1;
+
   @override
   void initState() {
     super.initState();
@@ -136,11 +144,15 @@ class _OpusOggPlayerWidgetState extends State<_OpusOggPlayerWidget> {
             )
           else
             IconButton(
-              onPressed: () {
+              onPressed: () async {
                 _player?.dispose();
+                _speedIndex = 1;
                 _player = OggOpusPlayer(widget.path);
+                session.configure(const AudioSessionConfiguration.music());
+                bool active = await session.setActive(true);
+                debugPrint('active: $active');
                 _player?.play();
-                _player?.state.addListener(() {
+                _player?.state.addListener(() async {
                   setState(() {});
                   if (_player?.state.value == PlayerState.ended) {
                     _player?.dispose();
@@ -153,12 +165,29 @@ class _OpusOggPlayerWidgetState extends State<_OpusOggPlayerWidget> {
           IconButton(
             onPressed: () {
               setState(() {
+                debugPrint('ended');
                 _player?.dispose();
                 _player = null;
+                session.setActive(false).then((value) {
+                  debugPrint('active: $value');
+                }).onError((error, stackTrace) {
+                  debugPrint('error: $error');
+                });
               });
             },
             icon: const Icon(Icons.stop),
           ),
+          if (_player != null)
+            TextButton(
+              onPressed: () {
+                _speedIndex++;
+                if (_speedIndex >= _kPlaybackSpeedSteps.length) {
+                  _speedIndex = 0;
+                }
+                _player?.setPlaybackRate(_kPlaybackSpeedSteps[_speedIndex]);
+              },
+              child: Text('X${_kPlaybackSpeedSteps[_speedIndex]}'),
+            ),
         ],
       ),
     );
@@ -196,12 +225,19 @@ class _RecorderExampleState extends State<_RecorderExample> {
         const SizedBox(height: 8),
         if (_recorder == null)
           IconButton(
-            onPressed: () {
+            onPressed: () async {
               final file = File(_recordedPath);
               if (file.existsSync()) {
                 File(_recordedPath).deleteSync();
               }
               File(_recordedPath).createSync(recursive: true);
+              await session.configure(const AudioSessionConfiguration(
+                avAudioSessionCategory: AVAudioSessionCategory.playAndRecord,
+                avAudioSessionCategoryOptions:
+                    AVAudioSessionCategoryOptions.allowBluetooth,
+                avAudioSessionMode: AVAudioSessionMode.spokenAudio,
+              ));
+              await session.setActive(true);
               final recorder = OggOpusRecorder(_recordedPath);
               recorder.start();
               setState(() {
@@ -220,6 +256,11 @@ class _RecorderExampleState extends State<_RecorderExample> {
               _recorder?.dispose();
               setState(() {
                 _recorder = null;
+                session.setActive(
+                  false,
+                  avAudioSessionSetActiveOptions:
+                      AVAudioSessionSetActiveOptions.notifyOthersOnDeactivation,
+                );
               });
             },
             icon: const Icon(Icons.stop),

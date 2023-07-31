@@ -4,12 +4,13 @@
 
 a ogg opus file player for flutter.
 
-| platform  |       | required os version |
-|-----------|-------|---------------------|
-| iOS       | ✅     | 10.0                |
-| macOS     | ✅     | 10.12               |
-| Windows   | ✅     |                     |
-| Linux     | ✅     |                     |
+| platform |   | required os version |
+|----------|---|---------------------|
+| iOS      | ✅ | 10.0                |
+| macOS    | ✅ | 10.12               |
+| Windows  | ✅ |                     |
+| Linux    | ✅ |                     |
+| Android  | ✅ | minSdk 21           |
 
 ## Getting Started
 
@@ -34,17 +35,24 @@ a ogg opus file player for flutter.
     }
     ```
 
+## AudioSession
+
+For android/iOS platform, you need to manage audio session by yourself.
+
+It is recommended to use [audio_session](https://pub.dev/packages/audio_session) to manage audio session.
+
 ## Linux required
 
 Need SDL2 library installed on Linux.
 
 ```shell
 sudo apt-get install libsdl2-dev
+sudo apt-get install libopus-dev
 ```
 
 ## iOS/macOS required
 
-Record voice need update your app's Info.plist NSMicrophoneUsageDescription key with a string value 
+Record voice need update your app's Info.plist NSMicrophoneUsageDescription key with a string value
 explaining to the user how the app uses this data.
 
 For example:

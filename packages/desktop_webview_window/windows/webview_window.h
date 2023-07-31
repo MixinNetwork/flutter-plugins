@@ -40,7 +40,8 @@ class WebviewWindow {
 
   void CreateAndShow(const std::wstring &title, int height, int width,
                      const std::wstring &userDataFolder,
-                     CreateCallback callback);
+                     int windowPosX, int windowPosY, bool useWindowPositionAndSize,
+                     bool openMaximized, CreateCallback callback);
 
   // OS callback called by message pump. Handles the WM_NCCREATE message which
   // is passed when the non-client area is being created and enables automatic

@@ -1,0 +1,74 @@
+name: Publish to pub.dev
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: "package"
+        required: true
+        type: choice
+        options:
+          - ogg_opus_player
+          - mixin_logger
+          - desktop_webview_window
+          - desktop_drop
+          - desktop_lifecycle
+  push:
+    tags:
+      - 'ogg_opus_player-v[0-9]+.[0-9]+.[0-9]+*'
+      - 'mixin_logger-v[0-9]+.[0-9]+.[0-9]+*'
+      - 'desktop_webview_window-v[0-9]+.[0-9]+.[0-9]+*'
+      - 'desktop_drop-v[0-9]+.[0-9]+.[0-9]+*'
+      - 'desktop_lifecycle-v[0-9]+.[0-9]+.[0-9]+*'
+
+jobs:
+  publish:
+
+    name: 'Publish to pub.dev'
+    environment: 'pub.dev'
+    permissions:
+      id-token: write # This is required for requesting the JWT
+    runs-on: ubuntu-latest
+    steps:
+      # Checkout repository
+      - uses: actions/checkout@v3
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - run: flutter --version
+
+      # Setup Dart SDK with JWT token
+      - uses: dart-lang/setup-dart@a57a6c04cf7d4840e88432aad6281d1e125f0d46
+
+      # Parse package from tag, e.g.: ogg_opus_player-v1.0.0
+      - name: Parse package name
+        id: parse
+        uses: actions/github-script@v6
+        with:
+          result-encoding: string
+          script: |
+            if (context.ref.startsWith('refs/tags/')) {
+              const tag = context.ref.replace('refs/tags/', '')
+              const package = tag.split('-')[0]
+              console.log(`Tag found, using ${package}`)
+              return package
+            }
+            console.log(`No tag found, using input ${context.payload.inputs.package}`)
+            return context.payload.inputs.package
+
+      # Minimal package setup and dry run checks.
+      - name: Install dependencies
+        run: flutter pub get
+        working-directory: 'packages/${{ steps.parse.outputs.result }}'
+
+      - name: Publish - dry run
+        run: flutter pub publish --dry-run
+        working-directory: 'packages/${{ steps.parse.outputs.result }}'
+
+      # Publishing...
+      - name: Publish to pub.dev
+        run: flutter pub publish -f
+        if: startsWith(github.ref, 'refs/tags/')
+        working-directory: 'packages/${{ steps.parse.outputs.result }}'

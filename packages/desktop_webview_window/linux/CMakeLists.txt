@@ -7,7 +7,7 @@ project(${PROJECT_NAME} LANGUAGES CXX)
 set(PLUGIN_NAME "desktop_webview_window_plugin")
 
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(WebKit REQUIRED IMPORTED_TARGET webkit2gtk-4.0)
+pkg_check_modules(WebKit REQUIRED IMPORTED_TARGET webkit2gtk-4.1)
 
 add_library(${PLUGIN_NAME} SHARED
         "desktop_webview_window_plugin.cc"

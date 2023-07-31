@@ -45,5 +45,7 @@
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
     <string>Example uses your microphone to record voice for test.</string>
+	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
 </dict>
 </plist>

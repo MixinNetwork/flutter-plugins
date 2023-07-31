@@ -32,7 +32,7 @@ void main() {
     d('debug message');
     i('info message');
     w('warning message');
-    e('error message');
+    e('error message', "Error", StackTrace.current);
     wtf('wtf message');
   });
 
@@ -117,8 +117,7 @@ void main() {
     expect(fileContent, equals('test\n'));
   });
 
-
-  test('test write on other isolate', () async {
+  test('test write in other isolate', () async {
     await LogFileManager.init(dir, 10, 1024 * 1024 * 10);
     final manger = LogFileManager.instance!;
     await manger.write('main');
@@ -138,6 +137,29 @@ void main() {
     expect(fileContent, contains('after initLogger\n'));
   });
 
+  test('write file leading', () async {
+    await LogFileManager.init(dir, 10, 200, fileLeading: 'file_leading_test');
+
+    for (var i = 0; i < 50; i++) {
+      LogFileManager.instance!.write('test $i');
+    }
+    await Future.delayed(const Duration(milliseconds: 1000));
+    final fileContent = File(p.join(dir, 'log_0.log')).readAsStringSync();
+    expect(fileContent, startsWith('file_leading_test'));
+    final fileContent1 = File(p.join(dir, 'log_1.log')).readAsStringSync();
+    expect(fileContent1, startsWith('file_leading_test'));
+    final fileContent2 = File(p.join(dir, 'log_2.log')).readAsStringSync();
+    expect(fileContent2, startsWith('file_leading_test'));
+    setLoggerFileLeading('new_file_leading');
+    for (var i = 0; i < 50; i++) {
+      LogFileManager.instance!.write('test $i');
+    }
+    await Future.delayed(const Duration(milliseconds: 1000));
+    final fileContent3 = File(p.join(dir, 'log_3.log')).readAsStringSync();
+    expect(fileContent3, startsWith('new_file_leading'));
+    final fileContent4 = File(p.join(dir, 'log_4.log')).readAsStringSync();
+    expect(fileContent4, startsWith('new_file_leading'));
+  });
 }
 
 void _writeLog(String message) {

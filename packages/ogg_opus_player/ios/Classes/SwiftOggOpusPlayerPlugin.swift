@@ -35,6 +35,7 @@ public class SwiftOggOpusPlayerPlugin: NSObject, FlutterPlugin {
       "position": player.currentTime,
       "playerId": id,
       "updateTime": systemUptime(),
+      "speed": player.playRate,
     ])
   }
 
@@ -56,23 +57,30 @@ public class SwiftOggOpusPlayerPlugin: NSObject, FlutterPlugin {
       } catch {
         result(FlutterError(code: "2", message: error.localizedDescription, details: nil))
       }
-      break
     case "play":
       if let playerId = call.arguments as? Int {
         playerDictionary[playerId]?.play()
       }
       result(nil)
-      break
     case "pause":
       if let playerId = call.arguments as? Int {
         playerDictionary[playerId]?.pause()
       }
       result(nil)
-      break
     case "stop":
       if let playerId = call.arguments as? Int {
         playerDictionary[playerId]?.stop()
         playerDictionary.removeValue(forKey: playerId)
+      }
+      result(nil)
+    case "setPlaybackSpeed":
+      if let args = call.arguments as? [String: Any],
+         let playerId = args["playerId"] as? Int,
+         let speed = args["speed"] as? Double {
+        if let player = playerDictionary[playerId] {
+          player.playRate = Float(speed)
+          handlePlayerStateChanged(id: playerId, player)
+        }
       }
       result(nil)
     case "createRecorder":
@@ -103,7 +111,6 @@ public class SwiftOggOpusPlayerPlugin: NSObject, FlutterPlugin {
       result(nil)
     default:
       result(FlutterMethodNotImplemented)
-      break
     }
   }
 }

@@ -1,3 +1,37 @@
+## 0.7.0
+
+* [iOS] support arm64 x86_64 simulator.
+
+## 0.6.4
+
+* [Windows] fix audio recorder sometimes makes invalid ogg file.
+* [Windows] upgrade SDL2 to 2.26.1.
+
+## 0.6.3
+
+* [Windows] bump libopusenc to the latest version. which has the fix stream assertion on Windows.
+
+## 0.6.2
+
+* fix setPlaybackRate on plugin didn't wait player initialized.
+
+## 0.6.1
+
+* add `OggOpusPlayer.setPlaybackRate` method.
+
+## 0.6.0
+
+* add Android support
+
+## 0.5.1
+
+* [Linux] libogg_opus_player.so add link to libogg
+
+## 0.5.0
+
+* [Linux] break change: remove libogg and libopus shared library, use system library instead.
+* [Linux] support aarch64
+
 ## 0.4.1
 
 [Linux] replace opus static libraries to release version.

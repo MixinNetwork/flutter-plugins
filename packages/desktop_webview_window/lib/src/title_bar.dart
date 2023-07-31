@@ -55,6 +55,7 @@ bool runWebViewWidget(
 
   runZonedGuarded(
     () {
+      WidgetsFlutterBinding.ensureInitialized();
       runApp(_TitleBarApp(
         webViewId: webViewId,
         titleBarTopPadding: titleBarTopPadding,

@@ -12,6 +12,7 @@ add_library(ogg_opus_player SHARED
   "ogg_opus_player.cc"
   "dart/dart_api_dl.c"
   "ogg_opus_recorder.cc"
+  "sonic.c"
   )
 
 set_target_properties(ogg_opus_player PROPERTIES
@@ -20,12 +21,14 @@ set_target_properties(ogg_opus_player PROPERTIES
   )
 
 if (UNIX AND NOT APPLE)
-  add_library(opus_shared SHARED IMPORTED GLOBAL)
-  set_target_properties(opus_shared PROPERTIES
-    IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/libs/linux_amd64/libopus.so.0)
-  target_link_libraries(ogg_opus_player ${CMAKE_CURRENT_SOURCE_DIR}/libs/linux_amd64/libopusenc.a)
-  target_link_libraries(ogg_opus_player ${CMAKE_CURRENT_SOURCE_DIR}/libs/linux_amd64/libopusfile.a)
-  target_link_libraries(ogg_opus_player -lSDL2 opus_shared)
+  if (CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64")
+    target_link_libraries(ogg_opus_player ${CMAKE_CURRENT_SOURCE_DIR}/libs/linux_arm64/libopusenc.a)
+    target_link_libraries(ogg_opus_player ${CMAKE_CURRENT_SOURCE_DIR}/libs/linux_arm64/libopusfile.a)
+  else()
+    target_link_libraries(ogg_opus_player ${CMAKE_CURRENT_SOURCE_DIR}/libs/linux_amd64/libopusenc.a)
+    target_link_libraries(ogg_opus_player ${CMAKE_CURRENT_SOURCE_DIR}/libs/linux_amd64/libopusfile.a)
+  endif()
+  target_link_libraries(ogg_opus_player -lSDL2 -lopus -logg)
 elseif (WIN32)
   add_library(ogg STATIC IMPORTED)
   set_target_properties(ogg PROPERTIES

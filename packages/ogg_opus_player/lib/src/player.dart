@@ -10,7 +10,7 @@ abstract class OggOpusPlayer {
   OggOpusPlayer.create();
 
   factory OggOpusPlayer(String path) {
-    if (Platform.isIOS || Platform.isMacOS) {
+    if (Platform.isIOS || Platform.isMacOS || Platform.isAndroid) {
       return OggOpusPlayerPluginImpl(path);
     } else if (Platform.isLinux || Platform.isWindows) {
       return OggOpusPlayerFfiImpl(path);
@@ -28,6 +28,10 @@ abstract class OggOpusPlayer {
 
   /// Current playing position, in seconds.
   double get currentPosition;
+
+  /// Set playback rate, in the range 0.5 through 2.0.
+  /// 1.0 is normal speed (default).
+  void setPlaybackRate(double speed);
 }
 
 abstract class OggOpusRecorder {
@@ -36,7 +40,7 @@ abstract class OggOpusRecorder {
   factory OggOpusRecorder(String path) {
     if (Platform.isLinux || Platform.isWindows) {
       return OggOpusRecorderFfiImpl(path);
-    } else if (Platform.isIOS || Platform.isMacOS) {
+    } else if (Platform.isIOS || Platform.isMacOS || Platform.isAndroid) {
       return OggOpusRecorderPluginImpl(path);
     }
     throw UnsupportedError('Platform not supported');
