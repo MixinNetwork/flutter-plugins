@@ -92,7 +92,7 @@ WebviewWindow::WebviewWindow(
       fl_plugin_registry_get_registrar_for_plugin(FL_PLUGIN_REGISTRY(title_bar), "DesktopWebviewWindowPlugin");
   client_message_channel_plugin_register_with_registrar(desktop_webview_window_registrar);
 
-  gtk_widget_set_size_request(GTK_WIDGET(title_bar), 200, title_bar_height);
+  gtk_widget_set_size_request(GTK_WIDGET(title_bar), -1, title_bar_height);
   gtk_widget_set_vexpand(GTK_WIDGET(title_bar), FALSE);
   gtk_box_pack_start(box_, GTK_WIDGET(title_bar), FALSE, FALSE, 0);
 
