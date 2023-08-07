@@ -1,3 +1,12 @@
+## 0.2.1
+
+* add Windows attentions to readme.
+* fix linux close sub window cause app exited.
+* fix linux webview title bar expanded unexpected.
+* More control over webview position and size under windows. [#206](https://github.com/MixinNetwork/flutter-plugins/pull/206) by [Lukas Heinze](https://github.com/Iri-Hor)
+* fix zone mismatch [#250](https://github.com/MixinNetwork/flutter-plugins/pull/250) by [CD](https://github.com/459217974)
+* fix linux webkit2gtk deprecated error [#246](https://github.com/MixinNetwork/flutter-plugins/pull/246) by [Zhiqiang Zhang](https://github.com/zhangzqs)
+
 ## 0.2.0
 
 * BREAK CHANGE: bump linux webkit2gtk version to 4.1
