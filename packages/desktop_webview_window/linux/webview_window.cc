@@ -115,11 +115,18 @@ WebviewWindow::WebviewWindow(
   gtk_widget_show_all(GTK_WIDGET(window_));
   gtk_widget_grab_focus(GTK_WIDGET(webview_));
 
+  // FROM: https://github.com/leanflutter/window_manager/pull/343
+  // Disconnect all delete-event handlers first in flutter 3.10.1, which causes delete_event not working.
+  // Issues from flutter/engine: https://github.com/flutter/engine/pull/40033
+  guint handler_id = g_signal_handler_find(window_, G_SIGNAL_MATCH_DATA, 0, 0, NULL, NULL, title_bar);
+  if (handler_id > 0) {
+    g_signal_handler_disconnect(window_, handler_id);
+  }
 }
 
 WebviewWindow::~WebviewWindow() {
   g_object_unref(method_channel_);
-  g_debug("~WebviewWindow");
+  printf("~WebviewWindow\n");
 }
 
 void WebviewWindow::Navigate(const char *url) {
@@ -217,7 +224,7 @@ gboolean WebviewWindow::DecidePolicy(WebKitPolicyDecision *decision, WebKitPolic
 
 void WebviewWindow::EvaluateJavaScript(const char *java_script, FlMethodCall *call) {
   webkit_web_view_evaluate_javascript(
-      WEBKIT_WEB_VIEW(webview_), java_script,-1,nullptr,nullptr, nullptr,
+      WEBKIT_WEB_VIEW(webview_), java_script, -1, nullptr, nullptr, nullptr,
       [](GObject *object, GAsyncResult *result, gpointer user_data) {
         auto *call = static_cast<FlMethodCall *>(user_data);
         GError *error = nullptr;
