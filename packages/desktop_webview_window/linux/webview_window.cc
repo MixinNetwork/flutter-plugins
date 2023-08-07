@@ -92,7 +92,8 @@ WebviewWindow::WebviewWindow(
       fl_plugin_registry_get_registrar_for_plugin(FL_PLUGIN_REGISTRY(title_bar), "DesktopWebviewWindowPlugin");
   client_message_channel_plugin_register_with_registrar(desktop_webview_window_registrar);
 
-  gtk_widget_set_size_request(GTK_WIDGET(title_bar), -1, title_bar_height);
+  gtk_widget_set_size_request(GTK_WIDGET(title_bar), 200, title_bar_height);
+  gtk_widget_set_vexpand(GTK_WIDGET(title_bar), FALSE);
   gtk_box_pack_start(box_, GTK_WIDGET(title_bar), FALSE, FALSE, 0);
 
   // initial web_view
@@ -109,11 +110,10 @@ WebviewWindow::WebviewWindow(
   auto settings = webkit_web_view_get_settings(WEBKIT_WEB_VIEW(webview_));
   webkit_settings_set_javascript_can_open_windows_automatically(settings, true);
   default_user_agent_ = webkit_settings_get_user_agent(settings);
-  gtk_box_pack_start(box_, webview_, true, true, 0);
+  gtk_box_pack_end(box_, webview_, true, true, 0);
 
+  gtk_widget_show_all(GTK_WIDGET(window_));
   gtk_widget_grab_focus(GTK_WIDGET(webview_));
-  gtk_widget_show_all(window_);
-  gtk_widget_queue_resize(GTK_WIDGET(title_bar));
 
 }
 
