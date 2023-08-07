@@ -37,13 +37,15 @@ Show a webview window on your flutter desktop application.
      webview.launch("https://example.com");
    ```
 
-### **linux requirement**
+## linux requirement
 
 ```shell
 sudo apt-get install webkit2gtk-4.1
 ```
 
-### **Windows requirement**
+## Windows
+
+### Requirement
 
 The backend of desktop_webview_window on Windows is WebView2, which requires **WebView2 Runtime** installed.
 
@@ -53,6 +55,22 @@ it may not installed on Windows10 devices. So you need consider how to distribut
 See more: https://docs.microsoft.com/en-us/microsoft-edge/webview2/concepts/distribution
 
 For convenience, you can use `WebviewWindow.isWebviewAvailable()` check whether the WebView2 is available.
+
+### Attention
+
+The default user data folder of WebView2 is `your_exe_file\WebView2`, which is not a good place to store user data.
+
+eg. if the application is installed in a read-only directory, the application will crash when WebView2 try to write data.
+
+you can use `WebviewWindow.create()` to create a webview with a custom user data folder.
+
+```dart
+final webview = await WebviewWindow.create(
+  confiruation: CreateConfiguration(
+    userDataFolderWindows: 'your_custom_user_data_folder',
+  ),
+);
+```
 
 ## License
 
