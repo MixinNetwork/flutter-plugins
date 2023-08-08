@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:mixin_logger/mixin_logger.dart';
 import 'package:path/path.dart' as p;
@@ -26,16 +27,38 @@ class MyApp extends StatelessWidget {
         body: SingleChildScrollView(
           child: Container(
             padding: const EdgeInsets.all(10),
-            child: Center(
-                child: TextButton(
-              onPressed: () {
-                i('test log: ${DateTime.now()}');
-              },
-              child: const Text('log'),
-            )),
+            child: Column(
+              children: [
+                TextButton(
+                  onPressed: () {
+                    i('test log: ${DateTime.now()}');
+                  },
+                  child: const Text('log'),
+                ),
+                TextButton(
+                  onPressed: () {
+                    scheduleMicrotask(() async {
+                      for (var i = 0; i < 1000; i++) {
+                        w('test log from main: ${DateTime.now()}');
+                        await Future.delayed(const Duration(milliseconds: 1));
+                      }
+                    });
+                    compute(_logInOtherIsolate, null);
+                  },
+                  child: const Text('log with multi isolate'),
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
+  }
+}
+
+void _logInOtherIsolate(String? msg) async {
+  for (var i = 0; i < 1000; i++) {
+    w('test log from other isolate: ${DateTime.now()}');
+    await Future.delayed(const Duration(milliseconds: 1));
   }
 }

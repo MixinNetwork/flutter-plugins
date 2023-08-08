@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
+	"sync"
 )
 
 type MixinLoggerContext struct {
@@ -18,6 +19,7 @@ type MixinLoggerContext struct {
 	maxFileCount int
 	fileLeading  string
 	logFile      *os.File
+	mu           sync.Mutex
 }
 
 var _mixinLoggerContext *MixinLoggerContext
@@ -55,7 +57,7 @@ type LogFileItem struct {
 	path  string
 }
 
-func (context MixinLoggerContext) _GetLogFileList() ([]LogFileItem, error) {
+func (context *MixinLoggerContext) _GetLogFileList() ([]LogFileItem, error) {
 	files, err := os.ReadDir(context.dir)
 	if err != nil {
 		return nil, err
@@ -80,7 +82,7 @@ func (context MixinLoggerContext) _GetLogFileList() ([]LogFileItem, error) {
 	return logFiles, nil
 }
 
-func (context MixinLoggerContext) _PrepareLogFile() (string, error) {
+func (context *MixinLoggerContext) _PrepareLogFile() (string, error) {
 	info, err := os.Stat(context.dir)
 	if os.IsNotExist(err) || !info.IsDir() {
 		if err == nil && !info.IsDir() {
@@ -135,7 +137,9 @@ func (context MixinLoggerContext) _PrepareLogFile() (string, error) {
 	return path.Join(context.dir, newLogFile), nil
 }
 
-func (context MixinLoggerContext) _WriteLogToContext(str string) {
+func (context *MixinLoggerContext) _WriteLogToContext(str string) {
+	context.mu.Lock()
+	defer context.mu.Unlock()
 	if context.logFile == nil {
 		filePath, err := context._PrepareLogFile()
 		if err != nil {
