@@ -80,8 +80,25 @@ func (context MixinLoggerContext) _GetLogFileList() ([]LogFileItem, error) {
 }
 
 func (context MixinLoggerContext) _PrepareLogFile() string {
+	info, err := os.Stat(context.dir)
+	if os.IsNotExist(err) || !info.IsDir() {
+		if err == nil && !info.IsDir() {
+			fmt.Println("mixin_logger: log dir is not a directory, try to remove it")
+			err = os.Remove(context.dir)
+			if err != nil {
+				fmt.Println("mixin_logger: remove log dir failed with error: ", err)
+				return ""
+			}
+		}
+		err = os.MkdirAll(context.dir, 0755)
+		if err != nil {
+			fmt.Println("mixin_logger: create log dir failed with error: ", err)
+			return ""
+		}
+	}
 	files, err := os.ReadDir(context.dir)
 	if err != nil {
+		fmt.Println("mixin_logger: read log dir failed with error: ", err)
 		return ""
 	}
 	if len(files) == 0 {
@@ -90,6 +107,7 @@ func (context MixinLoggerContext) _PrepareLogFile() string {
 
 	logFiles, err := context._GetLogFileList()
 	if err != nil {
+		fmt.Println("mixin_logger: get log file list failed with error: ", err)
 		return ""
 	}
 	if len(logFiles) == 0 {

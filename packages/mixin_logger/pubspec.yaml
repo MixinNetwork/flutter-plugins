@@ -25,4 +25,4 @@ flutter:
   plugin:
     platforms:
       macos:
-        ffiPlugin: true
+        pluginClass: MixinLoggerPlugin
