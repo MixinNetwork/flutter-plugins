@@ -1,16 +1,22 @@
 package main
 
-import "testing"
+import (
+	"testing"
+)
 import "github.com/stretchr/testify/assert"
 
 func TestLogger(t *testing.T) {
-	MixinLoggerInit("./", 1024, 10, "test")
-	MixinLoggerWriteLog("test\n")
-	MixinLoggerWriteLog("test\n")
-	MixinLoggerWriteLog("test\n")
-	MixinLoggerWriteLog("test\n")
-	MixinLoggerWriteLog("test\n")
-	MixinLoggerWriteLog("test\n")
+	context := MixinLoggerContext{
+		dir:          "./",
+		maxFileSize:  1024,
+		maxFileCount: 10,
+		fileLeading:  "test",
+	}
+	context._WriteLogToContext("test\n")
+	context._WriteLogToContext("test\n")
+	context._WriteLogToContext("test\n")
+	context._WriteLogToContext("test\n")
+	context._WriteLogToContext("test\n")
 }
 
 func TestGenerateFileName(t *testing.T) {
@@ -21,9 +27,22 @@ func TestGenerateFileName(t *testing.T) {
 }
 
 func TestExtractIndexFromFileName(t *testing.T) {
-	assert.Equal(t, int64(0), ExtractIndexFromFileName("log_0.log"))
-	assert.Equal(t, int64(1), ExtractIndexFromFileName("log_1.log"))
-	assert.Equal(t, int64(2), ExtractIndexFromFileName("log_2.log"))
-	assert.Equal(t, int64(30000), ExtractIndexFromFileName("log_30000.log"))
-	assert.Equal(t, int64(-1), ExtractIndexFromFileName("edf.log"))
+	index, err := ExtractIndexFromFileName("log_0.log")
+	assert.Nil(t, err)
+	assert.Equal(t, int64(0), index)
+
+	index, err = ExtractIndexFromFileName("log_1.log")
+	assert.Nil(t, err)
+	assert.Equal(t, int64(1), index)
+
+	index, err = ExtractIndexFromFileName("log_2.log")
+	assert.Nil(t, err)
+	assert.Equal(t, int64(2), index)
+
+	index, err = ExtractIndexFromFileName("log_30000.log")
+	assert.Nil(t, err)
+	assert.Equal(t, int64(30000), index)
+
+	index, err = ExtractIndexFromFileName("edf.log")
+	assert.NotNil(t, err)
 }
