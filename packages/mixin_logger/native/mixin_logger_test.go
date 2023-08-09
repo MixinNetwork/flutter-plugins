@@ -1,22 +1,25 @@
 package main
 
 import (
+	"fmt"
+	"os"
+	"path"
 	"testing"
 )
 import "github.com/stretchr/testify/assert"
 
 func TestLogger(t *testing.T) {
+	dir := path.Join(os.TempDir(), "mixin_logger_test")
+	fmt.Println("test dir:", dir)
 	context := MixinLoggerContext{
-		dir:          "./",
+		dir:          dir,
 		maxFileSize:  1024,
 		maxFileCount: 10,
 		fileLeading:  "test",
 	}
-	context._WriteLogToContext("test\n")
-	context._WriteLogToContext("test\n")
-	context._WriteLogToContext("test\n")
-	context._WriteLogToContext("test\n")
-	context._WriteLogToContext("test\n")
+	for i := 0; i < 1000; i++ {
+		context._WriteLogToContext(fmt.Sprintf("test %d", i))
+	}
 }
 
 func TestGenerateFileName(t *testing.T) {

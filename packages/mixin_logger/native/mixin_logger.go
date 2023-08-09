@@ -19,6 +19,7 @@ type MixinLoggerContext struct {
 	maxFileCount int
 	fileLeading  string
 	logFile      *os.File
+	fileSize     int64
 	mu           sync.Mutex
 }
 
@@ -151,10 +152,28 @@ func (context *MixinLoggerContext) _WriteLogToContext(str string) {
 			fmt.Println("mixin_logger: open log file failed with error: ", err)
 			return
 		}
+		info, err := file.Stat()
+		if err != nil {
+			fmt.Println("mixin_logger: get log file stat failed with error: ", err)
+			return
+		}
+		context.fileSize = info.Size()
 		context.logFile = file
 	}
-	_, err := context.logFile.WriteString(str)
-	_, _ = context.logFile.Write([]byte{'\n'})
+	write, err := context.logFile.WriteString(str)
+	context.fileSize += int64(write)
+	write, _ = context.logFile.Write([]byte{'\n'})
+	context.fileSize += int64(write)
+
+	if context.fileSize >= context.maxFileSize && context.logFile != nil {
+		err = context.logFile.Close()
+		if err != nil {
+			fmt.Println("mixin_logger: close log file failed with error: ", err)
+			return
+		}
+		context.logFile = nil
+		context.fileSize = 0
+	}
 
 	if err != nil {
 		fmt.Println("mixin_logger: write log failed with error: ", err)
