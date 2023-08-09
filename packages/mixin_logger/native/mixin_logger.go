@@ -138,6 +138,21 @@ func (context *MixinLoggerContext) _PrepareLogFile() (string, error) {
 	return path.Join(context.dir, newLogFile), nil
 }
 
+func writeLine(file *os.File, str string) (int64, error) {
+	fileSize := int64(0)
+	write, err := file.WriteString(str)
+	if err != nil {
+		return 0, err
+	}
+	fileSize += int64(write)
+	write, err = file.Write([]byte{'\n'})
+	if err != nil {
+		return 0, err
+	}
+	fileSize += int64(write)
+	return fileSize, nil
+}
+
 func (context *MixinLoggerContext) _WriteLogToContext(str string) {
 	context.mu.Lock()
 	defer context.mu.Unlock()
@@ -159,11 +174,13 @@ func (context *MixinLoggerContext) _WriteLogToContext(str string) {
 		}
 		context.fileSize = info.Size()
 		context.logFile = file
+
+		write, _ := writeLine(file, context.fileLeading)
+		context.fileSize += write
+
 	}
-	write, err := context.logFile.WriteString(str)
-	context.fileSize += int64(write)
-	write, _ = context.logFile.Write([]byte{'\n'})
-	context.fileSize += int64(write)
+	write, err := writeLine(context.logFile, str)
+	context.fileSize += write
 
 	if context.fileSize >= context.maxFileSize && context.logFile != nil {
 		err = context.logFile.Close()
