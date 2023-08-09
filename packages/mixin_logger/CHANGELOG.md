@@ -1,3 +1,7 @@
+## 0.1.0
+
+* refactor implementation to go. (macOS only)
+
 ## 0.0.6
 
 * add `setLoggerFileLeading` api.
