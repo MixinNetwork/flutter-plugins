@@ -15,6 +15,11 @@ WindowCreatedCallback _g_window_created_callback = nullptr;
 
 }
 
+gboolean on_close_clicked(GtkWidget *widget, GdkEvent *event, gpointer user_data) {
+    gtk_widget_destroy(widget);
+    return TRUE;
+}
+
 FlutterWindow::FlutterWindow(
     int64_t id,
     const std::string &args,
@@ -26,6 +31,7 @@ FlutterWindow::FlutterWindow(
   gtk_window_set_position(GTK_WINDOW(window_), GTK_WIN_POS_CENTER);
   gtk_widget_show(GTK_WIDGET(window_));
 
+  g_signal_connect(G_OBJECT(window_), "delete-event", G_CALLBACK(on_close_clicked), NULL);
   g_signal_connect(window_, "destroy", G_CALLBACK(+[](GtkWidget *, gpointer arg) {
     auto *self = static_cast<FlutterWindow *>(arg);
     if (auto callback = self->callback_.lock()) {
