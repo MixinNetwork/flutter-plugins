@@ -162,7 +162,7 @@ void WebviewWindowPlugin::HandleMethodCall(
     }
     windows_[window_id]->GetWebView()->GoForward();
     result->Success();
-  } else if (method_call.method_name() == "showWebviewWindow") {
+  } else if (method_call.method_name() == "setWebviewWindowVisibility") {
     auto* arguments = std::get_if<flutter::EncodableMap>(method_call.arguments());
     auto window_id = arguments->at(flutter::EncodableValue("viewId")).LongValue();
     auto visible = std::get<bool>(arguments->at(flutter::EncodableValue("visible")));

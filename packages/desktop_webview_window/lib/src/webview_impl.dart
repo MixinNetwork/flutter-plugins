@@ -172,7 +172,7 @@ class WebviewImpl extends Webview {
 
   @override
   Future<void> setWebviewWindowVisibility(bool visible) {
-    return channel.invokeMethod("showWebviewWindow", {
+    return channel.invokeMethod("setWebviewWindowVisibility", {
       "viewId": viewId,
       "visible": visible,
     });
