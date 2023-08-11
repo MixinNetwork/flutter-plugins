@@ -54,7 +54,7 @@ abstract class Webview {
   Future<void> forward();
 
   /// Show or hide webview window
-  Future<void> showWebviewWindow(bool show);
+  Future<void> setWebviewWindowVisibility(bool visible);
 
   /// Reload the current page.
   Future<void> reload();

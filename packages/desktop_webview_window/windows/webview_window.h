@@ -56,7 +56,7 @@ class WebviewWindow {
 
   void SetBrightness(int brightness);
 
-  void ShowWebviewWindow(bool show);
+  void setVisibility(bool visible);
 
   [[nodiscard]] const std::unique_ptr<webview_window::WebView> &GetWebView() const {
     return web_view_;

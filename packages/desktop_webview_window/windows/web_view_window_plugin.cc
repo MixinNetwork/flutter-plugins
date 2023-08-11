@@ -165,7 +165,7 @@ void WebviewWindowPlugin::HandleMethodCall(
   } else if (method_call.method_name() == "showWebviewWindow") {
     auto* arguments = std::get_if<flutter::EncodableMap>(method_call.arguments());
     auto window_id = arguments->at(flutter::EncodableValue("viewId")).LongValue();
-    auto show = std::get<bool>(arguments->at(flutter::EncodableValue("show")));
+    auto visible = std::get<bool>(arguments->at(flutter::EncodableValue("visible")));
     if (!windows_.count(window_id)) {
       result->Error("0", "can not find webview window for id");
       return;
@@ -174,7 +174,7 @@ void WebviewWindowPlugin::HandleMethodCall(
       result->Error("0", "webview window not ready");
       return;
     }
-    windows_[window_id]->ShowWebviewWindow(show);
+    windows_[window_id]->setVisibility(visible);
     result->Success();
   } else if (method_call.method_name() == "reload") {
     auto *arguments = std::get_if<flutter::EncodableMap>(method_call.arguments());
