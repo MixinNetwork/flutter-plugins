@@ -20,7 +20,8 @@ private func findFlutterViewController(_ viewController: NSViewController?) -> F
 public class DesktopDropPlugin: NSObject, FlutterPlugin {
   public static func register(with registrar: FlutterPluginRegistrar) {
     guard let app = NSApplication.shared.delegate as? FlutterAppDelegate else { return }
-    guard let vc = findFlutterViewController(app.mainFlutterWindow.contentViewController) else { return }
+    guard let flutterWindow = app.mainFlutterWindow else { return }
+    guard let vc = findFlutterViewController(flutterWindow.contentViewController) else { return }
 
     let channel = FlutterMethodChannel(name: "desktop_drop", binaryMessenger: registrar.messenger)
     let instance = DesktopDropPlugin()
