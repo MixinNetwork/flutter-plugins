@@ -53,6 +53,9 @@ abstract class Webview {
   /// Navigate to the next page in the history.
   Future<void> forward();
 
+  /// Show or hide webview window
+  Future<void> setWebviewWindowVisibility(bool visible);
+
   /// Reload the current page.
   Future<void> reload();
 

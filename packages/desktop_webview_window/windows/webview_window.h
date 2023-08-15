@@ -43,6 +43,7 @@ class WebviewWindow {
                      int windowPosX, int windowPosY, bool useWindowPositionAndSize,
                      bool openMaximized, CreateCallback callback);
 
+
   // OS callback called by message pump. Handles the WM_NCCREATE message which
   // is passed when the non-client area is being created and enables automatic
   // non-client DPI scaling so that the non-client area automatically
@@ -54,6 +55,8 @@ class WebviewWindow {
                                   LPARAM lparam) noexcept;
 
   void SetBrightness(int brightness);
+
+  void setVisibility(bool visible);
 
   [[nodiscard]] const std::unique_ptr<webview_window::WebView> &GetWebView() const {
     return web_view_;
