@@ -223,7 +223,7 @@ func MixinLoggerWriteLog(str *C.char) {
 		fmt.Println("mixin_logger is not initialized")
 		return
 	}
-	_mixinLoggerContext._WriteLogToContext(C.GoString(str))
+	go _mixinLoggerContext._WriteLogToContext(C.GoString(str))
 }
 
 //export MixinLoggerSetFileLeading

@@ -13,12 +13,12 @@ func TestLogger(t *testing.T) {
 	fmt.Println("test dir:", dir)
 	context := MixinLoggerContext{
 		dir:          dir,
-		maxFileSize:  1024,
+		maxFileSize:  102400,
 		maxFileCount: 10,
 		fileLeading:  "test",
 	}
-	for i := 0; i < 1000; i++ {
-		context._WriteLogToContext(fmt.Sprintf("test %d", i))
+	for i := 0; i < 1000000; i++ {
+		go context._WriteLogToContext(fmt.Sprintf("test %d", i))
 		context.fileLeading = fmt.Sprintf("test_leading_%d", i)
 	}
 }
