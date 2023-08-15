@@ -226,6 +226,15 @@ func MixinLoggerWriteLog(str *C.char) {
 	_mixinLoggerContext._WriteLogToContext(C.GoString(str))
 }
 
+//export MixinLoggerSetFileLeading
+func MixinLoggerSetFileLeading(str *C.char) {
+	if _mixinLoggerContext == nil {
+		fmt.Println("mixin_logger is not initialized")
+		return
+	}
+	_mixinLoggerContext.fileLeading = C.GoString(str)
+}
+
 func main() {
 
 }

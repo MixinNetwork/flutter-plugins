@@ -32,6 +32,10 @@ Future<void> initLogger(
 }
 
 void setLoggerFileLeading(String? fileLeading) {
+  if (Platform.isMacOS) {
+    ffi.setLoggerFileLeading(fileLeading);
+    return;
+  }
   assert(LogFileManager.instance != null, 'Logger is not initialized');
   LogFileManager.instance?.setLoggerFileLeading(fileLeading);
 }

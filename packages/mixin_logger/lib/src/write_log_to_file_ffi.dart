@@ -48,5 +48,7 @@ Future<void> initLogger(
 }
 
 void setLoggerFileLeading(String? fileLeading) {
-  // TODO: implement setLoggerFileLeading
+  final fileLeadingPtr = (fileLeading ?? "").toNativeUtf8();
+  _bindings.MixinLoggerSetFileLeading(fileLeadingPtr.cast());
+  malloc.free(fileLeadingPtr);
 }

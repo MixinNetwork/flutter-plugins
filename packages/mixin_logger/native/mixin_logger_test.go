@@ -19,6 +19,7 @@ func TestLogger(t *testing.T) {
 	}
 	for i := 0; i < 1000; i++ {
 		context._WriteLogToContext(fmt.Sprintf("test %d", i))
+		context.fileLeading = fmt.Sprintf("test_leading_%d", i)
 	}
 }
 

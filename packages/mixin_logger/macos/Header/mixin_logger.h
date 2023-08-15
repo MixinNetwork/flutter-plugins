@@ -76,6 +76,7 @@ extern "C" {
 
 extern void MixinLoggerInit(char* dir, GoInt64 maxFileSize, GoInt maxFileCount, char* fileLeading);
 extern void MixinLoggerWriteLog(char* str);
+extern void MixinLoggerSetFileLeading(char* str);
 
 #ifdef __cplusplus
 }

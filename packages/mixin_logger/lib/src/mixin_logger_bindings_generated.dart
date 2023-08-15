@@ -61,6 +61,20 @@ class MixinLoggerBindings {
           'MixinLoggerWriteLog');
   late final _MixinLoggerWriteLog = _MixinLoggerWriteLogPtr.asFunction<
       void Function(ffi.Pointer<ffi.Char>)>();
+
+  void MixinLoggerSetFileLeading(
+    ffi.Pointer<ffi.Char> str,
+  ) {
+    return _MixinLoggerSetFileLeading(
+      str,
+    );
+  }
+
+  late final _MixinLoggerSetFileLeadingPtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Char>)>>(
+          'MixinLoggerSetFileLeading');
+  late final _MixinLoggerSetFileLeading = _MixinLoggerSetFileLeadingPtr
+      .asFunction<void Function(ffi.Pointer<ffi.Char>)>();
 }
 
 class _GoString_ extends ffi.Struct {
