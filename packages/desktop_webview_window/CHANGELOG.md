@@ -1,3 +1,7 @@
+## 0.2.2
+
+* fix memory leak on macOS after close webview window.
+
 ## 0.2.1
 
 * add Windows attentions to readme.
