@@ -17,11 +17,11 @@ class WebviewWindowController: NSWindowController {
   private let width, height: Int
 
   private let titleBarHeight: Int
-  
+
   private let titleBarTopPadding: Int
-  
+
   private let title: String
-  
+
   public weak var webviewPlugin: DesktopWebviewWindowPlugin?
 
   init(viewId: Int64, methodChannel: FlutterMethodChannel,
@@ -36,6 +36,20 @@ class WebviewWindowController: NSWindowController {
     self.titleBarTopPadding = titleBarTopPadding
     self.title = title
     super.init(window: nil)
+
+    let newWindow = NSWindow(contentRect: NSRect(x: 0, y: 0, width: width, height: height), styleMask: [.titled, .closable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
+    newWindow.delegate = self
+    newWindow.title = title
+    newWindow.titlebarAppearsTransparent = true
+    newWindow.center()
+
+    let contentViewController = WebViewLayoutController(
+      methodChannel: methodChannel,
+      viewId: viewId, titleBarHeight: titleBarHeight,
+      titleBarTopPadding: titleBarTopPadding)
+    newWindow.contentViewController = contentViewController
+
+    window = newWindow
   }
 
   required init?(coder: NSCoder) {
@@ -43,23 +57,7 @@ class WebviewWindowController: NSWindowController {
   }
 
   public var webViewController: WebViewLayoutController {
-    contentViewController as! WebViewLayoutController
-  }
-
-  override func windowDidLoad() {
-    super.windowDidLoad()
-
-    contentViewController = WebViewLayoutController(
-      methodChannel: methodChannel,
-      viewId: viewId, titleBarHeight: titleBarHeight,
-      titleBarTopPadding: titleBarTopPadding)
-
-    window?.setContentSize(NSSize(width: width, height: height))
-    window?.center()
-    window?.title = title
-
-    window?.isReleasedWhenClosed = false
-    window?.delegate = self
+    window?.contentViewController as! WebViewLayoutController
   }
 
   override func keyDown(with event: NSEvent) {
@@ -69,8 +67,10 @@ class WebviewWindowController: NSWindowController {
   }
 
   func destroy() {
+    webViewController.destroy()
+    webviewPlugin = nil
     window?.delegate = nil
-    contentViewController = nil
+    window = nil
   }
 
   func setAppearance(brightness: Int) {
@@ -96,18 +96,13 @@ class WebviewWindowController: NSWindowController {
       print("\(self) deinited")
     #endif
   }
-
-  override var windowNibName: NSNib.Name? {
-    "WebviewWindowController"
-  }
 }
 
 extension WebviewWindowController: NSWindowDelegate {
   func windowWillClose(_ notification: Notification) {
     webViewController.destroy()
     methodChannel.invokeMethod("onWindowClose", arguments: ["id": viewId])
-    DispatchQueue.main.async {
-      self.webviewPlugin?.onWebviewWindowClose(viewId: self.viewId, wc: self)
-    }
+    webviewPlugin?.onWebviewWindowClose(viewId: viewId, wc: self)
+    destroy()
   }
 }

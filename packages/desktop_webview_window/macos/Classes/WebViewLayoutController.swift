@@ -106,7 +106,7 @@ class WebViewLayoutController: NSViewController {
         "id": viewId,
         "canGoBack": webView.canGoBack,
         "canGoForward": webView.canGoForward,
-      ])
+      ] as [String: Any])
     } else if keyPath == "loading" {
       if webView.isLoading {
         methodChannel.invokeMethod("onNavigationStarted", arguments: [
@@ -147,16 +147,9 @@ class WebViewLayoutController: NSViewController {
   }
 
   func destroy() {
-    webView.removeObserver(self, forKeyPath: "canGoBack")
-    webView.removeObserver(self, forKeyPath: "canGoForward")
-    webView.removeObserver(self, forKeyPath: "loading")
-
-    webView.uiDelegate = nil
-    webView.navigationDelegate = nil
-    javaScriptHandlerNames.forEach { name in
-      webView.configuration.userContentController.removeScriptMessageHandler(forName: name)
-    }
-    webView.configuration.userContentController.removeAllUserScripts()
+    webView.stopLoading(self)
+    webView.removeFromSuperview()
+    titleBarController.engine.shutDownEngine()
   }
 
   func reload() {
@@ -188,6 +181,12 @@ class WebViewLayoutController: NSViewController {
       completer(result)
     }
   }
+
+  deinit {
+    #if DEBUG
+      print("\(self) deinited")
+    #endif
+  }
 }
 
 extension WebViewLayoutController: WKNavigationDelegate {
@@ -205,7 +204,7 @@ extension WebViewLayoutController: WKNavigationDelegate {
     methodChannel.invokeMethod("onUrlRequested", arguments: [
       "id": viewId,
       "url": url.absoluteString,
-    ])
+    ] as [String: Any])
 
     decisionHandler(.allow)
   }
@@ -223,9 +222,9 @@ extension WebViewLayoutController: WKUIDelegate {
         "id": viewId,
         "prompt": prompt,
         "defaultText": defaultText ?? "",
-      ]) { result in
-      completionHandler((result as? String) ?? "")
-    }
+      ] as [String: Any]) { result in
+        completionHandler((result as? String) ?? "")
+      }
   }
 
   func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {

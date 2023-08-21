@@ -278,9 +278,6 @@ public class DesktopWebviewWindowPlugin: NSObject, FlutterPlugin {
   }
 
   func onWebviewWindowClose(viewId: Int64, wc: WebviewWindowController) {
-    wc.destroy()
-    let wc = webviews.removeValue(forKey: viewId)
-    wc?.window?.windowController = nil
-    wc?.window = nil
+    webviews.removeValue(forKey: viewId)
   }
 }
