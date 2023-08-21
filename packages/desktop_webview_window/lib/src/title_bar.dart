@@ -14,20 +14,45 @@ const _channel = ClientMessageChannel();
 /// can use [TitleBarWebViewController] to controller the WebView
 /// use [TitleBarWebViewState] to triger the title bar status.
 ///
+
+@Deprecated('Use [runWebViewWidget], this method will be removed')
 bool runWebViewTitleBarWidget(
   List<String> args, {
   WidgetBuilder? builder,
   Color? backgroundColor,
   void Function(Object error, StackTrace stack)? onError,
+}) =>
+    runWebViewWidget(
+      args,
+      builder: builder,
+      backgroundColor: backgroundColor,
+      onError: onError,
+    );
+
+bool runWebViewWidget(
+  List<String> args, {
+  WidgetBuilder? builder,
+  Color? backgroundColor,
+  void Function(Object error, StackTrace stack)? onError,
 }) {
-  if (args.isEmpty || args[0] != 'web_view_title_bar') {
+  if (args.isEmpty || !args[0].startsWith('web_view')) {
     return false;
   }
   final webViewId = int.tryParse(args[1]);
   if (webViewId == null) {
     return false;
   }
-  final titleBarTopPadding = int.tryParse(args.length > 2 ? args[2] : '0') ?? 0;
+  int titleBarTopPadding = 0;
+  if (args[0] != 'web_view') {
+    titleBarTopPadding = int.tryParse(args.length > 2 ? args[2] : '0') ?? 0;
+  }
+
+  WidgetBuilder? widgetBuilder;
+
+  if (args[0] == 'web_view_title_bar') {
+    widgetBuilder = _defaultTitleBar;
+  }
+
   runZonedGuarded(
     () {
       WidgetsFlutterBinding.ensureInitialized();
@@ -35,7 +60,7 @@ bool runWebViewTitleBarWidget(
         webViewId: webViewId,
         titleBarTopPadding: titleBarTopPadding,
         backgroundColor: backgroundColor,
-        builder: builder ?? _defaultTitleBar,
+        builder: widgetBuilder,
       ));
     },
     onError ??
@@ -128,7 +153,7 @@ class _TitleBarApp extends StatefulWidget {
     Key? key,
     required this.webViewId,
     required this.titleBarTopPadding,
-    required this.builder,
+    this.builder,
     this.backgroundColor,
   }) : super(key: key);
 
@@ -136,7 +161,7 @@ class _TitleBarApp extends StatefulWidget {
 
   final int titleBarTopPadding;
 
-  final WidgetBuilder builder;
+  final WidgetBuilder? builder;
 
   final Color? backgroundColor;
 
@@ -205,7 +230,9 @@ class _TitleBarAppState extends State<_TitleBarApp>
             canGoBack: _canGoBack,
             canGoForward: _canGoForward,
             url: _url,
-            child: Builder(builder: widget.builder),
+            child: widget.builder != null
+                ? Builder(builder: widget.builder!)
+                : const SizedBox.shrink(),
           ),
         ),
       ),

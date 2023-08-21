@@ -55,7 +55,9 @@ WebviewWindow::WebviewWindow(
     const std::string &title,
     int width,
     int height,
-    int title_bar_height
+    int title_bar_height,
+    bool use_fullscreen,
+    bool disable_title_bar
 ) : method_channel_(method_channel),
     window_id_(window_id),
     on_close_callback_(std::move(on_close_callback)),
@@ -75,8 +77,12 @@ WebviewWindow::WebviewWindow(
                          FL_METHOD_CHANNEL(window->method_channel_), "onWindowClose", args,
                          nullptr, nullptr, nullptr);
                    }), this);
+  if (use_fullscreen) {
+    gtk_window_fullscreen(GTK_WINDOW(window_));
+  } else {
+    gtk_window_set_default_size(GTK_WINDOW(window_), width, height);
+  }
   gtk_window_set_title(GTK_WINDOW(window_), title.c_str());
-  gtk_window_set_default_size(GTK_WINDOW(window_), width, height);
   gtk_window_set_position(GTK_WINDOW(window_), GTK_WIN_POS_CENTER);
 
   box_ = GTK_BOX(gtk_box_new(GTK_ORIENTATION_VERTICAL, 0));
@@ -84,8 +90,13 @@ WebviewWindow::WebviewWindow(
 
   // initial flutter_view
   g_autoptr(FlDartProject) project = fl_dart_project_new();
-  const char *args[] = {"web_view_title_bar", g_strdup_printf("%ld", window_id), nullptr};
-  fl_dart_project_set_dart_entrypoint_arguments(project, const_cast<char **>(args));
+  if (disable_title_bar) {
+    const char *args[] = {"web_view", g_strdup_printf("%ld", window_id), nullptr};
+    fl_dart_project_set_dart_entrypoint_arguments(project, const_cast<char **>(args));
+  } else {
+    const char *args[] = {"web_view_title_bar", g_strdup_printf("%ld", window_id), nullptr};
+    fl_dart_project_set_dart_entrypoint_arguments(project, const_cast<char **>(args));
+  }
   auto *title_bar = fl_view_new(project);
 
   g_autoptr(FlPluginRegistrar) desktop_webview_window_registrar =

@@ -16,6 +16,8 @@ class CreateConfiguration {
   final int titleBarTopPadding;
 
   final String userDataFolderWindows;
+  final bool useFullScreen;
+  final bool disableTitleBar;
 
   final bool useWindowPositionAndSize;
   final bool openMaximized;
@@ -29,8 +31,9 @@ class CreateConfiguration {
     this.titleBarHeight = 40,
     this.titleBarTopPadding = 0,
     this.userDataFolderWindows = 'webview_window_WebView2',
+    this.useFullScreen = false,
+    this.disableTitleBar = false,
     this.useWindowPositionAndSize = false,
-    this.openMaximized = false,
   });
 
   factory CreateConfiguration.platform() {
@@ -45,10 +48,11 @@ class CreateConfiguration {
         "windowPosX": windowPosX,
         "windowPosY": windowPosY,
         "title": title,
-        "titleBarHeight": titleBarHeight,
-        "titleBarTopPadding": titleBarTopPadding,
+        "titleBarHeight": disableTitleBar ? 0 : titleBarHeight,
+        "titleBarTopPadding": disableTitleBar ? 0 : titleBarTopPadding,
         "userDataFolderWindows": userDataFolderWindows,
+        "useFullScreen": useFullScreen,
+        "disableTitleBar": disableTitleBar,
         "useWindowPositionAndSize": useWindowPositionAndSize,
-        "openMaximized": openMaximized,
       };
 }
