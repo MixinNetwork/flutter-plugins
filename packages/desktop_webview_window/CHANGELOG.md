@@ -1,6 +1,11 @@
+## 0.2.3
+
+* fix macOS webview window size not working.
+
 ## 0.2.2
 
 * fix memory leak on macOS after close webview window.
+* Show and Hide Webview window by [@Iri-Hor](https://github.com/Iri-Hor) in [#268](https://github.com/MixinNetwork/flutter-plugins/pull/268)
 
 ## 0.2.1
 

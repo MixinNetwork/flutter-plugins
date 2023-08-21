@@ -37,17 +37,18 @@ class WebviewWindowController: NSWindowController {
     self.title = title
     super.init(window: nil)
 
-    let newWindow = NSWindow(contentRect: NSRect(x: 0, y: 0, width: width, height: height), styleMask: [.titled, .closable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
+    let newWindow = NSWindow(contentRect: NSRect(x: 0, y: 0, width: width, height: height), styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
     newWindow.delegate = self
     newWindow.title = title
     newWindow.titlebarAppearsTransparent = true
-    newWindow.center()
 
     let contentViewController = WebViewLayoutController(
       methodChannel: methodChannel,
       viewId: viewId, titleBarHeight: titleBarHeight,
       titleBarTopPadding: titleBarTopPadding)
     newWindow.contentViewController = contentViewController
+    newWindow.setContentSize(NSSize(width: width, height: height))
+    newWindow.center()
 
     window = newWindow
   }
