@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.2
+
+* fix crash on Windows when app exit
+
 ## 0.4.1
 
 * [macOS] improve enumerateDraggingItems on macOS.
