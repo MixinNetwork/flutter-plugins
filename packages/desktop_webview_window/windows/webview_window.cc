@@ -144,6 +144,11 @@ void WebviewWindow::setVisibility(bool visible)
     ::ShowWindow(hwnd_.get(), SW_HIDE);
 }
 
+void WebviewWindow::bringToForeground()
+{
+  SetForegroundWindow(hwnd_.get());
+}
+
 // static
 LRESULT CALLBACK
 WebviewWindow::WndProc(
