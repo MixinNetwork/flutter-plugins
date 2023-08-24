@@ -7,10 +7,10 @@ import 'package:path_provider/path_provider.dart';
 
 void main(List<String> args) {
   debugPrint('args: $args');
+  WidgetsFlutterBinding.ensureInitialized();
   if (runWebViewTitleBarWidget(args)) {
     return;
   }
-  WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
 }
 
