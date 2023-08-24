@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
 import 'message_channel.dart';
@@ -18,7 +16,6 @@ bool runWebViewTitleBarWidget(
   List<String> args, {
   WidgetBuilder? builder,
   Color? backgroundColor,
-  void Function(Object error, StackTrace stack)? onError,
 }) {
   if (args.isEmpty || args[0] != 'web_view_title_bar') {
     return false;
@@ -28,22 +25,13 @@ bool runWebViewTitleBarWidget(
     return false;
   }
   final titleBarTopPadding = int.tryParse(args.length > 2 ? args[2] : '0') ?? 0;
-  runZonedGuarded(
-    () {
-      WidgetsFlutterBinding.ensureInitialized();
-      runApp(_TitleBarApp(
-        webViewId: webViewId,
-        titleBarTopPadding: titleBarTopPadding,
-        backgroundColor: backgroundColor,
-        builder: builder ?? _defaultTitleBar,
-      ));
-    },
-    onError ??
-        (e, s) {
-          debugPrint('WebViewTitleBar: unhandled expections: $e, $s');
-        },
-  );
-
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(_TitleBarApp(
+    webViewId: webViewId,
+    titleBarTopPadding: titleBarTopPadding,
+    backgroundColor: backgroundColor,
+    builder: builder ?? _defaultTitleBar,
+  ));
   return true;
 }
 
