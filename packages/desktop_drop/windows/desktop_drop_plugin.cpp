@@ -138,9 +138,14 @@ namespace {
                         registrar->messenger(), "desktop_drop",
                         &flutter::StandardMethodCodec::GetInstance());
 
-        HWND hwnd;
+        HWND hwnd = nullptr;
         if (registrar->GetView()) {
             hwnd = registrar->GetView()->GetNativeWindow();
+        }
+
+        if (hwnd == nullptr) {
+            // no window, no drop.
+            return;
         }
 
         channel->SetMethodCallHandler([](const auto &call, auto result) {
