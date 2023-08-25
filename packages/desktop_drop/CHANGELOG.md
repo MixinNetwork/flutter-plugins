@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.3
+
+* fix windows build warning C4701
+
 ## 0.4.2
 
 * fix crash on Windows when app exit
