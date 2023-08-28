@@ -56,6 +56,9 @@ abstract class Webview {
   /// Show or hide webview window
   Future<void> setWebviewWindowVisibility(bool visible);
 
+  /// Move and Resize the webview window
+  Future<void> moveWebviewWindow(int left, int top, int width, int height);
+
   /// Activates the webview window (giving it the focus)
   Future<void> bringToForeground();
 

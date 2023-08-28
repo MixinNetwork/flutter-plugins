@@ -179,6 +179,17 @@ class WebviewImpl extends Webview {
   }
 
   @override
+  Future<void> moveWebviewWindow(int left, int top, int width, int height) {
+    return channel.invokeMethod("moveWebviewWindow", {
+      "viewId": viewId,
+      "left": left,
+      "top": top,
+      "width": width,
+      "height": height,
+    });
+  }
+
+  @override
   Future<void> bringToForeground() {
     return channel.invokeMethod("bringToForeground", {
       "viewId": viewId,

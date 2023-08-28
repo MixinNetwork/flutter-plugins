@@ -58,6 +58,8 @@ class WebviewWindow {
 
   void setVisibility(bool visible);
 
+  void moveWebviewWindow(int left, int top, int width, int height);
+
   void bringToForeground();
 
   [[nodiscard]] const std::unique_ptr<webview_window::WebView> &GetWebView() const {
