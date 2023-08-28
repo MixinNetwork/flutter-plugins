@@ -190,9 +190,10 @@ class WebviewImpl extends Webview {
   }
 
   @override
-  Future<void> bringToForeground() {
+  Future<void> bringToForeground({bool maximized = false}) {
     return channel.invokeMethod("bringToForeground", {
       "viewId": viewId,
+      "maximized": maximized,
     });
   }
 
