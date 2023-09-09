@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:cross_file/cross_file.dart';
+import 'package:desktop_drop/src/desktop_drop_public.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
@@ -72,15 +73,23 @@ class DesktopDrop {
       case "performOperation_linux":
         // gtk notify 'exit' before 'performOperation'.
         final text = (call.arguments as List<dynamic>)[0] as String;
-        final offset = ((call.arguments as List<dynamic>)[1] as List<dynamic>).cast<double>();
-        final paths = const LineSplitter().convert(text).map((e) {
+        final offset = ((call.arguments as List<dynamic>)[1] as List<dynamic>)
+            .cast<double>();
+        final paths = (await Future.wait(
+                const LineSplitter().convert(text).map(((e) async {
           try {
             return Uri.tryParse(e)?.toFilePath() ?? '';
+          } on UnsupportedError {
+            final handled =
+                await DesktopDropPlugin.onUnsupportedUriHandler?.call(e);
+            if (handled == null || handled.isEmpty) rethrow;
+            return handled;
           } catch (error, stacktrace) {
             debugPrint('failed to parse linux path: $error $stacktrace');
           }
           return '';
-        }).where((e) => e.isNotEmpty);
+        }))))
+            .where((e) => e.isNotEmpty);
         _notifyEvent(DropDoneEvent(
           location: Offset(offset[0], offset[1]),
           files: paths.map((e) => XFile(e)).toList(),

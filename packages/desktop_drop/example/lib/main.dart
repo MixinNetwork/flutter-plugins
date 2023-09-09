@@ -1,8 +1,14 @@
+import 'dart:io';
+
 import 'package:desktop_drop/desktop_drop.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:cross_file/cross_file.dart';
+import 'package:http/http.dart';
+import 'package:path_provider/path_provider.dart';
 
 void main() {
+  DesktopDropPlugin.onUnsupportedUriHandler = customHttpsHandler;
   runApp(const MyApp());
 }
 
@@ -104,4 +110,23 @@ class _ExampleDragTargetState extends State<ExampleDragTarget> {
       ),
     );
   }
+}
+
+Future<String?> customHttpsHandler(String url) async {
+  if (kIsWeb) return null;
+  final uri = Uri.tryParse(url);
+  if (uri == null) return null;
+
+  if (!['http', 'https'].contains(uri.scheme)) return null;
+
+  final response = await get(uri);
+
+  final tmp =
+      (await getDownloadsDirectory() ?? await getApplicationCacheDirectory());
+  await tmp.create(recursive: true);
+  final file =
+      File(tmp.path + '/desktop_drop_example/' + uri.path.split('/').last);
+  await file.create(recursive: true);
+  await file.writeAsBytes(response.bodyBytes);
+  return file.path;
 }
