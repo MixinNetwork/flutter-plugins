@@ -1,12 +1,12 @@
 import 'dart:convert';
 
-import 'package:cross_file/cross_file.dart';
+import 'package:desktop_drop/src/drop_item.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
-import 'drop_item.dart';
 import 'events.dart';
 import 'utils/platform.dart' if (dart.library.html) 'utils/platform_web.dart';
+import 'web_drop_item.dart';
 
 typedef RawDropListener = void Function(DropEvent);
 
@@ -64,7 +64,7 @@ class DesktopDrop {
         _notifyEvent(
           DropDoneEvent(
             location: _offset ?? Offset.zero,
-            files: paths.map((e) => XFile(e)).toList(),
+            files: paths.map((e) => DropItemFile(e)).toList(),
           ),
         );
         _offset = null;
@@ -83,20 +83,14 @@ class DesktopDrop {
         }).where((e) => e.isNotEmpty);
         _notifyEvent(DropDoneEvent(
           location: Offset(offset[0], offset[1]),
-          files: paths.map((e) => XFile(e)).toList(),
+          files: paths.map((e) => DropItemFile(e)).toList(),
         ));
         break;
       case "performOperation_web":
         final results = (call.arguments as List)
             .cast<Map>()
             .map((e) => WebDropItem.fromJson(e.cast<String, dynamic>()))
-            .map((e) => XFile(
-                  e.uri,
-                  name: e.name,
-                  length: e.size,
-                  lastModified: e.lastModified,
-                  mimeType: e.type,
-                ))
+            .map((e) => e.toDropItem())
             .toList();
         _notifyEvent(
           DropDoneEvent(location: _offset ?? Offset.zero, files: results),

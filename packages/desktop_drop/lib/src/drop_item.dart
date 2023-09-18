@@ -1,35 +1,107 @@
-class WebDropItem {
-  WebDropItem({
-    required this.uri,
-    required this.name,
-    required this.type,
-    required this.size,
-    required this.relativePath,
-    required this.lastModified,
-  });
+import 'dart:typed_data';
 
-  final String uri;
-  final String name;
-  final String type;
-  final int size;
-  final String? relativePath;
-  final DateTime lastModified;
+import 'package:cross_file/cross_file.dart';
 
-  factory WebDropItem.fromJson(Map<String, dynamic> json) => WebDropItem(
-        uri: json['uri'],
-        name: json['name'],
-        type: json['type'],
-        size: json['size'],
-        relativePath: json['relativePath'],
-        lastModified: DateTime.fromMillisecondsSinceEpoch(json['lastModified']),
-      );
+abstract class DropItem extends XFile {
+  DropItem(
+    String path, {
+    String? mimeType,
+    String? name,
+    int? length,
+    Uint8List? bytes,
+    DateTime? lastModified,
+  }) : super(path,
+            mimeType: mimeType,
+            name: name,
+            length: length,
+            bytes: bytes,
+            lastModified: lastModified);
 
-  Map<String, dynamic> toJson() => <String, dynamic>{
-        'uri': uri,
-        'name': name,
-        'type': type,
-        'size': size,
-        'relativePath': relativePath,
-        'lastModified': lastModified.millisecondsSinceEpoch,
-      };
+  DropItem.fromData(
+    Uint8List bytes, {
+    String? mimeType,
+    String? name,
+    int? length,
+    DateTime? lastModified,
+    String? path,
+  }) : super.fromData(
+          bytes,
+          mimeType: mimeType,
+          name: name,
+          length: length,
+          lastModified: lastModified,
+          path: path,
+        );
+}
+
+class DropItemFile extends DropItem {
+  DropItemFile(
+    String path, {
+    String? mimeType,
+    String? name,
+    int? length,
+    Uint8List? bytes,
+    DateTime? lastModified,
+  }) : super(
+          path,
+          mimeType: mimeType,
+          name: name,
+          length: length,
+          bytes: bytes,
+          lastModified: lastModified,
+        );
+
+  DropItemFile.fromData(
+    Uint8List bytes, {
+    String? mimeType,
+    String? name,
+    int? length,
+    DateTime? lastModified,
+    String? path,
+  }) : super.fromData(
+          bytes,
+          mimeType: mimeType,
+          name: name,
+          length: length,
+          lastModified: lastModified,
+          path: path,
+        );
+}
+
+class DropItemDirectory extends DropItem {
+  final List<DropItem> children;
+
+  DropItemDirectory(
+    String path,
+    this.children, {
+    String? mimeType,
+    String? name,
+    int? length,
+    Uint8List? bytes,
+    DateTime? lastModified,
+  }) : super(
+          path,
+          mimeType: mimeType,
+          name: name,
+          length: length,
+          bytes: bytes,
+          lastModified: lastModified,
+        );
+
+  DropItemDirectory.fromData(
+    Uint8List bytes,
+    this.children, {
+    String? mimeType,
+    String? name,
+    int? length,
+    DateTime? lastModified,
+    String? path,
+  }) : super.fromData(
+          bytes,
+          mimeType: mimeType,
+          name: name,
+          length: length,
+          lastModified: lastModified,
+          path: path,
+        );
 }

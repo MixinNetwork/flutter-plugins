@@ -1,4 +1,4 @@
-import 'package:cross_file/cross_file.dart';
+import 'package:desktop_drop/src/drop_item.dart';
 import 'package:flutter/painting.dart';
 
 abstract class DropEvent {
@@ -25,7 +25,7 @@ class DropUpdateEvent extends DropEvent {
 }
 
 class DropDoneEvent extends DropEvent {
-  final List<XFile> files;
+  final List<DropItem> files;
 
   DropDoneEvent({
     required Offset location,
