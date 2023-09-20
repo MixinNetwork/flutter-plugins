@@ -81,26 +81,22 @@ class DesktopDropWeb {
   }
 
   void _registerEvents() {
-    html.window.onDrop.listen((event) async {
+    html.window.onDrop.listen((event) {
       event.preventDefault();
 
-      final results = <WebDropItem>[];
-
-      try {
-        final items = event.dataTransfer.items;
-        for (var i = 0; i < (items?.length ?? 0); i++) {
-          final item = items![i];
-          final entry = item.getAsEntry();
-          results.add(await _entryToWebDropItem(entry));
-        }
-      } catch (e, s) {
-        debugPrint('desktop_drop_web: $e $s');
-      } finally {
+      final items = event.dataTransfer.items;
+      Future.wait(List.generate(items?.length ?? 0, (index) {
+        final item = items![index];
+        final entry = item.getAsEntry();
+        return _entryToWebDropItem(entry);
+      })).then((webItems) {
         channel.invokeMethod(
           "performOperation_web",
-          results.map((e) => e.toJson()).toList(),
+          webItems.map((e) => e.toJson()).toList(),
         );
-      }
+      }).catchError((e, s) {
+        debugPrint('desktop_drop_web: $e $s');
+      });
     });
 
     html.window.onDragEnter.listen((event) {
