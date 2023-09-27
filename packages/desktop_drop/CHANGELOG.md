@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.4
+
+* fix build on android [#285](https://github.com/MixinNetwork/flutter-plugins/pull/285)
+  by [AdamVe](https://github.com/AdamVe)
+
 ## 0.4.3
 
 * fix windows build warning C4701
