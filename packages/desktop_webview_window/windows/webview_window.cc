@@ -148,21 +148,6 @@ void WebviewWindow::moveWebviewWindow(int left, int top, int width, int height) 
   ::SetWindowPos(hwnd_.get(), nullptr, left, top, width, height, SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
-void WebviewWindow::getPositionalParameters(std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> completer) {
-  RECT rc;
-  GetWindowRect(hwnd_.get(), &rc);
-
-  std::unique_ptr<WINDOWPLACEMENT> wp(new WINDOWPLACEMENT);
-  GetWindowPlacement(hwnd_.get(), wp.get());
-  std::map<flutter::EncodableValue, flutter::EncodableValue> m{
-    {"left", rc.left},
-    {"top", rc.top},
-    {"width", rc.right-rc.left},
-    {"height", rc.bottom-rc.top},
-    {"maximized", wp->showCmd==SW_MAXIMIZE}};
-  completer->Success(flutter::EncodableValue(m));
-}
-
 void WebviewWindow::bringToForeground() {
   SetForegroundWindow(hwnd_.get());
 }

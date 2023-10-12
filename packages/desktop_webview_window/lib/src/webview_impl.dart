@@ -61,16 +61,11 @@ class WebviewImpl extends Webview {
   }
 
   bool notifyUrlChanged(String url) {
-    /*bool ret = false;
-    for (final callback in _onUrlRequestCallbacks) {
-      ret = ret | callback(url);
-    }*/
     if(_onUrlRequestCallback != null) {
       return _onUrlRequestCallback!(url);
     } else {
       return true;
     }
-    //return ret;
   }
 
   void notifyWebMessageReceived(String message) {
@@ -193,13 +188,6 @@ class WebviewImpl extends Webview {
       "top": top,
       "width": width,
       "height": height,
-    });
-  }
-
-  @override
-  Future<Map<dynamic,dynamic>?> getPositionalParameters() async {
-    return await channel.invokeMethod("getPositionalParameters", {
-      "viewId": viewId,
     });
   }
 
