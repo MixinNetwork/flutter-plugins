@@ -8,6 +8,8 @@
 #include <utility>
 #include <thread>
 
+#include "flutter/method_result_functions.h"
+
 #include "web_view.h"
 #include "utils.h"
 #include "strconv.h"
@@ -144,14 +146,37 @@ void WebView::OnWebviewControllerCreated() {
                 std::make_unique<flutter::EncodableValue>(flutter::EncodableMap{
                     {flutter::EncodableValue("id"), flutter::EncodableValue(web_view_id_)},
                 }));
-            LPWSTR uri;
-            args->get_Uri(&uri);
-            method_channel_->InvokeMethod(
-                "onUrlRequested",
-                std::make_unique<flutter::EncodableValue>(flutter::EncodableMap{
-                    {flutter::EncodableValue("id"), flutter::EncodableValue(web_view_id_)},
-                    {flutter::EncodableValue("url"), flutter::EncodableValue(wide_to_utf8(std::wstring(uri)))},
-                }));
+
+            if (!dartTriggeredLaunch) {
+              LPWSTR uri;
+              args->get_Uri(&uri);
+
+              auto result_handler = std::make_unique<flutter::MethodResultFunctions<>>(
+                  [uri, sender, this](const flutter::EncodableValue* success_value) {
+                    const bool answer = std::get<bool>(*success_value);
+                    std::cout << "received answer: " << answer << std::endl;
+                    std::wcout << "url:  " << uri << std::endl;
+                    if (answer) {
+                      this->setDartTriggeredLaunch(true);
+                      sender->Navigate(uri);
+                    }
+                  },
+                  nullptr, nullptr);
+
+              method_channel_->InvokeMethod(
+                  "onUrlRequested",
+                  std::make_unique<flutter::EncodableValue>(flutter::EncodableMap{
+                      {flutter::EncodableValue("id"), flutter::EncodableValue(web_view_id_)},
+                      {flutter::EncodableValue("url"), flutter::EncodableValue(wide_to_utf8(std::wstring(uri)))},
+                  }), std::move(result_handler));
+            }
+
+            if (dartTriggeredLaunch) {
+              args->put_Cancel(false);
+              dartTriggeredLaunch = false;
+            } else {
+              args->put_Cancel(true);
+            }
             return S_OK;
           }
       ).Get(), nullptr);
@@ -321,6 +346,10 @@ void WebView::PostWebMessageAsJson(const std::wstring& webmessage,
   } else {
     completer->Error("0", "webview not created");
   }
+}
+
+void WebView::setDartTriggeredLaunch(const bool value) {
+  this->dartTriggeredLaunch = value;
 }
 
 WebView::~WebView() {

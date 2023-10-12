@@ -95,6 +95,7 @@ void WebviewWindowPlugin::HandleMethodCall(
       result->Error("0", "webview window not ready");
       return;
     }
+    windows_[window_id]->GetWebView()->setDartTriggeredLaunch(true);
     windows_[window_id]->GetWebView()->Navigate(utf8_to_wide(url));
     result->Success();
   } else if (method_call.method_name() == "addScriptToExecuteOnDocumentCreated") {

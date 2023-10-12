@@ -22,9 +22,9 @@ class WebviewImpl extends Webview {
 
   OnHistoryChangedCallback? _onHistoryChanged;
 
-  final ValueNotifier<bool> _isNaivgating = ValueNotifier<bool>(false);
+  final ValueNotifier<bool> _isNavigating = ValueNotifier<bool>(false);
 
-  final Set<OnUrlRequestCallback> _onUrlRequestCallbacks = {};
+  OnUrlRequestCallback? _onUrlRequestCallback = null;
 
   final Set<OnWebMessageReceivedCallback> _onWebMessageReceivedCallbacks = {};
 
@@ -57,13 +57,20 @@ class WebviewImpl extends Webview {
   }
 
   void onNavigationStarted() {
-    _isNaivgating.value = true;
+    _isNavigating.value = true;
   }
 
-  void notifyUrlChanged(String url) {
+  bool notifyUrlChanged(String url) {
+    /*bool ret = false;
     for (final callback in _onUrlRequestCallbacks) {
-      callback(url);
+      ret = ret | callback(url);
+    }*/
+    if(_onUrlRequestCallback != null) {
+      return _onUrlRequestCallback!(url);
+    } else {
+      return true;
     }
+    //return ret;
   }
 
   void notifyWebMessageReceived(String message) {
@@ -73,11 +80,11 @@ class WebviewImpl extends Webview {
   }
 
   void onNavigationCompleted() {
-    _isNaivgating.value = false;
+    _isNavigating.value = false;
   }
 
   @override
-  ValueListenable<bool> get isNavigating => _isNaivgating;
+  ValueListenable<bool> get isNavigating => _isNavigating;
 
   @override
   void registerJavaScriptMessageHandler(
@@ -229,13 +236,15 @@ class WebviewImpl extends Webview {
   }
 
   @override
-  void addOnUrlRequestCallback(OnUrlRequestCallback callback) {
-    _onUrlRequestCallbacks.add(callback);
+  void setOnUrlRequestCallback(OnUrlRequestCallback callback) {
+    //_onUrlRequestCallbacks.add(callback);
+    _onUrlRequestCallback = callback;
   }
 
   @override
   void removeOnUrlRequestCallback(OnUrlRequestCallback callback) {
-    _onUrlRequestCallbacks.remove(callback);
+    //_onUrlRequestCallbacks.remove(callback);
+    _onUrlRequestCallback = null;
   }
 
   @override
