@@ -148,6 +148,7 @@ void WebView::OnWebviewControllerCreated() {
                 }));
 
             if (triggerOnUrlRequestedEvent) {
+
               LPWSTR uri;
               args->get_Uri(&uri);
 
@@ -169,12 +170,12 @@ void WebView::OnWebviewControllerCreated() {
                   }), std::move(result_handler));
             }
 
-            if (!triggerOnUrlRequestedEvent) {
-              args->put_Cancel(false);
-              setTriggerOnUrlRequestedEvent(true);
-            } else {
+            if (triggerOnUrlRequestedEvent) {
               // navigation is canceled here and retriggered later from the callback passed to the method channel
               args->put_Cancel(true);
+            } else {
+              args->put_Cancel(false);
+              triggerOnUrlRequestedEvent = true;
             }
             return S_OK;
           }

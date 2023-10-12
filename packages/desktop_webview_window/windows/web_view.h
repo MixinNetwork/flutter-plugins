@@ -81,7 +81,7 @@ class WebView {
 
   std::wstring user_data_folder_;
 
-  bool triggerOnUrlRequestedEvent{false};
+  bool triggerOnUrlRequestedEvent{true};
 
   void OnWebviewControllerCreated();
 
