@@ -196,6 +196,7 @@ void WebviewWindowPlugin::HandleMethodCall(
   } else if (method_call.method_name() == "bringToForeground") {
     auto* arguments = std::get_if<flutter::EncodableMap>(method_call.arguments());
     auto window_id = arguments->at(flutter::EncodableValue("viewId")).LongValue();
+    auto maximized = std::get<bool>(arguments->at(flutter::EncodableValue("maximized")));
     if (!windows_.count(window_id)) {
       result->Error("0", "can not find webview window for id");
       return;
@@ -204,7 +205,7 @@ void WebviewWindowPlugin::HandleMethodCall(
       result->Error("0", "webview window not ready");
       return;
     }
-    windows_[window_id]->bringToForeground();
+    windows_[window_id]->bringToForeground(maximized);
     result->Success();
   } else if (method_call.method_name() == "reload") {
     auto *arguments = std::get_if<flutter::EncodableMap>(method_call.arguments());
