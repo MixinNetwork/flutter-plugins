@@ -148,7 +148,6 @@ void WebView::OnWebviewControllerCreated() {
                 }));
 
             if (triggerOnUrlRequestedEvent) {
-
               LPWSTR uri;
               args->get_Uri(&uri);
 
@@ -168,9 +167,7 @@ void WebView::OnWebviewControllerCreated() {
                       {flutter::EncodableValue("id"), flutter::EncodableValue(web_view_id_)},
                       {flutter::EncodableValue("url"), flutter::EncodableValue(wide_to_utf8(std::wstring(uri)))},
                   }), std::move(result_handler));
-            }
 
-            if (triggerOnUrlRequestedEvent) {
               // navigation is canceled here and retriggered later from the callback passed to the method channel
               args->put_Cancel(true);
             } else {
