@@ -278,8 +278,6 @@ class _MyAppState extends State<MyApp> {
       ..setOnUrlRequestCallback((url) {
         debugPrint('url requested: $url');
         if (url == 'https://www.youtube.com/watch?v=hvYBFl5Tb1s&t=506s') {
-          //webview.launch('https://www.youtube.com/watch?v=hvYBFl5Tb1s&t=506s');
-          debugPrint("would launch");
           return true;
         } else {
           return false;
@@ -297,6 +295,8 @@ class _MyAppState extends State<MyApp> {
         debugPrint("on close");
       })
       ..launch(_controller.text);
+
+    webview.removeOnUrlRequestCallback();
 
     if (hideMainWindow) {
       final hwnd = FindWindow(ffi.nullptr, 'webview_window_example'.toNativeUtf16());

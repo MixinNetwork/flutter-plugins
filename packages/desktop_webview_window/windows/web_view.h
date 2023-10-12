@@ -60,7 +60,7 @@ class WebView {
   void PostWebMessageAsJson(const std::wstring &webmessage,
       std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> completer);
 
-  void setDartTriggeredLaunch(const bool value);
+  void setTriggerOnUrlRequestedEvent(const bool value);
 
  private:
   wil::unique_hwnd view_window_;
@@ -81,7 +81,7 @@ class WebView {
 
   std::wstring user_data_folder_;
 
-  bool dartTriggeredLaunch{true};
+  bool triggerOnUrlRequestedEvent{true};
 
   void OnWebviewControllerCreated();
 

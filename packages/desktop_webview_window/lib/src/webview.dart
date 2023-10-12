@@ -79,7 +79,7 @@ abstract class Webview {
 
   void setOnUrlRequestCallback(OnUrlRequestCallback callback);
 
-  void removeOnUrlRequestCallback(OnUrlRequestCallback callback);
+  void removeOnUrlRequestCallback();
 
   void addOnWebMessageReceivedCallback(OnWebMessageReceivedCallback callback);
 

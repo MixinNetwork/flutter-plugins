@@ -145,7 +145,6 @@ class WebviewWindow {
           'url': url,
         });
         return ret;
-        break;
       case "onWebMessageReceived":
         final message = args['message'] as String;
         webview.notifyWebMessageReceived(message);

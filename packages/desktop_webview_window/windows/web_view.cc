@@ -147,17 +147,15 @@ void WebView::OnWebviewControllerCreated() {
                     {flutter::EncodableValue("id"), flutter::EncodableValue(web_view_id_)},
                 }));
 
-            if (!dartTriggeredLaunch) {
+            if (!triggerOnUrlRequestedEvent) {
               LPWSTR uri;
               args->get_Uri(&uri);
 
               auto result_handler = std::make_unique<flutter::MethodResultFunctions<>>(
                   [uri, sender, this](const flutter::EncodableValue* success_value) {
-                    const bool answer = std::get<bool>(*success_value);
-                    std::cout << "received answer: " << answer << std::endl;
-                    std::wcout << "url:  " << uri << std::endl;
-                    if (answer) {
-                      this->setDartTriggeredLaunch(true);
+                  const bool letPass = std::get<bool>(*success_value);
+                    if (letPass) {
+                      this->setTriggerOnUrlRequestedEvent(true);
                       sender->Navigate(uri);
                     }
                   },
@@ -171,10 +169,11 @@ void WebView::OnWebviewControllerCreated() {
                   }), std::move(result_handler));
             }
 
-            if (dartTriggeredLaunch) {
+            if (triggerOnUrlRequestedEvent) {
               args->put_Cancel(false);
-              dartTriggeredLaunch = false;
+              triggerOnUrlRequestedEvent = false;
             } else {
+              // navigation is canceled here and retriggered later from the callback passed to the method channel
               args->put_Cancel(true);
             }
             return S_OK;
@@ -348,8 +347,8 @@ void WebView::PostWebMessageAsJson(const std::wstring& webmessage,
   }
 }
 
-void WebView::setDartTriggeredLaunch(const bool value) {
-  this->dartTriggeredLaunch = value;
+void WebView::setTriggerOnUrlRequestedEvent(const bool value) {
+  this->triggerOnUrlRequestedEvent = value;
 }
 
 WebView::~WebView() {
