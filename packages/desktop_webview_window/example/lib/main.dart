@@ -145,7 +145,6 @@ class _MyAppState extends State<MyApp> {
           debugPrint('login success. token: ${uri.queryParameters['token']}');
           webview.close();
         }
-
         // grant navigation request
         return true;
       })
