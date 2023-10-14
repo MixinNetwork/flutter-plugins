@@ -224,13 +224,8 @@ class WebviewImpl extends Webview {
   }
 
   @override
-  void setOnUrlRequestCallback(OnUrlRequestCallback callback) {
+  void setOnUrlRequestCallback(OnUrlRequestCallback? callback) {
     _onUrlRequestCallback = callback;
-  }
-
-  @override
-  void removeOnUrlRequestCallback() {
-    _onUrlRequestCallback = null;
   }
 
   @override

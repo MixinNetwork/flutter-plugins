@@ -74,9 +74,7 @@ abstract class Webview {
   /// Register a callback that will be invoked when the webview history changes.
   void setOnHistoryChangedCallback(OnHistoryChangedCallback? callback);
 
-  void setOnUrlRequestCallback(OnUrlRequestCallback callback);
-
-  void removeOnUrlRequestCallback();
+  void setOnUrlRequestCallback(OnUrlRequestCallback? callback);
 
   void addOnWebMessageReceivedCallback(OnWebMessageReceivedCallback callback);
 
