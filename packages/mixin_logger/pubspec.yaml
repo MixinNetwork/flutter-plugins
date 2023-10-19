@@ -24,5 +24,11 @@ dev_dependencies:
 flutter:
   plugin:
     platforms:
+      ios:
+        ffiPlugin: true
+      linux:
+        ffiPlugin: true
       macos:
-        pluginClass: MixinLoggerPlugin
+        ffiPlugin: true
+      windows:
+        ffiPlugin: true

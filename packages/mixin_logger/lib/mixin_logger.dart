@@ -4,8 +4,8 @@ import 'package:ansicolor/ansicolor.dart';
 import 'package:flutter/foundation.dart';
 
 import 'src/format.dart';
-import 'src/write_log_to_file_web.dart'
-    if (dart.library.io) 'src/write_log_to_file_io.dart' as platform;
+import 'src/write_to_file_web.dart'
+    if (dart.library.io) 'src/write_to_file_ffi.dart' as platform;
 
 const kLogMode = !kReleaseMode;
 
@@ -24,6 +24,8 @@ final _infoPen = AnsiPen()..green();
 final _warningPen = AnsiPen()..yellow();
 final _errorPen = AnsiPen()..red();
 final _wtfPen = AnsiPen()..magenta();
+
+final _writeToFile = platform.WriteToFileImpl();
 
 extension _LogLevelExtension on _LogLevel {
   String get prefix {
@@ -44,7 +46,7 @@ extension _LogLevelExtension on _LogLevel {
   }
 
   String colorize(String message) {
-    if (!platform.enableLogColor) {
+    if (!_writeToFile.enableLogColor) {
       return message;
     }
     switch (this) {
@@ -81,13 +83,13 @@ Future<void> initLogger(
   if (fileLeading != null) {
     assert(fileLeading.length < maxFileLength, 'fileLeading is too long');
   }
-  await platform.initLogger(logDir, maxFileCount, maxFileLength, fileLeading);
+  _writeToFile.init(logDir, maxFileCount, maxFileLength, fileLeading);
 }
 
 /// Set the leading of log file content, it will be written
 /// to the first line of each log file.
 void setLoggerFileLeading(String? leading) {
-  platform.setLoggerFileLeading(leading);
+  _writeToFile.setLoggerFileLeading(leading);
 }
 
 /// verbose log
@@ -138,7 +140,7 @@ void _print(String message, _LogLevel level) {
 
   final output = '${formatDateTime(DateTime.now())} ${level.prefix} $message';
   if (logToFile && !kIsWeb) {
-    platform.writeLog(output);
+    _writeToFile.writeLog(output);
   }
   if (kLogMode) {
     // ignore: avoid_print
