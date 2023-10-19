@@ -77,7 +77,7 @@ namespace mixin_logger {
 
     u_int64_t WriteLine(std::ofstream *file, const std::string &line) {
         *file << line;
-        *file << std::endl;
+        *file << '\n';
         return line.size() + sizeof('\n');
     }
 
