@@ -14,8 +14,14 @@
 #if _WIN32
 #define FFI_PLUGIN_EXPORT __declspec(dllexport)
 #else
-#define FFI_PLUGIN_EXPORT extern "C"
+#define FFI_PLUGIN_EXPORT
 #endif
+
+#ifdef __cplusplus
+extern "C" {  // only need to export C interface if
+// used by C++ source code
+#endif
+
 
 FFI_PLUGIN_EXPORT intptr_t
 mixin_logger_init(const char *dir, intptr_t max_file_size, intptr_t max_file_count, const char *file_leading);
@@ -23,3 +29,7 @@ mixin_logger_init(const char *dir, intptr_t max_file_size, intptr_t max_file_cou
 FFI_PLUGIN_EXPORT intptr_t mixin_logger_set_file_leading(const char *file_leading);
 
 FFI_PLUGIN_EXPORT intptr_t mixin_logger_write_log(const char *log);
+
+#ifdef __cplusplus
+}
+#endif
