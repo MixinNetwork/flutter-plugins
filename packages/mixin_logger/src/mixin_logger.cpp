@@ -106,7 +106,7 @@ namespace mixin_logger {
             }
             for (const auto &entry: fs::directory_iterator(dirPath)) {
                 if (entry.is_regular_file()) {
-                    long long index;
+                    int64_t index;
                     std::string fileName = entry.path().filename().string();
                     if (ExtractIndexFromFileName(fileName, index)) {
                         logFiles.push_back({index, entry.path()});
