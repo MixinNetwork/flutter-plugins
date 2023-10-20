@@ -17,3 +17,10 @@ set_target_properties(mixin_logger PROPERTIES
 )
 
 target_compile_definitions(mixin_logger PUBLIC DART_SHARED_LIB)
+
+find_package(GTest REQUIRED)
+
+enable_testing()
+add_executable(UnitTests test.cpp)
+target_link_libraries(UnitTests GTest::GTest GTest::Main)
+add_test(NAME UnitTests COMMAND UnitTests)

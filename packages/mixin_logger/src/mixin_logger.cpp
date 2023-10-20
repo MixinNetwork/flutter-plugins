@@ -48,7 +48,7 @@ namespace mixin_logger {
         fs::path file;
     };
 
-    int ExtractIndexFromFileName(const std::string &name, int64_t &index) {
+    bool ExtractIndexFromFileName(const std::string &name, int64_t &index) {
         std::regex pattern("log_(\\d+)\\.log");
         std::smatch match;
 
@@ -57,16 +57,16 @@ namespace mixin_logger {
                 std::string indexStr = match[1].str();
                 try {
                     index = std::stoll(indexStr);
-                    return 0;  // Success
+                    return true;  // Success
                 } catch (const std::invalid_argument &ia) {
-                    return -1; // Parsing error
+                    return false; // Parsing error
                 } catch (const std::out_of_range &oor) {
-                    return -2; // Out of range
+                    return false; // Out of range
                 }
             }
         }
 
-        return -3; // No match found
+        return false; // No match found
     }
 
 
@@ -80,7 +80,7 @@ namespace mixin_logger {
 
     u_int64_t WriteLine(std::ofstream *file, const std::string &line) {
         *file << line;
-        *file << '\n';
+        *file << std::endl;
         return line.size() + sizeof('\n');
     }
 
@@ -171,10 +171,11 @@ namespace mixin_logger {
             std::lock_guard<std::mutex> lock(mutex_);
             if (file_ == nullptr) {
                 auto log_file = PrepareLogFile();
-                file_ = new std::ofstream(log_file);
+                bool is_new_file = !fs::exists(log_file) || fs::file_size(log_file) == 0;
+                file_ = new std::ofstream(log_file, std::ios::out | std::ios::app);
 
-                if (!fs::exists(log_file)) {
-                    file_size_ = 0;
+                if (is_new_file) {
+                    file_size_ = int64_t(WriteLine(file_, file_leading_));
                 } else {
                     file_size_ = int64_t(fs::file_size(log_file));
                 }
@@ -184,7 +185,6 @@ namespace mixin_logger {
 
             if (file_size_ >= max_file_size_) {
                 file_->close();
-                delete file_;
                 file_ = nullptr;
                 file_size_ = 0;
             }
