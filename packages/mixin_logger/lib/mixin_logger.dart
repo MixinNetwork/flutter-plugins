@@ -72,12 +72,12 @@ extension _LogLevelExtension on _LogLevel {
 /// [logDir] the directory to store log files.
 /// [fileLeading] the leading of log file content, it will be written
 ///               to the first line of each log file.
-Future<void> initLogger(
+void initLogger(
   String logDir, {
   int maxFileCount = 10,
   int maxFileLength = 1024 * 1024 * 10, // 10 MB
   String? fileLeading,
-}) async {
+}) {
   assert(maxFileCount > 1, 'maxFileCount must be greater than 1');
   assert(maxFileLength > 10 * 1024, 'maxFileLength must be greater than 10 KB');
   if (fileLeading != null) {

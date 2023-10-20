@@ -8,7 +8,7 @@ import 'package:path/path.dart' as p;
 
 Future<void> main() async {
   final path = p.join(Directory.systemTemp.path, 'mixin_logger_test');
-  await initLogger(path);
+  initLogger(path);
   debugPrint('log path: $path');
   i('test');
   runApp(const MyApp());
