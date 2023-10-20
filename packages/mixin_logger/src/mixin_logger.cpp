@@ -10,14 +10,15 @@
 // time. In particular, std::filesystem is unavailable before macOS 10.15, iOS/tvOS 13.0,
 // and watchOS 6.0.
 #ifdef __APPLE__
+
 #include <Availability.h>
 // Note: This intentionally uses std::filesystem on any new Apple OS, like visionOS
 // released after std::filesystem, where std::filesystem is always available.
 // (All other __<platform>_VERSION_MIN_REQUIREDs will be undefined and thus 0.)
 #if __MAC_OS_X_VERSION_MIN_REQUIRED && __MAC_OS_X_VERSION_MIN_REQUIRED < 101500 \
-             || __IPHONE_OS_VERSION_MIN_REQUIRED && __IPHONE_OS_VERSION_MIN_REQUIRED < 130000 \
-             || __TV_OS_VERSION_MIN_REQUIRED && __TV_OS_VERSION_MIN_REQUIRED < 130000 \
-             || __WATCH_OS_VERSION_MAX_ALLOWED && __WATCH_OS_VERSION_MAX_ALLOWED < 60000
+ || __IPHONE_OS_VERSION_MIN_REQUIRED && __IPHONE_OS_VERSION_MIN_REQUIRED < 130000 \
+ || __TV_OS_VERSION_MIN_REQUIRED && __TV_OS_VERSION_MIN_REQUIRED < 130000 \
+ || __WATCH_OS_VERSION_MAX_ALLOWED && __WATCH_OS_VERSION_MAX_ALLOWED < 60000
 #undef GHC_USE_STD_FS
 #endif
 #endif
@@ -25,11 +26,13 @@
 #endif
 
 #ifdef GHC_USE_STD_FS
+
 #include <filesystem>
+
 namespace fs = std::filesystem;
 #else
 #include "filesystem.hpp"
-    namespace fs = ghc::filesystem;
+namespace fs = ghc::filesystem;
 #endif
 
 #include <iostream>
