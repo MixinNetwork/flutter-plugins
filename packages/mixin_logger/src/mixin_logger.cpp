@@ -58,10 +58,8 @@ namespace mixin_logger {
                 try {
                     index = std::stoll(indexStr);
                     return true;  // Success
-                } catch (const std::invalid_argument &ia) {
-                    return false; // Parsing error
-                } catch (const std::out_of_range &oor) {
-                    return false; // Out of range
+                } catch (...) {
+                    return false; // Failed
                 }
             }
         }
@@ -132,13 +130,13 @@ namespace mixin_logger {
 
             auto last_file = files.back();
 
-            if (fs::file_size(last_file.file) < max_file_size_) {
+            if (intptr_t(fs::file_size(last_file.file)) < max_file_size_) {
                 return last_file.file;
             }
 
             auto new_log_file = fs::path(dir_) / GenerateFileName(last_file.index + 1);
 
-            if (files.size() >= max_file_count_) {
+            if (intptr_t(files.size()) >= max_file_count_) {
                 fs::remove(files.front().file);
             }
 
