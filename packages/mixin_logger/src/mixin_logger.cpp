@@ -78,7 +78,7 @@ namespace mixin_logger {
         return file_name;
     }
 
-    u_int64_t WriteLine(std::ofstream *file, const std::string &line) {
+    uint64_t WriteLine(std::ofstream *file, const std::string &line) {
         *file << line;
         *file << std::endl;
         return line.size() + sizeof('\n');
@@ -131,8 +131,6 @@ namespace mixin_logger {
             }
 
             auto last_file = files.back();
-
-            fs::file_status status = fs::status(last_file.file);
 
             if (fs::file_size(last_file.file) < max_file_size_) {
                 return last_file.file;

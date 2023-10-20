@@ -46,7 +46,7 @@ TEST(GenerateFileName, TEST) {
 TEST(WriteLine, TEST) {
     std::ofstream file;
     file.open("test.log", std::ios::out | std::ios::app);
-    u_int64_t size = WriteLine(&file, "test");
+    auto size = WriteLine(&file, "test");
     EXPECT_EQ(size, 5);
     file.close();
     std::remove("test.log");
@@ -54,6 +54,7 @@ TEST(WriteLine, TEST) {
 
 TEST(LoggerContext, WriteLog) {
     auto dir = std::filesystem::temp_directory_path() / "mixin_logger_test";
+    std::filesystem::create_directories(dir);
     std::cout << "test dir: " << dir << std::endl;
 
     // clean files
@@ -100,6 +101,7 @@ TEST(LoggerContext, WriteLog) {
 
 TEST(LoggerContext, AppendLog) {
     auto dir = std::filesystem::temp_directory_path() / "mixin_logger_test";
+    std::filesystem::create_directories(dir);
     std::cout << "test dir: " << dir << std::endl;
 
     // clean files
