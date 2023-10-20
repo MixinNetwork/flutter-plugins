@@ -157,7 +157,11 @@ namespace mixin_logger {
 
         }
 
-        ~LoggerContext() = default;
+        ~LoggerContext() {
+            if (file_ != nullptr) {
+                file_->close();
+            }
+        }
 
         void SetFileLeading(const std::string &file_leading) {
             file_leading_ = file_leading;
