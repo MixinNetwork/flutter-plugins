@@ -60,7 +60,7 @@ abstract class Webview {
   Future<void> moveWebviewWindow(int left, int top, int width, int height);
 
   /// Activates the webview window (giving it the focus)
-  Future<void> bringToForeground();
+  Future<void> bringToForeground({bool maximized = false});
 
   /// Reload the current page.
   Future<void> reload();
