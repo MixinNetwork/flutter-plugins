@@ -86,6 +86,7 @@ void WebviewWindowPlugin::HandleMethodCall(
 
     auto window_id = arguments->at(flutter::EncodableValue("viewId")).LongValue();
     auto url = std::get<std::string>(arguments->at(flutter::EncodableValue("url")));
+    auto triggerOnUrlRequestEvent = std::get<bool>(arguments->at(flutter::EncodableValue("triggerOnUrlRequestEvent")));
 
     if (!windows_.count(window_id)) {
       result->Error("0", "can not find webview window for id");
@@ -95,6 +96,7 @@ void WebviewWindowPlugin::HandleMethodCall(
       result->Error("0", "webview window not ready");
       return;
     }
+    windows_[window_id]->GetWebView()->setTriggerOnUrlRequestedEvent(triggerOnUrlRequestEvent);
     windows_[window_id]->GetWebView()->Navigate(utf8_to_wide(url));
     result->Success();
   } else if (method_call.method_name() == "addScriptToExecuteOnDocumentCreated") {

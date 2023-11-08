@@ -10,7 +10,7 @@ typedef OnHistoryChangedCallback = void Function(
 
 /// Callback when WebView start to load a URL.
 /// [url] is the URL string.
-typedef OnUrlRequestCallback = void Function(String url);
+typedef OnUrlRequestCallback = bool Function(String url);
 
 /// Callback when WebView receives a web message
 /// [message] constains the webmessage
@@ -35,7 +35,7 @@ abstract class Webview {
   void setPromptHandler(PromptHandler? handler);
 
   /// Navigates to the given URL.
-  void launch(String url);
+  void launch(String url, {bool triggerOnUrlRequestEvent=true});
 
   /// change webview theme.
   ///
@@ -74,9 +74,7 @@ abstract class Webview {
   /// Register a callback that will be invoked when the webview history changes.
   void setOnHistoryChangedCallback(OnHistoryChangedCallback? callback);
 
-  void addOnUrlRequestCallback(OnUrlRequestCallback callback);
-
-  void removeOnUrlRequestCallback(OnUrlRequestCallback callback);
+  void setOnUrlRequestCallback(OnUrlRequestCallback? callback);
 
   void addOnWebMessageReceivedCallback(OnWebMessageReceivedCallback callback);
 
