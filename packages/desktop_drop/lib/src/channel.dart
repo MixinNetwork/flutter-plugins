@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:collection/collection.dart';
 import 'package:cross_file/cross_file.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -137,7 +138,9 @@ class DesktopDrop {
           ),
         );
       }
-      _channel.invokeMethod('updateDroppableStatus', target != null);
+      if (kIsWeb) {
+        _channel.invokeMethod('updateDroppableStatus', target != null);
+      }
     }
     if (target != null) {
       final position = target.globalToLocalOffset(event.location);
@@ -172,6 +175,8 @@ class DesktopDrop {
         ),
       );
     }
-    _channel.invokeMethod('updateDroppableStatus', false);
+    if (kIsWeb) {
+      _channel.invokeMethod('updateDroppableStatus', false);
+    }
   }
 }
