@@ -1,3 +1,7 @@
+## 0.1.1
+
+* add android support.
+
 ## 0.1.0
 
 * refactor implementation to c++, works on Windows/Linux/macOS/iOS.

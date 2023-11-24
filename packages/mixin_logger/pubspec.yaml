@@ -1,6 +1,6 @@
 name: mixin_logger
 description: Simple logger tool for flutter, make it easy to save your app log to file.
-version: 0.1.0
+version: 0.1.1
 homepage: https://github.com/MixinNetwork/flutter-plugins
 
 environment:
@@ -32,4 +32,6 @@ flutter:
       macos:
         ffiPlugin: true
       windows:
+        ffiPlugin: true
+      android:
         ffiPlugin: true
