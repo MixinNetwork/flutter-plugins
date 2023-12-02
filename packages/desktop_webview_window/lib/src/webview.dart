@@ -62,6 +62,9 @@ abstract class Webview {
   /// Activates the webview window (giving it the focus)
   Future<void> bringToForeground({bool maximized = false});
 
+  /// get position, extents and maximization info of the webview window
+  Future<Map<dynamic,dynamic>?> getPositionalParameters();
+
   /// Reload the current page.
   Future<void> reload();
 
