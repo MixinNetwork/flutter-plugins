@@ -1,6 +1,10 @@
+## 0.1.1
+
+* add android support.
+
 ## 0.1.0
 
-* refactor implementation to go. (macOS only)
+* refactor implementation to c++, works on Windows/Linux/macOS/iOS.
 
 ## 0.0.6
 

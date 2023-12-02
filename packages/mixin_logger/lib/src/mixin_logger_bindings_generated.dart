@@ -1,7 +1,6 @@
 // ignore_for_file: always_specify_types
 // ignore_for_file: camel_case_types
 // ignore_for_file: non_constant_identifier_names
-// ignore_for_file: unused_element
 
 // AUTO GENERATED FILE, DO NOT EDIT.
 //
@@ -27,81 +26,52 @@ class MixinLoggerBindings {
           lookup)
       : _lookup = lookup;
 
-  void MixinLoggerInit(
+  int mixin_logger_init(
     ffi.Pointer<ffi.Char> dir,
-    int maxFileSize,
-    int maxFileCount,
-    ffi.Pointer<ffi.Char> fileLeading,
+    int max_file_size,
+    int max_file_count,
+    ffi.Pointer<ffi.Char> file_leading,
   ) {
-    return _MixinLoggerInit(
+    return _mixin_logger_init(
       dir,
-      maxFileSize,
-      maxFileCount,
-      fileLeading,
+      max_file_size,
+      max_file_count,
+      file_leading,
     );
   }
 
-  late final _MixinLoggerInitPtr = _lookup<
+  late final _mixin_logger_initPtr = _lookup<
       ffi.NativeFunction<
-          ffi.Void Function(ffi.Pointer<ffi.Char>, GoInt64, GoInt,
-              ffi.Pointer<ffi.Char>)>>('MixinLoggerInit');
-  late final _MixinLoggerInit = _MixinLoggerInitPtr.asFunction<
-      void Function(ffi.Pointer<ffi.Char>, int, int, ffi.Pointer<ffi.Char>)>();
+          ffi.IntPtr Function(ffi.Pointer<ffi.Char>, ffi.IntPtr, ffi.IntPtr,
+              ffi.Pointer<ffi.Char>)>>('mixin_logger_init');
+  late final _mixin_logger_init = _mixin_logger_initPtr.asFunction<
+      int Function(ffi.Pointer<ffi.Char>, int, int, ffi.Pointer<ffi.Char>)>();
 
-  void MixinLoggerWriteLog(
-    ffi.Pointer<ffi.Char> str,
+  int mixin_logger_set_file_leading(
+    ffi.Pointer<ffi.Char> file_leading,
   ) {
-    return _MixinLoggerWriteLog(
-      str,
+    return _mixin_logger_set_file_leading(
+      file_leading,
     );
   }
 
-  late final _MixinLoggerWriteLogPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Char>)>>(
-          'MixinLoggerWriteLog');
-  late final _MixinLoggerWriteLog = _MixinLoggerWriteLogPtr.asFunction<
-      void Function(ffi.Pointer<ffi.Char>)>();
+  late final _mixin_logger_set_file_leadingPtr =
+      _lookup<ffi.NativeFunction<ffi.IntPtr Function(ffi.Pointer<ffi.Char>)>>(
+          'mixin_logger_set_file_leading');
+  late final _mixin_logger_set_file_leading = _mixin_logger_set_file_leadingPtr
+      .asFunction<int Function(ffi.Pointer<ffi.Char>)>();
 
-  void MixinLoggerSetFileLeading(
-    ffi.Pointer<ffi.Char> str,
+  int mixin_logger_write_log(
+    ffi.Pointer<ffi.Char> log,
   ) {
-    return _MixinLoggerSetFileLeading(
-      str,
+    return _mixin_logger_write_log(
+      log,
     );
   }
 
-  late final _MixinLoggerSetFileLeadingPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Char>)>>(
-          'MixinLoggerSetFileLeading');
-  late final _MixinLoggerSetFileLeading = _MixinLoggerSetFileLeadingPtr
-      .asFunction<void Function(ffi.Pointer<ffi.Char>)>();
+  late final _mixin_logger_write_logPtr =
+      _lookup<ffi.NativeFunction<ffi.IntPtr Function(ffi.Pointer<ffi.Char>)>>(
+          'mixin_logger_write_log');
+  late final _mixin_logger_write_log = _mixin_logger_write_logPtr
+      .asFunction<int Function(ffi.Pointer<ffi.Char>)>();
 }
-
-class _GoString_ extends ffi.Struct {
-  external ffi.Pointer<ffi.Char> p;
-
-  @ptrdiff_t()
-  external int n;
-}
-
-typedef ptrdiff_t = __darwin_ptrdiff_t;
-typedef __darwin_ptrdiff_t = ffi.Long;
-
-class GoInterface extends ffi.Struct {
-  external ffi.Pointer<ffi.Void> t;
-
-  external ffi.Pointer<ffi.Void> v;
-}
-
-class GoSlice extends ffi.Struct {
-  external ffi.Pointer<ffi.Void> data;
-
-  @GoInt()
-  external int len;
-
-  @GoInt()
-  external int cap;
-}
-
-typedef GoInt = GoInt64;
-typedef GoInt64 = ffi.LongLong;

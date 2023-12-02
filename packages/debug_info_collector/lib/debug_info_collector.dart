@@ -8,7 +8,7 @@ final context = p.Context(style: p.Style.windows);
 Future<void> collect() async {
   final executable = await _getDumpExecutable();
 
-  const windowsBuildDir = r'build\windows';
+  const windowsBuildDir = r'build\windows\x64';
 
   const outputPath = r'build\syms';
 
