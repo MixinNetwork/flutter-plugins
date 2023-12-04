@@ -39,9 +39,7 @@ class HMacSha256 implements Finalizable {
   Uint8List finalize() {
     final digest = malloc<Uint8>(_kDigestDataCount);
     bindings.CCHmacFinal(context, digest.cast());
-    final result = Uint8List.fromList(digest.asTypedList(_kDigestDataCount));
-    malloc.free(digest);
-    return result;
+    return digest.asTypedList(_kDigestDataCount, finalizer: malloc.nativeFree);
   }
 
   void dispose() {

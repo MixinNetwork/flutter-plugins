@@ -17,14 +17,12 @@ Uint8List _aesCrypt({
     key: key,
     iv: iv,
   );
-  final output = <int>[];
-  cryptor.update(data, (data) {
-    output.addAll(data);
-  });
-  cryptor.finalize((data) {
-    output.addAll(data);
-  });
-  return Uint8List.fromList(output);
+  return Uint8List.fromList(
+    [
+      ...cryptor.update(data),
+      ...cryptor.finalize(),
+    ],
+  );
 }
 
 Uint8List aesEncrypt({
@@ -96,10 +94,7 @@ class AesCryptor {
         isFinal,
       );
 
-  void update(
-    Uint8List data,
-    void Function(Uint8List data) onOutputData,
-  ) {
+  Uint8List update(Uint8List data) {
     final outputSize = outputDataCount(data.length, isFinal: false);
     final outputData = malloc<Uint8>(outputSize);
     final dataOutMoved = malloc<Size>();
@@ -117,19 +112,21 @@ class AesCryptor {
     final dataOutMovedValue = dataOutMoved.value;
     malloc.free(dataOutMoved);
     if (status != kCCSuccess) {
+      malloc.free(outputData);
       throw Exception('CCCryptorUpdate failed: $status');
     }
 
     if (dataOutMovedValue == 0) {
-      onOutputData(Uint8List(0));
+      malloc.free(outputData);
+      return Uint8List(0);
     } else {
-      final output = outputData.asTypedList(dataOutMovedValue);
-      onOutputData(output);
+      final output = outputData.asTypedList(dataOutMovedValue,
+          finalizer: malloc.nativeFree);
+      return output;
     }
-    malloc.free(outputData);
   }
 
-  void finalize(void Function(Uint8List data) onData) {
+  Uint8List finalize() {
     final outputSize = outputDataCount(0, isFinal: true);
     final outputData = malloc<Uint8>(outputSize);
     final dataOutMoved = malloc<Size>();
@@ -143,16 +140,18 @@ class AesCryptor {
     final dataOutMovedValue = dataOutMoved.value;
     malloc.free(dataOutMoved);
     if (status != kCCSuccess) {
+      malloc.free(outputData);
       throw Exception('CCCryptorFinal failed: $status');
     }
 
     if (dataOutMovedValue == 0) {
-      onData(Uint8List(0));
+      malloc.free(outputData);
+      return Uint8List(0);
     } else {
-      final output = outputData.asTypedList(dataOutMovedValue);
-      onData(output);
+      final output = outputData.asTypedList(dataOutMovedValue,
+          finalizer: malloc.nativeFree);
+      return output;
     }
-    malloc.free(outputData);
   }
 
   void dispose() {
