@@ -155,6 +155,21 @@ void WebviewWindow::bringToForeground(bool maximized) {
   }
 }
 
+void WebviewWindow::getPositionalParameters(std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> completer) {
+  RECT rc;
+  GetWindowRect(hwnd_.get(), &rc);
+
+  std::unique_ptr<WINDOWPLACEMENT> wp(new WINDOWPLACEMENT);
+  GetWindowPlacement(hwnd_.get(), wp.get());
+  std::map<flutter::EncodableValue, flutter::EncodableValue> m{
+    {"left", rc.left},
+    {"top", rc.top},
+    {"width", rc.right-rc.left},
+    {"height", rc.bottom-rc.top},
+    {"maximized", wp->showCmd==SW_MAXIMIZE}};
+  completer->Success(flutter::EncodableValue(m));
+}
+
 // static
 LRESULT CALLBACK
 WebviewWindow::WndProc(

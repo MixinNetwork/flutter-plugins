@@ -201,6 +201,13 @@ class WebviewImpl extends Webview {
   }
 
   @override
+  Future<Map<dynamic,dynamic>?> getPositionalParameters() async {
+    return await channel.invokeMethod("getPositionalParameters", {
+      "viewId": viewId,
+    });
+  }
+
+  @override
   Future<void> back() {
     return channel.invokeMethod("back", {"viewId": viewId});
   }
