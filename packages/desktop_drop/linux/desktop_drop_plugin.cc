@@ -5,7 +5,6 @@
 #include <sys/utsname.h>
 
 #include <cstring>
-#include <iostream>
 
 #define DESKTOP_DROP_PLUGIN(obj) \
   (G_TYPE_CHECK_INSTANCE_CAST((obj), desktop_drop_plugin_get_type(), \
