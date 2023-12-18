@@ -88,7 +88,9 @@ class DesktopKeepScreenOnLinux extends DesktopKeepScreenOnPlatform {
             await _inhibit(DbusApi.freedesktopScreenSaver);
           }
         } else {
-          for (final cookie in cookies) {
+          final toUnInhibit = cookies.toList();
+          cookies.clear();
+          for (final cookie in toUnInhibit) {
             await _unInhibit(cookie);
           }
         }

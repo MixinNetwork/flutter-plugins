@@ -1,6 +1,6 @@
 name: desktop_keep_screen_on
 description: A Flutter plugin to keep screen on for desktop.
-version: 0.0.2
+version: 0.0.3
 homepage: https://github.com/MixinNetwork/flutter-plugins
 
 environment:

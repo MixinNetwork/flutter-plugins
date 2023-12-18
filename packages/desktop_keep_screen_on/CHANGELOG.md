@@ -1,3 +1,7 @@
+## 0.0.3
+
+* fix un inhibit in Linux.
+
 ## 0.0.2
 
 * bump min flutter version to 3.0.0
