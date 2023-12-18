@@ -4,36 +4,32 @@ import 'package:flutter/painting.dart';
 abstract class DropEvent {
   Offset location;
 
-  DropEvent(this.location);
+  DropEvent({required this.location});
 
   @override
-  String toString() {
-    return '$runtimeType($location)';
-  }
+  String toString() => '$runtimeType($location)';
 }
 
 class DropEnterEvent extends DropEvent {
-  DropEnterEvent({required Offset location}) : super(location);
+  DropEnterEvent({required super.location});
 }
 
 class DropExitEvent extends DropEvent {
-  DropExitEvent({required Offset location}) : super(location);
+  DropExitEvent({required super.location});
 }
 
 class DropUpdateEvent extends DropEvent {
-  DropUpdateEvent({required Offset location}) : super(location);
+  DropUpdateEvent({required super.location});
 }
 
 class DropDoneEvent extends DropEvent {
   final List<XFile> files;
 
   DropDoneEvent({
-    required Offset location,
+    required super.location,
     required this.files,
-  }) : super(location);
+  });
 
   @override
-  String toString() {
-    return '$runtimeType($location, $files)';
-  }
+  String toString() => '$runtimeType($location, $files)';
 }
