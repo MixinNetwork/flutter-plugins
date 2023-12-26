@@ -48,6 +48,20 @@ class _ExampleDragTargetState extends State<ExampleDragTarget> {
 
   Offset? offset;
 
+  Future<void> printFiles(List<DropItem> files, [int depth = 0]) async {
+    debugPrint('  |' * depth);
+    for (final file in files) {
+      debugPrint('  |' * depth +
+          '> ${file.path} ${file.name}'
+              '  ${await file.lastModified()}'
+              '  ${await file.length()}'
+              '  ${file.mimeType}');
+      if (file is DropItemDirectory) {
+        printFiles(file.children, depth + 1);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return DropTarget(
@@ -57,12 +71,7 @@ class _ExampleDragTargetState extends State<ExampleDragTarget> {
         });
 
         debugPrint('onDragDone:');
-        for (final file in detail.files) {
-          debugPrint('  ${file.path} ${file.name}'
-              '  ${await file.lastModified()}'
-              '  ${await file.length()}'
-              '  ${file.mimeType}');
-        }
+        await printFiles(detail.files);
       },
       onDragUpdated: (details) {
         setState(() {

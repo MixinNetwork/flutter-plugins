@@ -1,11 +1,12 @@
 import 'dart:async';
-import 'dart:html' as html show window, Url;
+import 'dart:html' as html;
+import 'dart:js_util' as js_util;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_web_plugins/flutter_web_plugins.dart';
 
-import 'src/drop_item.dart';
+import 'src/web_drop_item.dart';
 
 /// A web implementation of the DesktopDrop plugin.
 class DesktopDropWeb {
@@ -25,38 +26,77 @@ class DesktopDropWeb {
     pluginInstance._registerEvents();
   }
 
+  Future<WebDropItem> _entryToWebDropItem(dynamic entry) async {
+    if (entry.isDirectory == true) {
+      final reader = js_util.callMethod(entry, 'createReader', []);
+      final entriesCompleter = Completer<List>();
+      final metadataCompleter = Completer();
+      entry.getMetadata((value) {
+        metadataCompleter.complete(value);
+      }, (error) {
+        metadataCompleter.completeError(error);
+      });
+      final metaData = await metadataCompleter.future;
+      reader.readEntries((values) {
+        entriesCompleter.complete(List.from(values));
+      }, (error) {
+        entriesCompleter.completeError(error);
+      });
+      final entries = await entriesCompleter.future;
+      final modificationTime = js_util.dartify(metaData.modificationTime);
+      final children = await Future.wait(
+        entries.map((e) => _entryToWebDropItem(e)),
+      )
+        ..removeWhere((element) => element.name == '.DS_Store' && element.type == '');
+      return WebDropItem(
+        uri: html.Url.createObjectUrlFromBlob(html.Blob([], 'directory')),
+        name: entry.name ?? '',
+        size: metaData.size ?? 0,
+        lastModified: modificationTime != null && modificationTime is DateTime
+            ? modificationTime
+            : DateTime.now(),
+        relativePath: entry.fullPath,
+        type: 'directory',
+        children: children,
+      );
+    }
+    final fileCompleter = Completer<html.File>();
+    entry.file((file) {
+      fileCompleter.complete(file);
+    }, (error) {
+      fileCompleter.completeError(error);
+    });
+    final file = await fileCompleter.future;
+    return WebDropItem(
+      uri: html.Url.createObjectUrl(file),
+      children: [],
+      name: file.name,
+      size: file.size,
+      type: file.type,
+      relativePath: file.relativePath,
+      lastModified: file.lastModified != null
+          ? DateTime.fromMillisecondsSinceEpoch(file.lastModified!)
+          : file.lastModifiedDate,
+    );
+  }
+
   void _registerEvents() {
     html.window.onDrop.listen((event) {
       event.preventDefault();
 
-      final results = <WebDropItem>[];
-
-      try {
-        final items = event.dataTransfer.files;
-        if (items != null) {
-          for (final item in items) {
-            results.add(
-              WebDropItem(
-                uri: html.Url.createObjectUrl(item),
-                name: item.name,
-                size: item.size,
-                type: item.type,
-                relativePath: item.relativePath,
-                lastModified: item.lastModified != null
-                    ? DateTime.fromMillisecondsSinceEpoch(item.lastModified!)
-                    : item.lastModifiedDate,
-              ),
-            );
-          }
-        }
-      } catch (e, s) {
-        debugPrint('desktop_drop_web: $e $s');
-      } finally {
+      final items = event.dataTransfer.items;
+      Future.wait(List.generate(items?.length ?? 0, (index) {
+        final item = items![index];
+        final entry = item.getAsEntry();
+        return _entryToWebDropItem(entry);
+      })).then((webItems) {
         channel.invokeMethod(
           "performOperation_web",
-          results.map((e) => e.toJson()).toList(),
+          webItems.map((e) => e.toJson()).toList(),
         );
-      }
+      }).catchError((e, s) {
+        debugPrint('desktop_drop_web: $e $s');
+      });
     });
 
     html.window.onDragEnter.listen((event) {

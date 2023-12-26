@@ -1,7 +1,7 @@
-import 'package:cross_file/cross_file.dart';
 import 'package:flutter/widgets.dart';
 
 import 'channel.dart';
+import 'drop_item.dart';
 import 'events.dart';
 import 'utils/platform.dart' if (dart.library.html) 'utils/platform_web.dart';
 
@@ -13,7 +13,7 @@ class DropDoneDetails {
     required this.globalPosition,
   });
 
-  final List<XFile> files;
+  final List<DropItem> files;
   final Offset localPosition;
   final Offset globalPosition;
 }
