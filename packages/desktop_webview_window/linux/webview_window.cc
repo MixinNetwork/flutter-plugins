@@ -254,7 +254,7 @@ void WebviewWindow::EvaluateJavaScript(const char *java_script, FlMethodCall *ca
   webkit_web_view_evaluate_javascript(
 #endif
       WEBKIT_WEB_VIEW(webview_), java_script,
-#ifndef !WEBKIT_OLD_USED
+#ifndef WEBKIT_OLD_USED
       -1, nullptr, nullptr,
 #endif
       nullptr,
