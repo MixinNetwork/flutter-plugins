@@ -7,7 +7,7 @@ Show a webview window on your flutter desktop application.
 |          |       |     |
 | -------- | ------- | ---- |
 | Windows  | ✅     | [Webview2](https://www.nuget.org/packages/Microsoft.Web.WebView2) 1.0.992.28 |
-| Linux    | ✅    |  [WebKitGTK-4.1](https://webkitgtk.org/reference/webkit2gtk/stable/index.html) |
+| Linux    | ✅    |  [WebKitGTK-4.1](https://webkitgtk.org/reference/webkit2gtk/stable/index.html) or [WebKitGTK-4.0](https://webkitgtk.org/reference/webkit2gtk/2.5.1/) |
 | macOS    | ✅     |  WKWebview |
 
 ## Getting Started
