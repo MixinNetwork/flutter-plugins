@@ -1,3 +1,7 @@
+## 0.2.4
+
+* Add backward compatibility with webkit2gtk-4.0 on Linux
+
 ## 0.2.3
 
 * fix macOS webview window size not working.
