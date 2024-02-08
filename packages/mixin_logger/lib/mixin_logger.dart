@@ -27,6 +27,8 @@ final _wtfPen = AnsiPen()..magenta();
 
 final _writeToFile = platform.WriteToFileImpl();
 
+void Function(String log)? onWriteToFile;
+
 extension _LogLevelExtension on _LogLevel {
   String get prefix {
     switch (this) {
@@ -141,6 +143,7 @@ void _print(String message, _LogLevel level) {
   final output = '${formatDateTime(DateTime.now())} ${level.prefix} $message';
   if (logToFile && !kIsWeb) {
     _writeToFile.writeLog(output);
+    onWriteToFile?.call(output);
   }
   if (kLogMode) {
     // ignore: avoid_print
