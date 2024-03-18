@@ -31,7 +31,9 @@ class WebDropItem {
                 .cast<Map>()
                 .map((e) => WebDropItem.fromJson(e.cast<String, dynamic>()))
                 .toList(),
-        data: json['data'] != null ? Uint8List.fromList(json['data']) : null,
+        data: json['data'] != null
+            ? Uint8List.fromList((json['data'] as List).cast<int>())
+            : null,
         name: json['name'],
         type: json['type'],
         size: json['size'],

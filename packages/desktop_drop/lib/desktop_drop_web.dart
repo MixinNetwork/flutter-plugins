@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:html' as html;
 import 'dart:js_util' as js_util;
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_web_plugins/flutter_web_plugins.dart';
+import 'package:mime/mime.dart';
 
 import 'src/web_drop_item.dart';
 
@@ -47,7 +49,8 @@ class DesktopDropWeb {
       final children = await Future.wait(
         entries.map((e) => _entryToWebDropItem(e)),
       )
-        ..removeWhere((element) => element.name == '.DS_Store' && element.type == '');
+        ..removeWhere(
+            (element) => element.name == '.DS_Store' && element.type == '');
       return WebDropItem(
         uri: html.Url.createObjectUrlFromBlob(html.Blob([], 'directory')),
         name: entry.name ?? '',
@@ -80,6 +83,11 @@ class DesktopDropWeb {
     );
   }
 
+  String _getMimeType(String text) {
+    final pattern = RegExp(r'^data:([^;]+);');
+    return pattern.firstMatch(text)?.group(1) ?? 'text/plain';
+  }
+
   void _registerEvents() {
     html.window.onDrop.listen((event) {
       event.preventDefault();
@@ -87,12 +95,32 @@ class DesktopDropWeb {
       final items = event.dataTransfer.items;
       Future.wait(List.generate(items?.length ?? 0, (index) {
         final item = items![index];
-        final entry = item.getAsEntry();
-        return _entryToWebDropItem(entry);
+        if (item.kind == 'file') {
+          final entry = item.getAsEntry();
+          return _entryToWebDropItem(entry);
+        }
+        if (item.kind == 'string' && item.type == 'text/uri-list') {
+          final data = event.dataTransfer.getData(item.type!);
+          final mime = _getMimeType(data);
+          return Future.value(
+            WebDropItem(
+              uri: data,
+              name: 'file.${extensionFromMime(mime)}',
+              type: mime,
+              data: base64Decode(data.split(';base64,')[1]),
+              size: 0,
+              relativePath: '',
+              lastModified: DateTime.now(),
+              children: [],
+            ),
+          );
+        }
+        // other types such as text/html
+        return Future.value(null);
       })).then((webItems) {
         channel.invokeMethod(
           "performOperation_web",
-          webItems.map((e) => e.toJson()).toList(),
+          webItems.whereType<WebDropItem>().map((e) => e.toJson()).toList(),
         );
       }).catchError((e, s) {
         debugPrint('desktop_drop_web: $e $s');
