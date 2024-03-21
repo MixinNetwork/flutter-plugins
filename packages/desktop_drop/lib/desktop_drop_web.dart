@@ -26,23 +26,12 @@ class DesktopDropWeb {
     pluginInstance._registerEvents();
   }
 
-  Future<WebDropItem> _entryToWebDropItem(dynamic entry) async {
+  Future<WebDropItem> _entryToWebDropItem(html.Entry entry) async {
     if (entry.isDirectory == true) {
-      final reader = js_util.callMethod(entry, 'createReader', []);
-      final entriesCompleter = Completer<List>();
-      final metadataCompleter = Completer();
-      entry.getMetadata((value) {
-        metadataCompleter.complete(value);
-      }, (error) {
-        metadataCompleter.completeError(error);
-      });
-      final metaData = await metadataCompleter.future;
-      reader.readEntries((values) {
-        entriesCompleter.complete(List.from(values));
-      }, (error) {
-        entriesCompleter.completeError(error);
-      });
-      final entries = await entriesCompleter.future;
+      entry = entry as html.DirectoryEntry;
+      final html.DirectoryReader reader = entry.createReader();
+      final metaData = await entry.getMetadata();
+      final entries = await reader.readEntries();
       final modificationTime = js_util.dartify(metaData.modificationTime);
       final children = await Future.wait(
         entries.map((e) => _entryToWebDropItem(e)),
@@ -60,13 +49,9 @@ class DesktopDropWeb {
         children: children,
       );
     }
-    final fileCompleter = Completer<html.File>();
-    entry.file((file) {
-      fileCompleter.complete(file);
-    }, (error) {
-      fileCompleter.completeError(error);
-    });
-    final file = await fileCompleter.future;
+    entry = entry as html.FileEntry;
+    final file = await entry.file();
+
     return WebDropItem(
       uri: html.Url.createObjectUrl(file),
       children: [],
