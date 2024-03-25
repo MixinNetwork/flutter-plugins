@@ -4,9 +4,6 @@
 #include <gtk/gtk.h>
 #include <sys/utsname.h>
 
-#include <cstring>
-#include <cctype>
-
 #define DESKTOP_DROP_PLUGIN(obj) \
   (G_TYPE_CHECK_INSTANCE_CAST((obj), desktop_drop_plugin_get_type(), \
                               DesktopDropPlugin))
@@ -71,12 +68,9 @@ static void desktop_drop_plugin_class_init(DesktopDropPluginClass *klass) {
 static void desktop_drop_plugin_init(DesktopDropPlugin *self) {
   const char * desktopEnv = std::getenv("XDG_CURRENT_DESKTOP");
   if (desktopEnv) {
-    char * lowercaseDesktopEnv = strdup(desktopEnv);
-    for (int i = 0; lowercaseDesktopEnv[i]; ++i) {
-      lowercaseDesktopEnv[i] = std::tolower(lowercaseDesktopEnv[i]);
-    }
+    const char * lowercaseDesktopEnv = g_ascii_strdown(desktopEnv, -1);
 
-    if (std::strcmp(lowercaseDesktopEnv, "kde") == 0 || std::strcmp(lowercaseDesktopEnv, "plasma") == 0) {
+    if (strcmp(lowercaseDesktopEnv, "kde") == 0 || strcmp(lowercaseDesktopEnv, "plasma") == 0) {
         isKDE = true;
     }
   }
