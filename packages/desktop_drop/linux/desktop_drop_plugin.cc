@@ -5,6 +5,7 @@
 #include <sys/utsname.h>
 
 #include <cstring>
+#include <cctype>
 
 #define DESKTOP_DROP_PLUGIN(obj) \
   (G_TYPE_CHECK_INSTANCE_CAST((obj), desktop_drop_plugin_get_type(), \
@@ -13,6 +14,9 @@
 struct _DesktopDropPlugin {
   GObject parent_instance;
 };
+
+static bool isKDE = false;
+static bool ignoreNext = false;
 
 G_DEFINE_TYPE(DesktopDropPlugin, desktop_drop_plugin, g_object_get_type())
 
@@ -31,6 +35,11 @@ void on_drag_data_received(GtkWidget *widget, GdkDragContext *drag_context,
 
 void on_drag_motion(GtkWidget *widget, GdkDragContext *drag_context,
                     gint x, gint y, guint time, gpointer user_data) {
+  if (ignoreNext) {
+    ignoreNext = false;
+    return;
+  }
+
   auto *channel = static_cast<FlMethodChannel *>(user_data);
   double point[] = {double(x), double(y)};
   g_autoptr(FlValue) args = fl_value_new_float_list(point, 2);
@@ -41,13 +50,6 @@ void on_drag_motion(GtkWidget *widget, GdkDragContext *drag_context,
 void on_drag_leave(GtkWidget *widget, GdkDragContext *drag_context, guint time, gpointer user_data) {
   auto *channel = static_cast<FlMethodChannel *>(user_data);
   fl_method_channel_invoke_method(channel, "exited", nullptr,
-                                  nullptr, nullptr, nullptr);
-}
-
-// This method will be redundant once GTK issue #5519 and KDE issue #464196 resolved.
-void on_focus_in_event(GtkWidget *widget, GdkEventFocus *event, gpointer user_data) {
-  auto *channel = static_cast<FlMethodChannel *>(user_data);
-  fl_method_channel_invoke_method(channel, "focusIn_linux", nullptr,
                                   nullptr, nullptr, nullptr);
 }
 
@@ -66,7 +68,26 @@ static void desktop_drop_plugin_class_init(DesktopDropPluginClass *klass) {
   G_OBJECT_CLASS(klass)->dispose = desktop_drop_plugin_dispose;
 }
 
-static void desktop_drop_plugin_init(DesktopDropPlugin *self) {}
+static void desktop_drop_plugin_init(DesktopDropPlugin *self) {
+  const char * desktopEnv = std::getenv("XDG_CURRENT_DESKTOP");
+  if (desktopEnv) {
+    char * lowercaseDesktopEnv = strdup(desktopEnv);
+    for (int i = 0; lowercaseDesktopEnv[i]; ++i) {
+      lowercaseDesktopEnv[i] = std::tolower(lowercaseDesktopEnv[i]);
+    }
+
+    if (std::strcmp(lowercaseDesktopEnv, "kde") == 0 || std::strcmp(lowercaseDesktopEnv, "plasma") == 0) {
+        isKDE = true;
+    }
+  }
+}
+
+static void on_focus_in_event(GtkWidget *widget, GdkEventFocus *event, gpointer user_data) {
+  if (isKDE) {
+    ignoreNext = true;
+  }
+  return;
+}
 
 static void method_call_cb(FlMethodChannel *channel, FlMethodCall *method_call,
                            gpointer user_data) {
@@ -100,10 +121,8 @@ void desktop_drop_plugin_register_with_registrar(FlPluginRegistrar *registrar) {
                    G_CALLBACK(on_drag_data_received), channel);
   g_signal_connect(GTK_WIDGET(fl_view), "drag-leave",
                    G_CALLBACK(on_drag_leave), channel);
-
-  g_signal_connect(G_OBJECT(fl_view), "focus-in-event",
-                   G_CALLBACK(on_focus_in_event), channel);
-
+  g_signal_connect(fl_view, "focus-in-event",
+                   G_CALLBACK(on_focus_in_event), nullptr);
 
   g_object_unref(plugin);
 }
