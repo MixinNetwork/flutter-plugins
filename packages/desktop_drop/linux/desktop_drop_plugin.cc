@@ -44,6 +44,13 @@ void on_drag_leave(GtkWidget *widget, GdkDragContext *drag_context, guint time, 
                                   nullptr, nullptr, nullptr);
 }
 
+// This method will be redundant once GTK issue #5519 and KDE issue #464196 resolved.
+void on_focus_in_event(GtkWidget *widget, GdkEventFocus *event, gpointer user_data) {
+  auto *channel = static_cast<FlMethodChannel *>(user_data);
+  fl_method_channel_invoke_method(channel, "focusIn_linux", nullptr,
+                                  nullptr, nullptr, nullptr);
+}
+
 // Called when a method call is received from Flutter.
 static void desktop_drop_plugin_handle_method_call(
     DesktopDropPlugin *self,
@@ -93,6 +100,10 @@ void desktop_drop_plugin_register_with_registrar(FlPluginRegistrar *registrar) {
                    G_CALLBACK(on_drag_data_received), channel);
   g_signal_connect(GTK_WIDGET(fl_view), "drag-leave",
                    G_CALLBACK(on_drag_leave), channel);
+
+  g_signal_connect(G_OBJECT(fl_view), "focus-in-event",
+                   G_CALLBACK(on_focus_in_event), channel);
+
 
   g_object_unref(plugin);
 }
