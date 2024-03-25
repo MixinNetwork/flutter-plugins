@@ -12,8 +12,8 @@ struct _DesktopDropPlugin {
   GObject parent_instance;
 };
 
-static bool isKDE = false;
-static bool ignoreNext = false;
+static gboolean isKDE = FALSE;
+static gboolean ignoreNext = FALSE;
 
 G_DEFINE_TYPE(DesktopDropPlugin, desktop_drop_plugin, g_object_get_type())
 
@@ -33,7 +33,7 @@ void on_drag_data_received(GtkWidget *widget, GdkDragContext *drag_context,
 void on_drag_motion(GtkWidget *widget, GdkDragContext *drag_context,
                     gint x, gint y, guint time, gpointer user_data) {
   if (ignoreNext) {
-    ignoreNext = false;
+    ignoreNext = FALSE;
     return;
   }
 
@@ -71,14 +71,14 @@ static void desktop_drop_plugin_init(DesktopDropPlugin *self) {
     const char * lowercaseDesktopEnv = g_ascii_strdown(desktopEnv, -1);
 
     if (strcmp(lowercaseDesktopEnv, "kde") == 0 || strcmp(lowercaseDesktopEnv, "plasma") == 0) {
-        isKDE = true;
+        isKDE = TRUE;
     }
   }
 }
 
 static void on_focus_in_event(GtkWidget *widget, GdkEventFocus *event, gpointer user_data) {
   if (isKDE) {
-    ignoreNext = true;
+    ignoreNext = TRUE;
   }
   return;
 }
