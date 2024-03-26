@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io' as io if (dart.library.html) 'dart:html';
 
 import 'package:desktop_drop/src/drop_item.dart';
 import 'package:flutter/services.dart';
@@ -24,10 +23,6 @@ class DesktopDrop {
 
   Offset? _offset;
 
-  bool isKDE = false;
-
-  bool ignoreNext = false;
-
   void init() {
     if (_inited) {
       return;
@@ -40,10 +35,6 @@ class DesktopDrop {
         debugPrint('_handleMethodChannel: $e $s');
       }
     });
-    if (Platform.isLinux) {
-      final deskEnv = io.Platform.environment['XDG_CURRENT_DESKTOP'].toString().toLowerCase();
-      isKDE = deskEnv == 'plasma' || deskEnv == 'kde';
-    }
   }
 
   Future<void> _handleMethodChannel(MethodCall call) async {
@@ -55,10 +46,6 @@ class DesktopDrop {
         break;
       case "updated":
         if (_offset == null && Platform.isLinux) {
-          if (ignoreNext) {
-            ignoreNext = false;
-            return;
-          }
           final position = (call.arguments as List).cast<double>();
           _offset = Offset(position[0], position[1]);
           _notifyEvent(DropEnterEvent(location: _offset!));
@@ -109,11 +96,6 @@ class DesktopDrop {
           DropDoneEvent(location: _offset ?? Offset.zero, files: results),
         );
         _offset = null;
-        break;
-      case "focusIn_linux":
-        if (isKDE) {
-          ignoreNext = true;
-        }
         break;
       default:
         throw UnimplementedError('${call.method} not implement.');
