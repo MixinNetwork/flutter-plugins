@@ -1,6 +1,7 @@
 import 'dart:async';
-import 'dart:html' as html;
-import 'dart:js_util' as js_util;
+
+import 'package:web/web.dart' as web;
+import 'dart:js_interop';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
@@ -26,68 +27,69 @@ class DesktopDropWeb {
     pluginInstance._registerEvents();
   }
 
-  Future<WebDropItem> _entryToWebDropItem(dynamic entry) async {
+  Future<WebDropItem> _entryToWebDropItem(web.FileSystemEntry entry) async {
     if (entry.isDirectory == true) {
-      final reader = js_util.callMethod(entry, 'createReader', []);
-      final entriesCompleter = Completer<List>();
-      final metadataCompleter = Completer();
-      entry.getMetadata((value) {
-        metadataCompleter.complete(value);
-      }, (error) {
-        metadataCompleter.completeError(error);
-      });
-      final metaData = await metadataCompleter.future;
-      reader.readEntries((values) {
-        entriesCompleter.complete(List.from(values));
-      }, (error) {
-        entriesCompleter.completeError(error);
-      });
-      final entries = await entriesCompleter.future;
-      final modificationTime = js_util.dartify(metaData.modificationTime);
+      entry = entry as web.FileSystemDirectoryEntry;
+      final web.FileSystemDirectoryReader reader = entry.createReader();
+      Completer entriesCompleter = Completer<List<dynamic>>();
+      entriesCallBack(JSArray<web.FileSystemEntry> sub) {
+        entriesCompleter.complete(sub.toDart);
+      }
+
+      reader.readEntries(entriesCallBack.toJS);
+
+      final List<dynamic> entries = await entriesCompleter.future;
+
       final children = await Future.wait(
         entries.map((e) => _entryToWebDropItem(e)),
       )
-        ..removeWhere((element) => element.name == '.DS_Store' && element.type == '');
+        ..removeWhere(
+            (element) => element.name == '.DS_Store' && element.type == '');
+
       return WebDropItem(
-        uri: html.Url.createObjectUrlFromBlob(html.Blob([], 'directory')),
-        name: entry.name ?? '',
-        size: metaData.size ?? 0,
-        lastModified: modificationTime != null && modificationTime is DateTime
-            ? modificationTime
-            : DateTime.now(),
+        uri: web.URL.createObjectURL(web.Blob().slice(0, 0, 'directory')),
+        name: entry.name,
+        size: 0,
+        lastModified: DateTime.now(),
         relativePath: entry.fullPath,
         type: 'directory',
         children: children,
       );
     }
-    final fileCompleter = Completer<html.File>();
-    entry.file((file) {
+
+    entry = entry as web.FileSystemFileEntry;
+
+    Completer fileCompleter = Completer<web.File>();
+
+    fileCallBack(web.File file) {
       fileCompleter.complete(file);
-    }, (error) {
-      fileCompleter.completeError(error);
-    });
-    final file = await fileCompleter.future;
+    }
+
+    entry.file(fileCallBack.toJS);
+
+    final web.File file = await fileCompleter.future;
+
     return WebDropItem(
-      uri: html.Url.createObjectUrl(file),
-      children: [],
+      uri: web.URL.createObjectURL(file),
       name: file.name,
       size: file.size,
+      lastModified: DateTime.fromMillisecondsSinceEpoch(file.lastModified),
+      relativePath: entry.fullPath,
       type: file.type,
-      relativePath: file.relativePath,
-      lastModified: file.lastModified != null
-          ? DateTime.fromMillisecondsSinceEpoch(file.lastModified!)
-          : file.lastModifiedDate,
+      children: [],
     );
+
   }
 
   void _registerEvents() {
-    html.window.onDrop.listen((event) {
+    web.window.ondrop = ((web.DragEvent event) {
       event.preventDefault();
 
-      final items = event.dataTransfer.items;
-      Future.wait(List.generate(items?.length ?? 0, (index) {
-        final item = items![index];
-        final entry = item.getAsEntry();
+      final items = event.dataTransfer!.items;
+
+      Future.wait(List.generate(items.length, (index) {
+        final item = items[index];
+        final entry = item.webkitGetAsEntry()!;
         return _entryToWebDropItem(entry);
       })).then((webItems) {
         channel.invokeMethod(
@@ -97,31 +99,31 @@ class DesktopDropWeb {
       }).catchError((e, s) {
         debugPrint('desktop_drop_web: $e $s');
       });
-    });
+    }.toJS);
 
-    html.window.onDragEnter.listen((event) {
+    web.window.ondragenter = ((web.DragEvent event) {
       event.preventDefault();
       channel.invokeMethod('entered', [
-        event.client.x.toDouble(),
-        event.client.y.toDouble(),
+        event.clientX.toDouble(),
+        event.clientY.toDouble(),
       ]);
-    });
+    }.toJS);
 
-    html.window.onDragOver.listen((event) {
+    web.window.ondragover = ((web.DragEvent event) {
       event.preventDefault();
       channel.invokeMethod('updated', [
-        event.client.x.toDouble(),
-        event.client.y.toDouble(),
+        event.clientX.toDouble(),
+        event.clientY.toDouble(),
       ]);
-    });
+    }.toJS);
 
-    html.window.onDragLeave.listen((event) {
+    web.window.ondragleave = ((web.DragEvent event) {
       event.preventDefault();
       channel.invokeMethod('exited', [
-        event.client.x.toDouble(),
-        event.client.y.toDouble(),
+        event.clientX.toDouble(),
+        event.clientY.toDouble(),
       ]);
-    });
+    }.toJS);
   }
 
   Future<dynamic> handleMethodCall(MethodCall call) async {
@@ -130,4 +132,8 @@ class DesktopDropWeb {
       details: 'desktop_drop for web doesn\'t implement \'${call.method}\'',
     );
   }
+}
+
+extension DataTransferItemListExt on web.DataTransferItemList {
+  external web.DataTransferItem operator [](int index);
 }
