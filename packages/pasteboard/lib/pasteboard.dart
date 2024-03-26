@@ -10,7 +10,7 @@ class Pasteboard {
   /// available on iOS, desktop and the web.
   static Future<Uint8List?> get image => pasteboard.image;
 
-  /// only available on Windows
+  /// only available on Windows and the web.
   /// Get "HTML format" from system pasteboard.
   /// HTML format: https://docs.microsoft.com/en-us/previous-versions/windows/internet-explorer/ie-developer/platform-apis/aa767917(v=vs.85)
   static Future<String?> get html => pasteboard.html;

@@ -4,13 +4,17 @@
 #include <flutter/plugin_registrar_windows.h>
 #include <flutter/standard_method_codec.h>
 
+
 #include <Windows.h>
 #include <ShlObj.h>
+#include <gdiplus.h>
 
 #include <map>
 #include <memory>
 
 #include "strconv.h"
+
+#pragma comment(lib, "GdiPlus")
 
 namespace {
 
@@ -129,6 +133,49 @@ PBITMAPINFO CreateBitmapInfoStruct(HBITMAP hBmp) {
   // device colors are important.
   pbmi->bmiHeader.biClrImportant = 0;
   return pbmi;
+}
+
+// The code was taken from this answer: https://stackoverflow.com/a/39201008/2134488
+//
+bool CopyImageToClipboard(const wchar_t* filename)
+{
+	//initialize Gdiplus once:
+	Gdiplus::GdiplusStartupInput gdiplusStartupInput;
+	ULONG_PTR gdiplusToken;
+	Gdiplus::GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, NULL);
+
+	bool result = false;
+	Gdiplus::Bitmap *gdibmp = Gdiplus::Bitmap::FromFile(filename);
+	if (gdibmp)
+	{
+		HBITMAP hbitmap;
+		gdibmp->GetHBITMAP(0, &hbitmap);
+		if (OpenClipboard(NULL))
+		{
+			EmptyClipboard();
+			DIBSECTION ds;
+			if (GetObject(hbitmap, sizeof(DIBSECTION), &ds))
+			{
+				HDC hdc = GetDC(HWND_DESKTOP);
+				//create compatible bitmap (get DDB from DIB)
+				HBITMAP hbitmap_ddb = CreateDIBitmap(hdc, &ds.dsBmih, CBM_INIT,
+					ds.dsBm.bmBits, (BITMAPINFO*)&ds.dsBmih, DIB_RGB_COLORS);
+				ReleaseDC(HWND_DESKTOP, hdc);
+				SetClipboardData(CF_BITMAP, hbitmap_ddb);
+				DeleteObject(hbitmap_ddb);
+				result = true;
+			}
+			CloseClipboard();
+		}
+
+		//cleanup:
+		DeleteObject(hbitmap);
+		delete gdibmp;
+	}
+
+	Gdiplus::GdiplusShutdown(gdiplusToken);
+
+	return result;
 }
 
 void CreateBMPFile(LPCTSTR pszFile, HBITMAP hBMP) {
@@ -431,6 +478,34 @@ void PasteboardPlugin::HandleMethodCall(
     SetClipboardData(CF_HDROP, storage.hGlobal);
 	result->Success();
   }
+  else if (method_call.method_name() == "writeImage") {
+
+
+  const auto* arguments = std::get_if<flutter::EncodableMap>(method_call.arguments());
+
+  std::string fileName;
+  if (arguments) {
+	  auto it = arguments->find(flutter::EncodableValue("fileName"));
+	  if (it != arguments->end()) {
+		  if (std::holds_alternative<std::string>(it->second)) {
+			  fileName = std::get<std::string>(it->second);
+		  }
+	  }
+  }
+
+  if (fileName.size() == 0) {
+	  result->Error("0", "File name is empty");
+	  return;
+  }
+  std::wstring wsFileName = cp_to_wide(fileName, CP_UTF8);
+
+  if (!CopyImageToClipboard(wsFileName.c_str())) {
+	  result->Error("0", "Failed to copy image to clipboard");
+	  return;
+  }
+
+  result->Success();
+}
   else if (method_call.method_name() == "html") {
 
   UINT CF_HTML = RegisterClipboardFormatA("HTML Format");
