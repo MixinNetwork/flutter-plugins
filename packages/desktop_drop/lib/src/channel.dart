@@ -37,6 +37,25 @@ class DesktopDrop {
     });
   }
 
+  Future<bool> startAccessingSecurityScopedResource(
+      {required Uint8List bookmark}) async {
+    Map<String, dynamic> resultMap = Map();
+    resultMap["apple-bookmark"] = bookmark;
+    final bool? result = await _channel.invokeMethod(
+        "startAccessingSecurityScopedResource", resultMap);
+    if (result == null) return false;
+    return result;
+  }
+
+  Future<bool> stopAccessingSecurityScopedResource(
+      {required Uint8List bookmark}) async {
+    Map<String, dynamic> resultMap = Map();
+    resultMap["apple-bookmark"] = bookmark;
+    final bool result = await _channel.invokeMethod(
+        "stopAccessingSecurityScopedResource", resultMap);
+    return result;
+  }
+
   Future<void> _handleMethodChannel(MethodCall call) async {
     switch (call.method) {
       case "entered":
@@ -69,10 +88,28 @@ class DesktopDrop {
         );
         _offset = null;
         break;
+      case "performOperation_macos":
+        // final paths = (call.arguments as List).cast<Map<String?, Object?>>();
+        final paths = call.arguments as List;
+        _notifyEvent(
+          DropDoneEvent(
+            location: _offset ?? Offset.zero,
+            files: paths
+                .map((e) => DropItemFile(
+                      e["path"] as String,
+                      extraAppleBookmark: e["apple-bookmark"] as Uint8List?,
+                    ))
+                .toList(),
+          ),
+        );
+        _offset = null;
+        break;
+
       case "performOperation_linux":
         // gtk notify 'exit' before 'performOperation'.
         final text = (call.arguments as List<dynamic>)[0] as String;
-        final offset = ((call.arguments as List<dynamic>)[1] as List<dynamic>).cast<double>();
+        final offset = ((call.arguments as List<dynamic>)[1] as List<dynamic>)
+            .cast<double>();
         final paths = const LineSplitter().convert(text).map((e) {
           try {
             return Uri.tryParse(e)?.toFilePath() ?? '';

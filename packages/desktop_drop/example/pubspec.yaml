@@ -3,8 +3,12 @@ description: Demonstrates how to use the desktop_drop plugin.
 
 publish_to: 'none'
 
+# environment:
+#   sdk: ">=2.12.0 <3.0.0"
+
 environment:
-  sdk: ">=2.12.0 <3.0.0"
+  sdk: ">=2.13.0 <3.0.0"
+  flutter: ">=1.20.0"
 
 dependencies:
   flutter:
@@ -14,6 +18,7 @@ dependencies:
     path: ../
   cross_file: ^0.3.2
   cupertino_icons: ^1.0.2
+  shared_preferences: ^2.2.3 
 
 dev_dependencies:
   flutter_test:

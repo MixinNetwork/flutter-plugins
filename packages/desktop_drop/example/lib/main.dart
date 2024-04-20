@@ -1,6 +1,11 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:desktop_drop/desktop_drop.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:cross_file/cross_file.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   runApp(const MyApp());
@@ -8,6 +13,49 @@ void main() {
 
 class MyApp extends StatelessWidget {
   const MyApp({Key? key}) : super(key: key);
+
+  void loadFile(BuildContext context, bool bookmarkEnable) async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    String? jsonStr = prefs.getString("apple-bookmark");
+    if (jsonStr == null) return;
+    print(jsonStr);
+    Map<String, dynamic> data = json.decode(jsonStr);
+    String path = data["path"]! as String;
+    String appleBookmarkStr = data["apple-bookmark"]! as String;
+    Uint8List appleBookmark = base64.decode(appleBookmarkStr);
+
+    // var file = XFile(path);
+    // var fileSize = await file.length();
+
+    try {
+      if (bookmarkEnable) {
+        bool grantedPermission = await DesktopDrop.instance
+            .startAccessingSecurityScopedResource(bookmark: appleBookmark);
+
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(
+          "file permission :" + grantedPermission.toString(),
+        )));
+      }
+
+      var file = File('$path');
+
+      var contents = await file.readAsBytes();
+      var fileSize = contents.length;
+
+      if (bookmarkEnable) {
+        await DesktopDrop.instance
+            .stopAccessingSecurityScopedResource(bookmark: appleBookmark);
+      }
+
+      final snackBar =
+          SnackBar(content: Text('file size:' + fileSize.toString()));
+      ScaffoldMessenger.of(context).showSnackBar(snackBar);
+    } catch (e) {
+      final snackBar = SnackBar(content: Text('error:' + e.toString()));
+      ScaffoldMessenger.of(context).showSnackBar(snackBar);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -20,13 +68,41 @@ class MyApp extends StatelessWidget {
           direction: Axis.horizontal,
           runSpacing: 8,
           spacing: 8,
-          children: const [
+          children: [
             ExampleDragTarget(),
             ExampleDragTarget(),
             ExampleDragTarget(),
             ExampleDragTarget(),
             ExampleDragTarget(),
             ExampleDragTarget(),
+            if (Platform.isMacOS)
+              StatefulBuilder(builder: (context, setState) {
+                return Column(
+                  children: [
+                    Text(
+                      "Test Apple Bookmark\n1 drag file \n2 save the bookmark,\n3 restart app\n4 choice test button",
+                    ),
+                    TextButton(
+                      onPressed: () async {
+                        loadFile(context, true);
+                        return;
+                      },
+                      child: Text(
+                        "with applemark, suc",
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () async {
+                        loadFile(context, false);
+                        return;
+                      },
+                      child: Text(
+                        "without applemark, err",
+                      ),
+                    ),
+                  ],
+                );
+              }),
           ],
         ),
       ),
@@ -43,6 +119,7 @@ class ExampleDragTarget extends StatefulWidget {
 
 class _ExampleDragTargetState extends State<ExampleDragTarget> {
   final List<XFile> _list = [];
+  final List<DropItem> drop_files = [];
 
   bool _dragging = false;
 
@@ -68,6 +145,7 @@ class _ExampleDragTargetState extends State<ExampleDragTarget> {
       onDragDone: (detail) async {
         setState(() {
           _list.addAll(detail.files);
+          drop_files.addAll(detail.files);
         });
 
         debugPrint('onDragDone:');
@@ -97,7 +175,7 @@ class _ExampleDragTargetState extends State<ExampleDragTarget> {
         child: Stack(
           children: [
             if (_list.isEmpty)
-              const Center(child: Text("Drop here"))
+              Center(child: Text("Drop here"))
             else
               Text(_list.map((e) => e.path).join("\n")),
             if (offset != null)
@@ -106,6 +184,34 @@ class _ExampleDragTargetState extends State<ExampleDragTarget> {
                 child: Text(
                   '$offset',
                   style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+            if (!_list.isEmpty && Platform.isMacOS)
+              Align(
+                alignment: Alignment.bottomRight,
+                child: TextButton(
+                  onPressed: () async {
+                    Map<String, String> data = Map();
+                    data["path"] = drop_files[0].path;
+
+                    String bookmark =
+                        base64.encode(drop_files[0].extraAppleBookmark!);
+                    data["apple-bookmark"] = bookmark;
+
+                    String jsonStr = json.encode(data);
+                    print(jsonStr);
+                    final SharedPreferences prefs =
+                        await SharedPreferences.getInstance();
+                    prefs.setString("apple-bookmark", jsonStr);
+
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text(
+                            'Save Suc, restart app, and Test Apple Bookmark')));
+                  },
+                  child: Text(
+                    'save bookmark',
+                    style: TextStyle(fontSize: 14),
+                  ),
                 ),
               )
           ],
