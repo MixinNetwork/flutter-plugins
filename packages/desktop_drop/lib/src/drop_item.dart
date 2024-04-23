@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:cross_file/cross_file.dart';
 
 abstract class DropItem extends XFile {
+  Uint8List? extraAppleBookmark;
   DropItem(
     String path, {
     String? mimeType,
@@ -10,6 +11,7 @@ abstract class DropItem extends XFile {
     int? length,
     Uint8List? bytes,
     DateTime? lastModified,
+    this.extraAppleBookmark,
   }) : super(path,
             mimeType: mimeType,
             name: name,
@@ -42,6 +44,7 @@ class DropItemFile extends DropItem {
     int? length,
     Uint8List? bytes,
     DateTime? lastModified,
+    Uint8List? extraAppleBookmark,
   }) : super(
           path,
           mimeType: mimeType,
@@ -49,6 +52,7 @@ class DropItemFile extends DropItem {
           length: length,
           bytes: bytes,
           lastModified: lastModified,
+          extraAppleBookmark: extraAppleBookmark,
         );
 
   DropItemFile.fromData(

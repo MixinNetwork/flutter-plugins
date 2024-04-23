@@ -24,8 +24,11 @@ public class DesktopDropPlugin: NSObject, FlutterPlugin {
     guard let vc = findFlutterViewController(flutterWindow.contentViewController) else { return }
 
     let channel = FlutterMethodChannel(name: "desktop_drop", binaryMessenger: registrar.messenger)
-    let instance = DesktopDropPlugin()
 
+    let instance = DesktopDropPlugin()
+      
+      channel.setMethodCallHandler(instance.handle(_:result:))
+      
     let d = DropTarget(frame: vc.view.bounds, channel: channel)
     d.autoresizingMask = [.width, .height]
 
@@ -37,9 +40,38 @@ public class DesktopDropPlugin: NSObject, FlutterPlugin {
     registrar.addMethodCallDelegate(instance, channel: channel)
   }
 
-  public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
-    result(FlutterMethodNotImplemented)
+    public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult){
+ 
+      if call.method ==  "startAccessingSecurityScopedResource"{
+            let map = call.arguments as! NSDictionary 
+            var isStale: Bool = false
+
+          let bookmarkByte = map["apple-bookmark"] as! FlutterStandardTypedData
+          let bookmark = bookmarkByte.data
+            
+            let url = try? URL(resolvingBookmarkData: bookmark, bookmarkDataIsStale: &isStale)
+            let suc = url?.startAccessingSecurityScopedResource()
+            result(suc) 
+            return
+      }
+
+      if call.method ==  "stopAccessingSecurityScopedResource"{
+            let map = call.arguments as! NSDictionary 
+            var isStale: Bool = false 
+          let bookmarkByte = map["apple-bookmark"] as! FlutterStandardTypedData
+          let bookmark = bookmarkByte.data
+            let url = try? URL(resolvingBookmarkData: bookmark, bookmarkDataIsStale: &isStale)
+            url?.stopAccessingSecurityScopedResource()
+            result(true)
+            return
+      }
+
+      Swift.print("method not found: \(call.method)")
+      result(FlutterMethodNotImplemented)
+      return
   }
+
+   
 }
 
 class DropTarget: NSView {
@@ -82,8 +114,8 @@ class DropTarget: NSView {
     return providerQueue
   }()
 
-  override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
-    var urls = [String]()
+  override func performDragOperation(_ sender: NSDraggingInfo) -> Bool { 
+    var items: [[String: Any?]] = [];
 
     let searchOptions: [NSPasteboard.ReadingOptionKey: Any] = [
       .urlReadingFileURLsOnly: true,
@@ -100,18 +132,27 @@ class DropTarget: NSView {
           if let error = error {
             debugPrint("error: \(error)")
           } else {
-            urls.append(fileURL.path)
+              let data = try? fileURL.bookmarkData()
+          items.append([
+            "path":fileURL.path,
+            "apple-bookmark": data,
+          ])
           }
           group.leave()
         }
       case let fileURL as URL:
-        urls.append(fileURL.path)
+          let data = try? fileURL.bookmarkData()
+          
+        items.append([
+          "path":fileURL.path,
+          "apple-bookmark": data,
+        ])
       default: break
       }
     }
 
     group.notify(queue: .main) {
-      self.channel.invokeMethod("performOperation", arguments: urls)
+      self.channel.invokeMethod("performOperation_macos", arguments: items)
     }
     return true
   }
