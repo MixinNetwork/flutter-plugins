@@ -34,7 +34,7 @@ window
 
 ### Invoke remote window method.
 
-The windows run on different flutter engine. So we need use `DesktopMultiWindow.invokeMethod`
+The windows run on different flutter engine. So we need use `DesktopMultiWindow.setMethodCallHandler`
 and `DesktopMultiWindow.invokeMethod` to handle method calls between windows.
 
 ```
