@@ -129,14 +129,14 @@ void MultiWindowManager::Center(int64_t id) {
   }
 }
 
-std::vector<int64_t> MultiWindowManager::GetAllSubWindowIds() {
-  std::vector<int64_t> ids;
+flutter::EncodableList MultiWindowManager::GetAllSubWindowIds() {
+  flutter::EncodableList resList = flutter::EncodableList();
   for (auto &window : windows_) {
     if (window.first != 0) {
-      ids.push_back(window.first);
+      resList.push_back(flutter::EncodableValue(window.first));
     }
   }
-  return ids;
+  return resList;
 }
 
 void MultiWindowManager::OnWindowClose(int64_t id) {
