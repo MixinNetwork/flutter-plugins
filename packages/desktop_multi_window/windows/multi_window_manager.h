@@ -35,7 +35,7 @@ class MultiWindowManager : public std::enable_shared_from_this<MultiWindowManage
 
   void SetTitle(int64_t id, const std::string &title);
 
-  std::vector<int64_t> GetAllSubWindowIds();
+  flutter::EncodableList GetAllSubWindowIds();
 
   void OnWindowClose(int64_t id) override;
 
