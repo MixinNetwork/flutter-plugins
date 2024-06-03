@@ -1,6 +1,5 @@
 import 'dart:io';
-import 'dart:typed_data';
-import 'package:path/path.dart' as Path;
+import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
 
 import 'package:flutter/foundation.dart';
@@ -93,7 +92,7 @@ String GetTempFileName() {
   var uuid = Uuid();
 
   while (true) {
-    tempFileName = Path.join(dir.path, uuid.v1().toString());
+    tempFileName = p.join(dir.path, uuid.v1().toString());
     if (!File(tempFileName).existsSync()) {
       break;
     }
