@@ -8,6 +8,10 @@
 
 #include "message_channel_plugin.h"
 
+#if WEBKIT_MAJOR_VERSION < 2 || (WEBKIT_MAJOR_VERSION == 2 && WEBKIT_MINOR_VERSION < 40)
+#define WEBKIT_OLD_USED
+#endif
+
 namespace
 {
 
