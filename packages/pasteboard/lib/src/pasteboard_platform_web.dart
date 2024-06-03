@@ -1,34 +1,14 @@
-// ignore_for_file: avoid_web_libraries_in_flutter, depend_on_referenced_packages
+import 'dart:js_interop';
 
-import 'dart:html';
-import 'dart:js_util';
-import 'dart:typed_data';
-
+import 'package:web/web.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
-import 'package:js/js.dart';
 
 import 'pasteboard_platform.dart';
-
-@JS('navigator.clipboard.read')
-external List<ClipboardItem> _readClipboard();
-
-@JS('navigator.clipboard.write')
-external void _writeClipboard(List<ClipboardItem> data);
-
-@JS('ClipboardItem')
-class ClipboardItem {
-  external ClipboardItem(dynamic data);
-
-  external List<String> get types;
-
-  external Blob getType(String type);
-}
 
 Future<String?> _readBlobAsText(Blob blob) async {
   final FileReader reader = FileReader();
   final future =
-      reader.onLoad.first.then((ProgressEvent event) => reader.result);
+      reader.onLoadEnd.first.then((ProgressEvent event) => reader.result);
 
   reader.readAsText(blob);
 
@@ -36,15 +16,13 @@ Future<String?> _readBlobAsText(Blob blob) async {
   return res.toString();
 }
 
-Future<Uint8List?> _readBlobAsArrayBuffer(Blob blob) async {
-  final FileReader reader = FileReader();
-  final future =
-      reader.onLoad.first.then((ProgressEvent event) => reader.result);
+Clipboard get _clipboard => window.navigator.clipboard;
 
-  reader.readAsArrayBuffer(blob);
-
-  final res = await future;
-  return res as Uint8List?;
+extension on Blob {
+  Future<Uint8List?> _readAsUint8List() async {
+    final buffer = await arrayBuffer().toDart;
+    return buffer.toDart.asUint8List();
+  }
 }
 
 const PasteboardPlatform pasteboard = PasteboardPlatformWeb();
@@ -58,12 +36,10 @@ class PasteboardPlatformWeb implements PasteboardPlatform {
   @override
   Future<String?> get html async {
     try {
-      final clipboardItems =
-          await promiseToFuture(_readClipboard()) as List<dynamic>;
-      for (var clipboardItem in clipboardItems.cast<ClipboardItem>()) {
-        if (clipboardItem.types.contains('text/html')) {
-          final Blob blob =
-              await promiseToFuture(clipboardItem.getType('text/html'));
+      final clipboardItems = await _clipboard.read().toDart;
+      for (var clipboardItem in clipboardItems.toDart) {
+        if (clipboardItem.types.toDart.contains('text/html'.toJS)) {
+          final blob = await clipboardItem.getType('text/html').toDart;
           return _readBlobAsText(blob);
         }
       }
@@ -76,16 +52,17 @@ class PasteboardPlatformWeb implements PasteboardPlatform {
   @override
   Future<Uint8List?> get image async {
     try {
-      final clipboardItems =
-          await promiseToFuture(_readClipboard()) as List<dynamic>;
-      for (var clipboardItem in clipboardItems.cast<ClipboardItem>()) {
-        if (clipboardItem.types.contains('image/png')) {
-          final Blob blob =
-              await promiseToFuture(clipboardItem.getType('image/png'));
-          return _readBlobAsArrayBuffer(blob);
+      final clipboardItems = await _clipboard.read().toDart;
+      for (var item in clipboardItems.toDart) {
+        for (var type in item.types.toDart) {
+          if (type.toDart.startsWith('image/')) {
+            final blob = await item.getType(type.toDart).toDart;
+            return blob._readAsUint8List();
+          }
         }
       }
-    } catch (e) {
+    } catch (error, stacktrace) {
+      debugPrint('get image failed: $error $stacktrace');
       return null;
     }
     return null;
@@ -100,10 +77,10 @@ class PasteboardPlatformWeb implements PasteboardPlatform {
       return;
     }
     try {
-      final blob = Blob([image], 'image/png');
-      _writeClipboard([
-        ClipboardItem(jsify({'image/png': blob}))
-      ]);
+      final blob = Blob([image.toJS].toJS, BlobPropertyBag(type: 'image/png'));
+      window.navigator.clipboard.write([
+        ClipboardItem({'image/png': blob}.jsify()! as JSObject)
+      ].toJS);
     } catch (e) {
       debugPrint('Error writing image to clipboard: $e');
       return;
@@ -112,8 +89,8 @@ class PasteboardPlatformWeb implements PasteboardPlatform {
 
   @override
   Future<String?> get text async {
-    final data = await Clipboard.getData(Clipboard.kTextPlain);
-    return data?.text;
+    final data = await _clipboard.readText().toDart;
+    return data.toDart;
   }
 
   @override
@@ -126,7 +103,7 @@ class PasteboardPlatformWeb implements PasteboardPlatform {
   }
 }
 
-void _select(TextAreaElement element) {
+void _select(HTMLTextAreaElement element) {
   final isReadOnly = element.hasAttribute('readonly');
 
   if (!isReadOnly) {
@@ -135,7 +112,7 @@ void _select(TextAreaElement element) {
 
   element
     ..select()
-    ..setSelectionRange(0, element.value?.length ?? 0);
+    ..setSelectionRange(0, element.value.length);
 
   if (!isReadOnly) {
     element.removeAttribute('readonly');
@@ -143,9 +120,9 @@ void _select(TextAreaElement element) {
 }
 
 /// https://github.com/zenorocha/clipboard.js/blob/master/src/common/create-fake-element.js
-TextAreaElement _createCopyFakeElement(String value) {
+HTMLTextAreaElement _createCopyFakeElement(String value) {
   final isRtl = document.documentElement?.getAttribute('dir') == 'rtl';
-  final fakeElement = TextAreaElement()
+  final fakeElement = HTMLTextAreaElement()
     // Prevent zooming on iOS
     ..style.fontSize = '12pt'
     // Reset box model
@@ -156,8 +133,8 @@ TextAreaElement _createCopyFakeElement(String value) {
     ..style.setProperty(isRtl ? 'right' : 'left', '-9999px');
 
   // Move element to the same position vertically
-  final yPosition =
-      window.pageYOffset | (document.documentElement?.scrollTop ?? 0);
+  final yPosition = window.pageYOffset.toInt() |
+      (document.documentElement?.scrollTop.toInt() ?? 0);
   fakeElement
     ..style.top = '${yPosition}px'
     ..setAttribute('readonly', '')
