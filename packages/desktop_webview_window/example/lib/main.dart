@@ -141,6 +141,10 @@ class _MyAppState extends State<MyApp> {
       try {
         final cookies = await webview.getAllCookies();
 
+        if (cookies.isEmpty) {
+          debugPrint('no cookies');
+        }
+
         for (final cookie in cookies) {
           debugPrint('cookie: $cookie');
         }

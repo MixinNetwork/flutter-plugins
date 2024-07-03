@@ -2,13 +2,13 @@
 // Created by yangbin on 2021/11/11.
 //
 
-#include <windows.h>
-
 #include "utils.h"
+
+#include <windows.h>
 
 #include <memory>
 #include <set>
-
+#include <string>
 
 namespace webview_window {
 
@@ -55,7 +55,8 @@ void ClipOrCenterWindowToMonitor(HWND hwnd, UINT flags) {
   RECT rc;
   GetWindowRect(hwnd, &rc);
   ClipOrCenterRectToMonitor(&rc, flags);
-  SetWindowPos(hwnd, nullptr, rc.left, rc.top, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+  SetWindowPos(hwnd, nullptr, rc.left, rc.top, 0, 0,
+               SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
 bool SetWindowBackgroundTransparent(HWND hwnd) {
@@ -77,9 +78,8 @@ const wchar_t *RegisterWindowClass(LPCWSTR class_name, WNDPROC wnd_proc) {
     window_class.cbClsExtra = 0;
     window_class.cbWndExtra = 0;
     window_class.hInstance = GetModuleHandle(nullptr);
-    window_class.hIcon =
-        LoadIcon(window_class.hInstance, IDI_APPLICATION);
-    window_class.hbrBackground = (HBRUSH) (COLOR_WINDOW + 1);
+    window_class.hIcon = LoadIcon(window_class.hInstance, IDI_APPLICATION);
+    window_class.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
     window_class.lpszMenuName = nullptr;
     window_class.lpfnWndProc = wnd_proc;
     RegisterClass(&window_class);
@@ -94,6 +94,16 @@ void UnregisterWindowClass(LPCWSTR class_name) {
   }
   class_registered_->erase(class_name);
   UnregisterClass(class_name, nullptr);
+}
+
+std::string ConvertLPCWSTRToString(LPCWSTR lpcwszStr) {
+  int strLength = WideCharToMultiByte(CP_UTF8, 0, lpcwszStr, -1, nullptr, 0,
+                                      nullptr, nullptr);
+  std::string str(strLength, 0);
+
+  WideCharToMultiByte(CP_UTF8, 0, lpcwszStr, -1, &str[0], strLength, nullptr,
+                      nullptr);
+  return str;
 }
 
 }  // namespace webview_window

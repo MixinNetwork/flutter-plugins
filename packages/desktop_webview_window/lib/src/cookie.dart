@@ -1,9 +1,11 @@
+import 'package:flutter/widgets.dart';
+
 class WebviewCookie {
   final String name;
   final String value;
   final String domain;
   final String path;
-  final DateTime expires;
+  final DateTime? expires;
   final bool secure;
   final bool httpOnly;
   final bool sessionOnly;
@@ -20,11 +22,16 @@ class WebviewCookie {
   });
 
   factory WebviewCookie.fromJson(Map<String, dynamic> json) {
+    debugPrint('WebviewCookie.fromJson: $json');
     return WebviewCookie(
       name: json['name'],
       value: json['value'],
       domain: json['domain'],
-      expires: DateTime.parse(json['expires']),
+      expires: json['expires'] == null
+          ? null
+          : DateTime.fromMillisecondsSinceEpoch(
+              ((json['expires'] as num) * 1000).toInt(),
+            ),
       httpOnly: json['httpOnly'],
       path: json['path'],
       secure: json['secure'],

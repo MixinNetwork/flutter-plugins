@@ -49,6 +49,8 @@ class WebView {
 
   void Stop();
 
+  void GetAllCookies(std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> completer);
+
   void openDevToolsWindow();
 
   void ExecuteJavaScript(const std::wstring &javaScript,
