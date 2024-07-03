@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:desktop_webview_window/src/cookie.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
@@ -61,7 +62,7 @@ class WebviewImpl extends Webview {
   }
 
   bool notifyUrlChanged(String url) {
-    if(_onUrlRequestCallback != null) {
+    if (_onUrlRequestCallback != null) {
       return _onUrlRequestCallback!(url);
     } else {
       return true;
@@ -123,7 +124,7 @@ class WebviewImpl extends Webview {
   }
 
   @override
-  void launch(String url, {bool triggerOnUrlRequestEvent=true}) async {
+  void launch(String url, {bool triggerOnUrlRequestEvent = true}) async {
     await channel.invokeMethod("launch", {
       "url": url,
       "viewId": viewId,
@@ -201,7 +202,7 @@ class WebviewImpl extends Webview {
   }
 
   @override
-  Future<Map<dynamic,dynamic>?> getPositionalParameters() async {
+  Future<Map<dynamic, dynamic>?> getPositionalParameters() async {
     return await channel.invokeMethod("getPositionalParameters", {
       "viewId": viewId,
     });
@@ -243,7 +244,8 @@ class WebviewImpl extends Webview {
   }
 
   @override
-  void removeOnWebMessageReceivedCallback(OnWebMessageReceivedCallback callback) {
+  void removeOnWebMessageReceivedCallback(
+      OnWebMessageReceivedCallback callback) {
     _onWebMessageReceivedCallbacks.remove(callback);
   }
 
@@ -281,5 +283,17 @@ class WebviewImpl extends Webview {
       "viewId": viewId,
       "webMessage": webMessage,
     });
+  }
+
+  @override
+  Future<List<WebviewCookie>> getAllCookies() async {
+    final result = await channel.invokeListMethod<Map>("getAllCookies", {
+      "viewId": viewId,
+    });
+
+    return result
+            ?.map((e) => WebviewCookie.fromJson(e.cast<String, dynamic>()))
+            .toList() ??
+        [];
   }
 }

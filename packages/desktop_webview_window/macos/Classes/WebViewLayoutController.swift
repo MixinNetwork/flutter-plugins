@@ -182,6 +182,28 @@ class WebViewLayoutController: NSViewController {
     }
   }
 
+  func getAllCookies(completer: @escaping FlutterResult) {
+    self.webView.configuration.websiteDataStore.httpCookieStore.getAllCookies{
+      cookies in
+
+      var cookieDict = [[String: Any]]()
+      for cookie in cookies {
+        cookieDict.append([
+          "name": cookie.name,
+          "value": cookie.value,
+          "domain": cookie.domain,
+          "path": cookie.path,
+          "expiresDate": cookie.expiresDate?.timeIntervalSince1970 ?? NSNull(),
+          "isSecure": cookie.isSecure,
+          "isHTTPOnly": cookie.isHTTPOnly,
+          "isSessionOnly": cookie.isSessionOnly,
+        ])
+      }
+
+      completer(cookieDict)
+    }
+  }
+
   deinit {
     #if DEBUG
       print("\(self) deinited")

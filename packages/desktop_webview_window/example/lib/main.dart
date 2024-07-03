@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:desktop_webview_window/desktop_webview_window.dart';
@@ -63,6 +64,7 @@ class _MyAppState extends State<MyApp> {
                     userDataFolderWindows: await _getWebViewPath(),
                   ),
                 );
+
                 webview
                   ..registerJavaScriptMessageHandler("test", (name, body) {
                     debugPrint('on javaScipt message: $name $body');
@@ -134,6 +136,20 @@ class _MyAppState extends State<MyApp> {
         titleBarTopPadding: Platform.isMacOS ? 20 : 0,
       ),
     );
+
+    Timer.periodic(const Duration(seconds: 1), (timer) async {
+      try {
+        final cookies = await webview.getAllCookies();
+
+        for (final cookie in cookies) {
+          debugPrint('cookie: $cookie');
+        }
+      } catch (e, stack) {
+        debugPrint('getAllCookies error: $e');
+        debugPrintStack(stackTrace: stack);
+      }
+    });
+
     webview
       ..setBrightness(Brightness.dark)
       ..setApplicationNameForUserAgent(" WebviewExample/1.0.0")
