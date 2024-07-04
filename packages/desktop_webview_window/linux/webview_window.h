@@ -7,20 +7,18 @@
 
 #include <flutter_linux/flutter_linux.h>
 #include <gtk/gtk.h>
+#include <libsoup/soup.h>
 #include <webkit2/webkit2.h>
-#include <functional>
 
+#include <functional>
 #include <string>
 
 class WebviewWindow {
  public:
-  WebviewWindow(
-      FlMethodChannel *method_channel,
-      int64_t window_id,
-      std::function<void()> on_close_callback,
-      const std::string &title, int width, int height,
-      int title_bar_height
-  );
+  WebviewWindow(FlMethodChannel *method_channel, int64_t window_id,
+                std::function<void()> on_close_callback,
+                const std::string &title, int width, int height,
+                int title_bar_height);
 
   virtual ~WebviewWindow();
 
@@ -42,10 +40,12 @@ class WebviewWindow {
 
   void StopLoading();
 
+  void GetAllCookies(FlValue **data);
+
   gboolean DecidePolicy(WebKitPolicyDecision *decision,
                         WebKitPolicyDecisionType type);
 
-  void EvaluateJavaScript(const char *java_script, FlMethodCall* call);
+  void EvaluateJavaScript(const char *java_script, FlMethodCall *call);
 
  private:
   FlMethodChannel *method_channel_;
@@ -57,7 +57,8 @@ class WebviewWindow {
   GtkWidget *window_ = nullptr;
   GtkWidget *webview_ = nullptr;
   GtkBox *box_ = nullptr;
-
+  static void cookies_got_callback(GObject *source_object, GAsyncResult *result,
+                                   gpointer user_data);
 };
 
-#endif //WEBVIEW_WINDOW_LINUX_WEBVIEW_WINDOW_H_
+#endif  // WEBVIEW_WINDOW_LINUX_WEBVIEW_WINDOW_H_
