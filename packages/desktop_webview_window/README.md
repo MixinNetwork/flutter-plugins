@@ -39,8 +39,14 @@ Show a webview window on your flutter desktop application.
 
 ## linux requirement
 
+In Ubuntu/Debian:
 ```shell
-sudo apt-get install webkit2gtk4.1
+sudo apt-get install libwebkit2gtk-4.1-0 libwebkit2gtk-4.1-dev libsoup-3.0-0 libsoup-3.0-dev
+```
+
+In Fedora/RPM:
+```shell
+sudo dnf install webkit2gtk4.1 webkit2gtk4.1-devel libsoup3 libsoup3-devel
 ```
 
 ## Windows
