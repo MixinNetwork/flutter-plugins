@@ -137,16 +137,16 @@ class _MyAppState extends State<MyApp> {
       ),
     );
 
-    Timer.periodic(const Duration(seconds: 1), (timer) async {
+    final timer = Timer.periodic(const Duration(seconds: 1), (timer) async {
       try {
         final cookies = await webview.getAllCookies();
 
         if (cookies.isEmpty) {
-          debugPrint('no cookies');
+          debugPrint('⚠️ no cookies found');
         }
 
         for (final cookie in cookies) {
-          debugPrint('cookie: $cookie');
+          debugPrint('cookie: ${cookie.toJson()}');
         }
       } catch (e, stack) {
         debugPrint('getAllCookies error: $e');
@@ -168,8 +168,10 @@ class _MyAppState extends State<MyApp> {
         // grant navigation request
         return true;
       })
+      ..openDevToolsWindow()
       ..onClose.whenComplete(() {
         debugPrint("on close");
+        timer.cancel();
       });
     await Future.delayed(const Duration(seconds: 2));
     for (final javaScript in _javaScriptToEval) {

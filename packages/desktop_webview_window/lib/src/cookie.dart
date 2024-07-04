@@ -1,5 +1,3 @@
-import 'package:flutter/widgets.dart';
-
 class WebviewCookie {
   final String name;
   final String value;
@@ -22,7 +20,6 @@ class WebviewCookie {
   });
 
   factory WebviewCookie.fromJson(Map<String, dynamic> json) {
-    debugPrint('WebviewCookie.fromJson: $json');
     return WebviewCookie(
       name: json['name'],
       value: json['value'],
@@ -37,5 +34,19 @@ class WebviewCookie {
       secure: json['secure'],
       sessionOnly: json['sessionOnly'],
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'name': name,
+      'value': value,
+      'domain': domain,
+      'path': path,
+      'expires':
+          expires == null ? null : expires!.millisecondsSinceEpoch ~/ 1000,
+      'secure': secure,
+      'httpOnly': httpOnly,
+      'sessionOnly': sessionOnly,
+    };
   }
 }

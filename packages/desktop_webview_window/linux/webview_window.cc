@@ -13,6 +13,49 @@
 #define WEBKIT_OLD_USED
 #endif
 
+void get_cookies_callback(WebKitCookieManager *manager, GAsyncResult *res,
+                          gpointer user_data) {
+  CookieData *data = (CookieData *)user_data;
+  GError *error = NULL;
+
+  GList *cookies =
+      webkit_cookie_manager_get_cookies_finish(manager, res, &error);
+  if (error != NULL) {
+    g_print("Error getting cookies: %s\n", error->message);
+    g_error_free(error);
+    data->cookies = NULL;
+  } else {
+    data->cookies = cookies;
+  }
+
+  g_main_loop_quit(data->loop);
+}
+
+GList *get_cookies_sync(WebKitWebView *web_view) {
+  WebKitCookieManager *cookie_manager;
+  GMainLoop *loop;
+  CookieData data = {0};
+
+  cookie_manager = webkit_web_context_get_cookie_manager(
+      webkit_web_view_get_context(web_view));
+  loop = g_main_loop_new(NULL, FALSE);
+  data.loop = loop;
+
+  const gchar *uri = webkit_web_view_get_uri(web_view);
+
+  // Start the asynchronous operation
+  webkit_cookie_manager_get_cookies(cookie_manager, uri, NULL,
+                                    (GAsyncReadyCallback)get_cookies_callback,
+                                    &data);
+
+  // Run the main loop until the callback is called
+  g_main_loop_run(loop);
+
+  g_main_loop_unref(loop);
+
+  return data.cookies;
+}
+
 namespace {
 
 gboolean on_load_failed_with_tls_errors(WebKitWebView *web_view,
@@ -217,13 +260,12 @@ void WebviewWindow::StopLoading() {
   webkit_web_view_stop_loading(WEBKIT_WEB_VIEW(webview_));
 }
 
-void WebviewWindow::cookies_got_callback(GObject *source_object, GAsyncResult *result,
-                                 gpointer user_data) {
-  WebKitCookieManager *cookie_manager = WEBKIT_COOKIE_MANAGER(source_object);
-  GList *cookies =
-      webkit_cookie_manager_get_cookies_finish(cookie_manager, result, NULL);
+FlValue *WebviewWindow::GetAllCookies() {
+  GList *cookies = get_cookies_sync(WEBKIT_WEB_VIEW(webview_));
 
-  g_autoptr(FlValue) cookie_list = fl_value_new_list();
+  g_autoptr(FlValue) fl_cookie_list = fl_value_new_list();
+
+  FlValue* cookie_list = fl_value_ref(fl_cookie_list);
 
   for (GList *l = cookies; l; l = l->next) {
     SoupCookie *cookie = (SoupCookie *)l->data;
@@ -261,21 +303,9 @@ void WebviewWindow::cookies_got_callback(GObject *source_object, GAsyncResult *r
     soup_cookie_free(cookie);
   }
 
-  *static_cast<FlValue **>(user_data) = fl_value_ref(cookie_list);
+  g_free(cookies);
 
-  g_list_free(cookies);
-}
-
-void WebviewWindow::GetAllCookies(FlValue **data) {
-  WebKitWebContext *context =
-      webkit_web_view_get_context(WEBKIT_WEB_VIEW(webview_));
-  WebKitCookieManager *manager = webkit_web_context_get_cookie_manager(context);
-
-  webkit_cookie_manager_get_cookies(
-      manager,
-      "*",
-      NULL,  // No cancellable object
-      (GAsyncReadyCallback)cookies_got_callback, data);
+  return cookie_list;
 }
 
 gboolean WebviewWindow::DecidePolicy(WebKitPolicyDecision *decision,

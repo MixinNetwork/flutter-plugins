@@ -13,6 +13,16 @@
 #include <functional>
 #include <string>
 
+typedef struct {
+    GMainLoop *loop;
+    GList *cookies;
+} CookieData;
+
+void get_cookies_callback(WebKitCookieManager *manager, GAsyncResult *res,
+                          gpointer user_data);
+
+GList *get_cookies_sync(WebKitWebView *web_view);
+
 class WebviewWindow {
  public:
   WebviewWindow(FlMethodChannel *method_channel, int64_t window_id,
@@ -40,7 +50,7 @@ class WebviewWindow {
 
   void StopLoading();
 
-  void GetAllCookies(FlValue **data);
+  FlValue* GetAllCookies();
 
   gboolean DecidePolicy(WebKitPolicyDecision *decision,
                         WebKitPolicyDecisionType type);
@@ -57,8 +67,6 @@ class WebviewWindow {
   GtkWidget *window_ = nullptr;
   GtkWidget *webview_ = nullptr;
   GtkBox *box_ = nullptr;
-  static void cookies_got_callback(GObject *source_object, GAsyncResult *result,
-                                   gpointer user_data);
 };
 
 #endif  // WEBVIEW_WINDOW_LINUX_WEBVIEW_WINDOW_H_

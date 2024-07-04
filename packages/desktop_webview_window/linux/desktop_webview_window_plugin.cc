@@ -214,18 +214,19 @@ static void webview_window_plugin_handle_method_call(
       return;
     }
 
-    auto *data = static_cast<FlValue **>(g_new(FlValue *, 1));
-    self->windows->at(window_id)->GetAllCookies(data);
+    FlValue *data = nullptr;
 
-    if (*data == nullptr) {
+    data = self->windows->at(window_id)->GetAllCookies();
+
+    if (data == nullptr) {
       fl_method_call_respond_error(method_call, "0", "get all cookies failed",
                                    nullptr, nullptr);
       return;
     }
 
-    fl_value_unref(*data);
 
-    fl_method_call_respond_success(method_call, *data, nullptr);
+    fl_method_call_respond_success(method_call, data, nullptr);
+    fl_value_unref(data);
   } else if (strcmp(method, "close") == 0) {
     auto *args = fl_method_call_get_args(method_call);
     if (fl_value_get_type(args) != FL_VALUE_TYPE_MAP) {
