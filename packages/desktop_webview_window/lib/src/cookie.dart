@@ -29,10 +29,10 @@ class WebviewCookie {
           : DateTime.fromMillisecondsSinceEpoch(
               ((json['expires'] as num) * 1000).toInt(),
             ),
-      httpOnly: json['httpOnly'],
+      httpOnly: json['httpOnly'] ?? false,
       path: json['path'],
-      secure: json['secure'],
-      sessionOnly: json['sessionOnly'],
+      secure: json['secure'] ?? false,
+      sessionOnly: json['sessionOnly'] ?? false,
     );
   }
 
