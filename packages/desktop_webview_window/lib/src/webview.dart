@@ -1,3 +1,4 @@
+import 'package:desktop_webview_window/src/cookie.dart';
 import 'package:flutter/foundation.dart';
 
 /// Handle custom message from JavaScript in your app.
@@ -35,7 +36,7 @@ abstract class Webview {
   void setPromptHandler(PromptHandler? handler);
 
   /// Navigates to the given URL.
-  void launch(String url, {bool triggerOnUrlRequestEvent=true});
+  void launch(String url, {bool triggerOnUrlRequestEvent = true});
 
   /// change webview theme.
   ///
@@ -63,7 +64,7 @@ abstract class Webview {
   Future<void> bringToForeground({bool maximized = false});
 
   /// get position, extents and maximization info of the webview window
-  Future<Map<dynamic,dynamic>?> getPositionalParameters();
+  Future<Map<dynamic, dynamic>?> getPositionalParameters();
 
   /// Reload the current page.
   Future<void> reload();
@@ -95,4 +96,6 @@ abstract class Webview {
 
   /// post a web message as JSON to the top level document in this WebView
   Future<void> postWebMessageAsJson(String webMessage);
+
+  Future<List<WebviewCookie>> getAllCookies();
 }

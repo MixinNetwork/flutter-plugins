@@ -12,6 +12,12 @@ if (NOT WebKit_FOUND)
   pkg_check_modules(WebKit REQUIRED IMPORTED_TARGET webkit2gtk-4.0)  # for backward compatibility
 endif ()
 
+pkg_check_modules(LibSoup REQUIRED IMPORTED_TARGET libsoup-3.0)
+if (NOT LibSoup_FOUND)
+  pkg_check_modules(LibSoup REQUIRED IMPORTED_TARGET libsoup-2.4)
+endif()
+
+
 add_library(${PLUGIN_NAME} SHARED
         "desktop_webview_window_plugin.cc"
         webview_window.cc

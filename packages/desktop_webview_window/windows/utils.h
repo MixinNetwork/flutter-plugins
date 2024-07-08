@@ -8,6 +8,8 @@
 #include <windows.h>
 #include "wil/wrl.h"
 
+#include <string>
+
 namespace webview_window {
 
 const auto MONITOR_CENTER = 0x0001;        // center rect to monitor
@@ -36,6 +38,8 @@ bool SetWindowBackgroundTransparent(HWND hwnd);
 const wchar_t *RegisterWindowClass(LPCWSTR class_name, WNDPROC wnd_proc);
 
 void UnregisterWindowClass(LPCWSTR class_name);
+
+std::string ConvertLPCWSTRToString(LPCWSTR lpcwszStr);
 
 }  // namespace webview_window
 
