@@ -68,7 +68,7 @@ else ()
 endif ()
 
 install(
-        DIRECTORY breakpad/src/client breakpad/src/common breakpad/src/google_breakpad
+        DIRECTORY breakpad/src/client breakpad/src/common breakpad/src/google_breakpad ${CMAKE_CURRENT_SOURCE_DIR}
         DESTINATION include/
         FILES_MATCHING
         PATTERN "*.h"
@@ -80,9 +80,11 @@ add_library(breakpad_client SHARED
 )
 
 set_target_properties(breakpad_client PROPERTIES
-        PUBLIC_HEADER breakpad_client.h
+        PUBLIC_HEADER include/breakpad_client/breakpad_client.h
         OUTPUT_NAME "breakpad_client"
 )
+
+target_include_directories(breakpad_client PUBLIC include)
 
 
 target_link_libraries(breakpad_client g_breakpad_client)
