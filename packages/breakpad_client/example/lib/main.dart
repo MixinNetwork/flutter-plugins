@@ -4,7 +4,10 @@ import 'package:breakpad_client/breakpad_client.dart' as breakpad_client;
 import 'package:flutter/material.dart';
 
 void main() {
-  breakpad_client.init_exception_handle("/tmp/crash/");
+  breakpad_client.setLogger((log) {
+    debugPrint("logger: $log");
+  });
+  breakpad_client.initExceptionHandle("/tmp/crash/");
   runApp(const MyApp());
 }
 

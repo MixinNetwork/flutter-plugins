@@ -7,9 +7,9 @@ description: |
 output: 'lib/breakpad_client_bindings_generated.dart'
 headers:
   entry-points:
-    - 'src/breakpad_client.h'
+    - 'src/include/breakpad_client/breakpad_client.h'
   include-directives:
-    - 'src/breakpad_client.h'
+    - 'src/include/breakpad_client/breakpad_client.h'
 preamble: |
   // ignore_for_file: always_specify_types
   // ignore_for_file: camel_case_types

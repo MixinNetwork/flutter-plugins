@@ -5,13 +5,19 @@ import 'package:ffi/ffi.dart';
 
 import 'breakpad_client_bindings_generated.dart';
 
-/// A very short-lived native function.
-///
-/// For very short-lived functions, it is fine to call them on the main isolate.
-/// They will block the Dart execution while running the native function, so
-/// only do this for native functions which are guaranteed to be short-lived.
-void init_exception_handle(String dir) =>
-    _bindings.init_breakpad_exception_handler(dir.toNativeUtf8().cast());
+void initExceptionHandle(String dir) =>
+    _bindings.breakpad_client_init_exception_handler(dir.toNativeUtf8().cast());
+
+void setLogger(void Function(String log) logger) {
+  void callback(Pointer<Char> cstr) {
+    final log = cstr.cast<Utf8>().toDartString();
+    logger(log);
+  }
+
+  _bindings.breakpad_client_set_logger(
+      NativeCallable<Void Function(Pointer<Char>)>.listener(callback)
+          .nativeFunction);
+}
 
 const String _libName = 'breakpad_client';
 

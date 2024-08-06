@@ -27,18 +27,36 @@ class BreakpadClientBindings {
           lookup)
       : _lookup = lookup;
 
-  void init_breakpad_exception_handler(
+  void breakpad_client_set_logger(
+    CustomLogger logger,
+  ) {
+    return _breakpad_client_set_logger(
+      logger,
+    );
+  }
+
+  late final _breakpad_client_set_loggerPtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(CustomLogger)>>(
+          'breakpad_client_set_logger');
+  late final _breakpad_client_set_logger =
+      _breakpad_client_set_loggerPtr.asFunction<void Function(CustomLogger)>();
+
+  int breakpad_client_init_exception_handler(
     ffi.Pointer<ffi.Char> dir,
   ) {
-    return _init_breakpad_exception_handler(
+    return _breakpad_client_init_exception_handler(
       dir,
     );
   }
 
-  late final _init_breakpad_exception_handlerPtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Char>)>>(
-          'init_breakpad_exception_handler');
-  late final _init_breakpad_exception_handler =
-      _init_breakpad_exception_handlerPtr
-          .asFunction<void Function(ffi.Pointer<ffi.Char>)>();
+  late final _breakpad_client_init_exception_handlerPtr =
+      _lookup<ffi.NativeFunction<ffi.Int Function(ffi.Pointer<ffi.Char>)>>(
+          'breakpad_client_init_exception_handler');
+  late final _breakpad_client_init_exception_handler =
+      _breakpad_client_init_exception_handlerPtr
+          .asFunction<int Function(ffi.Pointer<ffi.Char>)>();
 }
+
+typedef CustomLogger = ffi.Pointer<ffi.NativeFunction<CustomLoggerFunction>>;
+typedef CustomLoggerFunction = ffi.Void Function(ffi.Pointer<ffi.Char> str);
+typedef DartCustomLoggerFunction = void Function(ffi.Pointer<ffi.Char> str);

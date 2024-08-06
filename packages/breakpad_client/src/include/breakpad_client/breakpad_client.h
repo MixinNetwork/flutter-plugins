@@ -19,7 +19,11 @@
 extern "C" {
 #endif
 
-FFI_PLUGIN_EXPORT void init_breakpad_exception_handler(const char *dir);
+typedef void (*CustomLogger)(const char *str);
+
+FFI_PLUGIN_EXPORT void breakpad_client_set_logger(CustomLogger logger);
+
+FFI_PLUGIN_EXPORT int breakpad_client_init_exception_handler(const char *dir);
 
 #ifdef __cplusplus
 }
