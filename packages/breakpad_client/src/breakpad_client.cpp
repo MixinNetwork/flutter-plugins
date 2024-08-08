@@ -3,7 +3,6 @@
 #include <filesystem>
 #include <iostream>
 #include <sstream>
-#include <locale>
 
 #ifdef _WIN32
 
@@ -21,9 +20,8 @@ CustomLogger g_logger;
 void print_log(const char *log) {
     if (g_logger != nullptr) {
         g_logger(log);
-    } else {
-        std::cout << log << std::endl;
     }
+    std::cout << log << std::endl;
 }
 
 #ifdef _WIN32
@@ -49,7 +47,7 @@ static bool dump_callback(const wchar_t *dump_path,
 }
 
 
-#elif
+#else
 
 static bool dump_callback(const google_breakpad::MinidumpDescriptor &descriptor, void *context, bool succeed) {
     std::ostringstream stream;
@@ -83,10 +81,10 @@ FFI_PLUGIN_EXPORT int breakpad_client_init_exception_handler(const char *dir) {
     const auto handler = new google_breakpad::ExceptionHandler(
             dump_path, nullptr, dump_callback,
             nullptr, google_breakpad::ExceptionHandler::HANDLER_ALL);
-#elif
+#else
     const google_breakpad::MinidumpDescriptor descriptor(dir);
     const auto handler = new google_breakpad::ExceptionHandler(
-            descriptor, nullptr, dump_callback, nullptr, true, -1);
+        descriptor, nullptr, dump_callback, nullptr, true, -1);
 #endif
     g_exception_handler = handler;
     print_log("init_breakpad_exception_handler: ");
