@@ -1,5 +1,5 @@
 name: breakpad_client
-description: "A new Flutter FFI plugin project."
+description: "breakpad client for flutter desktop applications"
 version: 0.0.1
 homepage: https://github.com/MixinNetwork/flutter-plugins
 
