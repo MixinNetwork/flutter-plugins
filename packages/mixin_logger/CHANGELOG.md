@@ -1,3 +1,7 @@
+## 0.1.2
+
+* export native c header file
+
 ## 0.1.1
 
 * add android support.
