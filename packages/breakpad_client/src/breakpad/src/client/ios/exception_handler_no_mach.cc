@@ -197,6 +197,9 @@ void ExceptionHandler::SignalHandler(int sig, siginfo_t* info, void* uc) {
   if (gBreakpadAllocator)
     gBreakpadAllocator->Protect();
 #endif
+  // uninstall our own crash handler so that when the signal is re-raised, the
+  // default handler takes over.
+  gProtectedData.handler->UninstallHandlers();
 }
 
 bool ExceptionHandler::InstallHandlers() {

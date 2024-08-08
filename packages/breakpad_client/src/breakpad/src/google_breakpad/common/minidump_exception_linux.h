@@ -33,7 +33,6 @@
  *
  * Author: Mark Mentovai
  * Split into its own file: Neal Sidhwaney */
- 
 
 #ifndef GOOGLE_BREAKPAD_COMMON_MINIDUMP_EXCEPTION_LINUX_H__
 #define GOOGLE_BREAKPAD_COMMON_MINIDUMP_EXCEPTION_LINUX_H__
@@ -42,43 +41,89 @@
 
 #include "google_breakpad/common/breakpad_types.h"
 
+#if defined(__unix__) || defined(__linux__) || defined(__APPLE__)
+#include <signal.h>
+#else
+#define SIGHUP 1
+#define SIGINT 2
+#define SIGQUIT 3
+#define SIGILL 4
+#define SIGTRAP 5
+#define SIGABRT 6
+#define SIGBUS 7
+#define SIGFPE 8
+#define SIGKILL 9
+#define SIGUSR1 10
+#define SIGSEGV 11
+#define SIGUSR2 12
+#define SIGPIPE 13
+#define SIGALRM 14
+#define SIGTERM 15
+#define SIGSTKFLT 16
+#define SIGCHLD 17
+#define SIGCONT 18
+#define SIGSTOP 19
+#define SIGTSTP 20
+#define SIGTTIN 21
+#define SIGTTOU 22
+#define SIGURG 23
+#define SIGXCPU 24
+#define SIGXFSZ 25
+#define SIGVTALRM 26
+#define SIGPROF 27
+#define SIGWINCH 28
+#define SIGIO 29
+#define SIGPWR 30
+#define SIGSYS 31
+#endif
+
+#ifndef SIGSTKFLT
+#define SIGSTKFLT 990 /* 16 on x64 */
+#endif
+#ifndef SIGPWR
+#define SIGPWR 991 /* 30 on x64 */
+#endif
 
 /* For (MDException).exception_code.  These values come from bits/signum.h.
  */
 typedef enum {
-  MD_EXCEPTION_CODE_LIN_SIGHUP = 1,      /* Hangup (POSIX) */
-  MD_EXCEPTION_CODE_LIN_SIGINT = 2,      /* Interrupt (ANSI) */
-  MD_EXCEPTION_CODE_LIN_SIGQUIT = 3,     /* Quit (POSIX) */
-  MD_EXCEPTION_CODE_LIN_SIGILL = 4,      /* Illegal instruction (ANSI) */
-  MD_EXCEPTION_CODE_LIN_SIGTRAP = 5,     /* Trace trap (POSIX) */
-  MD_EXCEPTION_CODE_LIN_SIGABRT = 6,     /* Abort (ANSI) */
-  MD_EXCEPTION_CODE_LIN_SIGBUS = 7,      /* BUS error (4.2 BSD) */
-  MD_EXCEPTION_CODE_LIN_SIGFPE = 8,      /* Floating-point exception (ANSI) */
-  MD_EXCEPTION_CODE_LIN_SIGKILL = 9,     /* Kill, unblockable (POSIX) */
-  MD_EXCEPTION_CODE_LIN_SIGUSR1 = 10,    /* User-defined signal 1 (POSIX).  */
-  MD_EXCEPTION_CODE_LIN_SIGSEGV = 11,    /* Segmentation violation (ANSI) */
-  MD_EXCEPTION_CODE_LIN_SIGUSR2 = 12,    /* User-defined signal 2 (POSIX) */
-  MD_EXCEPTION_CODE_LIN_SIGPIPE = 13,    /* Broken pipe (POSIX) */
-  MD_EXCEPTION_CODE_LIN_SIGALRM = 14,    /* Alarm clock (POSIX) */
-  MD_EXCEPTION_CODE_LIN_SIGTERM = 15,    /* Termination (ANSI) */
-  MD_EXCEPTION_CODE_LIN_SIGSTKFLT = 16,  /* Stack faultd */
-  MD_EXCEPTION_CODE_LIN_SIGCHLD = 17,    /* Child status has changed (POSIX) */
-  MD_EXCEPTION_CODE_LIN_SIGCONT = 18,    /* Continue (POSIX) */
-  MD_EXCEPTION_CODE_LIN_SIGSTOP = 19,    /* Stop, unblockable (POSIX) */
-  MD_EXCEPTION_CODE_LIN_SIGTSTP = 20,    /* Keyboard stop (POSIX) */
-  MD_EXCEPTION_CODE_LIN_SIGTTIN = 21,    /* Background read from tty (POSIX) */
-  MD_EXCEPTION_CODE_LIN_SIGTTOU = 22,    /* Background write to tty (POSIX) */
-  MD_EXCEPTION_CODE_LIN_SIGURG = 23,
-    /* Urgent condition on socket (4.2 BSD) */
-  MD_EXCEPTION_CODE_LIN_SIGXCPU = 24,    /* CPU limit exceeded (4.2 BSD) */
-  MD_EXCEPTION_CODE_LIN_SIGXFSZ = 25,
-    /* File size limit exceeded (4.2 BSD) */
-  MD_EXCEPTION_CODE_LIN_SIGVTALRM = 26,  /* Virtual alarm clock (4.2 BSD) */
-  MD_EXCEPTION_CODE_LIN_SIGPROF = 27,    /* Profiling alarm clock (4.2 BSD) */
-  MD_EXCEPTION_CODE_LIN_SIGWINCH = 28,   /* Window size change (4.3 BSD, Sun) */
-  MD_EXCEPTION_CODE_LIN_SIGIO = 29,      /* I/O now possible (4.2 BSD) */
-  MD_EXCEPTION_CODE_LIN_SIGPWR = 30,     /* Power failure restart (System V) */
-  MD_EXCEPTION_CODE_LIN_SIGSYS = 31,     /* Bad system call */
+  MD_EXCEPTION_CODE_LIN_SIGHUP = SIGHUP,   /* Hangup (POSIX) */
+  MD_EXCEPTION_CODE_LIN_SIGINT = SIGINT,   /* Interrupt (ANSI) */
+  MD_EXCEPTION_CODE_LIN_SIGQUIT = SIGQUIT, /* Quit (POSIX) */
+  MD_EXCEPTION_CODE_LIN_SIGILL = SIGILL,   /* Illegal instruction (ANSI) */
+  MD_EXCEPTION_CODE_LIN_SIGTRAP = SIGTRAP, /* Trace trap (POSIX) */
+  MD_EXCEPTION_CODE_LIN_SIGABRT = SIGABRT, /* Abort (ANSI) */
+  MD_EXCEPTION_CODE_LIN_SIGBUS = SIGBUS,   /* BUS error (4.2 BSD) */
+  MD_EXCEPTION_CODE_LIN_SIGFPE = SIGFPE,   /* Floating-point exception (ANSI) */
+  MD_EXCEPTION_CODE_LIN_SIGKILL = SIGKILL, /* Kill, unblockable (POSIX) */
+  MD_EXCEPTION_CODE_LIN_SIGUSR1 = SIGUSR1, /* User-defined signal 1 (POSIX).  */
+  MD_EXCEPTION_CODE_LIN_SIGSEGV = SIGSEGV, /* Segmentation violation (ANSI) */
+  MD_EXCEPTION_CODE_LIN_SIGUSR2 = SIGUSR2, /* User-defined signal 2 (POSIX) */
+  MD_EXCEPTION_CODE_LIN_SIGPIPE = SIGPIPE, /* Broken pipe (POSIX) */
+  MD_EXCEPTION_CODE_LIN_SIGALRM = SIGALRM, /* Alarm clock (POSIX) */
+  MD_EXCEPTION_CODE_LIN_SIGTERM = SIGTERM, /* Termination (ANSI) */
+  MD_EXCEPTION_CODE_LIN_SIGSTKFLT = SIGSTKFLT, /* Stack faultd */
+  MD_EXCEPTION_CODE_LIN_SIGCHLD =
+      SIGCHLD, /* Child status has changed (POSIX) */
+  MD_EXCEPTION_CODE_LIN_SIGCONT = SIGCONT, /* Continue (POSIX) */
+  MD_EXCEPTION_CODE_LIN_SIGSTOP = SIGSTOP, /* Stop, unblockable (POSIX) */
+  MD_EXCEPTION_CODE_LIN_SIGTSTP = SIGTSTP, /* Keyboard stop (POSIX) */
+  MD_EXCEPTION_CODE_LIN_SIGTTIN =
+      SIGTTIN, /* Background read from tty (POSIX) */
+  MD_EXCEPTION_CODE_LIN_SIGTTOU = SIGTTOU, /* Background write to tty (POSIX) */
+  MD_EXCEPTION_CODE_LIN_SIGURG = SIGURG,
+  /* Urgent condition on socket (4.2 BSD) */
+  MD_EXCEPTION_CODE_LIN_SIGXCPU = SIGXCPU, /* CPU limit exceeded (4.2 BSD) */
+  MD_EXCEPTION_CODE_LIN_SIGXFSZ = SIGXFSZ,
+  /* File size limit exceeded (4.2 BSD) */
+  MD_EXCEPTION_CODE_LIN_SIGVTALRM =
+      SIGVTALRM,                           /* Virtual alarm clock (4.2 BSD) */
+  MD_EXCEPTION_CODE_LIN_SIGPROF = SIGPROF, /* Profiling alarm clock (4.2 BSD) */
+  MD_EXCEPTION_CODE_LIN_SIGWINCH =
+      SIGWINCH,                          /* Window size change (4.3 BSD, Sun) */
+  MD_EXCEPTION_CODE_LIN_SIGIO = SIGIO,   /* I/O now possible (4.2 BSD) */
+  MD_EXCEPTION_CODE_LIN_SIGPWR = SIGPWR, /* Power failure restart (System V) */
+  MD_EXCEPTION_CODE_LIN_SIGSYS = SIGSYS, /* Bad system call */
   MD_EXCEPTION_CODE_LIN_DUMP_REQUESTED = 0xFFFFFFFF /* No exception,
                                                        dump requested. */
 } MDExceptionCodeLinux;
@@ -112,6 +157,11 @@ typedef enum {
   MD_EXCEPTION_FLAG_LIN_SEGV_ACCERR = 2,
   MD_EXCEPTION_FLAG_LIN_SEGV_BNDERR = 3,
   MD_EXCEPTION_FLAG_LIN_SEGV_PKUERR = 4,
+  MD_EXCEPTION_FLAG_LIN_SEGV_ACCADI = 5,
+  MD_EXCEPTION_FLAG_LIN_SEGV_ADIDERR = 6,
+  MD_EXCEPTION_FLAG_LIN_SEGV_ADIPERR = 7,
+  MD_EXCEPTION_FLAG_LIN_SEGV_MTEAERR = 8,
+  MD_EXCEPTION_FLAG_LIN_SEGV_MTESERR = 9,
 
   /* SIGBUS */
   MD_EXCEPTION_FLAG_LIN_BUS_ADRALN = 1,
@@ -121,4 +171,4 @@ typedef enum {
   MD_EXCEPTION_FLAG_LIN_BUS_MCEERR_AO = 5,
 } MDExceptionFlagLinux;
 
-#endif  /* GOOGLE_BREAKPAD_COMMON_MINIDUMP_EXCEPTION_LINUX_H__ */
+#endif /* GOOGLE_BREAKPAD_COMMON_MINIDUMP_EXCEPTION_LINUX_H__ */

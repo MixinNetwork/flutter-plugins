@@ -694,9 +694,11 @@ src_tools_linux_dump_syms_dump_syms_SOURCES = \
 	src/common/linux/safe_readlink.cc \
 	src/tools/linux/dump_syms/dump_syms.cc
 src_tools_linux_dump_syms_dump_syms_CXXFLAGS = \
-	$(RUSTC_DEMANGLE_CFLAGS)
+	$(RUSTC_DEMANGLE_CFLAGS) \
+	$(ZSTD_CFLAGS)
 src_tools_linux_dump_syms_dump_syms_LDADD = \
 	$(RUSTC_DEMANGLE_LIBS) \
+	$(ZSTD_CFLAGS) \
 	-lz
 
 src_tools_linux_md2core_minidump_2_core_SOURCES = \
@@ -821,11 +823,13 @@ src_common_dumper_unittest_SOURCES = \
 src_common_dumper_unittest_CPPFLAGS = \
 	$(AM_CPPFLAGS) $(TEST_CFLAGS) \
 	$(RUSTC_DEMANGLE_CFLAGS) \
-	$(PTHREAD_CFLAGS)
+	$(PTHREAD_CFLAGS) \
+	$(ZSTD_CFLAGS)
 src_common_dumper_unittest_LDADD = \
 	$(TEST_LIBS) \
 	$(RUSTC_DEMANGLE_LIBS) \
 	$(PTHREAD_CFLAGS) $(PTHREAD_LIBS) \
+	$(ZSTD_LIBS) \
 	-lz
 
 src_common_mac_macho_reader_unittest_SOURCES = \

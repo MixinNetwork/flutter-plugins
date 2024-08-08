@@ -51,6 +51,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <zlib.h>
+#ifdef HAVE_LIBZSTD
+#include <zstd.h>
+#endif
 
 #include <set>
 #include <string>
@@ -106,6 +109,11 @@ using google_breakpad::wasteful_vector;
 // Define AARCH64 ELF architecture if host machine does not include this define.
 #ifndef EM_AARCH64
 #define EM_AARCH64      183
+#endif
+
+// Define ZStd compression if host machine does not include this define.
+#ifndef ELFCOMPRESS_ZSTD
+#define ELFCOMPRESS_ZSTD 2
 #endif
 
 //
@@ -305,7 +313,7 @@ uint32_t GetCompressionHeader(
   return sizeof (*header);
 }
 
-std::pair<uint8_t *, uint64_t> UncompressSectionContents(
+std::pair<uint8_t *, uint64_t> UncompressZlibSectionContents(
     const uint8_t* compressed_buffer, uint64_t compressed_size, uint64_t uncompressed_size) {
   z_stream stream;
   memset(&stream, 0, sizeof stream);
@@ -332,6 +340,37 @@ std::pair<uint8_t *, uint64_t> UncompressSectionContents(
   return inflateEnd(&stream) != Z_OK || status != Z_OK || stream.avail_out != 0
     ? std::make_pair(nullptr, 0)
     : std::make_pair(uncompressed_buffer.release(), uncompressed_size);
+}
+
+#ifdef HAVE_LIBZSTD
+std::pair<uint8_t *, uint64_t> UncompressZstdSectionContents(
+    const uint8_t* compressed_buffer, uint64_t compressed_size,uint64_t uncompressed_size) {
+
+  google_breakpad::scoped_array<uint8_t> uncompressed_buffer(new uint8_t[uncompressed_size]);
+  size_t out_size = ZSTD_decompress(uncompressed_buffer.get(), uncompressed_size,
+    compressed_buffer, compressed_size);
+  if (ZSTD_isError(out_size)) {
+    return std::make_pair(nullptr, 0);
+  }
+  assert(out_size == uncompressed_size);
+  return std::make_pair(uncompressed_buffer.release(), uncompressed_size);
+}
+#endif
+
+std::pair<uint8_t *, uint64_t> UncompressSectionContents(
+    uint64_t compression_type, const uint8_t* compressed_buffer,
+    uint64_t compressed_size, uint64_t uncompressed_size) {
+  if (compression_type == ELFCOMPRESS_ZLIB) {
+    return UncompressZlibSectionContents(compressed_buffer, compressed_size, uncompressed_size);
+  }
+
+#ifdef HAVE_LIBZSTD
+  if (compression_type == ELFCOMPRESS_ZSTD) {
+    return UncompressZstdSectionContents(compressed_buffer, compressed_size, uncompressed_size);
+  }
+#endif
+
+  return std::make_pair(nullptr, 0);
 }
 
 void StartProcessSplitDwarf(google_breakpad::CompilationUnit* reader,
@@ -437,7 +476,7 @@ bool LoadDwarf(const string& dwarf_filename,
     size -= compression_header_size;
 
     std::pair<uint8_t *, uint64_t> uncompressed =
-      UncompressSectionContents(contents, size, chdr.ch_size);
+      UncompressSectionContents(chdr.ch_type, contents, size, chdr.ch_size);
 
     if (uncompressed.first != nullptr && uncompressed.second != 0) {
       file_context.AddManagedSectionToSectionMap(name, uncompressed.first, uncompressed.second);
@@ -587,7 +626,7 @@ bool LoadDwarfCFI(const string& dwarf_filename,
   cfi_size -= compression_header_size;
 
   std::pair<uint8_t *, uint64_t> uncompressed =
-    UncompressSectionContents(cfi, cfi_size, chdr.ch_size);
+    UncompressSectionContents(chdr.ch_type, cfi, cfi_size, chdr.ch_size);
 
   if (uncompressed.first == nullptr || uncompressed.second == 0) {
     fprintf(stderr, "%s: decompression failed\n", dwarf_filename.c_str());

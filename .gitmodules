@@ -1,0 +1,3 @@
+[submodule "packages/breakpad_client/src/breakpad"]
+	path = packages/breakpad_client/src/breakpad
+	url = https://github.com/getsentry/breakpad
