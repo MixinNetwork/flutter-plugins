@@ -9,7 +9,7 @@ import 'dart:ffi' as ffi;
 
 /// Bindings for `src/mixin_logger.h`.
 ///
-/// Regenerate bindings with `flutter pub run ffigen --config ffigen.yaml`.
+/// Regenerate bindings with `dart run ffigen --config ffigen.yaml`.
 ///
 class MixinLoggerBindings {
   /// Holds the symbol lookup function.

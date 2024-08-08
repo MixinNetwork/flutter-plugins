@@ -12,11 +12,12 @@ add_library(mixin_logger SHARED
 )
 
 set_target_properties(mixin_logger PROPERTIES
-        PUBLIC_HEADER mixin_logger.h
+        PUBLIC_HEADER include/mixin_logger/mixin_logger.h
         OUTPUT_NAME "mixin_logger"
 )
 
 target_compile_definitions(mixin_logger PUBLIC DART_SHARED_LIB)
+target_include_directories(mixin_logger PUBLIC include)
 
 find_package(GTest)
 if (GTest_FOUND)
