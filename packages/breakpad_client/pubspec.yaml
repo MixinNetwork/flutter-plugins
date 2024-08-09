@@ -1,6 +1,6 @@
 name: breakpad_client
 description: "breakpad client for flutter desktop applications"
-version: 0.0.1
+version: 0.0.2
 homepage: https://github.com/MixinNetwork/flutter-plugins
 
 environment:
