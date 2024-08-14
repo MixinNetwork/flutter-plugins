@@ -54,7 +54,7 @@ List<String> tokenize(
   final cfString = _bindings.CFStringCreateWithCString(
     nullptr,
     string.toNativeUtf8().cast(),
-    binding.CFStringBuiltInEncodings.kCFStringEncodingUTF8,
+    binding.CFStringBuiltInEncodings.kCFStringEncodingUTF8.value,
   );
 
   int optionsInt = 0;
