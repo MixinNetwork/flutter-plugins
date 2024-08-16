@@ -26,11 +26,20 @@ class TextCheckingResult {
   binding.NSTextCheckingType get type => _inner.resultType;
 
   TextRange get range {
-    final p = malloc.allocate<binding.NSRange>(sizeOf<binding.NSRange>());
-    _inner.getRange(p);
+    final msgSend = objc.msgSendPointer
+        .cast<
+            NativeFunction<
+                binding.NSRange Function(
+                    Pointer<objc.ObjCObject>, Pointer<objc.ObjCSelector>)>>()
+        .asFunction<
+            binding.NSRange Function(
+                Pointer<objc.ObjCObject>, Pointer<objc.ObjCSelector>)>();
+    final property = objc.registerName("range");
+
+    // the generated _inner.getRange() not working on macos x64, call send manually
+    final range = msgSend(_inner.pointer, property);
     final textRange =
-        TextRange(start: p.ref.location, end: p.ref.location + p.ref.length);
-    malloc.free(p);
+        TextRange(start: range.location, end: range.location + range.length);
     return textRange;
   }
 
