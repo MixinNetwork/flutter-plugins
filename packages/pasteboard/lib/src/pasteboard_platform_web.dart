@@ -133,8 +133,7 @@ HTMLTextAreaElement _createCopyFakeElement(String value) {
     ..style.setProperty(isRtl ? 'right' : 'left', '-9999px');
 
   // Move element to the same position vertically
-  final yPosition = window.pageYOffset.toInt() |
-      (document.documentElement?.scrollTop.toInt() ?? 0);
+  final yPosition = document.documentElement?.scrollTop.toInt() ?? 0;
   fakeElement
     ..style.top = '${yPosition}px'
     ..setAttribute('readonly', '')

@@ -9,7 +9,9 @@ void main() {
     const str = "text: https://mixin.one";
     final results = detector.matchesInString(str);
     for (final result in results) {
-      print('result: ${result.range.textInside(str)}');
+      while (true) {
+        print('result: ${result.range.textInside(str)}');
+      }
     }
   });
 }
