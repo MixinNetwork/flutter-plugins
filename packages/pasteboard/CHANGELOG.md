@@ -1,3 +1,7 @@
+## 0.3.0
+
+* bump web version to 1.0.0
+
 ## 0.2.0
 
 * update docs. [@OutdatedGuy](https://github.com/OutdatedGuy)
