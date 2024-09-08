@@ -17,9 +17,9 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.io.IOException
 import java.util.UUID
 import kotlin.concurrent.thread
-
 
 /** PasteboardPlugin */
 class PasteboardPlugin: FlutterPlugin, MethodCallHandler {
@@ -53,28 +53,38 @@ class PasteboardPlugin: FlutterPlugin, MethodCallHandler {
       }
       "files" -> {
         manager.primaryClip?.run {
+          if (itemCount == 0) result.success(null)
           val files: MutableList<String> = mutableListOf()
           var finish = 0
           for (i in 0 until itemCount) {
-            val name = UUID.randomUUID().toString()
-            val file = File(context.cacheDir, name)
-            getItemAt(i).uri?.let {
-              // if copy big file, how to handle?
-              thread {
-                cr.openAssetFileDescriptor(it, "r")?.use { desc ->
-                  FileInputStream(desc.fileDescriptor).use { inp ->
-                    FileOutputStream(file).use { out ->
-                      inp.copyTo(out)
+            thread {
+              getItemAt(i).uri?.let {
+                val path = it.path ?: return@let
+                val name = File(path).name
+                val file = File(context.cacheDir, name)
+                // if copy big file, how to handle?
+                try {
+                  cr.openAssetFileDescriptor(it, "r")?.use { desc ->
+                    FileInputStream(desc.fileDescriptor).use { inp ->
+                      FileOutputStream(file).use { out ->
+                        inp.copyTo(out)
+                      }
                     }
                   }
-                }
-                if (++finish >= itemCount) {
-                  result.success(files)
+                  files.add(file.path.toString())
+                } catch (e: Exception) {
+                  when (e) {
+                    is SecurityException -> {}
+                    is IOException -> {}
+                    else -> throw e
+                  }
                 }
               }
+              if (++finish >= itemCount) {
+                result.success(files)
+              }
             }
-            files.add(file.path.toString())
-          } // need use toList?
+          }
         }
       }
       "html" -> result.success(first?.htmlText)
