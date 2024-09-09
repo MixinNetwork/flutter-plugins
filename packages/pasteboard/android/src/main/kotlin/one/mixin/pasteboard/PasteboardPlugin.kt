@@ -121,7 +121,7 @@ class PasteboardPlugin: FlutterPlugin, MethodCallHandler {
         FileOutputStream(file).use {
           out.writeTo(it)
         }
-        val uri = FileProvider.getUriForFile(context, "${context.packageName}.clipboard", file)
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.provider", file)
         val clip = ClipData.newUri(cr, "image.png", uri)
         manager.setPrimaryClip(clip)
       }
