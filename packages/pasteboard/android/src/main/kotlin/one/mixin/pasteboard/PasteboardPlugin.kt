@@ -55,36 +55,12 @@ class PasteboardPlugin: FlutterPlugin, MethodCallHandler {
         manager.primaryClip?.run {
           if (itemCount == 0) result.success(null)
           val files: MutableList<String> = mutableListOf()
-          var finish = 0
           for (i in 0 until itemCount) {
-            thread {
-              getItemAt(i).uri?.let {
-                val path = it.path ?: return@let
-                val name = File(path).name
-                val file = File(context.cacheDir, name)
-                // if copy big file, how to handle?
-                try {
-                  cr.openAssetFileDescriptor(it, "r")?.use { desc ->
-                    FileInputStream(desc.fileDescriptor).use { inp ->
-                      FileOutputStream(file).use { out ->
-                        inp.copyTo(out)
-                      }
-                    }
-                  }
-                  files.add(file.path.toString())
-                } catch (e: Exception) {
-                  when (e) {
-                    is SecurityException -> {}
-                    is IOException -> {}
-                    else -> throw e
-                  }
-                }
-              }
-              if (++finish >= itemCount) {
-                result.success(files)
-              }
+            getItemAt(i).uri?.let {
+              files.add(it.toString())
             }
           }
+          result.success(files)
         }
       }
       "html" -> result.success(first?.htmlText)
