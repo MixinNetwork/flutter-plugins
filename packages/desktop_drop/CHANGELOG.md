@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.0
+
+* upgrade web version to 1.0.0
+
 ## 0.4.4
 
 * fix build on android [#285](https://github.com/MixinNetwork/flutter-plugins/pull/285)
