@@ -22,7 +22,7 @@ class PasteboardPlatformIO implements PasteboardPlatform {
 
   @override
   Future<String?> get html async {
-    if (Platform.isWindows) {
+    if (Platform.isWindows || Platform.isAndroid) {
       return await _channel.invokeMethod<Object>('html') as String?;
     }
     return null;
@@ -35,7 +35,7 @@ class PasteboardPlatformIO implements PasteboardPlatform {
     if (image == null) {
       return null;
     }
-    if (Platform.isMacOS || Platform.isLinux || Platform.isIOS) {
+    if (Platform.isMacOS || Platform.isLinux || Platform.isIOS || Platform.isAndroid) {
       return image as Uint8List;
     } else if (Platform.isWindows) {
       final file = File(image as String);
@@ -62,7 +62,7 @@ class PasteboardPlatformIO implements PasteboardPlatform {
     if (image == null) {
       return;
     }
-    if (Platform.isIOS || Platform.isMacOS) {
+    if (Platform.isIOS || Platform.isMacOS || Platform.isAndroid) {
       await _channel.invokeMethod<void>('writeImage', image);
     } else if (Platform.isWindows) {
       final file = await File(GetTempFileName()).create();

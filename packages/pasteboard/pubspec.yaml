@@ -24,6 +24,9 @@ dev_dependencies:
 flutter:
   plugin:
     platforms:
+      android:
+        package: one.mixin.pasteboard
+        pluginClass: PasteboardPlugin
       macos:
         pluginClass: PasteboardPlugin
       windows:
