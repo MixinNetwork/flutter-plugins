@@ -37,22 +37,18 @@ class DesktopDrop {
     });
   }
 
-  Future<bool> startAccessingSecurityScopedResource(
-      {required Uint8List bookmark}) async {
+  Future<bool> startAccessingSecurityScopedResource({required Uint8List bookmark}) async {
     Map<String, dynamic> resultMap = Map();
     resultMap["apple-bookmark"] = bookmark;
-    final bool? result = await _channel.invokeMethod(
-        "startAccessingSecurityScopedResource", resultMap);
+    final bool? result = await _channel.invokeMethod("startAccessingSecurityScopedResource", resultMap);
     if (result == null) return false;
     return result;
   }
 
-  Future<bool> stopAccessingSecurityScopedResource(
-      {required Uint8List bookmark}) async {
+  Future<bool> stopAccessingSecurityScopedResource({required Uint8List bookmark}) async {
     Map<String, dynamic> resultMap = Map();
     resultMap["apple-bookmark"] = bookmark;
-    final bool result = await _channel.invokeMethod(
-        "stopAccessingSecurityScopedResource", resultMap);
+    final bool result = await _channel.invokeMethod("stopAccessingSecurityScopedResource", resultMap);
     return result;
   }
 
@@ -108,8 +104,7 @@ class DesktopDrop {
       case "performOperation_linux":
         // gtk notify 'exit' before 'performOperation'.
         final text = (call.arguments as List<dynamic>)[0] as String;
-        final offset = ((call.arguments as List<dynamic>)[1] as List<dynamic>)
-            .cast<double>();
+        final offset = ((call.arguments as List<dynamic>)[1] as List<dynamic>).cast<double>();
         final paths = const LineSplitter().convert(text).map((e) {
           try {
             return Uri.tryParse(e)?.toFilePath() ?? '';
@@ -124,11 +119,7 @@ class DesktopDrop {
         ));
         break;
       case "performOperation_web":
-        final results = (call.arguments as List)
-            .cast<Map>()
-            .map((e) => WebDropItem.fromJson(e.cast<String, dynamic>()))
-            .map((e) => e.toDropItem())
-            .toList();
+        final results = (call.arguments as List).cast<Map>().map((e) => WebDropItem.fromJson(e.cast<String, dynamic>())).map((e) => e.toDropItem()).toList();
         _notifyEvent(
           DropDoneEvent(location: _offset ?? Offset.zero, files: results),
         );
@@ -153,5 +144,13 @@ class DesktopDrop {
   void removeRawDropEventListener(RawDropListener listener) {
     assert(_listeners.contains(listener));
     _listeners.remove(listener);
+  }
+
+  void enableDragDropVisualFeedback() {
+    _channel.invokeMethod('enable', {});
+  }
+
+  void disableDragDropVisualFeedback() {
+    _channel.invokeMethod('disable', {});
   }
 }

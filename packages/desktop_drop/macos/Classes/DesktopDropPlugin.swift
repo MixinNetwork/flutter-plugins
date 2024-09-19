@@ -35,9 +35,22 @@ public class DesktopDropPlugin: NSObject, FlutterPlugin {
     d.registerForDraggedTypes(NSFilePromiseReceiver.readableDraggedTypes.map { NSPasteboard.PasteboardType($0) })
     d.registerForDraggedTypes([NSPasteboard.PasteboardType.fileURL])
 
-    vc.view.addSubview(d)
+    // If the DropTarget be added from here, drag-and-drop visual feedback will be implemented immediately.
+    // This will causes the cursor to change to `+` shape and appear as if files can be dropped, even though the flutter code does not include a DropTarget widget.
+    // vc.view.addSubview(d)
 
     registrar.addMethodCallDelegate(instance, channel: channel)
+
+    // Instead, it should be added only when needed and removed otherwise.
+    // `channel.setMethodCallHandler` should be implemented after `registrar.addMethodCallDelegate`
+    channel.setMethodCallHandler { call, result in
+      if call.method == "enable"{
+        vc.view.addSubview(d)
+      }else if (call.method == "disable"){
+        d.removeFromSuperview()
+      }
+      result(nil)
+    }
   }
 
     public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult){
