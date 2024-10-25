@@ -19,6 +19,9 @@ bool hasIdentity() {
   UINT32 length;
   wchar_t packageFamilyName[PACKAGE_FAMILY_NAME_MAX_LENGTH + 1];
   LONG result = DllImporter::GetPackageFamilyName(GetCurrentProcess(), &length, packageFamilyName);
+  if(result == ERROR_INSUFFICIENT_BUFFER){
+    result = DllImporter::GetPackageFamilyName(GetCurrentProcess(), &length, packageFamilyName);
+  }
   return result == ERROR_SUCCESS;
 }
 
