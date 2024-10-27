@@ -1,3 +1,7 @@
+## 0.3.1
+
+* Fix not working if packaged by msix([#375](https://github.com/MixinNetwork/flutter-plugins/pull/375))
+
 ## 0.3.0
 
 **BREAKING CHANGES**
