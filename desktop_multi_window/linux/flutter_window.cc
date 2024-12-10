@@ -12,6 +12,7 @@
 namespace {
 
 WindowCreatedCallback _g_window_created_callback = nullptr;
+WindowCreatedCallback _g_window_closed_callback = nullptr;
 
 }
 
@@ -34,6 +35,7 @@ FlutterWindow::FlutterWindow(
   g_signal_connect(G_OBJECT(window_), "delete-event", G_CALLBACK(on_close_clicked), NULL);
   g_signal_connect(window_, "destroy", G_CALLBACK(+[](GtkWidget *, gpointer arg) {
     auto *self = static_cast<FlutterWindow *>(arg);
+    if (_g_window_closed_callback) _g_window_closed_callback(self->id_);
     if (auto callback = self->callback_.lock()) {
       callback->OnWindowClose(self->id_);
       callback->OnWindowDestroy(self->id_);
@@ -50,7 +52,9 @@ FlutterWindow::FlutterWindow(
   gtk_container_add(GTK_CONTAINER(window_), GTK_WIDGET(fl_view));
 
   if (_g_window_created_callback) {
-    _g_window_created_callback(FL_PLUGIN_REGISTRY(fl_view));
+    auto flEngine = fl_view_get_engine(view);
+    auto flTextureRegistrar = fl_engine_get_texture_registrar(flEngine);
+    _g_window_created_callback(FL_PLUGIN_REGISTRY(fl_view), flTextureRegistrar, id);
   }
   g_autoptr(FlPluginRegistrar)
       desktop_multi_window_registrar =
@@ -71,4 +75,8 @@ FlutterWindow::~FlutterWindow() = default;
 
 void desktop_multi_window_plugin_set_window_created_callback(WindowCreatedCallback callback) {
   _g_window_created_callback = callback;
+}
+
+void desktop_multi_window_plugin_set_window_closed_callback(WindowClosedCallback callback) {
+  _g_window_closed_callback = callback;
 }

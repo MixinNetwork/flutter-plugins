@@ -23,9 +23,18 @@ FLUTTER_PLUGIN_EXPORT void desktop_multi_window_plugin_register_with_registrar(
 
 typedef void (*WindowCreatedCallback)(FlPluginRegistry *registry);
 
+
+using WindowCreatedCallback = std::function<void(
+        FlPluginRegistry *registry,
+        FlutterDesktopTextureRegistrarRef texture_registrar,
+        int64_t windowId)>;
+
 FLUTTER_PLUGIN_EXPORT void desktop_multi_window_plugin_set_window_created_callback(
     WindowCreatedCallback callback);
 
+using WindowClosedCallback = std::function<void(int64_t)>;
+FLUTTER_PLUGIN_EXPORT void desktop_multi_window_plugin_set_window_closed_callback(
+    WindowClosedCallback);
 
 G_END_DECLS
 
