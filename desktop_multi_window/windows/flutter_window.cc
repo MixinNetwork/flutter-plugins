@@ -17,6 +17,7 @@
 namespace {
 
 WindowCreatedCallback _g_window_created_callback = nullptr;
+WindowClosedCallback _g_window_closed_callback = nullptr;
 
 TCHAR kFlutterWindowClassName[] = _T("FlutterMultiWindow");
 
@@ -114,7 +115,9 @@ FlutterWindow::FlutterWindow(
       flutter_controller_->engine()->GetRegistrarForPlugin("DesktopMultiWindowPlugin"), id_);
 
   if (_g_window_created_callback) {
-    _g_window_created_callback(flutter_controller_.get());
+    auto registrarRef = flutter_controller_->engine()->GetRegistrarForPlugin("DesktopMultiWindowPlugin");
+    auto reg = FlutterDesktopRegistrarGetTextureRegistrar(registrarRef);
+    _g_window_created_callback(flutter_controller_.get(), reg, id);
   }
 
   // hide the window when created.
@@ -211,6 +214,11 @@ LRESULT FlutterWindow::MessageHandler(HWND hwnd, UINT message, WPARAM wparam, LP
 }
 
 void FlutterWindow::Destroy() {
+  if (_g_window_closed_callback) {
+    _g_window_closed_callback(id_);
+    _g_window_closed_callback = nullptr;
+  }
+
   if (window_channel_) {
     window_channel_ = nullptr;
   }
@@ -232,4 +240,8 @@ FlutterWindow::~FlutterWindow() {
 
 void DesktopMultiWindowSetWindowCreatedCallback(WindowCreatedCallback callback) {
   _g_window_created_callback = callback;
+}
+
+void DesktopMultiWindowSetWindowClosedCallback(WindowClosedCallback callback) {
+  _g_window_closed_callback = callback;
 }

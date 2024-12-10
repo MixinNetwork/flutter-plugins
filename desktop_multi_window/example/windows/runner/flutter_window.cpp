@@ -29,12 +29,16 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
   RegisterPlugins(flutter_controller_->engine());
-  DesktopMultiWindowSetWindowCreatedCallback([](void *controller) {
+  DesktopMultiWindowSetWindowCreatedCallback([&] (void *controller, auto textureRef, int64_t windowId) {
     auto *flutter_view_controller =
         reinterpret_cast<flutter::FlutterViewController *>(controller);
     auto *registry = flutter_view_controller->engine();
     DesktopLifecyclePluginRegisterWithRegistrar(
         registry->GetRegistrarForPlugin("DesktopLifecyclePlugin"));
+  });
+
+  DesktopMultiWindowSetWindowClosedCallback([&] (int64_t windowId) {
+      printf("Window %d closed", static_cast<int>(windowId));
   });
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
   return true;
