@@ -15,16 +15,23 @@ public class FlutterMultiWindowPlugin: NSObject, FlutterPlugin {
       debugPrint("failed to find flutter main window")
       return
     }
-    
+
     let mainWindowChannel = WindowChannel.register(with: registrar, windowId: 0)
     MultiWindowManager.shared.attachMainWindow(window: window, mainWindowChannel)
   }
 
-  public typealias OnWindowCreatedCallback = (FlutterViewController) -> Void
+  public typealias OnWindowClosedCallback = (Int64) -> Void
+  static var onWindowClosedCallback: OnWindowClosedCallback?
+
+  public typealias OnWindowCreatedCallback = (FlutterViewController, Int64) -> Void
   static var onWindowCreatedCallback: OnWindowCreatedCallback?
 
   public static func setOnWindowCreatedCallback(_ callback: @escaping OnWindowCreatedCallback) {
     onWindowCreatedCallback = callback
+  }
+
+  public static func setOnWindowClosedCallback(_ callback: @escaping OnWindowClosedCallback) {
+    onWindowClosedCallback = callback
   }
 
   public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {

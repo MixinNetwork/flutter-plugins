@@ -78,7 +78,7 @@ class FlutterWindow: BaseFlutterWindow {
     FlutterMultiWindowPlugin.registerInternal(with: plugin)
     let windowChannel = WindowChannel.register(with: plugin, windowId: id)
     // Give app a chance to register plugin.
-    FlutterMultiWindowPlugin.onWindowCreatedCallback?(flutterViewController)
+    FlutterMultiWindowPlugin.onWindowCreatedCallback?(flutterViewController, id)
 
     super.init(window: window, channel: windowChannel)
 
@@ -90,6 +90,7 @@ class FlutterWindow: BaseFlutterWindow {
 
   deinit {
     debugPrint("release window resource")
+    FlutterMultiWindowPlugin.onWindowClosedCallback?(windowId)
     window.delegate = nil
     if let flutterViewController = window.contentViewController as? FlutterViewController {
       flutterViewController.engine.shutDownEngine()

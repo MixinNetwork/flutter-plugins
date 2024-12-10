@@ -11,8 +11,8 @@ class MainFlutterWindow: NSWindow {
     self.setFrame(windowFrame, display: true)
 
     RegisterGeneratedPlugins(registry: flutterViewController)
-    
-    FlutterMultiWindowPlugin.setOnWindowCreatedCallback { controller in
+
+    FlutterMultiWindowPlugin.setOnWindowCreatedCallback { controller in windowId in
       // Register the plugin which you want access from other isolate.
       DesktopLifecyclePlugin.register(with: controller.registrar(forPlugin: "DesktopLifecyclePlugin"))
     }
