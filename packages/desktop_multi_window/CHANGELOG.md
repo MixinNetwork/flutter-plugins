@@ -1,3 +1,7 @@
+## 0.2.1
+
+* bug fixed
+
 ## 0.2.0
 * Added the ability to determine whether a created window will be resizable or not
 ([#101](https://github.com/MixinNetwork/flutter-plugins/issues/101) and [#130](https://github.com/MixinNetwork/flutter-plugins/pull/130))
