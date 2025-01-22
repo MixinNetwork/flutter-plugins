@@ -2,7 +2,7 @@
 
 [![Pub](https://img.shields.io/pub/v/desktop_multi_window.svg)](https://pub.dev/packages/desktop_multi_window)
 
-A flutter plugin that create and manager multi window in desktop.
+A flutter plugin to create and manage multi window in desktop.
 
 |         |     | 
 |---------|-----|
@@ -34,7 +34,7 @@ window
 
 ### Invoke remote window method.
 
-The windows run on different flutter engine. So we need use `DesktopMultiWindow.setMethodCallHandler`
+The windows run on different flutter engine. So we need to use `DesktopMultiWindow.setMethodCallHandler`
 and `DesktopMultiWindow.invokeMethod` to handle method calls between windows.
 
 ```
