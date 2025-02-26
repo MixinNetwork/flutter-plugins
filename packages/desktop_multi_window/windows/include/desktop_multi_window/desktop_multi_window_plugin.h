@@ -10,18 +10,19 @@
 #endif
 
 #if defined(__cplusplus)
-extern "C" {
+extern "C"
+{
 #endif
 
-FLUTTER_PLUGIN_EXPORT void DesktopMultiWindowPluginRegisterWithRegistrar(
-    FlutterDesktopPluginRegistrarRef registrar);
+    FLUTTER_PLUGIN_EXPORT void DesktopMultiWindowPluginRegisterWithRegistrar(
+        FlutterDesktopPluginRegistrarRef registrar);
 
-// flutter_view_controller: pointer to the flutter::FlutterViewController
-typedef void (*WindowCreatedCallback)(void *flutter_view_controller);
-FLUTTER_PLUGIN_EXPORT void DesktopMultiWindowSetWindowCreatedCallback(WindowCreatedCallback callback);
+    // flutter_view_controller: pointer to the flutter::FlutterViewController
+    typedef void (*WindowCreatedCallback)(void* flutter_view_controller);
+    FLUTTER_PLUGIN_EXPORT void DesktopMultiWindowSetWindowCreatedCallback(WindowCreatedCallback callback);
 
 #if defined(__cplusplus)
-}  // extern "C"
+} // extern "C"
 #endif
 
-#endif  // FLUTTER_PLUGIN_DESKTOP_MULTI_WINDOW_PLUGIN_H_
+#endif // FLUTTER_PLUGIN_DESKTOP_MULTI_WINDOW_PLUGIN_H_

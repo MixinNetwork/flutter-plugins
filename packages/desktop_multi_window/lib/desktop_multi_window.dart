@@ -5,8 +5,13 @@ import 'package:flutter/services.dart';
 import 'src/channels.dart';
 import 'src/window_controller.dart';
 import 'src/window_controller_impl.dart';
+import 'src/window_options.dart';
 
 export 'src/window_controller.dart';
+export 'src/window_options.dart';
+export 'src/windows/window_options.dart';
+export 'src/windows/extended_window_style.dart';
+export 'src/windows/window_style.dart';
 
 class DesktopMultiWindow {
   /// Create a new Window.
@@ -26,10 +31,15 @@ class DesktopMultiWindow {
   ///
   /// NOTE: [createWindow] will only create a new window, you need to call
   /// [WindowController.show] to show the window.
-  static Future<WindowController> createWindow([String? arguments]) async {
+  static Future<WindowController> createWindow(
+      [String? arguments, WindowOptions? options]) async {
+    final Map<String, dynamic> args = {
+      if (arguments != null) 'arguments': arguments,
+      if (options != null) 'options': options.toJson(),
+    };
     final windowId = await multiWindowChannel.invokeMethod<int>(
       'createWindow',
-      arguments,
+      args,
     );
     assert(windowId != null, 'windowId is null');
     assert(windowId! > 0, 'id must be greater than 0');
@@ -42,7 +52,8 @@ class DesktopMultiWindow {
   /// method.
   ///
   /// [targetWindowId] which window you want to invoke the method.
-  static Future<dynamic> invokeMethod(int targetWindowId, String method, [dynamic arguments]) {
+  static Future<dynamic> invokeMethod(int targetWindowId, String method,
+      [dynamic arguments]) {
     return windowEventChannel.invokeMethod(method, <String, dynamic>{
       'targetWindowId': targetWindowId,
       'arguments': arguments,
@@ -55,7 +66,8 @@ class DesktopMultiWindow {
   /// for example: you can not receive the method call which target window isn't
   /// main window in main window isolate.
   ///
-  static void setMethodHandler(Future<dynamic> Function(MethodCall call, int fromWindowId)? handler) {
+  static void setMethodHandler(
+      Future<dynamic> Function(MethodCall call, int fromWindowId)? handler) {
     if (handler == null) {
       windowEventChannel.setMethodCallHandler(null);
       return;
@@ -63,14 +75,16 @@ class DesktopMultiWindow {
     windowEventChannel.setMethodCallHandler((call) async {
       final fromWindowId = call.arguments['fromWindowId'] as int;
       final arguments = call.arguments['arguments'];
-      final result = await handler(MethodCall(call.method, arguments), fromWindowId);
+      final result =
+          await handler(MethodCall(call.method, arguments), fromWindowId);
       return result;
     });
   }
 
   /// Get all sub window id.
   static Future<List<int>> getAllSubWindowIds() async {
-    final result = await multiWindowChannel.invokeMethod<List<dynamic>>('getAllSubWindowIds');
+    final result = await multiWindowChannel
+        .invokeMethod<List<dynamic>>('getAllSubWindowIds');
     final ids = result?.cast<int>() ?? const [];
     assert(!ids.contains(0), 'ids must not contains main window id');
     assert(ids.every((id) => id > 0), 'id must be greater than 0');

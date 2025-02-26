@@ -7,13 +7,13 @@
 
 #include "window_channel.h"
 
-class BaseFlutterWindow {
+class BaseFlutterWindow
+{
 
- public:
-
+public:
   virtual ~BaseFlutterWindow() = default;
 
-  virtual WindowChannel *GetWindowChannel() = 0;
+  virtual WindowChannel* GetWindowChannel() = 0;
 
   void Show();
 
@@ -21,16 +21,14 @@ class BaseFlutterWindow {
 
   void Close();
 
-  void SetTitle(const std::string &title);
+  void SetTitle(const std::string& title);
 
   void SetBounds(double_t x, double_t y, double_t width, double_t height);
 
   void Center();
 
- protected:
-
+protected:
   virtual HWND GetWindowHandle() = 0;
-
 };
 
-#endif //MULTI_WINDOW_WINDOWS_BASE_FLUTTER_WINDOW_H_
+#endif // MULTI_WINDOW_WINDOWS_BASE_FLUTTER_WINDOW_H_

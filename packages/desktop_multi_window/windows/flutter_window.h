@@ -14,33 +14,30 @@
 
 #include "base_flutter_window.h"
 #include "window_channel.h"
+#include "window_options.h"
 
 class FlutterWindowCallback {
 
- public:
+public:
   virtual void OnWindowClose(int64_t id) = 0;
 
   virtual void OnWindowDestroy(int64_t id) = 0;
-
 };
 
 class FlutterWindow : public BaseFlutterWindow {
 
- public:
-
-  FlutterWindow(int64_t id, std::string args, const std::shared_ptr<FlutterWindowCallback> &callback);
+public:
+  FlutterWindow(int64_t id, std::string args, const std::shared_ptr<FlutterWindowCallback>& callback, WindowOptions options);
   ~FlutterWindow() override;
 
-  WindowChannel *GetWindowChannel() override {
+  WindowChannel* GetWindowChannel() override {
     return window_channel_.get();
   }
 
- protected:
-
+protected:
   HWND GetWindowHandle() override { return window_handle_; }
 
- private:
-
+private:
   std::weak_ptr<FlutterWindowCallback> callback_;
 
   HWND window_handle_;
@@ -58,11 +55,11 @@ class FlutterWindow : public BaseFlutterWindow {
 
   static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
-  static FlutterWindow *GetThisFromHandle(HWND window) noexcept;
+  static FlutterWindow* GetThisFromHandle(HWND window) noexcept;
 
   LRESULT MessageHandler(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam);
 
   void Destroy();
 };
 
-#endif //DESKTOP_MULTI_WINDOW_WINDOWS_FLUTTER_WINDOW_H_
+#endif // DESKTOP_MULTI_WINDOW_WINDOWS_FLUTTER_WINDOW_H_

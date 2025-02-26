@@ -2,15 +2,15 @@ import 'extended_window_style.dart';
 import 'window_style.dart';
 
 class WindowsWindowOptions {
-  final WindowsWindowStyle style;
-  final WindowsExtendedWindowStyle exStyle;
+  final int style;
+  final int exStyle;
   final int x;
   final int y;
   final int width;
   final int height;
   final String title;
 
-  WindowsWindowOptions({
+  const WindowsWindowOptions({
     this.style = WindowsWindowStyle.WS_OVERLAPPED, // WS_OVERLAPPEDWINDOW
     this.exStyle = WindowsExtendedWindowStyle.NO_EX_STYLE,
     this.x = 10,
@@ -22,8 +22,8 @@ class WindowsWindowOptions {
 
   Map<String, dynamic> toJson() {
     return {
-      'style': style.value,
-      'exStyle': exStyle.value,
+      'style': style,
+      'exStyle': exStyle,
       'x': x,
       'y': y,
       'width': width,
