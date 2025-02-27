@@ -5,7 +5,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import 'events.dart';
-import 'utils/platform.dart' if (dart.library.html) 'utils/platform_web.dart';
+import 'utils/platform.dart'
+    if (dart.library.js_interop) 'utils/platform_web.dart';
 import 'web_drop_item.dart';
 
 typedef RawDropListener = void Function(DropEvent);
@@ -39,7 +40,7 @@ class DesktopDrop {
 
   Future<bool> startAccessingSecurityScopedResource(
       {required Uint8List bookmark}) async {
-    Map<String, dynamic> resultMap = Map();
+    Map<String, dynamic> resultMap = {};
     resultMap["apple-bookmark"] = bookmark;
     final bool? result = await _channel.invokeMethod(
         "startAccessingSecurityScopedResource", resultMap);
@@ -49,7 +50,7 @@ class DesktopDrop {
 
   Future<bool> stopAccessingSecurityScopedResource(
       {required Uint8List bookmark}) async {
-    Map<String, dynamic> resultMap = Map();
+    Map<String, dynamic> resultMap = {};
     resultMap["apple-bookmark"] = bookmark;
     final bool result = await _channel.invokeMethod(
         "stopAccessingSecurityScopedResource", resultMap);

@@ -5,107 +5,66 @@ import 'package:cross_file/cross_file.dart';
 abstract class DropItem extends XFile {
   Uint8List? extraAppleBookmark;
   DropItem(
-    String path, {
-    String? mimeType,
-    String? name,
-    int? length,
-    Uint8List? bytes,
-    DateTime? lastModified,
+    super.path, {
+    super.mimeType,
+    super.name,
+    super.length,
+    super.bytes,
+    super.lastModified,
     this.extraAppleBookmark,
-  }) : super(path,
-            mimeType: mimeType,
-            name: name,
-            length: length,
-            bytes: bytes,
-            lastModified: lastModified);
+  });
 
   DropItem.fromData(
-    Uint8List bytes, {
-    String? mimeType,
-    String? name,
-    int? length,
-    DateTime? lastModified,
-    String? path,
-  }) : super.fromData(
-          bytes,
-          mimeType: mimeType,
-          name: name,
-          length: length,
-          lastModified: lastModified,
-          path: path,
-        );
+    super.bytes, {
+    super.mimeType,
+    super.name,
+    super.length,
+    super.lastModified,
+    super.path,
+  }) : super.fromData();
 }
 
 class DropItemFile extends DropItem {
   DropItemFile(
-    String path, {
-    String? mimeType,
-    String? name,
-    int? length,
-    Uint8List? bytes,
-    DateTime? lastModified,
-    Uint8List? extraAppleBookmark,
-  }) : super(
-          path,
-          mimeType: mimeType,
-          name: name,
-          length: length,
-          bytes: bytes,
-          lastModified: lastModified,
-          extraAppleBookmark: extraAppleBookmark,
-        );
+    super.path, {
+    super.mimeType,
+    super.name,
+    super.length,
+    super.bytes,
+    super.lastModified,
+    super.extraAppleBookmark,
+  });
 
   DropItemFile.fromData(
-    Uint8List bytes, {
-    String? mimeType,
-    String? name,
-    int? length,
-    DateTime? lastModified,
-    String? path,
-  }) : super.fromData(
-          bytes,
-          mimeType: mimeType,
-          name: name,
-          length: length,
-          lastModified: lastModified,
-          path: path,
-        );
+    super.bytes, {
+    super.mimeType,
+    super.name,
+    super.length,
+    super.lastModified,
+    super.path,
+  }) : super.fromData();
 }
 
 class DropItemDirectory extends DropItem {
   final List<DropItem> children;
 
   DropItemDirectory(
-    String path,
+    super.path,
     this.children, {
-    String? mimeType,
-    String? name,
-    int? length,
-    Uint8List? bytes,
-    DateTime? lastModified,
-  }) : super(
-          path,
-          mimeType: mimeType,
-          name: name,
-          length: length,
-          bytes: bytes,
-          lastModified: lastModified,
-        );
+    super.mimeType,
+    super.name,
+    super.length,
+    super.bytes,
+    super.lastModified,
+  });
 
   DropItemDirectory.fromData(
-    Uint8List bytes,
+    super.bytes,
     this.children, {
-    String? mimeType,
-    String? name,
-    int? length,
-    DateTime? lastModified,
-    String? path,
-  }) : super.fromData(
-          bytes,
-          mimeType: mimeType,
-          name: name,
-          length: length,
-          lastModified: lastModified,
-          path: path,
-        );
+    super.mimeType,
+    super.name,
+    super.length,
+    super.lastModified,
+    super.path,
+  }) : super.fromData();
 }
