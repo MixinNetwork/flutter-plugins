@@ -12,14 +12,13 @@ dependencies:
     sdk: flutter
   flutter_web_plugins:
     sdk: flutter
-  cross_file: ^0.3.4+1
-  web: ^1.0.0
-
+  cross_file: ^0.3.4+2
+  web: ^1.1.1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^1.0.0
+  flutter_lints: ^5.0.0
 
 flutter:
   plugin:

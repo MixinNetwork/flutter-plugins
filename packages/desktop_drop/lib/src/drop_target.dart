@@ -3,7 +3,8 @@ import 'package:flutter/widgets.dart';
 import 'channel.dart';
 import 'drop_item.dart';
 import 'events.dart';
-import 'utils/platform.dart' if (dart.library.html) 'utils/platform_web.dart';
+import 'utils/platform.dart'
+    if (dart.library.js_interop) 'utils/platform_web.dart';
 
 @immutable
 class DropDoneDetails {
@@ -36,14 +37,14 @@ typedef OnDragCallback<Detail> = void Function(Detail details);
 /// A widget that accepts draggable files.
 class DropTarget extends StatefulWidget {
   const DropTarget({
-    Key? key,
+    super.key,
     required this.child,
     this.onDragEntered,
     this.onDragExited,
     this.onDragDone,
     this.onDragUpdated,
     this.enable = true,
-  }) : super(key: key);
+  });
 
   final Widget child;
 
