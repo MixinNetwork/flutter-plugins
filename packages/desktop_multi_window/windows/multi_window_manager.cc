@@ -6,8 +6,6 @@
 
 #include <memory>
 
-#include "flutter_window.h"
-
 namespace {
   int64_t g_next_id_ = 0;
 
@@ -100,11 +98,20 @@ void MultiWindowManager::Close(int64_t id) {
   }
 }
 
-void MultiWindowManager::SetFrame(int64_t id, double x, double y, double width, double height) {
+void MultiWindowManager::SetFrame(int64_t id, double_t x, double_t y, double_t width, double_t height) {
   auto window = windows_.find(id);
   if (window != windows_.end()) {
     window->second->SetBounds(x, y, width, height);
   }
+}
+
+flutter::EncodableMap MultiWindowManager::GetFrame(int64_t id, const flutter::EncodableMap& args) {
+  flutter::EncodableMap map = flutter::EncodableMap();
+  auto window = windows_.find(id);
+  if (window != windows_.end()) {
+    map = window->second->GetBounds(args);
+  }
+  return map;
 }
 
 void MultiWindowManager::SetTitle(int64_t id, const std::string& title) {

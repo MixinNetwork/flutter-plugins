@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:flutter/services.dart';
 
@@ -45,6 +46,31 @@ class WindowControllerMainImpl extends WindowController {
       'width': frame.width,
       'height': frame.height,
     });
+  }
+
+  double getDevicePixelRatio() {
+    // Subsequent version, remove this deprecated member.
+    // ignore: deprecated_member_use
+    return window.devicePixelRatio;
+  }
+
+  @override
+  Future<Rect> getFrame() async {
+    final Map<String, dynamic> arguments = {
+      'windowId': _id,
+      'devicePixelRatio': getDevicePixelRatio(),
+    };
+    final Map<dynamic, dynamic> resultData = await _channel.invokeMethod(
+      'getFrame',
+      arguments,
+    );
+
+    return Rect.fromLTWH(
+      resultData['x'],
+      resultData['y'],
+      resultData['width'],
+      resultData['height'],
+    );
   }
 
   @override

@@ -5,9 +5,8 @@
 //  Created by Bin Yang on 2022/1/28.
 //
 
-import Foundation
-
 import FlutterMacOS
+import Foundation
 
 typealias MethodHandler = (Int64, Int64, String, Any?, @escaping FlutterResult) -> Void
 
@@ -16,8 +15,11 @@ class WindowChannel: NSObject, FlutterPlugin {
     fatalError()
   }
 
-  public static func register(with registrar: FlutterPluginRegistrar, windowId: Int64) -> WindowChannel {
-    let channel = FlutterMethodChannel(name: "mixin.one/flutter_multi_window_channel", binaryMessenger: registrar.messenger)
+  public static func register(with registrar: FlutterPluginRegistrar, windowId: Int64)
+    -> WindowChannel
+  {
+    let channel = FlutterMethodChannel(
+      name: "mixin.one/flutter_multi_window_channel", binaryMessenger: registrar.messenger)
     let instance = WindowChannel(windowId: windowId, methodChannel: channel)
     registrar.addMethodCallDelegate(instance, channel: channel)
     return instance
@@ -46,7 +48,9 @@ class WindowChannel: NSObject, FlutterPlugin {
     }
   }
 
-  func invokeMethod(fromWindowId: Int64, method: String, arguments: Any?, result: @escaping FlutterResult) {
+  func invokeMethod(
+    fromWindowId: Int64, method: String, arguments: Any?, result: @escaping FlutterResult
+  ) {
     let args = [
       "fromWindowId": fromWindowId,
       "arguments": arguments,

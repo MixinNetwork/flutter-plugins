@@ -3,7 +3,8 @@ import FlutterMacOS
 
 public class FlutterMultiWindowPlugin: NSObject, FlutterPlugin {
   static func registerInternal(with registrar: FlutterPluginRegistrar) {
-    let channel = FlutterMethodChannel(name: "mixin.one/flutter_multi_window", binaryMessenger: registrar.messenger)
+    let channel = FlutterMethodChannel(
+      name: "mixin.one/flutter_multi_window", binaryMessenger: registrar.messenger)
     let instance = FlutterMultiWindowPlugin()
     registrar.addMethodCallDelegate(instance, channel: channel)
   }
@@ -11,7 +12,8 @@ public class FlutterMultiWindowPlugin: NSObject, FlutterPlugin {
   public static func register(with registrar: FlutterPluginRegistrar) {
     registerInternal(with: registrar)
     guard let app = NSApplication.shared.delegate as? FlutterAppDelegate else {
-      debugPrint("failed to find flutter main window, application delegate is not FlutterAppDelegate")
+      debugPrint(
+        "failed to find flutter main window, application delegate is not FlutterAppDelegate")
       return
     }
     guard let window = app.mainFlutterWindow else {
@@ -32,9 +34,24 @@ public class FlutterMultiWindowPlugin: NSObject, FlutterPlugin {
   public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     switch call.method {
     case "createWindow":
-      let arguments = call.arguments as? String
-      let windowId = MultiWindowManager.shared.create(arguments: arguments ?? "")
-      result(windowId)
+      if let args = call.arguments as? [String: Any],
+        let optionsJson = args["options"] as? [String: Any],
+        let macosJson = optionsJson["macos"] as? [String: Any],
+        let windowOptions = WindowOptions(json: macosJson)
+      {
+        let arguments = call.arguments as? String
+        let windowId = MultiWindowManager.shared.create(arguments: arguments ?? "", windowOptions: windowOptions)
+        result(windowId)
+      } else {
+        result(
+          FlutterError(
+            code: "INVALID_ARGUMENTS",
+            message: "Could not parse macOS window options.",
+            details: nil))
+      }
+    // let arguments = call.arguments as? String
+    // let windowId = MultiWindowManager.shared.create(arguments: arguments ?? "")
+    // result(windowId)
     case "show":
       let windowId = call.arguments as! Int64
       MultiWindowManager.shared.show(windowId: windowId)
@@ -61,18 +78,23 @@ public class FlutterMultiWindowPlugin: NSObject, FlutterPlugin {
       let rect = NSRect(x: left, y: top, width: width, height: height)
       MultiWindowManager.shared.setFrame(windowId: windowId, frame: rect)
       result(nil)
+    case "getFrame":
+      let arguments = call.arguments as! [String: Any?]
+      let windowId = arguments["windowId"] as! Int64
+      let bounds = MultiWindowManager.shared.getFrame(windowId: windowId)
+      result(bounds)
     case "setTitle":
       let arguments = call.arguments as! [String: Any?]
       let windowId = arguments["windowId"] as! Int64
       let title = arguments["title"] as! String
       MultiWindowManager.shared.setTitle(windowId: windowId, title: title)
       result(nil)
-	case "resizable":
-	  let arguments = call.arguments as! [String: Any?]
-	  let windowId = arguments["windowId"] as! Int64
-	  let resizable = arguments["resizable"] as! Bool
-	  MultiWindowManager.shared.resizable(windowId: windowId, resizable: resizable)
-	  result(nil)
+    case "resizable":
+      let arguments = call.arguments as! [String: Any?]
+      let windowId = arguments["windowId"] as! Int64
+      let resizable = arguments["resizable"] as! Bool
+      MultiWindowManager.shared.resizable(windowId: windowId, resizable: resizable)
+      result(nil)
     case "setFrameAutosaveName":
       let arguments = call.arguments as! [String: Any?]
       let windowId = arguments["windowId"] as! Int64

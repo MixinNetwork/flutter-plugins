@@ -58,8 +58,7 @@ class _EventWidgetState extends State<EventWidget> {
     super.dispose();
   }
 
-  Future<dynamic> _handleMethodCallback(
-      MethodCall call, int fromWindowId) async {
+  Future<dynamic> _handleMethodCallback(MethodCall call, int fromWindowId) async {
     if (call.arguments.toString() == "ping") {
       return "pong";
     }
@@ -83,10 +82,14 @@ class _EventWidgetState extends State<EventWidget> {
         return;
       }
       final windowId = int.tryParse(windowInputController.text);
-      textInputController.clear();
-      final result =
-          await DesktopMultiWindow.invokeMethod(windowId!, "onSend", text);
-      debugPrint("onSend result: $result");
+      final subWindowIds = await DesktopMultiWindow.getAllSubWindowIds();
+      if (windowId != null && subWindowIds.contains(windowId)) {
+        textInputController.clear();
+        final result = await DesktopMultiWindow.invokeMethod(windowId, "onSend", text);
+        debugPrint("onSend result: $result");
+      } else {
+        debugPrint("Invalid window ID");
+      }
     }
 
     return Column(
@@ -95,8 +98,7 @@ class _EventWidgetState extends State<EventWidget> {
           child: ListView.builder(
             itemCount: messages.length,
             reverse: true,
-            itemBuilder: (context, index) =>
-                _MessageItemWidget(item: messages[index]),
+            itemBuilder: (context, index) => _MessageItemWidget(item: messages[index]),
           ),
         ),
         Row(

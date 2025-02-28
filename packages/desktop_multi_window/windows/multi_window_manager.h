@@ -31,6 +31,8 @@ public:
 
   void SetFrame(int64_t id, double_t x, double_t y, double_t width, double_t height);
 
+  flutter::EncodableMap GetFrame(int64_t id, const flutter::EncodableMap& args);
+
   void Center(int64_t id);
 
   void SetTitle(int64_t id, const std::string& title);

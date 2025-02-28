@@ -5,8 +5,23 @@
 //  Created by Bin Yang on 2022/1/10.
 //
 
+import Cocoa
 import FlutterMacOS
 import Foundation
+
+extension NSRect {
+  var topLeft: CGPoint {
+    set {
+      let screenFrameRect = NSScreen.screens[0].frame
+      origin.x = newValue.x
+      origin.y = screenFrameRect.height - newValue.y - size.height
+    }
+    get {
+      let screenFrameRect = NSScreen.screens[0].frame
+      return CGPoint(x: origin.x, y: screenFrameRect.height - origin.y - size.height)
+    }
+  }
+}
 
 class MultiWindowManager {
   static let shared = MultiWindowManager()
@@ -15,11 +30,11 @@ class MultiWindowManager {
 
   private var windows: [Int64: BaseFlutterWindow] = [:]
 
-  func create(arguments: String) -> Int64 {
+  func create(arguments: String, windowOptions: WindowOptions) -> Int64 {
     id += 1
     let windowId = id
 
-    let window = FlutterWindow(id: windowId, arguments: arguments)
+    let window = FlutterWindow(id: windowId, arguments: arguments, windowOptions: windowOptions)
     window.delegate = self
     window.windowChannel.methodHandler = self.handleMethodCall
     windows[windowId] = window
@@ -32,12 +47,18 @@ class MultiWindowManager {
     windows[0] = mainWindow
   }
 
-  private func handleMethodCall(fromWindowId: Int64, targetWindowId: Int64, method: String, arguments: Any?, result: @escaping FlutterResult) {
+  private func handleMethodCall(
+    fromWindowId: Int64, targetWindowId: Int64, method: String, arguments: Any?,
+    result: @escaping FlutterResult
+  ) {
     guard let window = self.windows[targetWindowId] else {
-      result(FlutterError(code: "-1", message: "failed to find target window. \(targetWindowId)", details: nil))
+      result(
+        FlutterError(
+          code: "-1", message: "failed to find target window. \(targetWindowId)", details: nil))
       return
     }
-    window.windowChannel.invokeMethod(fromWindowId: fromWindowId, method: method, arguments: arguments, result: result)
+    window.windowChannel.invokeMethod(
+      fromWindowId: fromWindowId, method: method, arguments: arguments, result: result)
   }
 
   func show(windowId: Int64) {
@@ -84,6 +105,28 @@ class MultiWindowManager {
       return
     }
     window.setFrame(frame: frame)
+  }
+
+  func getFrame(windowId: Int64) -> NSDictionary {
+    guard let window = windows[windowId] else {
+      debugPrint("window \(windowId) not exists.")
+      let data: NSDictionary = [
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 0,
+      ]
+      return data
+    }
+    let frameRect: NSRect = window.window.frame
+
+    let data: NSDictionary = [
+      "x": frameRect.topLeft.x,
+      "y": frameRect.topLeft.y,
+      "width": frameRect.size.width,
+      "height": frameRect.size.height,
+    ]
+    return data
   }
 
   func setTitle(windowId: Int64, title: String) {

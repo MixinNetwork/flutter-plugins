@@ -25,6 +25,8 @@ public:
 
   void SetBounds(double_t x, double_t y, double_t width, double_t height);
 
+  flutter::EncodableMap GetBounds(const flutter::EncodableMap& args);
+
   void Center();
 
 protected:

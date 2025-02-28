@@ -69,6 +69,30 @@ void BaseFlutterWindow::SetBounds(double_t x, double_t y, double_t width, double
     TRUE);
 }
 
+RECT BaseFlutterWindow::GetBounds(const flutter::EncodableMap& args)
+{
+  HWND hwnd = GetMainWindow();
+  double devicePixelRatio =
+      std::get<double>(args.at(flutter::EncodableValue("devicePixelRatio")));
+
+  flutter::EncodableMap resultMap = flutter::EncodableMap();
+  RECT rect;
+  if (GetWindowRect(hwnd, &rect)) {
+    double x = rect.left / devicePixelRatio * 1.0f;
+    double y = rect.top / devicePixelRatio * 1.0f;
+    double width = (rect.right - rect.left) / devicePixelRatio * 1.0f;
+    double height = (rect.bottom - rect.top) / devicePixelRatio * 1.0f;
+
+    resultMap[flutter::EncodableValue("x")] = flutter::EncodableValue(x);
+    resultMap[flutter::EncodableValue("y")] = flutter::EncodableValue(y);
+    resultMap[flutter::EncodableValue("width")] =
+        flutter::EncodableValue(width);
+    resultMap[flutter::EncodableValue("height")] =
+        flutter::EncodableValue(height);
+  }
+  return rect;
+}
+
 void BaseFlutterWindow::SetTitle(const std::string& title) {
   auto handle = GetWindowHandle();
   if (!handle) {
