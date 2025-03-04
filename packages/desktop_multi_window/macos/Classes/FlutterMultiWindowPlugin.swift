@@ -20,8 +20,11 @@ public class FlutterMultiWindowPlugin: NSObject, FlutterPlugin {
       debugPrint("failed to find flutter main window")
       return
     }
-    let mainWindowChannel = WindowChannel.register(with: registrar, windowId: 0)
-    MultiWindowManager.shared.attachMainWindow(window: window, mainWindowChannel)
+    let mainWindowEventsChannel = WindowEventsChannel.register(returns: registrar)
+    let mainWindowInterWindowEventChannel = InterWindowEventChannel.register(
+      with: registrar, windowId: 0)
+    MultiWindowManager.shared.attachMainWindow(
+      window: window, mainWindowInterWindowEventChannel, mainWindowEventsChannel)
   }
 
   public typealias OnWindowCreatedCallback = (FlutterViewController) -> Void
@@ -40,7 +43,8 @@ public class FlutterMultiWindowPlugin: NSObject, FlutterPlugin {
         let windowOptions = WindowOptions(json: macosJson)
       {
         let arguments = call.arguments as? String
-        let windowId = MultiWindowManager.shared.create(arguments: arguments ?? "", windowOptions: windowOptions)
+        let windowId = MultiWindowManager.shared.create(
+          arguments: arguments ?? "", windowOptions: windowOptions)
         result(windowId)
       } else {
         result(
@@ -49,63 +53,43 @@ public class FlutterMultiWindowPlugin: NSObject, FlutterPlugin {
             message: "Could not parse macOS window options.",
             details: nil))
       }
-    // let arguments = call.arguments as? String
-    // let windowId = MultiWindowManager.shared.create(arguments: arguments ?? "")
-    // result(windowId)
-    case "show":
-      let windowId = call.arguments as! Int64
-      MultiWindowManager.shared.show(windowId: windowId)
-      result(nil)
-    case "hide":
-      let windowId = call.arguments as! Int64
-      MultiWindowManager.shared.hide(windowId: windowId)
-      result(nil)
-    case "close":
-      let windowId = call.arguments as! Int64
-      MultiWindowManager.shared.close(windowId: windowId)
-      result(nil)
-    case "center":
-      let windowId = call.arguments as! Int64
-      MultiWindowManager.shared.center(windowId: windowId)
-      result(nil)
-    case "setFrame":
-      let arguments = call.arguments as! [String: Any?]
-      let windowId = arguments["windowId"] as! Int64
-      let left = arguments["left"] as! Double
-      let top = arguments["top"] as! Double
-      let width = arguments["width"] as! Double
-      let height = arguments["height"] as! Double
-      let rect = NSRect(x: left, y: top, width: width, height: height)
-      MultiWindowManager.shared.setFrame(windowId: windowId, frame: rect)
-      result(nil)
-    case "getFrame":
-      let arguments = call.arguments as! [String: Any?]
-      let windowId = arguments["windowId"] as! Int64
-      let bounds = MultiWindowManager.shared.getFrame(windowId: windowId)
-      result(bounds)
-    case "setTitle":
-      let arguments = call.arguments as! [String: Any?]
-      let windowId = arguments["windowId"] as! Int64
-      let title = arguments["title"] as! String
-      MultiWindowManager.shared.setTitle(windowId: windowId, title: title)
-      result(nil)
-    case "resizable":
-      let arguments = call.arguments as! [String: Any?]
-      let windowId = arguments["windowId"] as! Int64
-      let resizable = arguments["resizable"] as! Bool
-      MultiWindowManager.shared.resizable(windowId: windowId, resizable: resizable)
-      result(nil)
-    case "setFrameAutosaveName":
-      let arguments = call.arguments as! [String: Any?]
-      let windowId = arguments["windowId"] as! Int64
-      let frameAutosaveName = arguments["name"] as! String
-      MultiWindowManager.shared.setFrameAutosaveName(windowId: windowId, name: frameAutosaveName)
-      result(nil)
     case "getAllSubWindowIds":
       let subWindowIds = MultiWindowManager.shared.getAllSubWindowIds()
       result(subWindowIds)
     default:
-      result(FlutterMethodNotImplemented)
+      guard let arguments = call.arguments as? [String: Any?] else {
+        result(FlutterError(
+          code: "INVALID_ARGUMENTS",
+          message: "Method call arguments must be a dictionary",
+          details: nil
+        ))
+        return
+      }
+      
+      guard let windowId = arguments["windowId"] as? Int64 else {
+        result(FlutterError(
+          code: "INVALID_WINDOW_ID",
+          message: "Window ID must be provided and must be an integer",
+          details: nil
+        ))
+        return
+      }
+      
+      // Verify the window exists before attempting to handle the event
+      if !MultiWindowManager.shared.hasWindow(windowId: windowId) {
+        result(FlutterError(
+          code: "WINDOW_NOT_FOUND",
+          message: "No window found with ID: \(windowId)",
+          details: nil
+        ))
+        return
+      }
+      MultiWindowManager.shared.handleWindowEvent(
+        windowId: windowId,
+        method: call.method,
+        arguments: arguments,
+        result: result
+      )
     }
   }
 }

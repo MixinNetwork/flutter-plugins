@@ -8,34 +8,35 @@
 import FlutterMacOS
 import Foundation
 
-typealias MethodHandler = (Int64, Int64, String, Any?, @escaping FlutterResult) -> Void
+typealias InterWindowMethodHandler = (Int64, Int64, String, Any?, @escaping FlutterResult) -> Void
 
-class WindowChannel: NSObject, FlutterPlugin {
+class InterWindowEventChannel: NSObject, FlutterPlugin {
   public static func register(with registrar: FlutterPluginRegistrar) {
     fatalError()
   }
 
   public static func register(with registrar: FlutterPluginRegistrar, windowId: Int64)
-    -> WindowChannel
+    -> InterWindowEventChannel
   {
     let channel = FlutterMethodChannel(
-      name: "mixin.one/flutter_multi_window_channel", binaryMessenger: registrar.messenger)
-    let instance = WindowChannel(windowId: windowId, methodChannel: channel)
+      name: "mixin.one/flutter_multi_window_inter_window_event_channel",
+      binaryMessenger: registrar.messenger)
+    let instance = InterWindowEventChannel(windowId: windowId, methodChannel: channel)
     registrar.addMethodCallDelegate(instance, channel: channel)
     return instance
   }
+
+  var methodHandler: InterWindowMethodHandler?
+
+  let methodChannel: FlutterMethodChannel
+
+  private let windowId: Int64
 
   init(windowId: Int64, methodChannel: FlutterMethodChannel) {
     self.windowId = windowId
     self.methodChannel = methodChannel
     super.init()
   }
-
-  var methodHandler: MethodHandler?
-
-  private let methodChannel: FlutterMethodChannel
-
-  private let windowId: Int64
 
   func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     let args = call.arguments as! [String: Any?]

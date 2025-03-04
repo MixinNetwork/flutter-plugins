@@ -19,6 +19,7 @@ export 'src/macos/window_type.dart';
 export 'src/macos/window_backing.dart';
 export 'src/macos/title_visibility.dart';
 export 'src/macos/animation_behavior.dart';
+export 'src/window_events.dart';
 
 class DesktopMultiWindow {
   /// Create a new Window.
@@ -49,7 +50,7 @@ class DesktopMultiWindow {
     );
     assert(windowId != null, 'windowId is null');
     assert(windowId! > 0, 'id must be greater than 0');
-    return WindowControllerMainImpl(windowId!);
+    return WindowControllerImpl(windowId!);
   }
 
   /// Invoke method on the isolate of the window.
@@ -59,7 +60,7 @@ class DesktopMultiWindow {
   ///
   /// [targetWindowId] which window you want to invoke the method.
   static Future<dynamic> invokeMethod(int targetWindowId, String method, [dynamic arguments]) {
-    return windowEventChannel.invokeMethod(method, <String, dynamic>{
+    return interWindowEventChannel.invokeMethod(method, <String, dynamic>{
       'targetWindowId': targetWindowId,
       'arguments': arguments,
     });
@@ -73,10 +74,10 @@ class DesktopMultiWindow {
   ///
   static void setMethodHandler(Future<dynamic> Function(MethodCall call, int fromWindowId)? handler) {
     if (handler == null) {
-      windowEventChannel.setMethodCallHandler(null);
+      interWindowEventChannel.setMethodCallHandler(null);
       return;
     }
-    windowEventChannel.setMethodCallHandler((call) async {
+    interWindowEventChannel.setMethodCallHandler((call) async {
       final fromWindowId = call.arguments['fromWindowId'] as int;
       final arguments = call.arguments['arguments'];
       final result = await handler(MethodCall(call.method, arguments), fromWindowId);

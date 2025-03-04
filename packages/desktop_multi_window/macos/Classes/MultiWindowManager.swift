@@ -23,138 +23,106 @@ extension NSRect {
   }
 }
 
+enum WindowState {
+  case normal
+  case minimized
+  case maximized
+  case fullscreen
+  case hidden
+}
+
 class MultiWindowManager {
   static let shared = MultiWindowManager()
 
   private var id: Int64 = 0
-
   private var windows: [Int64: BaseFlutterWindow] = [:]
+  private let windowsLock = NSLock()
 
   func create(arguments: String, windowOptions: WindowOptions) -> Int64 {
+    windowsLock.lock()
+    defer { windowsLock.unlock() }
+
     id += 1
     let windowId = id
 
     let window = FlutterWindow(id: windowId, arguments: arguments, windowOptions: windowOptions)
     window.delegate = self
-    window.windowChannel.methodHandler = self.handleMethodCall
+    window.interWindowEventChannel.methodHandler = self.handleInterWindowEvent
     windows[windowId] = window
     return windowId
   }
 
-  func attachMainWindow(window: NSWindow, _ channel: WindowChannel) {
-    let mainWindow = BaseFlutterWindow(window: window, channel: channel)
-    mainWindow.windowChannel.methodHandler = self.handleMethodCall
+  func attachMainWindow(window: NSWindow, _ interWindowEventChannel: InterWindowEventChannel, _ channel: WindowEventsChannel) {
+    windowsLock.lock()
+    defer { windowsLock.unlock() }
+
+    let mainWindow = BaseFlutterWindow(id: 0, window: window, interWindowEventChannel: interWindowEventChannel, windowEventsChannel: channel)
+    mainWindow.interWindowEventChannel.methodHandler = self.handleInterWindowEvent
     windows[0] = mainWindow
   }
 
-  private func handleMethodCall(
+  private func handleInterWindowEvent(
     fromWindowId: Int64, targetWindowId: Int64, method: String, arguments: Any?,
     result: @escaping FlutterResult
   ) {
+    windowsLock.lock()
     guard let window = self.windows[targetWindowId] else {
+      windowsLock.unlock()
       result(
         FlutterError(
           code: "-1", message: "failed to find target window. \(targetWindowId)", details: nil))
       return
     }
-    window.windowChannel.invokeMethod(
+
+    // Check if window is still valid
+    if window.window.contentViewController == nil
+      || (window.window.contentViewController as? FlutterViewController)?.engine == nil
+    {
+      windowsLock.unlock()
+      result(
+        FlutterError(
+          code: "-2", message: "window engine is no longer valid \(targetWindowId)", details: nil))
+      return
+    }
+    windowsLock.unlock()
+
+    window.interWindowEventChannel.invokeMethod(
       fromWindowId: fromWindowId, method: method, arguments: arguments, result: result)
   }
 
-  func show(windowId: Int64) {
+  func handleWindowEvent(windowId: Int64, method: String, arguments: [String: Any?]?, result: @escaping FlutterResult) {
+    windowsLock.lock()
     guard let window = windows[windowId] else {
+      windowsLock.unlock()
       debugPrint("window \(windowId) not exists.")
       return
     }
-    window.show()
-  }
-
-  func hide(windowId: Int64) {
-    guard let window = windows[windowId] else {
-      debugPrint("window \(windowId) not exists.")
-      return
-    }
-    window.hide()
-  }
-
-  func close(windowId: Int64) {
-    guard let window = windows[windowId] else {
-      debugPrint("window \(windowId) not exists.")
-      return
-    }
-    window.close()
-  }
-
-  func closeAll() {
-    windows.forEach { _, value in
-      value.close()
-    }
-  }
-
-  func center(windowId: Int64) {
-    guard let window = windows[windowId] else {
-      debugPrint("window \(windowId) not exists.")
-      return
-    }
-    window.center()
-  }
-
-  func setFrame(windowId: Int64, frame: NSRect) {
-    guard let window = windows[windowId] else {
-      debugPrint("window \(windowId) not exists.")
-      return
-    }
-    window.setFrame(frame: frame)
-  }
-
-  func getFrame(windowId: Int64) -> NSDictionary {
-    guard let window = windows[windowId] else {
-      debugPrint("window \(windowId) not exists.")
-      let data: NSDictionary = [
-        "x": 0,
-        "y": 0,
-        "width": 0,
-        "height": 0,
-      ]
-      return data
-    }
-    let frameRect: NSRect = window.window.frame
-
-    let data: NSDictionary = [
-      "x": frameRect.topLeft.x,
-      "y": frameRect.topLeft.y,
-      "width": frameRect.size.width,
-      "height": frameRect.size.height,
-    ]
-    return data
-  }
-
-  func setTitle(windowId: Int64, title: String) {
-    guard let window = windows[windowId] else {
-      debugPrint("window \(windowId) not exists.")
-      return
-    }
-    window.setTitle(title: title)
-  }
-
-  func resizable(windowId: Int64, resizable: Bool) {
-    guard let window = windows[windowId] else {
-      debugPrint("window \(windowId) not exists.")
-      return
-    }
-    window.resizable(resizable: resizable)
-  }
-
-  func setFrameAutosaveName(windowId: Int64, name: String) {
-    guard let window = windows[windowId] else {
-      debugPrint("window \(windowId) not exists.")
-      return
-    }
-    window.setFrameAutosaveName(name: name)
+    windowsLock.unlock()
+    window.handleMethodCall(method: method, arguments: arguments, result: result)
   }
 
   func getAllSubWindowIds() -> [Int64] {
-    return windows.keys.filter { $0 != 0 }
+    windowsLock.lock()
+    let ids = windows.keys.filter { $0 != 0 }
+    windowsLock.unlock()
+    return ids
+  }
+
+  func getWindowState(windowId: Int64) -> WindowState? {
+    windowsLock.lock()
+    defer { windowsLock.unlock() }
+    
+    guard let window = windows[windowId] else {
+      return nil
+    }
+    
+    return window.getWindowState()
+  }
+
+  func hasWindow(windowId: Int64) -> Bool {
+    windowsLock.lock()
+    defer { windowsLock.unlock() }
+    return windows[windowId] != nil
   }
 }
 
@@ -164,6 +132,29 @@ protocol WindowManagerDelegate: AnyObject {
 
 extension MultiWindowManager: WindowManagerDelegate {
   func onClose(windowId: Int64) {
-    windows.removeValue(forKey: windowId)
+    if let _ = windows[windowId] {
+      // Give time for any pending messages to complete
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+        self.windowsLock.lock()
+        self.windows.removeValue(forKey: windowId)
+        self.windowsLock.unlock()
+      }
+    }
+  }
+}
+
+extension BaseFlutterWindow {
+  func getWindowState() -> WindowState {
+    if !window.isVisible {
+      return .hidden
+    } else if window.isMiniaturized {
+      return .minimized
+    } else if window.isZoomed {
+      return .maximized
+    } else if window.styleMask.contains(.fullScreen) {
+      return .fullscreen
+    } else {
+      return .normal
+    }
   }
 }

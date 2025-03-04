@@ -8,14 +8,171 @@ import Cocoa
 import FlutterMacOS
 import Foundation
 
-class BaseFlutterWindow: NSObject {
-  let window: NSWindow
-  let windowChannel: WindowChannel
+// Protocol for handling window events
+protocol WindowEventHandler: AnyObject {
+  func handleWindowWillClose()
+  func handleWindowShouldClose() -> Bool
+  func handleWindowShouldZoom() -> Bool
+  func handleWindowDidResize()
+  func handleWindowDidEndLiveResize()
+  func handleWindowWillMove()
+  func handleWindowDidMove()
+  func handleWindowDidBecomeKey()
+  func handleWindowDidResignKey()
+  func handleWindowDidBecomeMain()
+  func handleWindowDidResignMain()
+  func handleWindowDidMiniaturize()
+  func handleWindowDidDeminiaturize()
+  func handleWindowDidEnterFullScreen()
+  func handleWindowDidExitFullScreen()
+}
 
-  init(window: NSWindow, channel: WindowChannel) {
+// Proxy class that forwards delegate calls
+class WindowDelegateProxy: NSObject, NSWindowDelegate {
+  weak var originalDelegate: NSWindowDelegate?
+  weak var eventHandler: WindowEventHandler?
+  
+  public func windowWillClose(_ notification: Notification) {
+    eventHandler?.handleWindowWillClose()
+    originalDelegate?.windowWillClose?(notification)
+  }
+  
+  public func windowShouldClose(_ sender: NSWindow) -> Bool {
+    let shouldClose = eventHandler?.handleWindowShouldClose() ?? true
+    return originalDelegate?.windowShouldClose?(sender) ?? shouldClose
+  }
+  
+  public func windowShouldZoom(_ window: NSWindow, toFrame newFrame: NSRect) -> Bool {
+    let shouldZoom = eventHandler?.handleWindowShouldZoom() ?? true
+    return originalDelegate?.windowShouldZoom?(window, toFrame: newFrame) ?? shouldZoom
+  }
+  
+  public func windowDidResize(_ notification: Notification) {
+    eventHandler?.handleWindowDidResize()
+    originalDelegate?.windowDidResize?(notification)
+  }
+  
+  public func windowDidEndLiveResize(_ notification: Notification) {
+    eventHandler?.handleWindowDidEndLiveResize()
+    originalDelegate?.windowDidEndLiveResize?(notification)
+  }
+  
+  public func windowWillMove(_ notification: Notification) {
+    eventHandler?.handleWindowWillMove()
+    originalDelegate?.windowWillMove?(notification)
+  }
+  
+  public func windowDidMove(_ notification: Notification) {
+    eventHandler?.handleWindowDidMove()
+    originalDelegate?.windowDidMove?(notification)
+  }
+  
+  public func windowDidBecomeKey(_ notification: Notification) {
+    eventHandler?.handleWindowDidBecomeKey()
+    originalDelegate?.windowDidBecomeKey?(notification)
+  }
+  
+  public func windowDidResignKey(_ notification: Notification) {
+    eventHandler?.handleWindowDidResignKey()
+    originalDelegate?.windowDidResignKey?(notification)
+  }
+  
+  public func windowDidBecomeMain(_ notification: Notification) {
+    eventHandler?.handleWindowDidBecomeMain()
+    originalDelegate?.windowDidBecomeMain?(notification)
+  }
+  
+  public func windowDidResignMain(_ notification: Notification) {
+    eventHandler?.handleWindowDidResignMain()
+    originalDelegate?.windowDidResignMain?(notification)
+  }
+  
+  public func windowDidMiniaturize(_ notification: Notification) {
+    eventHandler?.handleWindowDidMiniaturize()
+    originalDelegate?.windowDidMiniaturize?(notification)
+  }
+  
+  public func windowDidDeminiaturize(_ notification: Notification) {
+    eventHandler?.handleWindowDidDeminiaturize()
+    originalDelegate?.windowDidDeminiaturize?(notification)
+  }
+  
+  public func windowDidEnterFullScreen(_ notification: Notification) {
+    eventHandler?.handleWindowDidEnterFullScreen()
+    originalDelegate?.windowDidEnterFullScreen?(notification)
+  }
+  
+  public func windowDidExitFullScreen(_ notification: Notification) {
+    eventHandler?.handleWindowDidExitFullScreen()
+    originalDelegate?.windowDidExitFullScreen?(notification)
+  }
+  
+  // Forward any unhandled messages to the original delegate
+  override func responds(to aSelector: Selector!) -> Bool {
+    return super.responds(to: aSelector) || originalDelegate?.responds(to: aSelector) == true
+  }
+  
+  override func forwardingTarget(for aSelector: Selector!) -> Any? {
+    if originalDelegate?.responds(to: aSelector) == true {
+      return originalDelegate
+    }
+    return super.forwardingTarget(for: aSelector)
+  }
+}
+
+class BaseFlutterWindow: NSObject {
+  let windowId: Int64
+  let window: NSWindow
+  let interWindowEventChannel: InterWindowEventChannel
+  let windowEventsChannel: WindowEventsChannel
+  weak var delegate: WindowManagerDelegate?
+
+  private var _isPreventClose: Bool = false
+  private var _isMaximized: Bool = false
+  private var _isMaximizable: Bool = true
+  
+  private weak var originalDelegate: NSWindowDelegate?
+  private let delegateProxy: WindowDelegateProxy
+  private var delegateObservation: NSKeyValueObservation?
+
+  init(
+    id: Int64, window: NSWindow, interWindowEventChannel: InterWindowEventChannel,
+    windowEventsChannel: WindowEventsChannel
+  ) {
+    self.windowId = id
     self.window = window
-    self.windowChannel = channel
+    self.interWindowEventChannel = interWindowEventChannel
+    self.windowEventsChannel = windowEventsChannel
+    
+    self.originalDelegate = window.delegate
+    self.delegateProxy = WindowDelegateProxy()
+    
     super.init()
+    
+    self.windowEventsChannel.methodHandler = handleMethodCall
+    
+    // Set up the proxy
+    self.delegateProxy.originalDelegate = self.originalDelegate
+    self.delegateProxy.eventHandler = self
+    self.window.delegate = self.delegateProxy
+    
+    // Observe delegate changes
+    self.delegateObservation = window.observe(\.delegate, options: [.new, .old]) { [weak self] window, change in
+      guard let self = self else { return }
+      if let newDelegate = change.newValue as? NSWindowDelegate,
+         newDelegate !== self.delegateProxy {
+        self.originalDelegate = newDelegate
+        self.delegateProxy.originalDelegate = newDelegate
+        window.delegate = self.delegateProxy
+      }
+    }
+  }
+
+  private func emitEvent(_ eventName: String) {
+    let args: NSDictionary = [
+      "eventName": eventName
+    ]
+    windowEventsChannel.methodChannel.invokeMethod("onEvent", arguments: args, result: nil)
   }
 
   public func show() {
@@ -36,8 +193,16 @@ class BaseFlutterWindow: NSObject {
     window.center()
   }
 
-  func setFrame(frame: NSRect) {
-    window.setFrame(frame, display: false, animate: true)
+  func getFrame() -> NSRect {
+    return window.frame
+  }
+
+  func setFrame(frame: NSRect, animate: Bool) {
+    if animate {
+      window.animator().setFrame(frame, display: true, animate: true)
+    } else {
+      window.setFrame(frame, display: true)
+    }
   }
 
   func setTitle(title: String) {
@@ -56,18 +221,226 @@ class BaseFlutterWindow: NSObject {
     window.close()
   }
 
+  public func isMinimized() -> Bool {
+    return window.isMiniaturized
+  }
+
+  public func isMaximized() -> Bool {
+    return window.isZoomed
+  }
+
+  public func isVisible() -> Bool {
+    return window.isVisible
+  }
+
+  public func isPreventClose() -> Bool {
+    return _isPreventClose
+  }
+
+  public func isMaximizable() -> Bool {
+    return _isMaximizable
+  }
+
   func setFrameAutosaveName(name: String) {
     window.setFrameAutosaveName(name)
+  }
+
+  func handleMethodCall(
+    method: String, arguments: [String: Any?]?, result: @escaping FlutterResult
+  ) {
+    switch method {
+    case "show":
+      show()
+      result(nil)
+    case "hide":
+      hide()
+      result(nil)
+    case "close":
+      close()
+      result(nil)
+    case "center":
+      center()
+      result(nil)
+    case "getFrame":
+      let frameRect = getFrame()
+      let data: NSDictionary = [
+        "left": frameRect.topLeft.x,
+        "top": frameRect.topLeft.y,
+        "width": frameRect.size.width,
+        "height": frameRect.size.height,
+      ]
+      result(data)
+    case "setFrame":
+      guard let arguments = arguments else {
+        result(
+          FlutterError(
+            code: "INVALID_ARGUMENTS",
+            message: "Arguments must be a dictionary",
+            details: nil
+          ))
+        return
+      }
+      let animate = arguments["animate"] as? Bool ?? false
+
+      var frameRect = getFrame()
+      if arguments["width"] != nil && arguments["height"] != nil {
+        let width: CGFloat = CGFloat(truncating: arguments["width"] as! NSNumber)
+        let height: CGFloat = CGFloat(truncating: arguments["height"] as! NSNumber)
+
+        frameRect.origin.y += (frameRect.size.height - height)
+        frameRect.size.width = width
+        frameRect.size.height = height
+      }
+      if arguments["left"] != nil && arguments["top"] != nil {
+        frameRect.topLeft.x = CGFloat(truncating: arguments["left"] as! NSNumber)
+        frameRect.topLeft.y = CGFloat(truncating: arguments["top"] as! NSNumber)
+      }
+      setFrame(frame: frameRect, animate: animate)
+      result(nil)
+    case "setTitle":
+      guard let arguments = arguments else {
+        result(
+          FlutterError(
+            code: "INVALID_ARGUMENTS",
+            message: "Arguments must be a dictionary",
+            details: nil
+          ))
+        return
+      }
+      let title = arguments["title"] as! String
+      setTitle(title: title)
+      result(nil)
+    case "resizable":
+      guard let arguments = arguments else {
+        result(
+          FlutterError(
+            code: "INVALID_ARGUMENTS",
+            message: "Arguments must be a dictionary",
+            details: nil
+          ))
+        return
+      }
+      let value = arguments["resizable"] as! Bool
+      resizable(resizable: value)
+      result(nil)
+    case "setFrameAutosaveName":
+      guard let arguments = arguments else {
+        result(
+          FlutterError(
+            code: "INVALID_ARGUMENTS",
+            message: "Arguments must be a dictionary",
+            details: nil
+          ))
+        return
+      }
+      let frameAutosaveName = arguments["name"] as! String
+      setFrameAutosaveName(name: frameAutosaveName)
+      result(nil)
+    default:
+      result(FlutterMethodNotImplemented)
+    }
+  }
+
+  deinit {
+    debugPrint("Releasing window resources")
+    delegateObservation?.invalidate()
+    if window.delegate === delegateProxy {
+      window.delegate = originalDelegate
+    }
+    if let flutterViewController = window.contentViewController as? FlutterViewController {
+      DispatchQueue.main.async {
+        flutterViewController.engine.shutDownEngine()
+      }
+    }
+    window.contentViewController = nil
+    window.windowController = nil
+  }
+}
+
+// Implementation of event handling
+extension BaseFlutterWindow: WindowEventHandler {
+  func handleWindowWillClose() {
+    delegate?.onClose(windowId: windowId)
+  }
+  
+  func handleWindowShouldClose() -> Bool {
+    emitEvent("close")
+    if isPreventClose() {
+      return false
+    }
+    delegate?.onClose(windowId: windowId)
+    return true
+  }
+  
+  func handleWindowShouldZoom() -> Bool {
+    emitEvent("maximize")
+    return isMaximizable()
+  }
+  
+  func handleWindowDidResize() {
+    emitEvent("resize")
+    if !_isMaximized && window.isZoomed {
+      _isMaximized = true
+      emitEvent("maximize")
+    }
+    if _isMaximized && !window.isZoomed {
+      _isMaximized = false
+      emitEvent("unmaximize")
+    }
+  }
+  
+  func handleWindowDidEndLiveResize() {
+    emitEvent("resized")
+  }
+  
+  func handleWindowWillMove() {
+    emitEvent("move")
+  }
+  
+  func handleWindowDidMove() {
+    emitEvent("moved")
+  }
+  
+  func handleWindowDidBecomeKey() {
+    if window is NSPanel {
+      emitEvent("focus")
+    }
+  }
+  
+  func handleWindowDidResignKey() {
+    if window is NSPanel {
+      emitEvent("blur")
+    }
+  }
+  
+  func handleWindowDidBecomeMain() {
+    emitEvent("focus")
+  }
+  
+  func handleWindowDidResignMain() {
+    emitEvent("blur")
+  }
+  
+  func handleWindowDidMiniaturize() {
+    emitEvent("minimize")
+  }
+  
+  func handleWindowDidDeminiaturize() {
+    emitEvent("restore")
+  }
+  
+  func handleWindowDidEnterFullScreen() {
+    emitEvent("enter-full-screen")
+  }
+  
+  func handleWindowDidExitFullScreen() {
+    emitEvent("leave-full-screen")
   }
 }
 
 class FlutterWindow: BaseFlutterWindow {
-  let windowId: Int64
-
-  weak var delegate: WindowManagerDelegate?
 
   init(id: Int64, arguments: String, windowOptions: WindowOptions) {
-    windowId = id
 
     let createdWindow: NSWindow
 
@@ -84,24 +457,27 @@ class FlutterWindow: BaseFlutterWindow {
     } else {
       createdWindow = NSWindow(
         contentRect: contentRect,
-        // styleMask: NSWindow.StyleMask(rawValue: windowOptions.styleMask),
-        styleMask: [.miniaturizable, .closable, .resizable, .titled, .fullSizeContentView],
+        styleMask: NSWindow.StyleMask(rawValue: windowOptions.styleMask),
+        // styleMask: [.miniaturizable, .closable, .resizable, .titled, .fullSizeContentView],
         backing: .buffered, defer: false)
     }
 
     let project = FlutterDartProject()
-    project.dartEntrypointArguments = ["multi_window", "\(windowId)", arguments]
+    project.dartEntrypointArguments = ["multi_window", "\(id)", arguments]
     let flutterViewController = FlutterViewController(project: project)
     createdWindow.contentViewController = flutterViewController
 
     let plugin = flutterViewController.registrar(forPlugin: "FlutterMultiWindowPlugin")
     FlutterMultiWindowPlugin.registerInternal(with: plugin)
-    let windowChannel = WindowChannel.register(with: plugin, windowId: id)
-    // Give app a chance to register plugin.
+    let interWindowEventChannel = InterWindowEventChannel.register(with: plugin, windowId: id)
+    let windowEventsChannel = WindowEventsChannel.register(returns: plugin)
+
+    // Give app a chance to register plugins.
     FlutterMultiWindowPlugin.onWindowCreatedCallback?(flutterViewController)
 
-    super.init(window: createdWindow, channel: windowChannel)
-    createdWindow.delegate = self
+    super.init(
+      id: id, window: createdWindow, interWindowEventChannel: interWindowEventChannel,
+      windowEventsChannel: windowEventsChannel)
 
     createdWindow.isReleasedWhenClosed = false
     createdWindow.titleVisibility = .hidden
@@ -129,27 +505,6 @@ class FlutterWindow: BaseFlutterWindow {
     let frameRect = NSWindow.frameRect(
       forContentRect: contentRect, styleMask: createdWindow.styleMask)
     createdWindow.setFrame(frameRect, display: true)
-    NSApplication.shared.setActivationPolicy(.accessory);
-  }
-
-  deinit {
-    debugPrint("release window resource")
-    window.delegate = nil
-    if let flutterViewController = window.contentViewController as? FlutterViewController {
-      flutterViewController.engine.shutDownEngine()
-    }
-    window.contentViewController = nil
-    window.windowController = nil
-  }
-}
-
-extension FlutterWindow: NSWindowDelegate {
-  func windowWillClose(_ notification: Notification) {
-    delegate?.onClose(windowId: windowId)
-  }
-
-  func windowShouldClose(_ sender: NSWindow) -> Bool {
-    delegate?.onClose(windowId: windowId)
-    return true
+    NSApplication.shared.setActivationPolicy(.accessory)
   }
 }

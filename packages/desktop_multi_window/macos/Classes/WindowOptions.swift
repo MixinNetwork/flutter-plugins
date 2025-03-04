@@ -28,39 +28,27 @@ struct WindowOptions {
     let animationBehavior: String?
 
     init?(json: [String: Any]) {
-        // Parse common properties.
-        guard let type = json["type"] as? String,
-            let level = json["level"] as? Int,
-            let styleMask = json["styleMask"] as? UInt,
-            let x = json["x"] as? Int,
-            let y = json["y"] as? Int,
-            let width = json["width"] as? Int,
-            let height = json["height"] as? Int,
-            let title = json["title"] as? String,
-            let isOpaque = json["isOpaque"] as? Bool,
-            let hasShadow = json["hasShadow"] as? Bool,
-            let isMovable = json["isMovable"] as? Bool,
-            let backing = json["backing"] as? String,
-            let backgroundColor = json["backgroundColor"] as? [String: Any],
-            let windowButtonVisibility = json["windowButtonVisibility"] as? Bool
-        else {
-            return nil
+        // Use default values for optional parameters
+        self.type = json["type"] as? String ?? "NSWindow"
+        self.level = json["level"] as? Int ?? Int(NSWindow.Level.normal.rawValue)
+        self.styleMask = json["styleMask"] as? UInt ?? UInt(NSWindow.StyleMask([.titled, .closable, .miniaturizable, .resizable]).rawValue)
+        self.x = json["x"] as? Int ?? 0
+        self.y = json["y"] as? Int ?? 0
+        self.width = json["width"] as? Int ?? 800
+        self.height = json["height"] as? Int ?? 600
+        self.title = json["title"] as? String ?? ""
+        self.isOpaque = json["isOpaque"] as? Bool ?? true
+        self.hasShadow = json["hasShadow"] as? Bool ?? true
+        self.isMovable = json["isMovable"] as? Bool ?? true
+        self.backing = json["backing"] as? String ?? "buffered"
+        
+        if let bgColor = json["backgroundColor"] as? [String: Any] {
+            self.backgroundColor = WindowOptions.parseColor(from: bgColor) ?? NSColor.windowBackgroundColor
+        } else {
+            self.backgroundColor = NSColor.windowBackgroundColor
         }
-
-        self.type = type
-        self.level = level
-        self.styleMask = styleMask
-        self.x = x
-        self.y = y
-        self.width = width
-        self.height = height
-        self.title = title
-        self.isOpaque = isOpaque
-        self.hasShadow = hasShadow
-        self.isMovable = isMovable
-        self.backing = backing
-        self.backgroundColor = WindowOptions.parseColor(from: backgroundColor) ?? NSColor.clear
-        self.windowButtonVisibility = windowButtonVisibility
+        
+        self.windowButtonVisibility = json["windowButtonVisibility"] as? Bool ?? true
 
         // NSWindow-specific properties.
         if type == "NSWindow" {
