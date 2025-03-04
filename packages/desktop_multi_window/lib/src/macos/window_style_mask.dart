@@ -5,7 +5,7 @@
 ///
 /// Note: Some values (like `texturedBackground`) are deprecated or less commonly used,
 /// and the specific bit assignments should be verified against your target macOS version.
-class MacOSWindowStyleMask {
+class MacOsWindowStyleMask {
   /// A borderless window with no title bar or controls.
   /// (Equivalent to an empty set of style masks.)
   static const int borderless = 0;

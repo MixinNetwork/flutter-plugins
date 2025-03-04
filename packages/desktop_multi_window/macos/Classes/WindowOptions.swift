@@ -70,7 +70,7 @@ struct WindowOptions {
         }
     }
 
-    private static func parseColor(from json: [String: Any]) -> NSColor? {
+    static func parseColor(from json: [String: Any]) -> NSColor? {
         // Expect red, green, blue as integers, and optionally alpha.
         guard let redValue = json["red"] as? Int,
             let greenValue = json["green"] as? Int,

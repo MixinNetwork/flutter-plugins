@@ -1,6 +1,6 @@
 /// Defines macOS window levels.
 /// These values determine the z-ordering of windows.
-enum MacOSWindowLevel {
+enum MacOsWindowLevel {
   /// Standard window level.
   normal(0),
 
@@ -26,5 +26,5 @@ enum MacOSWindowLevel {
   screenSaver(1000);
 
   final int value;
-  const MacOSWindowLevel(this.value);
+  const MacOsWindowLevel(this.value);
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'window_collection_behavior.dart';
 import 'window_level.dart';
 import 'window_style_mask.dart';
 import 'window_type.dart';
@@ -20,60 +21,60 @@ extension ColorExtension on Color {
 
 class MacOSWindowOptions {
   // Common properties
-  final MacOSWindowType type;
-  final MacOSWindowLevel level;
+  final MacOsWindowType type;
+  final MacOsWindowLevel level;
   final Set<int> styleMask;
-  final int x;
-  final int y;
+  final Set<int> collectionBehavior;
+  final int left;
+  final int top;
   final int width;
   final int height;
   final String title;
   final bool isOpaque;
   final bool hasShadow;
   final bool isMovable;
-  final MacOSWindowBacking backing;
+  final MacOsWindowBacking backing;
   final Color backgroundColor;
   final bool windowButtonVisibility;
 
   // NSWindow-only properties
   final bool isModal;
-  final MacOSTitleVisibility titleVisibility;
+  final MacOsTitleVisibility titleVisibility;
   final bool titlebarAppearsTransparent;
-  final int collectionBehavior;
   final bool ignoresMouseEvents;
   final bool acceptsMouseMovedEvents;
-  final MacOSAnimationBehavior animationBehavior;
+  final MacOsAnimationBehavior animationBehavior;
 
   const MacOSWindowOptions({
-    this.type = MacOSWindowType.NSWindow,
-    this.level = MacOSWindowLevel.normal,
+    this.type = MacOsWindowType.NSWindow,
+    this.level = MacOsWindowLevel.normal,
     // Default style mask is arbitrary; typically you’ll override this.
     this.styleMask = const {
-      MacOSWindowStyleMask.miniaturizable,
-      MacOSWindowStyleMask.closable,
-      MacOSWindowStyleMask.resizable,
-      MacOSWindowStyleMask.titled,
-      MacOSWindowStyleMask.fullSizeContentView,
+      MacOsWindowStyleMask.miniaturizable,
+      MacOsWindowStyleMask.closable,
+      MacOsWindowStyleMask.resizable,
+      MacOsWindowStyleMask.titled,
+      MacOsWindowStyleMask.fullSizeContentView,
     },
-    this.x = 10,
-    this.y = 10,
+    this.left = 10,
+    this.top = 10,
     this.width = 1280,
     this.height = 720,
     this.title = '',
     this.isOpaque = true,
     this.hasShadow = true,
     this.isMovable = true,
-    this.backing = MacOSWindowBacking.buffered,
+    this.backing = MacOsWindowBacking.buffered,
     this.backgroundColor = const Color(0x00000000),
     this.windowButtonVisibility = true,
     // NSWindow-specific defaults:
     this.isModal = false,
-    this.titleVisibility = MacOSTitleVisibility.visible,
+    this.titleVisibility = MacOsTitleVisibility.visible,
     this.titlebarAppearsTransparent = false,
-    this.collectionBehavior = 0,
+    this.collectionBehavior = const {MacOsWindowCollectionBehavior.default_},
     this.ignoresMouseEvents = false,
     this.acceptsMouseMovedEvents = false,
-    this.animationBehavior = MacOSAnimationBehavior.defaultBehavior,
+    this.animationBehavior = MacOsAnimationBehavior.defaultBehavior,
   }); /* : assert(
           type != MacOSWindowType.NSPanel || (styleMask & MacOSWindowStyleMask.utility) != 0,
           'NSPanel requires the utility style mask to be set.',
@@ -93,37 +94,37 @@ class MacOSWindowOptions {
 
   /// Convenience factory constructor for NSPanel.
   factory MacOSWindowOptions.nspanel({
-    Set<int> styleMask = const {MacOSWindowStyleMask.titled, MacOSWindowStyleMask.closable, MacOSWindowStyleMask.miniaturizable, MacOSWindowStyleMask.utility},
-    MacOSWindowLevel level = MacOSWindowLevel.floating,
-    int x = 10,
-    int y = 10,
+    Set<int> styleMask = const {MacOsWindowStyleMask.titled, MacOsWindowStyleMask.closable, MacOsWindowStyleMask.miniaturizable, MacOsWindowStyleMask.utility},
+    MacOsWindowLevel level = MacOsWindowLevel.floating,
+    int left = 10,
+    int top = 10,
     int width = 1280,
     int height = 720,
     String title = '',
     Color backgroundColor = const Color(0x00000000),
     bool windowButtonVisibility = true,
     // NSPanel-specific: force non-modal, hide title.
-    MacOSWindowBacking backing = MacOSWindowBacking.buffered,
+    MacOsWindowBacking backing = MacOsWindowBacking.buffered,
     bool isOpaque = true,
     bool hasShadow = true,
     bool isMovable = true,
     // For panels, we force title to be hidden.
-    MacOSTitleVisibility titleVisibility = MacOSTitleVisibility.hidden,
+    MacOsTitleVisibility titleVisibility = MacOsTitleVisibility.hidden,
     bool titlebarAppearsTransparent = false,
-    int collectionBehavior = 0,
+    Set<int> collectionBehavior = const {MacOsWindowCollectionBehavior.default_},
     bool ignoresMouseEvents = false,
     bool acceptsMouseMovedEvents = false,
-    MacOSAnimationBehavior animationBehavior = MacOSAnimationBehavior.defaultBehavior,
+    MacOsAnimationBehavior animationBehavior = MacOsAnimationBehavior.defaultBehavior,
   }) {
-    if (!styleMask.contains(MacOSWindowStyleMask.utility)) {
-      styleMask.add(MacOSWindowStyleMask.utility);
+    if (!styleMask.contains(MacOsWindowStyleMask.utility)) {
+      styleMask.add(MacOsWindowStyleMask.utility);
     }
     return MacOSWindowOptions(
-      type: MacOSWindowType.NSPanel,
+      type: MacOsWindowType.NSPanel,
       level: level,
       styleMask: styleMask,
-      x: x,
-      y: y,
+      left: left,
+      top: top,
       width: width,
       height: height,
       title: title,
@@ -147,38 +148,38 @@ class MacOSWindowOptions {
   /// Convenience factory constructor for NSWindow.
   factory MacOSWindowOptions.nswindow({
     Set<int> styleMask = const {
-      MacOSWindowStyleMask.miniaturizable,
-      MacOSWindowStyleMask.closable,
-      MacOSWindowStyleMask.resizable,
-      MacOSWindowStyleMask.titled,
-      MacOSWindowStyleMask.fullSizeContentView,
+      MacOsWindowStyleMask.miniaturizable,
+      MacOsWindowStyleMask.closable,
+      MacOsWindowStyleMask.resizable,
+      MacOsWindowStyleMask.titled,
+      MacOsWindowStyleMask.fullSizeContentView,
     },
-    MacOSWindowLevel level = MacOSWindowLevel.normal,
-    int x = 10,
-    int y = 10,
+    MacOsWindowLevel level = MacOsWindowLevel.normal,
+    int left = 10,
+    int top = 10,
     int width = 1280,
     int height = 720,
     String title = '',
     bool isModal = false,
     bool isOpaque = true,
-    MacOSWindowBacking backing = MacOSWindowBacking.buffered,
+    MacOsWindowBacking backing = MacOsWindowBacking.buffered,
     Color backgroundColor = const Color(0x00000000),
     bool windowButtonVisibility = true,
     bool hasShadow = true,
     bool isMovable = true,
-    MacOSTitleVisibility titleVisibility = MacOSTitleVisibility.visible,
+    MacOsTitleVisibility titleVisibility = MacOsTitleVisibility.visible,
     bool titlebarAppearsTransparent = false,
-    int collectionBehavior = 0,
+    Set<int> collectionBehavior = const {MacOsWindowCollectionBehavior.default_},
     bool ignoresMouseEvents = false,
     bool acceptsMouseMovedEvents = false,
-    MacOSAnimationBehavior animationBehavior = MacOSAnimationBehavior.defaultBehavior,
+    MacOsAnimationBehavior animationBehavior = MacOsAnimationBehavior.defaultBehavior,
   }) {
     return MacOSWindowOptions(
-      type: MacOSWindowType.NSWindow,
+      type: MacOsWindowType.NSWindow,
       level: level,
       styleMask: styleMask,
-      x: x,
-      y: y,
+      left: left,
+      top: top,
       width: width,
       height: height,
       title: title,
@@ -205,8 +206,8 @@ class MacOSWindowOptions {
     final common = {
       'level': level.value,
       'styleMask': styleMask.fold<int>(0, (a, b) => a | b),
-      'x': x,
-      'y': y,
+      'left': left,
+      'top': top,
       'width': width,
       'height': height,
       'title': title,
@@ -218,7 +219,7 @@ class MacOSWindowOptions {
       'windowButtonVisibility': windowButtonVisibility,
     };
 
-    if (type == MacOSWindowType.NSWindow) {
+    if (type == MacOsWindowType.NSWindow) {
       return {
         'type': 'NSWindow',
         ...common,
@@ -230,7 +231,7 @@ class MacOSWindowOptions {
         'acceptsMouseMovedEvents': acceptsMouseMovedEvents,
         'animationBehavior': animationBehavior.value,
       };
-    } else if (type == MacOSWindowType.NSPanel) {
+    } else if (type == MacOsWindowType.NSPanel) {
       // For NSPanel, output only the common properties plus any NSPanel-specific ones.
       // We exclude NSWindow-only properties like isModal, titleVisibility, etc.
       return {

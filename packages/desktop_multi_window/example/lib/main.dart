@@ -96,17 +96,19 @@ class _ExampleMainWindowState extends State<_ExampleMainWindow> with WindowEvent
       macos: MacOSWindowOptions.nswindow(
         title: 'Sub Window',
         backgroundColor: Colors.transparent,
-        level: MacOSWindowLevel.floating,
+        level: MacOsWindowLevel.floating,
         isOpaque: false,
         hasShadow: false,
       ),
     );
 
     return MaterialApp(
+      color: Colors.transparent,
       home: Scaffold(
         appBar: AppBar(
           title: const Text('Plugin example app'),
         ),
+        backgroundColor: Colors.transparent,
         body: Column(
           children: [
             Padding(
@@ -151,11 +153,83 @@ class _ExampleMainWindowState extends State<_ExampleMainWindow> with WindowEvent
                 }
               },
             ),
-            TextButton(
-              onPressed: () async {
-                await WindowController.main().hide();
-              },
-              child: const Text('Hide this window'),
+            Row(
+              children: [
+                ElevatedButton(
+                  onPressed: () async {
+                    await WindowController.main().hide();
+                  },
+                  child: const Text('Hide'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                    foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    await WindowController.main().maximize();
+                  },
+                  child: const Text('Maximize'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                    foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    await WindowController.main().unmaximize();
+                  },
+                  child: const Text('Unmaximize'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                    foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    await WindowController.main().minimize();
+                  },
+                  child: const Text('Minimize'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                    foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    final isFullscreen = await WindowController.main().isFullScreen();
+                    await WindowController.main().setFullScreen(!isFullscreen);
+                  },
+                  child: const Text('Toggle Fullscreen'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                    foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    await WindowController.main().setWindowStyle(
+                      styleMask: MacOsWindowStyleMask.titled,
+                      level: MacOsWindowLevel.normal,
+                      collectionBehavior: MacOsWindowCollectionBehavior.default_,
+                      isOpaque: false,
+                      hasShadow: false,
+                      backgroundColor: Colors.red,
+                    );
+                  },
+                  child: const Text('Set Frameless'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                    foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  ),
+                ),
+              ],
             ),
             Center(
               child: Row(

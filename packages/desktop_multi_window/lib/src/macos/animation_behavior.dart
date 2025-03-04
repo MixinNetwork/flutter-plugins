@@ -1,5 +1,5 @@
 /// The animation behavior options for a macOS window.
-enum MacOSAnimationBehavior {
+enum MacOsAnimationBehavior {
   /// Use the default animation behavior.
   defaultBehavior('default'),
 
@@ -13,5 +13,5 @@ enum MacOSAnimationBehavior {
   alertPanel('alertPanel');
 
   final String value;
-  const MacOSAnimationBehavior(this.value);
+  const MacOsAnimationBehavior(this.value);
 }

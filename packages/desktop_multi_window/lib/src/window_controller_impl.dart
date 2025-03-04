@@ -4,9 +4,15 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import '../desktop_multi_window.dart';
 import 'channels.dart';
+import 'macos/window_collection_behavior.dart';
+import 'macos/window_level.dart';
+import 'macos/window_style_mask.dart';
 import 'window_controller.dart';
 import 'window_events.dart';
+import 'windows/extended_window_style.dart';
+import 'windows/window_style.dart';
 
 class WindowControllerImpl extends WindowController {
   final MethodChannel _channel = multiWindowChannel;
@@ -190,5 +196,87 @@ class WindowControllerImpl extends WindowController {
       'windowId': _id,
       'name': name,
     });
+  }
+
+  @override
+  Future<bool> isFocused() async {
+    return await _channel.invokeMethod('isFocused', {'windowId': _id});
+  }
+
+  @override
+  Future<bool> isFullScreen() async {
+    return await _channel.invokeMethod('isFullScreen', {'windowId': _id});
+  }
+
+  @override
+  Future<bool> isMaximized() async {
+    return await _channel.invokeMethod('isMaximized', {'windowId': _id});
+  }
+
+  @override
+  Future<bool> isMinimized() async {
+    return await _channel.invokeMethod('isMinimized', {'windowId': _id});
+  }
+
+  @override
+  Future<bool> isVisible() async {
+    return await _channel.invokeMethod('isVisible', {'windowId': _id});
+  }
+
+  @override
+  Future<void> maximize({bool vertically = false}) async {
+    return await _channel.invokeMethod('maximize', {'windowId': _id, 'vertically': vertically});
+  }
+
+  @override
+  Future<void> unmaximize() async {
+    return await _channel.invokeMethod('unmaximize', {'windowId': _id});
+  }
+
+  @override
+  Future<void> minimize() async {
+    return await _channel.invokeMethod('minimize', {'windowId': _id});
+  }
+
+  @override
+  Future<void> restore() async {
+    return await _channel.invokeMethod('restore', {'windowId': _id});
+  }
+
+  @override
+  Future<void> setFullScreen(bool isFullScreen) async {
+    return await _channel.invokeMethod('setFullScreen', {'windowId': _id, 'isFullScreen': isFullScreen});
+  }
+
+  @override
+  Future<void> setWindowStyle({
+    // macOS parameters
+    int? styleMask,
+    int? collectionBehavior,
+    MacOsWindowLevel? level,
+    bool? isOpaque,
+    bool? hasShadow,
+    Color? backgroundColor,
+    // Windows parameters
+    WindowsWindowStyle? style,
+    WindowsExtendedWindowStyle? extendedStyle,
+  }) async {
+    if (Platform.isMacOS) {
+      return await _channel.invokeMethod('setWindowStyle', {
+        'windowId': _id,
+        if (styleMask != null) 'styleMask': styleMask,
+        if (collectionBehavior != null) 'collectionBehavior': collectionBehavior,
+        if (level != null) 'level': level.value,
+        if (isOpaque != null) 'isOpaque': isOpaque,
+        if (hasShadow != null) 'hasShadow': hasShadow,
+        if (backgroundColor != null) 'backgroundColor': backgroundColor.toJson(),
+      });
+    } else if (Platform.isWindows) {
+      return await _channel.invokeMethod('setWindowStyle', {
+        'windowId': _id,
+        if (style != null) 'style': style,
+        if (extendedStyle != null) 'extendedStyle': extendedStyle,
+      });
+    }
   }
 }

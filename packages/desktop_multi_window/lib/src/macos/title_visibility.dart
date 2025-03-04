@@ -1,5 +1,5 @@
 /// The title visibility options for a macOS window.
-enum MacOSTitleVisibility {
+enum MacOsTitleVisibility {
   /// The window title is visible.
   visible('visible'),
 
@@ -7,5 +7,5 @@ enum MacOSTitleVisibility {
   hidden('hidden');
 
   final String value;
-  const MacOSTitleVisibility(this.value);
+  const MacOsTitleVisibility(this.value);
 }

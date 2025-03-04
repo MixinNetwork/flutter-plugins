@@ -1,5 +1,5 @@
 /// The backing store type for a macOS window.
-enum MacOSWindowBacking {
+enum MacOsWindowBacking {
   /// NSBackingStoreBuffered – the common choice.
   buffered('buffered'),
 
@@ -10,5 +10,5 @@ enum MacOSWindowBacking {
   nonretained('nonretained');
 
   final String value;
-  const MacOSWindowBacking(this.value);
+  const MacOsWindowBacking(this.value);
 }
