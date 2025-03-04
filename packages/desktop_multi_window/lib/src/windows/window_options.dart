@@ -4,8 +4,8 @@ import 'window_style.dart';
 class WindowsWindowOptions {
   final int style;
   final int exStyle;
-  final int x;
-  final int y;
+  final int left;
+  final int top;
   final int width;
   final int height;
   final String title;
@@ -13,8 +13,8 @@ class WindowsWindowOptions {
   const WindowsWindowOptions({
     this.style = WindowsWindowStyle.WS_OVERLAPPED, // WS_OVERLAPPEDWINDOW
     this.exStyle = WindowsExtendedWindowStyle.NO_EX_STYLE,
-    this.x = 10,
-    this.y = 10,
+    this.left = 10,
+    this.top = 10,
     this.width = 1280,
     this.height = 720,
     this.title = '',
@@ -24,8 +24,8 @@ class WindowsWindowOptions {
     return {
       'style': style,
       'exStyle': exStyle,
-      'x': x,
-      'y': y,
+      'left': left,
+      'top': top,
       'width': width,
       'height': height,
       'title': title,

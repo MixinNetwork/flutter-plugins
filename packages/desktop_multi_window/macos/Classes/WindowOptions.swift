@@ -32,8 +32,8 @@ struct WindowOptions {
         self.type = json["type"] as? String ?? "NSWindow"
         self.level = json["level"] as? Int ?? Int(NSWindow.Level.normal.rawValue)
         self.styleMask = json["styleMask"] as? UInt ?? UInt(NSWindow.StyleMask([.titled, .closable, .miniaturizable, .resizable]).rawValue)
-        self.x = json["x"] as? Int ?? 0
-        self.y = json["y"] as? Int ?? 0
+        self.x = json["left"] as? Int ?? 0
+        self.y = json["top"] as? Int ?? 0
         self.width = json["width"] as? Int ?? 800
         self.height = json["height"] as? Int ?? 600
         self.title = json["title"] as? String ?? ""
