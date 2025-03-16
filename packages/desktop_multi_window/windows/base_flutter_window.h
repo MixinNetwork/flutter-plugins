@@ -9,6 +9,7 @@
 
 #include "inter_window_event_channel.h"
 #include "window_events_channel.h"
+#include "window_options.h"
 
 enum WindowState {
   STATE_NORMAL,
@@ -55,7 +56,9 @@ public:
 
   void SetFrame(double_t x, double_t y, double_t width, double_t height);
 
-  void SetBackgroundColor(const flutter::EncodableMap& color);
+  void SetBackgroundColor(Color backgroundColor);
+
+  void SetOpacity(double opacity);
 
   // void SetMinSize(double_t width, double_t height);
 

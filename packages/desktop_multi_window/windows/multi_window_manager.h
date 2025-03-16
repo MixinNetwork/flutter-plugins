@@ -65,6 +65,8 @@ public:
 
   void SetStyle(int64_t id, int32_t style, int32_t extended_style);
 
+  void SetBackgroundColor(int64_t id, Color backgroundColor);
+
   void SetTitle(int64_t id, const std::string& title);
 
   flutter::EncodableList GetAllSubWindowIds();

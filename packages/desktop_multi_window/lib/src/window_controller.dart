@@ -98,6 +98,8 @@ abstract class WindowController {
     int? extendedStyle,
   });
 
+  Future<void> setBackgroundColor(Color backgroundColor);
+
   /// Whether the window can be resized. Available only on macOS.
   ///
   /// Most useful for ensuring windows *cannot* be resized. Windows are

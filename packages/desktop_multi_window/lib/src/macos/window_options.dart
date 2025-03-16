@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../extensions.dart';
 import 'window_collection_behavior.dart';
 import 'window_level.dart';
 import 'window_style_mask.dart';
@@ -7,17 +8,6 @@ import 'window_type.dart';
 import 'window_backing.dart';
 import 'title_visibility.dart';
 import 'animation_behavior.dart';
-
-extension ColorExtension on Color {
-  Map<String, dynamic> toJson() {
-    return {
-      'red': r,
-      'green': g,
-      'blue': b,
-      'alpha': a,
-    };
-  }
-}
 
 class MacOSWindowOptions {
   // Common properties

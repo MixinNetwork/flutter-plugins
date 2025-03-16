@@ -292,7 +292,36 @@ namespace
       auto window_id = arguments->at(flutter::EncodableValue("windowId")).LongValue();
       auto style = std::get<int32_t>(arguments->at(flutter::EncodableValue("style")));
       auto extended_style = std::get<int32_t>(arguments->at(flutter::EncodableValue("extendedStyle")));
+      Color backgroundColor;
+      try {
+        auto backgroundColorIter = arguments->find(flutter::EncodableValue("backgroundColor"));
+        if (backgroundColorIter != arguments->end() &&
+          std::holds_alternative<flutter::EncodableMap>(backgroundColorIter->second)) {
+          const auto& backgroundColorMap = std::get<flutter::EncodableMap>(backgroundColorIter->second);
+          backgroundColor = Color::ParseColor(backgroundColorMap);
+        }
+      } catch (const std::exception& e) {
+        std::cerr << L"Error parsing background color: " << e.what() << std::endl;
+      }
+      MultiWindowManager::Instance()->SetBackgroundColor(window_id, backgroundColor);
       MultiWindowManager::Instance()->SetStyle(window_id, style, extended_style);
+      result->Success(flutter::EncodableValue(true));
+      return;
+    } else if (method_call.method_name() == "setBackgroundColor") {
+      auto* arguments = std::get_if<flutter::EncodableMap>(method_call.arguments());
+      auto window_id = arguments->at(flutter::EncodableValue("windowId")).LongValue();
+      Color backgroundColor;
+      try {
+        auto backgroundColorIter = arguments->find(flutter::EncodableValue("backgroundColor"));
+        if (backgroundColorIter != arguments->end() &&
+          std::holds_alternative<flutter::EncodableMap>(backgroundColorIter->second)) {
+          const auto& backgroundColorMap = std::get<flutter::EncodableMap>(backgroundColorIter->second);
+          backgroundColor = Color::ParseColor(backgroundColorMap);
+        }
+      } catch (const std::exception& e) {
+        std::cerr << L"Error parsing background color: " << e.what() << std::endl;
+      }
+      MultiWindowManager::Instance()->SetBackgroundColor(window_id, backgroundColor);
       result->Success(flutter::EncodableValue(true));
       return;
     } else if (method_call.method_name() == "getAllSubWindowIds") {
@@ -312,7 +341,7 @@ void DesktopMultiWindowPluginRegisterWithRegistrar(FlutterDesktopPluginRegistrar
   // Attach MainWindow for
   auto view = FlutterDesktopPluginRegistrarGetView(registrar);
   auto hwnd = FlutterDesktopViewGetHWND(view);
-  
+
   auto inter_window_event_channel = InterWindowEventChannel::RegisterWithRegistrar(registrar, 0);
   auto window_events_channel = WindowEventsChannel::RegisterWithRegistrar(registrar);
   MultiWindowManager::Instance()->AttachFlutterMainWindow(

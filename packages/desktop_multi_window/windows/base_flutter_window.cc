@@ -143,20 +143,11 @@ void BaseFlutterWindow::SetFrame(double_t left, double_t top, double_t width, do
   );
 }
 
-void BaseFlutterWindow::SetBackgroundColor(const flutter::EncodableMap& color) {
-  int backgroundColorA =
-    std::get<int>(color.at(flutter::EncodableValue("alpha")));
-  int backgroundColorR =
-    std::get<int>(color.at(flutter::EncodableValue("red")));
-  int backgroundColorG =
-    std::get<int>(color.at(flutter::EncodableValue("green")));
-  int backgroundColorB =
-    std::get<int>(color.at(flutter::EncodableValue("blue")));
+void BaseFlutterWindow::SetBackgroundColor(Color backgroundColor) {
+  // bool isTransparent = backgroundColor.a == 0 && backgroundColor.r == 0 && backgroundColor.g == 0 && backgroundColor.b == 0;
+  bool isTransparent = true;
 
-  bool isTransparent = backgroundColorA == 0 && backgroundColorR == 0 &&
-    backgroundColorG == 0 && backgroundColorB == 0;
-
-  HWND hWnd = GetWindowHandle();
+  HWND hWnd = GetRootWindowHandle();
   const HINSTANCE hModule = LoadLibrary(TEXT("user32.dll"));
   if (hModule) {
     typedef enum _ACCENT_STATE {
@@ -186,14 +177,24 @@ void BaseFlutterWindow::SetBackgroundColor(const flutter::EncodableMap& color) {
         : ACCENT_ENABLE_GRADIENT;
       ACCENTPOLICY policy = {
           accent_state, 2,
-          ((backgroundColorA << 24) + (backgroundColorB << 16) +
-           (backgroundColorG << 8) + (backgroundColorR)),
+          (int)backgroundColor.toABGR(),
           0 };
       WINCOMPATTRDATA data = { 19, &policy, sizeof(policy) };
       SetWindowCompositionAttribute(hWnd, &data);
     }
     FreeLibrary(hModule);
   }
+}
+
+void BaseFlutterWindow::SetOpacity(double opacity) {
+  auto handle = GetRootWindowHandle();
+  if (!handle) {
+    return;
+  }
+
+  long gwlExStyle = GetWindowLong(handle, GWL_EXSTYLE);
+  SetWindowLong(handle, GWL_EXSTYLE, gwlExStyle | WS_EX_LAYERED);
+  SetLayeredWindowAttributes(handle, 0, static_cast<BYTE>(opacity * 255), 0x02);
 }
 
 RECT BaseFlutterWindow::GetFrame() {

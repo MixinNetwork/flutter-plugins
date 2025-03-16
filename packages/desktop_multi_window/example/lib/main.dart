@@ -101,16 +101,17 @@ class _ExampleMainWindowState extends State<_ExampleMainWindow> {
         exStyle: WindowsExtendedWindowStyle.WS_EX_APPWINDOW,
         width: 1280,
         height: 720,
+        backgroundColor: Colors.transparent,
       ),
     );
 
     return MaterialApp(
-      // color: Colors.transparent,
+      color: Colors.transparent,
       home: Scaffold(
         appBar: AppBar(
           title: const Text('Plugin example app'),
         ),
-        // backgroundColor: Colors.transparent,
+        backgroundColor: Colors.transparent,
         body: Column(
           children: [
             Row(

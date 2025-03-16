@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import '../desktop_multi_window.dart';
 import 'channels.dart';
+import 'extensions.dart';
 
 class WindowControllerImpl extends WindowController {
   final MethodChannel _channel = multiWindowChannel;
@@ -274,7 +275,16 @@ class WindowControllerImpl extends WindowController {
         'windowId': _id,
         if (style != null) 'style': style,
         if (extendedStyle != null) 'extendedStyle': extendedStyle,
+        if (backgroundColor != null) 'backgroundColor': backgroundColor.toJson(),
       });
     }
+  }
+
+  @override
+  Future<void> setBackgroundColor(Color backgroundColor) async {
+    return await _channel.invokeMethod('setBackgroundColor', {
+      'windowId': _id,
+      'backgroundColor': backgroundColor.toJson(),
+    });
   }
 }

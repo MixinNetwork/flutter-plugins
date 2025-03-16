@@ -12,15 +12,16 @@ class WindowEventsWidget extends StatefulWidget {
   State<WindowEventsWidget> createState() => _WindowEventsWidgetState();
 }
 
-class _WindowEventsWidgetState extends State<WindowEventsWidget>
-    with WindowEvents {
-  TextEditingController xPositionController = TextEditingController()
-    ..text = '100';
-  TextEditingController yPositionController = TextEditingController()
-    ..text = '100';
+class _WindowEventsWidgetState extends State<WindowEventsWidget> with WindowEvents {
+  TextEditingController xPositionController = TextEditingController()..text = '100';
+  TextEditingController yPositionController = TextEditingController()..text = '100';
   TextEditingController widthController = TextEditingController()..text = '800';
-  TextEditingController heightController = TextEditingController()
-    ..text = '600';
+  TextEditingController heightController = TextEditingController()..text = '600';
+
+  TextEditingController backgroundColorRController = TextEditingController()..text = '100';
+  TextEditingController backgroundColorGController = TextEditingController()..text = '100';
+  TextEditingController backgroundColorBController = TextEditingController()..text = '100';
+  TextEditingController backgroundColorAController = TextEditingController()..text = '100';
 
   int _windowStyle = 0x00CF0000; // Default WS_OVERLAPPEDWINDOW
   int _extendedStyle = 0x00000100; // Default WS_EX_WINDOWEDGE
@@ -72,17 +73,17 @@ class _WindowEventsWidgetState extends State<WindowEventsWidget>
                           TextSpan(
                             text: '${_position.dx},${_position.dy}',
                             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
+                                  fontWeight: FontWeight.bold,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
                           ),
                           const TextSpan(text: ' & Size '),
                           TextSpan(
                             text: '${_size.width}x${_size.height}',
                             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
+                                  fontWeight: FontWeight.bold,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
                           ),
                         ],
                       ),
@@ -98,8 +99,7 @@ class _WindowEventsWidgetState extends State<WindowEventsWidget>
                               labelText: 'Left',
                               labelStyle: Theme.of(context).textTheme.bodySmall,
                               border: const OutlineInputBorder(),
-                              contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 8),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                               isDense: true,
                             ),
                             keyboardType: TextInputType.number,
@@ -114,8 +114,7 @@ class _WindowEventsWidgetState extends State<WindowEventsWidget>
                               labelText: 'Top',
                               labelStyle: Theme.of(context).textTheme.bodySmall,
                               border: const OutlineInputBorder(),
-                              contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 8),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                               isDense: true,
                             ),
                             keyboardType: TextInputType.number,
@@ -130,8 +129,7 @@ class _WindowEventsWidgetState extends State<WindowEventsWidget>
                               labelText: 'Width',
                               labelStyle: Theme.of(context).textTheme.bodySmall,
                               border: const OutlineInputBorder(),
-                              contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 8),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                               isDense: true,
                             ),
                             keyboardType: TextInputType.number,
@@ -146,8 +144,7 @@ class _WindowEventsWidgetState extends State<WindowEventsWidget>
                               labelText: 'Height',
                               labelStyle: Theme.of(context).textTheme.bodySmall,
                               border: const OutlineInputBorder(),
-                              contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 8),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                               isDense: true,
                             ),
                             keyboardType: TextInputType.number,
@@ -160,12 +157,9 @@ class _WindowEventsWidgetState extends State<WindowEventsWidget>
                       children: [
                         ElevatedButton(
                           onPressed: () async {
-                            final position = Offset(
-                                double.parse(xPositionController.text),
-                                double.parse(yPositionController.text));
-                            final size = Size(
-                                double.parse(widthController.text),
-                                double.parse(heightController.text));
+                            final position =
+                                Offset(double.parse(xPositionController.text), double.parse(yPositionController.text));
+                            final size = Size(double.parse(widthController.text), double.parse(heightController.text));
                             await widget.controller.setFrame(position & size);
                             setState(() {
                               _position = position;
@@ -174,13 +168,9 @@ class _WindowEventsWidgetState extends State<WindowEventsWidget>
                           },
                           child: const Text('Set frame'),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor:
-                                Theme.of(context).colorScheme.primaryContainer,
-                            foregroundColor: Theme.of(context)
-                                .colorScheme
-                                .onPrimaryContainer,
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 8),
+                            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                            foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                           ),
                         ),
                         const SizedBox(width: 4),
@@ -200,14 +190,9 @@ class _WindowEventsWidgetState extends State<WindowEventsWidget>
                           },
                           child: const Text('Center'),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Theme.of(context)
-                                .colorScheme
-                                .surfaceContainerHighest,
-                            foregroundColor: Theme.of(context)
-                                .colorScheme
-                                .onPrimaryContainer,
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 8),
+                            backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                            foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                           ),
                         ),
                       ],
@@ -227,12 +212,9 @@ class _WindowEventsWidgetState extends State<WindowEventsWidget>
                       },
                       child: const Text('Hide'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor:
-                            Theme.of(context).colorScheme.primaryContainer,
-                        foregroundColor:
-                            Theme.of(context).colorScheme.onPrimaryContainer,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 12),
+                        backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                        foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       ),
                     ),
                     Row(
@@ -243,13 +225,9 @@ class _WindowEventsWidgetState extends State<WindowEventsWidget>
                           },
                           child: const Text('Maximize'),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor:
-                                Theme.of(context).colorScheme.primaryContainer,
-                            foregroundColor: Theme.of(context)
-                                .colorScheme
-                                .onPrimaryContainer,
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 12),
+                            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                            foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                           ),
                         ),
                         ElevatedButton(
@@ -258,13 +236,9 @@ class _WindowEventsWidgetState extends State<WindowEventsWidget>
                           },
                           child: const Text('Unmaximize'),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor:
-                                Theme.of(context).colorScheme.primaryContainer,
-                            foregroundColor: Theme.of(context)
-                                .colorScheme
-                                .onPrimaryContainer,
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 12),
+                            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                            foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                           ),
                         ),
                       ],
@@ -277,34 +251,107 @@ class _WindowEventsWidgetState extends State<WindowEventsWidget>
                           },
                           child: const Text('Minimize'),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor:
-                                Theme.of(context).colorScheme.primaryContainer,
-                            foregroundColor: Theme.of(context)
-                                .colorScheme
-                                .onPrimaryContainer,
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 12),
+                            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                            foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                           ),
                         ),
                         ElevatedButton(
                           onPressed: () async {
-                            final isFullscreen =
-                                await widget.controller.isFullScreen();
-                            await widget.controller
-                                .setFullScreen(!isFullscreen);
+                            final isFullscreen = await widget.controller.isFullScreen();
+                            await widget.controller.setFullScreen(!isFullscreen);
                           },
                           child: const Text('Toggle Fullscreen'),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor:
-                                Theme.of(context).colorScheme.primaryContainer,
-                            foregroundColor: Theme.of(context)
-                                .colorScheme
-                                .onPrimaryContainer,
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 12),
+                            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                            foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                           ),
                         ),
                       ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        SizedBox(
+                          width: 60,
+                          child: TextField(
+                            controller: backgroundColorRController,
+                            decoration: InputDecoration(
+                              labelText: 'Red',
+                              labelStyle: Theme.of(context).textTheme.bodySmall,
+                              border: const OutlineInputBorder(),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                              isDense: true,
+                            ),
+                            keyboardType: TextInputType.number,
+                          ),
+                        ),
+                        SizedBox(
+                          width: 60,
+                          child: TextField(
+                            controller: backgroundColorGController,
+                            decoration: InputDecoration(
+                              labelText: 'Green',
+                              labelStyle: Theme.of(context).textTheme.bodySmall,
+                              border: const OutlineInputBorder(),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                              isDense: true,
+                            ),
+                            keyboardType: TextInputType.number,
+                          ),
+                        ),
+                        SizedBox(
+                          width: 60,
+                          child: TextField(
+                            controller: backgroundColorBController,
+                            decoration: InputDecoration(
+                              labelText: 'Blue',
+                              labelStyle: Theme.of(context).textTheme.bodySmall,
+                              border: const OutlineInputBorder(),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                              isDense: true,
+                            ),
+                            keyboardType: TextInputType.number,
+                          ),
+                        ),
+                        SizedBox(
+                          width: 60,
+                          child: TextField(
+                            controller: backgroundColorAController,
+                            decoration: InputDecoration(
+                              labelText: 'Alpha',
+                              labelStyle: Theme.of(context).textTheme.bodySmall,
+                              border: const OutlineInputBorder(),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                              isDense: true,
+                            ),
+                            keyboardType: TextInputType.number,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: () async {
+                        await widget.controller.setBackgroundColor(
+                          Color.fromARGB(int.parse(backgroundColorAController.text), int.parse(backgroundColorRController.text),
+                              int.parse(backgroundColorGController.text), int.parse(backgroundColorBController.text)));
+                      },
+                      child: const Text('Set Background Color'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                        foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      ),
                     ),
                   ],
                 ),
@@ -333,13 +380,11 @@ class _WindowEventsWidgetState extends State<WindowEventsWidget>
                 ),
                 ElevatedButton(
                   onPressed: () async {
-                    print(
-                        'Setting style to $_windowStyle and extended style to $_extendedStyle');
+                    print('Setting style to $_windowStyle and extended style to $_extendedStyle');
                     await widget.controller.setStyle(
                       styleMask: MacOsWindowStyleMask.titled,
                       level: MacOsWindowLevel.normal,
-                      collectionBehavior:
-                          MacOsWindowCollectionBehavior.default_,
+                      collectionBehavior: MacOsWindowCollectionBehavior.default_,
                       isOpaque: false,
                       hasShadow: false,
                       backgroundColor: Colors.red,
@@ -349,12 +394,9 @@ class _WindowEventsWidgetState extends State<WindowEventsWidget>
                   },
                   child: const Text('Set Style'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor:
-                        Theme.of(context).colorScheme.primaryContainer,
-                    foregroundColor:
-                        Theme.of(context).colorScheme.onPrimaryContainer,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
+                    backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                    foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   ),
                 ),
               ],

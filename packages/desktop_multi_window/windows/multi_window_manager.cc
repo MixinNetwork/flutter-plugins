@@ -250,6 +250,14 @@ void MultiWindowManager::SetStyle(int64_t id, int32_t style, int32_t extended_st
   }
 }
 
+void MultiWindowManager::SetBackgroundColor(int64_t id, Color backgroundColor) {
+  std::lock_guard<std::mutex> lock(threadMtx);
+  auto window = windows_.find(id);
+  if (window != windows_.end()) {
+    window->second->SetBackgroundColor(backgroundColor);
+  }
+}
+
 flutter::EncodableList MultiWindowManager::GetAllSubWindowIds() {
   std::lock_guard<std::mutex> lock(threadMtx);
   flutter::EncodableList resList = flutter::EncodableList();
