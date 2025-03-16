@@ -41,10 +41,17 @@ class DesktopMultiWindow {
   /// NOTE: [createWindow] will only create a new window, you need to call
   /// [WindowController.show] to show the window.
   static Future<WindowController> createWindow([String? arguments, WindowOptions? options]) async {
+    print('createWindow called with:');
+    print('arguments: $arguments');
+    print('options: $options');
+    
     final Map<String, dynamic> args = {
       if (arguments != null) 'arguments': arguments,
       if (options != null) 'options': options.toJson(),
     };
+    
+    print('Prepared args map: $args');
+    
     final windowId = await multiWindowChannel.invokeMethod<int>(
       'createWindow',
       args,

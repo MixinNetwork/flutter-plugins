@@ -8,11 +8,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_multi_window_example/event_widget.dart';
 
+import 'window_events_widget.dart';
+
 void main(List<String> args) {
   WidgetsFlutterBinding.ensureInitialized();
   if (args.firstOrNull == 'multi_window') {
     final windowId = int.parse(args[1]);
-    final argument = args[2].isEmpty ? const {} : jsonDecode(args[2]) as Map<String, dynamic>;
+    final argument = args[2].isEmpty
+        ? const {}
+        : jsonDecode(args[2]) as Map<String, dynamic>;
     runApp(_ExampleSubWindow(
       windowController: WindowController.fromWindowId(windowId),
       args: argument,
@@ -28,27 +32,19 @@ class _ExampleMainWindow extends StatefulWidget {
   State<_ExampleMainWindow> createState() => _ExampleMainWindowState();
 }
 
-class _ExampleMainWindowState extends State<_ExampleMainWindow> with WindowEvents {
-  TextEditingController xPositionController = TextEditingController();
-  TextEditingController yPositionController = TextEditingController();
-  TextEditingController widthController = TextEditingController();
-  TextEditingController heightController = TextEditingController();
-
+class _ExampleMainWindowState extends State<_ExampleMainWindow> {
   int? _selectedWindowId;
   List<int> _windowIds = [];
-
-  Offset _position = const Offset(0, 0);
-  Size _size = const Size(0, 0);
 
   late final AppLifecycleListener? _appLifecycleListener;
 
   @override
   void initState() {
     if (Platform.isMacOS) {
-      _appLifecycleListener = AppLifecycleListener(onStateChange: _handleStateChange);
+      _appLifecycleListener =
+          AppLifecycleListener(onStateChange: _handleStateChange);
     }
     super.initState();
-    WindowController.main().addListener(this);
     _updateWindowIds();
   }
 
@@ -65,12 +61,12 @@ class _ExampleMainWindowState extends State<_ExampleMainWindow> with WindowEvent
       _appLifecycleListener?.dispose();
     }
     super.dispose();
-    WindowController.main().removeListener(this);
   }
 
   Future<void> _updateWindowIds() async {
     // Get all sub-window IDs
-    final List<int> subWindowIds = await DesktopMultiWindow.getAllSubWindowIds();
+    final List<int> subWindowIds =
+        await DesktopMultiWindow.getAllSubWindowIds();
     setState(() {
       _windowIds = subWindowIds;
       if (_windowIds.isNotEmpty) {
@@ -100,235 +96,137 @@ class _ExampleMainWindowState extends State<_ExampleMainWindow> with WindowEvent
         isOpaque: false,
         hasShadow: false,
       ),
+      windows: const WindowsWindowOptions(
+        style: WindowsWindowStyle.WS_OVERLAPPEDWINDOW,
+        exStyle: WindowsExtendedWindowStyle.WS_EX_APPWINDOW,
+        width: 1280,
+        height: 720,
+      ),
     );
 
     return MaterialApp(
-      color: Colors.transparent,
+      // color: Colors.transparent,
       home: Scaffold(
         appBar: AppBar(
           title: const Text('Plugin example app'),
         ),
-        backgroundColor: Colors.transparent,
+        // backgroundColor: Colors.transparent,
         body: Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-              child: ElevatedButton.icon(
-                onPressed: () async {
-                  final window = await DesktopMultiWindow.createWindow(
-                    jsonEncode({
-                      'args1': 'Sub window',
-                      'args2': 100,
-                      'args3': true,
-                      'business': 'business_test',
-                    }),
-                    options,
-                  );
-                  window
-                    ..setFrame(const Offset(0, 0) & const Size(1280, 720))
-                    ..center()
-                    ..setTitle('Another window')
-                    ..show();
-                  _updateWindowIds();
-                },
-                icon: const Icon(Icons.add),
-                label: const Text('Create Window'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                  foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                ),
-              ),
-            ),
-            TextButton(
-              child: const Text('Send event to all sub windows'),
-              onPressed: () async {
-                final subWindowIds = await DesktopMultiWindow.getAllSubWindowIds();
-                for (final windowId in subWindowIds) {
-                  DesktopMultiWindow.invokeMethod(
-                    windowId,
-                    'broadcast',
-                    'Broadcast from main window',
-                  );
-                }
-              },
-            ),
             Row(
               children: [
-                ElevatedButton(
-                  onPressed: () async {
-                    await WindowController.main().hide();
-                  },
-                  child: const Text('Hide'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                    foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  ),
-                ),
-                ElevatedButton(
-                  onPressed: () async {
-                    await WindowController.main().maximize();
-                  },
-                  child: const Text('Maximize'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                    foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  ),
-                ),
-                ElevatedButton(
-                  onPressed: () async {
-                    await WindowController.main().unmaximize();
-                  },
-                  child: const Text('Unmaximize'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                    foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  ),
-                ),
-                ElevatedButton(
-                  onPressed: () async {
-                    await WindowController.main().minimize();
-                  },
-                  child: const Text('Minimize'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                    foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  ),
-                ),
-                ElevatedButton(
-                  onPressed: () async {
-                    final isFullscreen = await WindowController.main().isFullScreen();
-                    await WindowController.main().setFullScreen(!isFullscreen);
-                  },
-                  child: const Text('Toggle Fullscreen'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                    foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  ),
-                ),
-                ElevatedButton(
-                  onPressed: () async {
-                    await WindowController.main().setWindowStyle(
-                      styleMask: MacOsWindowStyleMask.titled,
-                      level: MacOsWindowLevel.normal,
-                      collectionBehavior: MacOsWindowCollectionBehavior.default_,
-                      isOpaque: false,
-                      hasShadow: false,
-                      backgroundColor: Colors.red,
-                    );
-                  },
-                  child: const Text('Set Frameless'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                    foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  ),
+                WindowEventsWidget(
+                    controller: WindowController.fromWindowId(0)),
+                Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8.0, vertical: 8.0),
+                      child: ElevatedButton.icon(
+                        onPressed: () async {
+                          final window = await DesktopMultiWindow.createWindow(
+                            jsonEncode({
+                              'args1': 'Sub window',
+                              'args2': 100,
+                              'args3': true,
+                              'business': 'business_test',
+                            }),
+                            options,
+                          );
+                          window
+                            ..setFrame(
+                                const Offset(0, 0) & const Size(1280, 720))
+                            ..center()
+                            ..setTitle('Another window')
+                            ..show();
+                          await _updateWindowIds();
+                        },
+                        icon: const Icon(Icons.add),
+                        label: const Text('Create Window'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor:
+                              Theme.of(context).colorScheme.primaryContainer,
+                          foregroundColor:
+                              Theme.of(context).colorScheme.onPrimaryContainer,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 12),
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8.0, vertical: 8.0),
+                      child: ElevatedButton.icon(
+                        onPressed: () async {
+                          final subWindowIds =
+                              await DesktopMultiWindow.getAllSubWindowIds();
+                          for (final windowId in subWindowIds) {
+                            DesktopMultiWindow.invokeMethod(
+                              windowId,
+                              'broadcast',
+                              'Broadcast from main window',
+                            );
+                          }
+                        },
+                        icon: const Icon(Icons.send),
+                        label: const Text('Send event to all sub windows'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor:
+                              Theme.of(context).colorScheme.primaryContainer,
+                          foregroundColor:
+                              Theme.of(context).colorScheme.onPrimaryContainer,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 12),
+                        ),
+                      ),
+                    ),
+                    Center(
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Text('Window: '),
+                          MouseRegion(
+                            cursor: SystemMouseCursors.click,
+                            child: DropdownButton<int>(
+                              value: _windowIds.contains(_selectedWindowId) ? _selectedWindowId : null,
+                              items: _windowIds.map((int id) {
+                                return DropdownMenuItem<int>(
+                                  value: id,
+                                  child: Text(
+                                      id == 0 ? 'Main Window' : 'Window $id'),
+                                );
+                              }).toList(),
+                              onTap: () async {
+                                // Update window list before showing dropdown
+                                await _updateWindowIds();
+                              },
+                              onChanged: (int? newValue) {
+                                if (newValue == null) {
+                                  return;
+                                }
+                                setState(() {
+                                  _selectedWindowId = newValue;
+                                });
+                              },
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () async {
+                              if (_selectedWindowId != null) {
+                                await WindowController.fromWindowId(
+                                        _selectedWindowId!)
+                                    .show();
+                              }
+                            },
+                            child: const Text('Show this window'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
-            Center(
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text('Window: '),
-                  MouseRegion(
-                    cursor: SystemMouseCursors.click,
-                    child: DropdownButton<int>(
-                      value: _selectedWindowId,
-                      items: _windowIds.map((int id) {
-                        return DropdownMenuItem<int>(
-                          value: id,
-                          child: Text(id == 0 ? 'Main Window' : 'Window $id'),
-                        );
-                      }).toList(),
-                      onTap: () {
-                        // Update window list before showing dropdown
-                        _updateWindowIds();
-                      },
-                      onChanged: (int? newValue) {
-                        setState(() {
-                          _selectedWindowId = newValue;
-                        });
-                      },
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () async {
-                      if (_selectedWindowId != null) {
-                        await WindowController.fromWindowId(_selectedWindowId!).show();
-                      }
-                    },
-                    child: const Text('Show this window'),
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(
-              height: 40,
-              width: 400,
-              child: Row(
-                children: [
-                  Row(
-                    children: [
-                      Text('X: '),
-                      SizedBox(
-                        height: 40,
-                        width: 40,
-                        child: TextField(controller: xPositionController),
-                      ),
-                    ],
-                  ),
-                  Row(
-                    children: [
-                      Text('Y: '),
-                      SizedBox(
-                        height: 40,
-                        width: 40,
-                        child: TextField(controller: yPositionController),
-                      ),
-                    ],
-                  ),
-                  Row(
-                    children: [
-                      Text('Width: '),
-                      SizedBox(
-                        height: 40,
-                        width: 40,
-                        child: TextField(controller: widthController),
-                      ),
-                    ],
-                  ),
-                  Row(
-                    children: [
-                      Text('Height: '),
-                      SizedBox(
-                        height: 40,
-                        width: 40,
-                        child: TextField(controller: heightController),
-                      ),
-                    ],
-                  ),
-                  TextButton(
-                      onPressed: () async {
-                        final position = Offset(double.parse(xPositionController.text), double.parse(yPositionController.text));
-                        final size = Size(double.parse(widthController.text), double.parse(heightController.text));
-                        await WindowController.main().setFrame(position & size);
-                        setState(() {
-                          _position = position;
-                          _size = size;
-                        });
-                      },
-                      child: const Text('Set frame')),
-                ],
-              ),
-            ),
-            Text('Position: $_position'),
-            Text('Size: $_size'),
             Expanded(
               child: EventWidget(controller: WindowController.fromWindowId(0)),
             )
@@ -336,42 +234,6 @@ class _ExampleMainWindowState extends State<_ExampleMainWindow> with WindowEvent
         ),
       ),
     );
-  }
-
-  @override
-  void onWindowMove() {
-    WindowController.main().getPosition().then((position) {
-      setState(() {
-        _position = position;
-      });
-    });
-  }
-
-  @override
-  void onWindowMoved() {
-    WindowController.main().getPosition().then((position) {
-      setState(() {
-        _position = position;
-      });
-    });
-  }
-
-  @override
-  void onWindowResize() {
-    WindowController.main().getSize().then((size) {
-      setState(() {
-        _size = size;
-      });
-    });
-  }
-
-  @override
-  void onWindowResized() {
-    WindowController.main().getSize().then((size) {
-      setState(() {
-        _size = size;
-      });
-    });
   }
 }
 
@@ -389,29 +251,24 @@ class _ExampleSubWindow extends StatefulWidget {
   State<_ExampleSubWindow> createState() => _ExampleSubWindowState();
 }
 
-class _ExampleSubWindowState extends State<_ExampleSubWindow> with WindowEvents {
-  TextEditingController xPositionController = TextEditingController();
-  TextEditingController yPositionController = TextEditingController();
-  TextEditingController widthController = TextEditingController();
-  TextEditingController heightController = TextEditingController();
-  Offset _position = const Offset(0, 0);
-  Size _size = const Size(0, 0);
-
+class _ExampleSubWindowState extends State<_ExampleSubWindow>
+    with WindowEvents {
   late final AppLifecycleListener? _appLifecycleListener;
 
   @override
   void initState() {
     super.initState();
     if (Platform.isMacOS) {
-      _appLifecycleListener = AppLifecycleListener(onStateChange: _handleStateChange);
+      _appLifecycleListener =
+          AppLifecycleListener(onStateChange: _handleStateChange);
     }
-    widget.windowController.addListener(this);
   }
 
   void _handleStateChange(AppLifecycleState state) {
     // workaround applies for all sub-windows
     if (Platform.isMacOS && state == AppLifecycleState.hidden) {
-      SchedulerBinding.instance.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      SchedulerBinding.instance
+          .handleAppLifecycleStateChanged(AppLifecycleState.inactive);
     }
   }
 
@@ -456,117 +313,15 @@ class _ExampleSubWindowState extends State<_ExampleSubWindow> with WindowEvents 
             ),
             TextButton(
               onPressed: () async {
-                widget.windowController.hide();
-              },
-              child: const Text('Hide this window'),
-            ),
-            TextButton(
-              onPressed: () async {
                 await WindowController.main().show();
               },
               child: const Text('Show main window'),
             ),
-            SizedBox(
-              height: 40,
-              width: 400,
-              child: Row(
-                children: [
-                  Row(
-                    children: [
-                      Text('X: '),
-                      SizedBox(
-                        height: 40,
-                        width: 40,
-                        child: TextField(controller: xPositionController),
-                      ),
-                    ],
-                  ),
-                  Row(
-                    children: [
-                      Text('Y: '),
-                      SizedBox(
-                        height: 40,
-                        width: 40,
-                        child: TextField(controller: yPositionController),
-                      ),
-                    ],
-                  ),
-                  Row(
-                    children: [
-                      Text('Width: '),
-                      SizedBox(
-                        height: 40,
-                        width: 40,
-                        child: TextField(controller: widthController),
-                      ),
-                    ],
-                  ),
-                  Row(
-                    children: [
-                      Text('Height: '),
-                      SizedBox(
-                        height: 40,
-                        width: 40,
-                        child: TextField(controller: heightController),
-                      ),
-                    ],
-                  ),
-                  TextButton(
-                      onPressed: () async {
-                        final position = Offset(double.parse(xPositionController.text), double.parse(yPositionController.text));
-                        final size = Size(double.parse(widthController.text), double.parse(heightController.text));
-                        await widget.windowController.setFrame(position & size);
-                        setState(() {
-                          _position = position;
-                          _size = size;
-                        });
-                      },
-                      child: const Text('Set frame')),
-                ],
-              ),
-            ),
-            Text('Position: $_position'),
-            Text('Size: $_size'),
+            WindowEventsWidget(controller: widget.windowController),
             Expanded(child: EventWidget(controller: widget.windowController)),
           ],
         ),
       ),
     );
-  }
-
-  @override
-  void onWindowMove() {
-    widget.windowController.getPosition().then((position) {
-      setState(() {
-        _position = position;
-      });
-    });
-  }
-
-  @override
-  void onWindowMoved() {
-    widget.windowController.getPosition().then((position) {
-      setState(() {
-        _position = position;
-      });
-    });
-  }
-
-  @override
-  void onWindowResize() {
-    widget.windowController.getSize().then((size) {
-      setState(() {
-        _size = size;
-      });
-    });
-  }
-
-  @override
-  void onWindowResized() {
-    widget.windowController.getSize().then((size) {
-      setState(() {
-        _size = size;
-      });
-    });
   }
 }

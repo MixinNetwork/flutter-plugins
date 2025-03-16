@@ -12,14 +12,14 @@ struct WindowOptions
   std::wstring title;
   DWORD style;
   DWORD exStyle;
-  int x;
-  int y;
+  int left;
+  int top;
   int width;
   int height;
 
   WindowOptions()
     : title(L""), style(WS_OVERLAPPEDWINDOW), exStyle(0),
-    x(10), y(10), width(1280), height(720) {
+    left(10), top(10), width(1280), height(720) {
   }
 
   // Parse the window options from a flutter::EncodableMap.
@@ -51,8 +51,8 @@ struct WindowOptions
 
     style = static_cast<DWORD>(getInt("style", style));
     exStyle = static_cast<DWORD>(getInt("exStyle", exStyle));
-    x = getInt("x", x);
-    y = getInt("y", y);
+    left = getInt("left", left);
+    top = getInt("top", top);
     width = getInt("width", width);
     height = getInt("height", height);
     title = getString("title", title);
@@ -64,7 +64,7 @@ struct WindowOptions
     std::wcout << L"  Title: " << title << std::endl;
     std::wcout << L"  Style: 0x" << std::hex << style << std::dec << std::endl;
     std::wcout << L"  ExStyle: 0x" << std::hex << exStyle << std::dec << std::endl;
-    std::wcout << L"  Position: (" << x << L", " << y << L")" << std::endl;
+    std::wcout << L"  Position: (" << left << L", " << top << L")" << std::endl;
     std::wcout << L"  Size: " << width << L" x " << height << std::endl;
   }
 };

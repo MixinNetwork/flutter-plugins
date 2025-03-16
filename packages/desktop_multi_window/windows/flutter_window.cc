@@ -70,15 +70,19 @@ namespace {
       FreeLibrary(user32_module);
     }
   }
-
 }
 
 FlutterWindow::FlutterWindow(
   int64_t id,
   std::string args,
-  const std::shared_ptr<FlutterWindowCallback>& callback,
+  const std::shared_ptr<BaseFlutterWindowCallback>& callback,
   WindowOptions options
-) : callback_(callback), id_(id), window_handle_(nullptr), scale_factor_(1) {
+) {
+  callback_ = callback;
+  id_ = id;
+  window_handle_ = nullptr;
+  scale_factor_ = 1;
+
   RegisterWindowClass(FlutterWindow::WndProc);
 
   const POINT target_point = { static_cast<LONG>(10),
@@ -94,8 +98,8 @@ FlutterWindow::FlutterWindow(
     kFlutterWindowClassName,     // Window class name
     options.title.c_str(),       // Window title (wide string)
     options.style,               // Window style
-    Scale(options.x, scale_factor_),
-    Scale(options.y, scale_factor_),
+    Scale(options.left, scale_factor_),
+    Scale(options.top, scale_factor_),
     Scale(options.width, scale_factor_),
     Scale(options.height, scale_factor_),
     nullptr,                   // Parent window handle
@@ -117,10 +121,12 @@ FlutterWindow::FlutterWindow(
   SetParent(view_handle, window_handle);
   MoveWindow(view_handle, 0, 0, frame.right - frame.left, frame.bottom - frame.top, true);
 
-  InternalMultiWindowPluginRegisterWithRegistrar(
-    flutter_controller_->engine()->GetRegistrarForPlugin("DesktopMultiWindowPlugin"));
-  window_channel_ = WindowChannel::RegisterWithRegistrar(
-    flutter_controller_->engine()->GetRegistrarForPlugin("DesktopMultiWindowPlugin"), id_);
+  auto registrar_plugin = flutter_controller_->engine()->GetRegistrarForPlugin("DesktopMultiWindowPlugin");
+  registrar_ = flutter::PluginRegistrarManager::GetInstance()->GetRegistrar<flutter::PluginRegistrarWindows>(registrar_plugin);
+
+  InternalMultiWindowPluginRegisterWithRegistrar(registrar_plugin);
+  inter_window_event_channel_ = InterWindowEventChannel::RegisterWithRegistrar(registrar_plugin, id_);
+  window_events_channel_ = WindowEventsChannel::RegisterWithRegistrar(registrar_plugin);
 
   if (_g_window_created_callback) {
     _g_window_created_callback(flutter_controller_.get());
@@ -151,85 +157,6 @@ LRESULT CALLBACK FlutterWindow::WndProc(HWND window, UINT message, WPARAM wparam
   }
 
   return DefWindowProc(window, message, wparam, lparam);
-}
-
-LRESULT FlutterWindow::MessageHandler(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam) {
-
-  // Give Flutter, including plugins, an opportunity to handle window messages.
-  if (flutter_controller_) {
-    std::optional<LRESULT> result = flutter_controller_->HandleTopLevelWindowProc(hwnd, message, wparam, lparam);
-    if (result) {
-      return *result;
-    }
-  }
-
-  auto child_content_ = flutter_controller_ ? flutter_controller_->view()->GetNativeWindow() : nullptr;
-
-  switch (message) {
-  case WM_FONTCHANGE: {
-    flutter_controller_->engine()->ReloadSystemFonts();
-    break;
-  }
-  case WM_DESTROY: {
-    Destroy();
-    if (!destroyed_) {
-      destroyed_ = true;
-      if (auto callback = callback_.lock()) {
-        callback->OnWindowDestroy(id_);
-      }
-    }
-    return 0;
-  }
-  case WM_CLOSE: {
-    if (auto callback = callback_.lock()) {
-      callback->OnWindowClose(id_);
-    }
-    break;
-  }
-  case WM_DPICHANGED: {
-    auto newRectSize = reinterpret_cast<RECT*>(lparam);
-    LONG newWidth = newRectSize->right - newRectSize->left;
-    LONG newHeight = newRectSize->bottom - newRectSize->top;
-
-    SetWindowPos(hwnd, nullptr, newRectSize->left, newRectSize->top, newWidth,
-      newHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-
-    return 0;
-  }
-  case WM_SIZE: {
-    RECT rect;
-    GetClientRect(window_handle_, &rect);
-    if (child_content_ != nullptr) {
-      // Size and position the child window.
-      MoveWindow(child_content_, rect.left, rect.top, rect.right - rect.left,
-        rect.bottom - rect.top, TRUE);
-    }
-    return 0;
-  }
-
-  case WM_ACTIVATE: {
-    if (child_content_ != nullptr) {
-      SetFocus(child_content_);
-    }
-    return 0;
-  }
-  default: break;
-  }
-
-  return DefWindowProc(window_handle_, message, wparam, lparam);
-}
-
-void FlutterWindow::Destroy() {
-  if (window_channel_) {
-    window_channel_ = nullptr;
-  }
-  if (flutter_controller_) {
-    flutter_controller_ = nullptr;
-  }
-  if (window_handle_) {
-    DestroyWindow(window_handle_);
-    window_handle_ = nullptr;
-  }
 }
 
 FlutterWindow::~FlutterWindow() {

@@ -12,16 +12,24 @@
 #include "base_flutter_window.h"
 #include "flutter_window.h"
 
-class MultiWindowManager : public std::enable_shared_from_this<MultiWindowManager>, public FlutterWindowCallback {
+class MultiWindowManager : public std::enable_shared_from_this<MultiWindowManager>, public BaseFlutterWindowCallback {
 
 public:
   static MultiWindowManager* Instance();
 
   MultiWindowManager();
 
-  int64_t Create(std::string args, WindowOptions options);
+  int64_t Create(
+    std::string args,
+    WindowOptions options
+  );
 
-  void AttachFlutterMainWindow(HWND main_window_handle, std::unique_ptr<WindowChannel> window_channel);
+  void AttachFlutterMainWindow(
+    HWND main_window_handle,
+    std::unique_ptr<InterWindowEventChannel> inter_window_event_channel,
+    std::unique_ptr<WindowEventsChannel> window_events_channel,
+    flutter::PluginRegistrarWindows* registrar
+  );
 
   void Show(int64_t id);
 
@@ -29,11 +37,33 @@ public:
 
   void Close(int64_t id);
 
+  void Center(int64_t id);
+
+  flutter::EncodableMap GetFrame(int64_t id, double_t devicePixelRatio);
+
   void SetFrame(int64_t id, double_t x, double_t y, double_t width, double_t height);
 
-  flutter::EncodableMap GetFrame(int64_t id, const flutter::EncodableMap& args);
+  bool IsFocused(int64_t id);
 
-  void Center(int64_t id);
+  bool IsFullScreen(int64_t id);
+
+  bool IsMaximized(int64_t id);
+
+  bool IsMinimized(int64_t id);
+
+  bool IsVisible(int64_t id);
+
+  void Maximize(int64_t id, bool vertically);
+
+  void Unmaximize(int64_t id);
+
+  void Minimize(int64_t id);
+
+  void Restore(int64_t id);
+
+  void SetFullScreen(int64_t id, bool is_full_screen);
+
+  void SetStyle(int64_t id, int32_t style, int32_t extended_style);
 
   void SetTitle(int64_t id, const std::string& title);
 

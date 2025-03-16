@@ -3,8 +3,6 @@ import 'dart:ui';
 import 'macos/window_level.dart';
 import 'window_controller_impl.dart';
 import 'window_events.dart';
-import 'windows/extended_window_style.dart';
-import 'windows/window_style.dart';
 
 /// The [WindowController] instance that is used to control this window.
 abstract class WindowController {
@@ -89,15 +87,15 @@ abstract class WindowController {
 
   Future<void> setFullScreen(bool isFullScreen);
 
-  Future<void> setWindowStyle({
+  Future<void> setStyle({
     int? styleMask,
     int? collectionBehavior,
     MacOsWindowLevel? level,
     bool? isOpaque,
     bool? hasShadow,
     Color? backgroundColor,
-    WindowsWindowStyle? style,
-    WindowsExtendedWindowStyle? extendedStyle,
+    int? style,
+    int? extendedStyle,
   });
 
   /// Whether the window can be resized. Available only on macOS.

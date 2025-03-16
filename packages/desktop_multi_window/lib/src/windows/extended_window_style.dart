@@ -55,12 +55,6 @@ class WindowsExtendedWindowStyle {
   /// Forces a top-level window onto the taskbar when visible.
   static const int WS_EX_APPWINDOW = 0x00040000;
 
-  /// Combines WS_EX_WINDOWEDGE and WS_EX_CLIENTEDGE (value: 0x00000300).
-  static const int WS_EX_OVERLAPPEDWINDOW = 0x00000300;
-
-  /// Combines WS_EX_WINDOWEDGE, WS_EX_TOOLWINDOW, and WS_EX_TOPMOST (value: 0x00000188).
-  static const int WS_EX_PALETTEWINDOW = 0x00000188;
-
   /// Allows the window to be a layered window.
   static const int WS_EX_LAYERED = 0x00080000;
 
@@ -75,4 +69,17 @@ class WindowsExtendedWindowStyle {
 
   /// A window created with this style does not become the foreground window when the user clicks it.
   static const int WS_EX_NOACTIVATE = 0x08000000;
+
+    /// Common extended style combinations
+
+  /// Standard overlapped window with extended styles
+  /// Combines common extended styles for main application windows
+  static const int WS_EX_OVERLAPPEDWINDOW = WS_EX_WINDOWEDGE | 
+                                           WS_EX_CLIENTEDGE;
+
+  /// Standard palette window with extended styles
+  /// Combines styles typically used for palette or toolbar windows
+  static const int WS_EX_PALETTEWINDOW = WS_EX_WINDOWEDGE | 
+                                        WS_EX_TOOLWINDOW | 
+                                        WS_EX_TOPMOST;
 }

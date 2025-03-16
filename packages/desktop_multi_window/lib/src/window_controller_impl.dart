@@ -6,13 +6,6 @@ import 'package:flutter/services.dart';
 
 import '../desktop_multi_window.dart';
 import 'channels.dart';
-import 'macos/window_collection_behavior.dart';
-import 'macos/window_level.dart';
-import 'macos/window_style_mask.dart';
-import 'window_controller.dart';
-import 'window_events.dart';
-import 'windows/extended_window_style.dart';
-import 'windows/window_style.dart';
 
 class WindowControllerImpl extends WindowController {
   final MethodChannel _channel = multiWindowChannel;
@@ -68,11 +61,17 @@ class WindowControllerImpl extends WindowController {
 
   @override
   void addListener(WindowEvents listener) {
+    if (_listeners.contains(listener)) {
+      return;
+    }
     _listeners.add(listener);
   }
 
   @override
   void removeListener(WindowEvents listener) {
+    if (!_listeners.contains(listener)) {
+      return;
+    }
     _listeners.remove(listener);
   }
 
@@ -115,7 +114,6 @@ class WindowControllerImpl extends WindowController {
       'getFrame',
       arguments,
     );
-
     return Rect.fromLTWH(
       resultData['left'],
       resultData['top'],
@@ -249,7 +247,7 @@ class WindowControllerImpl extends WindowController {
   }
 
   @override
-  Future<void> setWindowStyle({
+  Future<void> setStyle({
     // macOS parameters
     int? styleMask,
     int? collectionBehavior,
@@ -258,11 +256,11 @@ class WindowControllerImpl extends WindowController {
     bool? hasShadow,
     Color? backgroundColor,
     // Windows parameters
-    WindowsWindowStyle? style,
-    WindowsExtendedWindowStyle? extendedStyle,
+    int? style,
+    int? extendedStyle,
   }) async {
     if (Platform.isMacOS) {
-      return await _channel.invokeMethod('setWindowStyle', {
+      return await _channel.invokeMethod('setStyle', {
         'windowId': _id,
         if (styleMask != null) 'styleMask': styleMask,
         if (collectionBehavior != null) 'collectionBehavior': collectionBehavior,
@@ -272,7 +270,7 @@ class WindowControllerImpl extends WindowController {
         if (backgroundColor != null) 'backgroundColor': backgroundColor.toJson(),
       });
     } else if (Platform.isWindows) {
-      return await _channel.invokeMethod('setWindowStyle', {
+      return await _channel.invokeMethod('setStyle', {
         'windowId': _id,
         if (style != null) 'style': style,
         if (extendedStyle != null) 'extendedStyle': extendedStyle,

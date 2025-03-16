@@ -436,7 +436,7 @@ class BaseFlutterWindow: NSObject {
       let isFullScreen = arguments?["isFullScreen"] as? Bool ?? false
       setFullScreen(isFullScreen: isFullScreen)
       result(nil)
-    case "setWindowStyle":
+    case "setStyle":
       let styleMask = arguments?["styleMask"] as? UInt
       let collectionBehavior = arguments?["collectionBehavior"] as? UInt
       let level = arguments?["level"] as? Int

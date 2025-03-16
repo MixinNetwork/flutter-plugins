@@ -11,10 +11,10 @@ import 'animation_behavior.dart';
 extension ColorExtension on Color {
   Map<String, dynamic> toJson() {
     return {
-      'red': red,
-      'green': green,
-      'blue': blue,
-      'alpha': alpha,
+      'red': r,
+      'green': g,
+      'blue': b,
+      'alpha': a,
     };
   }
 }
@@ -94,7 +94,12 @@ class MacOSWindowOptions {
 
   /// Convenience factory constructor for NSPanel.
   factory MacOSWindowOptions.nspanel({
-    Set<int> styleMask = const {MacOsWindowStyleMask.titled, MacOsWindowStyleMask.closable, MacOsWindowStyleMask.miniaturizable, MacOsWindowStyleMask.utility},
+    Set<int> styleMask = const {
+      MacOsWindowStyleMask.titled,
+      MacOsWindowStyleMask.closable,
+      MacOsWindowStyleMask.miniaturizable,
+      MacOsWindowStyleMask.utility
+    },
     MacOsWindowLevel level = MacOsWindowLevel.floating,
     int left = 10,
     int top = 10,
@@ -111,10 +116,13 @@ class MacOSWindowOptions {
     // For panels, we force title to be hidden.
     MacOsTitleVisibility titleVisibility = MacOsTitleVisibility.hidden,
     bool titlebarAppearsTransparent = false,
-    Set<int> collectionBehavior = const {MacOsWindowCollectionBehavior.default_},
+    Set<int> collectionBehavior = const {
+      MacOsWindowCollectionBehavior.default_
+    },
     bool ignoresMouseEvents = false,
     bool acceptsMouseMovedEvents = false,
-    MacOsAnimationBehavior animationBehavior = MacOsAnimationBehavior.defaultBehavior,
+    MacOsAnimationBehavior animationBehavior =
+        MacOsAnimationBehavior.defaultBehavior,
   }) {
     if (!styleMask.contains(MacOsWindowStyleMask.utility)) {
       styleMask.add(MacOsWindowStyleMask.utility);
@@ -169,10 +177,13 @@ class MacOSWindowOptions {
     bool isMovable = true,
     MacOsTitleVisibility titleVisibility = MacOsTitleVisibility.visible,
     bool titlebarAppearsTransparent = false,
-    Set<int> collectionBehavior = const {MacOsWindowCollectionBehavior.default_},
+    Set<int> collectionBehavior = const {
+      MacOsWindowCollectionBehavior.default_
+    },
     bool ignoresMouseEvents = false,
     bool acceptsMouseMovedEvents = false,
-    MacOsAnimationBehavior animationBehavior = MacOsAnimationBehavior.defaultBehavior,
+    MacOsAnimationBehavior animationBehavior =
+        MacOsAnimationBehavior.defaultBehavior,
   }) {
     return MacOSWindowOptions(
       type: MacOsWindowType.NSWindow,
@@ -203,9 +214,11 @@ class MacOSWindowOptions {
   /// The resulting map only includes the keys that are allowed for the specified [type].
   Map<String, dynamic> toJson() {
     // Common properties for both NSWindow and NSPanel.
-    final common = {
+    return {
+      'type': type.name,
       'level': level.value,
       'styleMask': styleMask.fold<int>(0, (a, b) => a | b),
+      'collectionBehavior': collectionBehavior.fold<int>(0, (a, b) => a | b),
       'left': left,
       'top': top,
       'width': width,
@@ -217,28 +230,13 @@ class MacOSWindowOptions {
       'backing': backing.value,
       'backgroundColor': backgroundColor.toJson(),
       'windowButtonVisibility': windowButtonVisibility,
-    };
 
-    if (type == MacOsWindowType.NSWindow) {
-      return {
-        'type': 'NSWindow',
-        ...common,
         'isModal': isModal,
         'titleVisibility': titleVisibility.value,
         'titlebarAppearsTransparent': titlebarAppearsTransparent,
-        'collectionBehavior': collectionBehavior,
         'ignoresMouseEvents': ignoresMouseEvents,
         'acceptsMouseMovedEvents': acceptsMouseMovedEvents,
         'animationBehavior': animationBehavior.value,
       };
-    } else if (type == MacOsWindowType.NSPanel) {
-      // For NSPanel, output only the common properties plus any NSPanel-specific ones.
-      // We exclude NSWindow-only properties like isModal, titleVisibility, etc.
-      return {
-        'type': 'NSPanel',
-        ...common,
-      };
-    }
-    return common;
   }
 }
