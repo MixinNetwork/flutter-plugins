@@ -365,7 +365,7 @@ class _WindowEventsWidgetState extends State<WindowEventsWidget> with WindowEven
             child: Column(
               children: [
                 SizedBox(
-                  height: 250,
+                  height: 350,
                   width: 300,
                   child: WindowStyleSelector(
                     initialStyle: _windowStyle,

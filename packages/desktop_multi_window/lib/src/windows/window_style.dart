@@ -7,13 +7,13 @@ class WindowsWindowStyle {
   static const int WS_OVERLAPPED = 0x00000000;
 
   /// Creates a pop-up window. Cannot be used with WS_CHILD
-  static const int WS_POPUP = 0x80000000;
+  static const int WS_POPUP = -0x80000000;
 
   /// Creates a child window. Cannot be used with WS_POPUP
-  static const int WS_CHILD = 0x40000000;
+  static const int WS_CHILD = -0x40000000;
 
   /// Creates a window that is initially minimized. Same as WS_ICONIC
-  static const int WS_MINIMIZE = 0x20000000;
+  static const int WS_MINIMIZE = -0x20000000;
 
   /// Creates a window that is initially visible
   static const int WS_VISIBLE = 0x10000000;

@@ -433,8 +433,8 @@ void BaseFlutterWindow::SetFullScreen(bool is_full_screen) {
   }
 }
 
-void BaseFlutterWindow::SetStyle(DWORD style, DWORD extended_style) {
-  auto handle = GetWindowHandle();
+void BaseFlutterWindow::SetStyle(int32_t style, int32_t extended_style) {
+  auto handle = GetRootWindowHandle();
   if (!handle) {
     return;
   }
@@ -469,44 +469,44 @@ void BaseFlutterWindow::SetStyle(DWORD style, DWORD extended_style) {
   );
 
   // Get the new client area
-  RECT newClientRect;
-  GetClientRect(handle, &newClientRect);
+  // RECT newClientRect;
+  // GetClientRect(handle, &newClientRect);
 
   // Find the Flutter view - try different class names that might be used
-  HWND flutterView = NULL;
-  const wchar_t* possibleClassNames[] = {
-      L"FlutterMultiWindow",
-      L"FLUTTER_RUNNER_WIN32_WINDOW",
-      L"FLUTTERVIEW"
-  };
+  // HWND flutterView = NULL;
+  // const wchar_t* possibleClassNames[] = {
+  //     L"FlutterMultiWindow",
+  //     L"FLUTTER_RUNNER_WIN32_WINDOW",
+  //     L"FLUTTERVIEW"
+  // };
 
-  for (const auto& className : possibleClassNames) {
-    flutterView = FindWindowEx(handle, NULL, className, NULL);
-    if (flutterView) break;
-  }
+  // for (const auto& className : possibleClassNames) {
+  //   flutterView = FindWindowEx(handle, NULL, className, NULL);
+  //   if (flutterView) break;
+  // }
 
-  // If we found the Flutter view, resize it to fill the client area
-  if (flutterView) {
-    SetWindowPos(
-      flutterView,
-      NULL,
-      0, 0,
-      newClientRect.right, newClientRect.bottom,
-      SWP_NOZORDER
-    );
-  } else {
-    // If we couldn't find the Flutter view by class name, try the first child window
-    flutterView = GetWindow(handle, GW_CHILD);
-    if (flutterView) {
-      SetWindowPos(
-        flutterView,
-        NULL,
-        0, 0,
-        newClientRect.right, newClientRect.bottom,
-        SWP_NOZORDER
-      );
-    }
-  }
+  // // If we found the Flutter view, resize it to fill the client area
+  // if (flutterView) {
+  //   SetWindowPos(
+  //     flutterView,
+  //     NULL,
+  //     0, 0,
+  //     newClientRect.right, newClientRect.bottom,
+  //     SWP_NOZORDER
+  //   );
+  // } else {
+  //   // If we couldn't find the Flutter view by class name, try the first child window
+  //   flutterView = GetWindow(handle, GW_CHILD);
+  //   if (flutterView) {
+  //     SetWindowPos(
+  //       flutterView,
+  //       NULL,
+  //       0, 0,
+  //       newClientRect.right, newClientRect.bottom,
+  //       SWP_NOZORDER
+  //     );
+  //   }
+  // }
 
   // Restore maximized state if needed
   if (wasMaximized) {

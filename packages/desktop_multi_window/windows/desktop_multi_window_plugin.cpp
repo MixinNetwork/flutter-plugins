@@ -13,7 +13,15 @@
 
 namespace
 {
-
+  int64_t GetIntegerValue(const flutter::EncodableValue& value) {
+    if (std::holds_alternative<int32_t>(value)) {
+      return std::get<int32_t>(value);
+    } else if (std::holds_alternative<int64_t>(value)) {
+      return std::get<int64_t>(value);
+    }
+    throw std::runtime_error("Value is not an integer");
+  }
+  
   const flutter::EncodableValue* ValueOrNull(const flutter::EncodableMap& map, const char* key) {
     auto it = map.find(flutter::EncodableValue(key));
     if (it == map.end()) {

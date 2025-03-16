@@ -132,6 +132,8 @@ FlutterWindow::FlutterWindow(
     _g_window_created_callback(flutter_controller_.get());
   }
 
+  SetBackgroundColor(options.backgroundColor);
+
   // hide the window when created.
   ShowWindow(window_handle, SW_HIDE);
 

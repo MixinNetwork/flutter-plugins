@@ -17,8 +17,7 @@ class WindowStyleSelector extends StatefulWidget {
   _WindowStyleSelectorState createState() => _WindowStyleSelectorState();
 }
 
-class _WindowStyleSelectorState extends State<WindowStyleSelector>
-    with SingleTickerProviderStateMixin {
+class _WindowStyleSelectorState extends State<WindowStyleSelector> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   late int _currentStyle;
   late int _currentExtendedStyle;
@@ -32,10 +31,8 @@ class _WindowStyleSelectorState extends State<WindowStyleSelector>
     StyleOption(name: 'WS_MINIMIZE', value: WindowsWindowStyle.WS_MINIMIZE),
     StyleOption(name: 'WS_VISIBLE', value: WindowsWindowStyle.WS_VISIBLE),
     StyleOption(name: 'WS_DISABLED', value: WindowsWindowStyle.WS_DISABLED),
-    StyleOption(
-        name: 'WS_CLIPSIBLINGS', value: WindowsWindowStyle.WS_CLIPSIBLINGS),
-    StyleOption(
-        name: 'WS_CLIPCHILDREN', value: WindowsWindowStyle.WS_CLIPCHILDREN),
+    StyleOption(name: 'WS_CLIPSIBLINGS', value: WindowsWindowStyle.WS_CLIPSIBLINGS),
+    StyleOption(name: 'WS_CLIPCHILDREN', value: WindowsWindowStyle.WS_CLIPCHILDREN),
     StyleOption(name: 'WS_MAXIMIZE', value: WindowsWindowStyle.WS_MAXIMIZE),
     StyleOption(name: 'WS_BORDER', value: WindowsWindowStyle.WS_BORDER),
     StyleOption(name: 'WS_DLGFRAME', value: WindowsWindowStyle.WS_DLGFRAME),
@@ -45,82 +42,42 @@ class _WindowStyleSelectorState extends State<WindowStyleSelector>
     StyleOption(name: 'WS_THICKFRAME', value: WindowsWindowStyle.WS_THICKFRAME),
     StyleOption(name: 'WS_GROUP', value: WindowsWindowStyle.WS_GROUP),
     StyleOption(name: 'WS_TABSTOP', value: WindowsWindowStyle.WS_TABSTOP),
-    StyleOption(
-        name: 'WS_MINIMIZEBOX', value: WindowsWindowStyle.WS_MINIMIZEBOX),
-    StyleOption(
-        name: 'WS_MAXIMIZEBOX', value: WindowsWindowStyle.WS_MAXIMIZEBOX),
+    StyleOption(name: 'WS_MINIMIZEBOX', value: WindowsWindowStyle.WS_MINIMIZEBOX),
+    StyleOption(name: 'WS_MAXIMIZEBOX', value: WindowsWindowStyle.WS_MAXIMIZEBOX),
+    StyleOption(name: 'WS_CAPTION', value: WindowsWindowStyle.WS_CAPTION)
   ];
 
   // Extended window styles
   final List<StyleOption> _extendedStyles = [
-    StyleOption(
-        name: 'WS_EX_DLGMODALFRAME',
-        value: WindowsExtendedWindowStyle.WS_EX_DLGMODALFRAME),
-    StyleOption(
-        name: 'WS_EX_NOPARENTNOTIFY',
-        value: WindowsExtendedWindowStyle.WS_EX_NOPARENTNOTIFY),
-    StyleOption(
-        name: 'WS_EX_TOPMOST', value: WindowsExtendedWindowStyle.WS_EX_TOPMOST),
-    StyleOption(
-        name: 'WS_EX_ACCEPTFILES',
-        value: WindowsExtendedWindowStyle.WS_EX_ACCEPTFILES),
-    StyleOption(
-        name: 'WS_EX_TRANSPARENT',
-        value: WindowsExtendedWindowStyle.WS_EX_TRANSPARENT),
-    StyleOption(
-        name: 'WS_EX_MDICHILD',
-        value: WindowsExtendedWindowStyle.WS_EX_MDICHILD),
-    StyleOption(
-        name: 'WS_EX_TOOLWINDOW',
-        value: WindowsExtendedWindowStyle.WS_EX_TOOLWINDOW),
-    StyleOption(
-        name: 'WS_EX_WINDOWEDGE',
-        value: WindowsExtendedWindowStyle.WS_EX_WINDOWEDGE),
-    StyleOption(
-        name: 'WS_EX_CLIENTEDGE',
-        value: WindowsExtendedWindowStyle.WS_EX_CLIENTEDGE),
-    StyleOption(
-        name: 'WS_EX_CONTEXTHELP',
-        value: WindowsExtendedWindowStyle.WS_EX_CONTEXTHELP),
-    StyleOption(
-        name: 'WS_EX_RIGHT', value: WindowsExtendedWindowStyle.WS_EX_RIGHT),
-    StyleOption(
-        name: 'WS_EX_RTLREADING',
-        value: WindowsExtendedWindowStyle.WS_EX_RTLREADING),
-    StyleOption(
-        name: 'WS_EX_LEFTSCROLLBAR',
-        value: WindowsExtendedWindowStyle.WS_EX_LEFTSCROLLBAR),
-    StyleOption(
-        name: 'WS_EX_CONTROLPARENT',
-        value: WindowsExtendedWindowStyle.WS_EX_CONTROLPARENT),
-    StyleOption(
-        name: 'WS_EX_STATICEDGE',
-        value: WindowsExtendedWindowStyle.WS_EX_STATICEDGE),
-    StyleOption(
-        name: 'WS_EX_APPWINDOW',
-        value: WindowsExtendedWindowStyle.WS_EX_APPWINDOW),
-    StyleOption(
-        name: 'WS_EX_LAYERED', value: WindowsExtendedWindowStyle.WS_EX_LAYERED),
-    StyleOption(
-        name: 'WS_EX_NOINHERITLAYOUT',
-        value: WindowsExtendedWindowStyle.WS_EX_NOINHERITLAYOUT),
-    StyleOption(
-        name: 'WS_EX_LAYOUTRTL',
-        value: WindowsExtendedWindowStyle.WS_EX_LAYOUTRTL),
-    StyleOption(
-        name: 'WS_EX_COMPOSITED',
-        value: WindowsExtendedWindowStyle.WS_EX_COMPOSITED),
-    StyleOption(
-        name: 'WS_EX_NOACTIVATE',
-        value: WindowsExtendedWindowStyle.WS_EX_NOACTIVATE),
+    StyleOption(name: 'WS_EX_DLGMODALFRAME', value: WindowsExtendedWindowStyle.WS_EX_DLGMODALFRAME),
+    StyleOption(name: 'WS_EX_NOPARENTNOTIFY', value: WindowsExtendedWindowStyle.WS_EX_NOPARENTNOTIFY),
+    StyleOption(name: 'WS_EX_TOPMOST', value: WindowsExtendedWindowStyle.WS_EX_TOPMOST),
+    StyleOption(name: 'WS_EX_ACCEPTFILES', value: WindowsExtendedWindowStyle.WS_EX_ACCEPTFILES),
+    StyleOption(name: 'WS_EX_TRANSPARENT', value: WindowsExtendedWindowStyle.WS_EX_TRANSPARENT),
+    StyleOption(name: 'WS_EX_MDICHILD', value: WindowsExtendedWindowStyle.WS_EX_MDICHILD),
+    StyleOption(name: 'WS_EX_TOOLWINDOW', value: WindowsExtendedWindowStyle.WS_EX_TOOLWINDOW),
+    StyleOption(name: 'WS_EX_WINDOWEDGE', value: WindowsExtendedWindowStyle.WS_EX_WINDOWEDGE),
+    StyleOption(name: 'WS_EX_CLIENTEDGE', value: WindowsExtendedWindowStyle.WS_EX_CLIENTEDGE),
+    StyleOption(name: 'WS_EX_CONTEXTHELP', value: WindowsExtendedWindowStyle.WS_EX_CONTEXTHELP),
+    StyleOption(name: 'WS_EX_RIGHT', value: WindowsExtendedWindowStyle.WS_EX_RIGHT),
+    StyleOption(name: 'WS_EX_RTLREADING', value: WindowsExtendedWindowStyle.WS_EX_RTLREADING),
+    StyleOption(name: 'WS_EX_LEFTSCROLLBAR', value: WindowsExtendedWindowStyle.WS_EX_LEFTSCROLLBAR),
+    StyleOption(name: 'WS_EX_CONTROLPARENT', value: WindowsExtendedWindowStyle.WS_EX_CONTROLPARENT),
+    StyleOption(name: 'WS_EX_STATICEDGE', value: WindowsExtendedWindowStyle.WS_EX_STATICEDGE),
+    StyleOption(name: 'WS_EX_APPWINDOW', value: WindowsExtendedWindowStyle.WS_EX_APPWINDOW),
+    StyleOption(name: 'WS_EX_LAYERED', value: WindowsExtendedWindowStyle.WS_EX_LAYERED),
+    StyleOption(name: 'WS_EX_NOINHERITLAYOUT', value: WindowsExtendedWindowStyle.WS_EX_NOINHERITLAYOUT),
+    StyleOption(name: 'WS_EX_LAYOUTRTL', value: WindowsExtendedWindowStyle.WS_EX_LAYOUTRTL),
+    StyleOption(name: 'WS_EX_COMPOSITED', value: WindowsExtendedWindowStyle.WS_EX_COMPOSITED),
+    StyleOption(name: 'WS_EX_NOACTIVATE', value: WindowsExtendedWindowStyle.WS_EX_NOACTIVATE),
   ];
 
   // Common style presets
   final Map<String, int> _stylePresets = {
     'WS_OVERLAPPEDWINDOW (Default)':
         0x00CF0000, // WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX
-    'WS_POPUPWINDOW': 0x80880000, // WS_POPUP | WS_BORDER | WS_SYSMENU
-    'WS_CHILDWINDOW': 0x40000000, // WS_CHILD
+    'WS_POPUPWINDOW': -0x80880000, // WS_POPUP | WS_BORDER | WS_SYSMENU
+    'WS_CHILDWINDOW': -0x40000000, // WS_CHILD
     'WS_CAPTION': 0x00C00000, // WS_BORDER | WS_DLGFRAME
     'No Border': 0x00080000, // WS_SYSMENU only
     'Fixed Size': 0x00C80000, // WS_CAPTION | WS_SYSMENU (no WS_THICKFRAME)
@@ -154,15 +111,13 @@ class _WindowStyleSelectorState extends State<WindowStyleSelector>
         // Special case for WS_OVERLAPPED (0)
         style.isSelected = (_currentStyle & 0xF0000000) == 0;
       } else {
-        style.isSelected =
-            (_currentStyle & style.value) == style.value && style.value != 0;
+        style.isSelected = (_currentStyle & style.value) == style.value && style.value != 0;
       }
     }
 
     // Update extended style checkboxes
     for (var style in _extendedStyles) {
-      style.isSelected = (_currentExtendedStyle & style.value) == style.value &&
-          style.value != 0;
+      style.isSelected = (_currentExtendedStyle & style.value) == style.value && style.value != 0;
     }
   }
 
@@ -185,8 +140,7 @@ class _WindowStyleSelectorState extends State<WindowStyleSelector>
     }
 
     // Check for incompatibilities
-    List<String> warnings =
-        _checkStyleIncompatibilities(newStyle, newExtendedStyle);
+    List<String> warnings = _checkStyleIncompatibilities(newStyle, newExtendedStyle);
 
     setState(() {
       _currentStyle = newStyle;
@@ -200,38 +154,77 @@ class _WindowStyleSelectorState extends State<WindowStyleSelector>
   List<String> _checkStyleIncompatibilities(int style, int extendedStyle) {
     List<String> warnings = [];
 
-    // Check base window type conflicts
-    bool hasOverlapped = (style & 0xF0000000) == 0;
-    bool hasPopup = (style & WindowsWindowStyle.WS_POPUP) != 0;
-    bool hasChild = (style & WindowsWindowStyle.WS_CHILD) != 0;
+    // For debugging
+    print('Current style: ${style.toRadixString(16)}');
+    
+    // Check base window type - using exact matches for the high bits
+    bool hasPopup = style < 0 && (style & WindowsWindowStyle.WS_POPUP) == WindowsWindowStyle.WS_POPUP;
+    bool hasChild = style < 0 && (style & WindowsWindowStyle.WS_CHILD) == WindowsWindowStyle.WS_CHILD;
 
+    // Only warn if BOTH popup and child are selected
     if (hasPopup && hasChild) {
       warnings.add("WS_POPUP and WS_CHILD can't be used together");
     }
 
-    // Check for other incompatibilities
+    // Check caption-related conflicts - positive values remain the same
+    bool hasCaption = (style & WindowsWindowStyle.WS_CAPTION) == WindowsWindowStyle.WS_CAPTION;
+    bool hasSysMenu = (style & WindowsWindowStyle.WS_SYSMENU) == WindowsWindowStyle.WS_SYSMENU;
+    bool hasMinBox = (style & WindowsWindowStyle.WS_MINIMIZEBOX) == WindowsWindowStyle.WS_MINIMIZEBOX;
+    bool hasMaxBox = (style & WindowsWindowStyle.WS_MAXIMIZEBOX) == WindowsWindowStyle.WS_MAXIMIZEBOX;
+
+    // Only check child window restrictions if it's actually a child window
     if (hasChild) {
-      if ((extendedStyle & WindowsExtendedWindowStyle.WS_EX_APPWINDOW) != 0) {
+      if (hasCaption) {
+        warnings.add("WS_CHILD windows shouldn't have WS_CAPTION");
+      }
+      if (hasSysMenu) {
+        warnings.add("WS_CHILD windows shouldn't have WS_SYSMENU");
+      }
+      if ((extendedStyle & WindowsExtendedWindowStyle.WS_EX_APPWINDOW) == WindowsExtendedWindowStyle.WS_EX_APPWINDOW) {
         warnings.add("WS_CHILD can't be used with WS_EX_APPWINDOW");
       }
     }
 
-    // Check for state conflicts
-    bool hasMinimize = (style & WindowsWindowStyle.WS_MINIMIZE) != 0;
-    bool hasMaximize = (style & WindowsWindowStyle.WS_MAXIMIZE) != 0;
-
-    if (hasMinimize && hasMaximize) {
-      warnings.add("WS_MINIMIZE and WS_MAXIMIZE shouldn't be used together");
+    // Min/Max box requires caption
+    if (!hasCaption) {
+      if (hasMinBox) {
+        warnings.add("WS_MINIMIZEBOX requires WS_CAPTION");
+      }
+      if (hasMaxBox) {
+        warnings.add("WS_MAXIMIZEBOX requires WS_CAPTION");
+      }
     }
 
-    // Check for tool window vs app window conflict
-    bool hasToolWindow =
-        (extendedStyle & WindowsExtendedWindowStyle.WS_EX_TOOLWINDOW) != 0;
-    bool hasAppWindow =
-        (extendedStyle & WindowsExtendedWindowStyle.WS_EX_APPWINDOW) != 0;
+    // System menu usually requires caption (except for popup windows)
+    if (hasSysMenu && !hasCaption && !hasPopup) {
+      warnings.add("WS_SYSMENU usually requires WS_CAPTION (except for popup windows)");
+    }
+
+    // Window state conflicts - negative values need exact comparison
+    bool hasMinimize = (style & WindowsWindowStyle.WS_MINIMIZE) == WindowsWindowStyle.WS_MINIMIZE;
+    bool hasMaximize = (style & WindowsWindowStyle.WS_MAXIMIZE) == WindowsWindowStyle.WS_MAXIMIZE;
+
+    if (hasMinimize && hasMaximize) {
+      warnings.add("Window cannot be both minimized and maximized");
+    }
+
+    // Extended style conflicts - all positive values, standard comparison works
+    bool hasToolWindow = (extendedStyle & WindowsExtendedWindowStyle.WS_EX_TOOLWINDOW) == WindowsExtendedWindowStyle.WS_EX_TOOLWINDOW;
+    bool hasAppWindow = (extendedStyle & WindowsExtendedWindowStyle.WS_EX_APPWINDOW) == WindowsExtendedWindowStyle.WS_EX_APPWINDOW;
+    bool hasDialogFrame = (extendedStyle & WindowsExtendedWindowStyle.WS_EX_DLGMODALFRAME) == WindowsExtendedWindowStyle.WS_EX_DLGMODALFRAME;
 
     if (hasToolWindow && hasAppWindow) {
-      warnings.add("WS_EX_TOOLWINDOW and WS_EX_APPWINDOW are contradictory");
+      warnings.add("WS_EX_TOOLWINDOW and WS_EX_APPWINDOW shouldn't be used together");
+    }
+
+    if (hasDialogFrame && hasPopup) {
+      warnings.add("WS_EX_DLGMODALFRAME is typically used with overlapped windows, not popup windows");
+    }
+
+    // MDI-related checks
+    bool hasMDIChild = (extendedStyle & WindowsExtendedWindowStyle.WS_EX_MDICHILD) == WindowsExtendedWindowStyle.WS_EX_MDICHILD;
+    if (hasMDIChild && !hasChild) {
+      warnings.add("WS_EX_MDICHILD requires WS_CHILD style");
     }
 
     return warnings;
@@ -344,13 +337,11 @@ class _WindowStyleSelectorState extends State<WindowStyleSelector>
                     icon: const Icon(Icons.arrow_drop_down, size: 16),
                     style: const TextStyle(fontSize: 12, color: Colors.black),
                     onChanged: (String? newValue) {
-                      if (newValue != null &&
-                          _stylePresets.containsKey(newValue)) {
+                      if (newValue != null && _stylePresets.containsKey(newValue)) {
                         _selectStylePreset(_stylePresets[newValue]!);
                       }
                     },
-                    items: _stylePresets.keys
-                        .map<DropdownMenuItem<String>>((String value) {
+                    items: _stylePresets.keys.map<DropdownMenuItem<String>>((String value) {
                       return DropdownMenuItem<String>(
                         value: value,
                         child: Text(
@@ -398,8 +389,7 @@ class _WindowStyleSelectorState extends State<WindowStyleSelector>
                   });
                 },
                 dense: true,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
                 visualDensity: VisualDensity.compact,
                 controlAffinity: ListTileControlAffinity.leading,
               );
@@ -477,14 +467,11 @@ class _WindowStyleSelectorState extends State<WindowStyleSelector>
                     icon: const Icon(Icons.arrow_drop_down, size: 16),
                     style: const TextStyle(fontSize: 12, color: Colors.black),
                     onChanged: (String? newValue) {
-                      if (newValue != null &&
-                          _extendedStylePresets.containsKey(newValue)) {
-                        _selectExtendedStylePreset(
-                            _extendedStylePresets[newValue]!);
+                      if (newValue != null && _extendedStylePresets.containsKey(newValue)) {
+                        _selectExtendedStylePreset(_extendedStylePresets[newValue]!);
                       }
                     },
-                    items: _extendedStylePresets.keys
-                        .map<DropdownMenuItem<String>>((String value) {
+                    items: _extendedStylePresets.keys.map<DropdownMenuItem<String>>((String value) {
                       return DropdownMenuItem<String>(
                         value: value,
                         child: Text(
@@ -532,8 +519,7 @@ class _WindowStyleSelectorState extends State<WindowStyleSelector>
                   });
                 },
                 dense: true,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
                 visualDensity: VisualDensity.compact,
                 controlAffinity: ListTileControlAffinity.leading,
               );
@@ -557,8 +543,7 @@ class StyleOption {
   final int value;
   bool isSelected;
 
-  StyleOption(
-      {required this.name, required this.value, this.isSelected = false});
+  StyleOption({required this.name, required this.value, this.isSelected = false});
 }
 
 // Usage example
@@ -599,10 +584,8 @@ class _WindowStyleExampleState extends State<WindowStyleExample> {
             ElevatedButton(
               onPressed: () {
                 // Apply the window style
-                print(
-                    'Applying window style: 0x${_windowStyle.toRadixString(16).toUpperCase()}');
-                print(
-                    'Applying extended style: 0x${_extendedStyle.toRadixString(16).toUpperCase()}');
+                print('Applying window style: 0x${_windowStyle.toRadixString(16).toUpperCase()}');
+                print('Applying extended style: 0x${_extendedStyle.toRadixString(16).toUpperCase()}');
                 // Here you would call your platform-specific code to apply the style
               },
               child: const Text('Apply Window Style'),

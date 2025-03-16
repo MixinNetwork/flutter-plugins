@@ -88,7 +88,7 @@ public:
 
   void SetFullScreen(bool is_full_screen);
 
-  void SetStyle(DWORD style, DWORD extended_style);
+  void SetStyle(int32_t style, int32_t extended_style);
 
   void Center();
 

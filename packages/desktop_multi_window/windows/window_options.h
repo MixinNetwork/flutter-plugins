@@ -23,6 +23,20 @@ auto getInt = [&](const flutter::EncodableMap& map, const std::string& key, int 
   return defaultValue;
 };
 
+auto getInt64 = [&](const flutter::EncodableMap& map, const std::string& key, int64_t defaultValue) -> int64_t {
+  auto iter = map.find(flutter::EncodableValue(key));
+  if (iter != map.end()) {
+    return std::visit([&](auto&& arg) -> int64_t {
+      using T = std::decay_t<decltype(arg)>;
+      if constexpr (std::is_integral_v<T> || std::is_floating_point_v<T>) {
+        return static_cast<int64_t>(arg);
+      } else {
+        return defaultValue;
+      } }, iter->second);
+  }
+  return defaultValue;
+};
+
 // Helper lambda to extract double values from the map.
 auto getDouble = [&](const flutter::EncodableMap& map, const std::string& key, double defaultValue) -> double {
   auto iter = map.find(flutter::EncodableValue(key));
@@ -125,8 +139,8 @@ struct Color {
 struct WindowOptions
 {
   std::wstring title;
-  DWORD style;
-  DWORD exStyle;
+  int32_t style;
+  int32_t exStyle;
   int left;
   int top;
   int width;
@@ -140,8 +154,10 @@ struct WindowOptions
 
   // Parse the window options from a flutter::EncodableMap.
   void Parse(const flutter::EncodableMap& windows_map) {
-    style = static_cast<DWORD>(getInt(windows_map, "style", style));
-    exStyle = static_cast<DWORD>(getInt(windows_map, "exStyle", exStyle));
+    // auto styleW = GetIntegerValue(windows_map.at(flutter::EncodableValue("style")));
+    // auto extended_styleW = GetIntegerValue(windows_map.at(flutter::EncodableValue("extendedStyle")));
+    style = getInt(windows_map, "style", style);
+    exStyle = getInt(windows_map, "exStyle", exStyle);
     left = getInt(windows_map, "left", left);
     top = getInt(windows_map, "top", top);
     width = getInt(windows_map, "width", width);
