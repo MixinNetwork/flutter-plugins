@@ -112,24 +112,24 @@ void BaseFlutterWindow::Center() {
   SetWindowPos(handle, nullptr, rect.left, rect.top, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
-void BaseFlutterWindow::SetFrame(double_t left, double_t top, double_t width, double_t height) {
+void BaseFlutterWindow::SetFrame(double_t left, double_t top, double_t width, double_t height, UINT flags) {
   auto handle = GetRootWindowHandle();
   if (!handle) {
     return;
   }
 
-  // Get window styles
-  DWORD style = GetWindowLong(handle, GWL_STYLE);
-  DWORD exStyle = GetWindowLong(handle, GWL_EXSTYLE);
+  // // Get window styles
+  // DWORD style = GetWindowLong(handle, GWL_STYLE);
+  // DWORD exStyle = GetWindowLong(handle, GWL_EXSTYLE);
 
-  // Calculate the required window size to achieve the desired client area size
-  RECT rect = { 0, 0, static_cast<LONG>(width), static_cast<LONG>(height) };
+  // // Calculate the required window size to achieve the desired client area size
+  // RECT rect = { 0, 0, static_cast<LONG>(width), static_cast<LONG>(height) };
 
-  // Adjust for window decorations (title bar, borders, etc.)
-  AdjustWindowRectEx(&rect, style, FALSE, exStyle);
+  // // Adjust for window decorations (title bar, borders, etc.)
+  // AdjustWindowRectEx(&rect, style, FALSE, exStyle);
 
-  int adjustedWidth = rect.right - rect.left;
-  int adjustedHeight = rect.bottom - rect.top;
+  // int adjustedWidth = rect.right - rect.left;
+  // int adjustedHeight = rect.bottom - rect.top;
 
   // Move and resize the window
   SetWindowPos(
@@ -137,9 +137,9 @@ void BaseFlutterWindow::SetFrame(double_t left, double_t top, double_t width, do
     NULL,
     static_cast<int>(left),
     static_cast<int>(top),
-    adjustedWidth,
-    adjustedHeight,
-    SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED
+    static_cast<int>(width),
+    static_cast<int>(height),
+    SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED | flags
   );
 }
 

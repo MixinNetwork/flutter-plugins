@@ -114,11 +114,11 @@ void MultiWindowManager::Close(int64_t id) {
   }
 }
 
-void MultiWindowManager::SetFrame(int64_t id, double_t left, double_t top, double_t width, double_t height) {
+void MultiWindowManager::SetFrame(int64_t id, double_t left, double_t top, double_t width, double_t height, UINT flags) {
   std::lock_guard<std::mutex> lock(threadMtx);
   auto window = windows_.find(id);
   if (window != windows_.end()) {
-    window->second->SetFrame(left, top, width, height);
+    window->second->SetFrame(left, top, width, height, flags);
   }
 }
 

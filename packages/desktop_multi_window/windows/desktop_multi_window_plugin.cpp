@@ -209,7 +209,7 @@ namespace
         uFlags = SWP_NOSIZE;
       }
 
-      MultiWindowManager::Instance()->SetFrame(window_id, x, y, width, height);
+      MultiWindowManager::Instance()->SetFrame(window_id, x, y, width, height, uFlags);
       result->Success();
       return;
     } else if (method_call.method_name() == "getFrame") {
