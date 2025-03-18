@@ -29,6 +29,8 @@ class _WindowEventsWidgetState extends State<WindowEventsWidget> with WindowEven
   Offset _position = const Offset(0, 0);
   Size _size = const Size(0, 0);
 
+  Offset _mousePosition = const Offset(0, 0);
+
   @override
   void initState() {
     super.initState();
@@ -59,6 +61,7 @@ class _WindowEventsWidgetState extends State<WindowEventsWidget> with WindowEven
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const SizedBox(width: 16),
+            Text('Mouse Position: ${_mousePosition.dx},${_mousePosition.dy}'),
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(8),
@@ -440,6 +443,13 @@ class _WindowEventsWidgetState extends State<WindowEventsWidget> with WindowEven
       setState(() {
         _size = size;
       });
+    });
+  }
+
+  @override
+  void onMouseMove(int x, int y) {
+    setState(() {
+      _mousePosition = Offset(x.toDouble(), y.toDouble());
     });
   }
 }

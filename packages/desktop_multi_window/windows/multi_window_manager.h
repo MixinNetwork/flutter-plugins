@@ -11,6 +11,8 @@
 
 #include "base_flutter_window.h"
 #include "flutter_window.h"
+#include "utils.h"
+
 
 class MultiWindowManager : public std::enable_shared_from_this<MultiWindowManager>, public BaseFlutterWindowCallback {
 

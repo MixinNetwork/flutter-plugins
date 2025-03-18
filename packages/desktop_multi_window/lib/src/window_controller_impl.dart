@@ -28,8 +28,13 @@ class WindowControllerImpl extends WindowController {
 
       if (call.method != 'onEvent') throw UnimplementedError();
 
-      String eventName = call.arguments['eventName'];
-      listener.onWindowEvent(eventName);
+      final String eventName = call.arguments['eventName'];
+      final dynamic rawEventData = call.arguments['eventData'];
+      final Map<String, dynamic>? eventData = rawEventData != null 
+          ? Map<String, dynamic>.from(rawEventData as Map)
+          : null;
+
+      listener.onWindowEvent(eventName, eventData);
       Map<String, Function> funcMap = {
         kWindowEventClose: listener.onWindowClose,
         kWindowEventFocus: listener.onWindowFocus,
@@ -46,8 +51,13 @@ class WindowControllerImpl extends WindowController {
         kWindowEventLeaveFullScreen: listener.onWindowLeaveFullScreen,
         kWindowEventDocked: listener.onWindowDocked,
         kWindowEventUndocked: listener.onWindowUndocked,
+        kWindowEventMouseMove: (Map<String, dynamic>? eventData) {
+          final x = (eventData?['x'] as num?)?.toInt() ?? 0;
+          final y = (eventData?['y'] as num?)?.toInt() ?? 0;
+          listener.onMouseMove(x, y);
+        },
       };
-      funcMap[eventName]?.call();
+      funcMap[eventName]?.call(eventData);
     }
   }
 

@@ -15,6 +15,8 @@ const kWindowEventLeaveFullScreen = 'leave-full-screen';
 const kWindowEventDocked = 'docked';
 const kWindowEventUndocked = 'undocked';
 
+const kWindowEventMouseMove = 'mouse-move';
+
 abstract mixin class WindowEvents {
   /// Emitted when the window is going to be closed.
   void onWindowClose() {}
@@ -69,6 +71,9 @@ abstract mixin class WindowEvents {
   /// @platforms windows
   void onWindowUndocked() {}
 
+  /// Emitted when the mouse is moved.
+  void onMouseMove(int x, int y) {}
+
   /// Emitted all events.
-  void onWindowEvent(String eventName) {}
+  void onWindowEvent(String eventName, Map<String, dynamic>? eventData) {}
 }
