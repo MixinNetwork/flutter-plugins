@@ -61,7 +61,12 @@ class _WindowEventsWidgetState extends State<WindowEventsWidget> with WindowEven
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const SizedBox(width: 16),
-            Text('Mouse Position: ${_mousePosition.dx},${_mousePosition.dy}'),
+            Text(
+              'Mouse Position: ${_mousePosition.dx},${_mousePosition.dy}',
+              style: const TextStyle(
+                color: Colors.red,
+              ),
+            ),
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(8),
@@ -345,9 +350,11 @@ class _WindowEventsWidgetState extends State<WindowEventsWidget> with WindowEven
                     const SizedBox(height: 16),
                     ElevatedButton(
                       onPressed: () async {
-                        await widget.controller.setBackgroundColor(
-                          Color.fromARGB(int.parse(backgroundColorAController.text), int.parse(backgroundColorRController.text),
-                              int.parse(backgroundColorGController.text), int.parse(backgroundColorBController.text)));
+                        await widget.controller.setBackgroundColor(Color.fromARGB(
+                            int.parse(backgroundColorAController.text),
+                            int.parse(backgroundColorRController.text),
+                            int.parse(backgroundColorGController.text),
+                            int.parse(backgroundColorBController.text)));
                       },
                       child: const Text('Set Background Color'),
                       style: ElevatedButton.styleFrom(

@@ -14,9 +14,7 @@ void main(List<String> args) {
   WidgetsFlutterBinding.ensureInitialized();
   if (args.firstOrNull == 'multi_window') {
     final windowId = int.parse(args[1]);
-    final argument = args[2].isEmpty
-        ? const {}
-        : jsonDecode(args[2]) as Map<String, dynamic>;
+    final argument = args[2].isEmpty ? const {} : jsonDecode(args[2]) as Map<String, dynamic>;
     runApp(_ExampleSubWindow(
       windowController: WindowController.fromWindowId(windowId),
       args: argument,
@@ -41,8 +39,7 @@ class _ExampleMainWindowState extends State<_ExampleMainWindow> {
   @override
   void initState() {
     if (Platform.isMacOS) {
-      _appLifecycleListener =
-          AppLifecycleListener(onStateChange: _handleStateChange);
+      _appLifecycleListener = AppLifecycleListener(onStateChange: _handleStateChange);
     }
     super.initState();
     _updateWindowIds();
@@ -65,8 +62,7 @@ class _ExampleMainWindowState extends State<_ExampleMainWindow> {
 
   Future<void> _updateWindowIds() async {
     // Get all sub-window IDs
-    final List<int> subWindowIds =
-        await DesktopMultiWindow.getAllSubWindowIds();
+    final List<int> subWindowIds = await DesktopMultiWindow.getAllSubWindowIds();
     setState(() {
       _windowIds = subWindowIds;
       if (_windowIds.isNotEmpty) {
@@ -116,13 +112,11 @@ class _ExampleMainWindowState extends State<_ExampleMainWindow> {
           children: [
             Row(
               children: [
-                WindowEventsWidget(
-                    controller: WindowController.fromWindowId(0)),
+                WindowEventsWidget(controller: WindowController.main()),
                 Column(
                   children: [
                     Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8.0, vertical: 8.0),
+                      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
                       child: ElevatedButton.icon(
                         onPressed: () async {
                           final window = await DesktopMultiWindow.createWindow(
@@ -135,8 +129,7 @@ class _ExampleMainWindowState extends State<_ExampleMainWindow> {
                             options,
                           );
                           window
-                            ..setFrame(
-                                const Offset(0, 0) & const Size(1280, 720))
+                            ..setFrame(const Offset(0, 0) & const Size(1280, 720))
                             ..center()
                             ..setTitle('Another window')
                             ..show();
@@ -145,22 +138,17 @@ class _ExampleMainWindowState extends State<_ExampleMainWindow> {
                         icon: const Icon(Icons.add),
                         label: const Text('Create Window'),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor:
-                              Theme.of(context).colorScheme.primaryContainer,
-                          foregroundColor:
-                              Theme.of(context).colorScheme.onPrimaryContainer,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 12),
+                          backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                          foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                         ),
                       ),
                     ),
                     Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8.0, vertical: 8.0),
+                      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
                       child: ElevatedButton.icon(
                         onPressed: () async {
-                          final subWindowIds =
-                              await DesktopMultiWindow.getAllSubWindowIds();
+                          final subWindowIds = await DesktopMultiWindow.getAllSubWindowIds();
                           for (final windowId in subWindowIds) {
                             DesktopMultiWindow.invokeMethod(
                               windowId,
@@ -172,12 +160,9 @@ class _ExampleMainWindowState extends State<_ExampleMainWindow> {
                         icon: const Icon(Icons.send),
                         label: const Text('Send event to all sub windows'),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor:
-                              Theme.of(context).colorScheme.primaryContainer,
-                          foregroundColor:
-                              Theme.of(context).colorScheme.onPrimaryContainer,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 12),
+                          backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                          foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                         ),
                       ),
                     ),
@@ -193,8 +178,7 @@ class _ExampleMainWindowState extends State<_ExampleMainWindow> {
                               items: _windowIds.map((int id) {
                                 return DropdownMenuItem<int>(
                                   value: id,
-                                  child: Text(
-                                      id == 0 ? 'Main Window' : 'Window $id'),
+                                  child: Text(id == 0 ? 'Main Window' : 'Window $id'),
                                 );
                               }).toList(),
                               onTap: () async {
@@ -214,9 +198,7 @@ class _ExampleMainWindowState extends State<_ExampleMainWindow> {
                           TextButton(
                             onPressed: () async {
                               if (_selectedWindowId != null) {
-                                await WindowController.fromWindowId(
-                                        _selectedWindowId!)
-                                    .show();
+                                await WindowController.fromWindowId(_selectedWindowId!).show();
                               }
                             },
                             child: const Text('Show this window'),
@@ -229,7 +211,7 @@ class _ExampleMainWindowState extends State<_ExampleMainWindow> {
               ],
             ),
             Expanded(
-              child: EventWidget(controller: WindowController.fromWindowId(0)),
+              child: EventWidget(controller: WindowController.main()),
             )
           ],
         ),
@@ -252,24 +234,21 @@ class _ExampleSubWindow extends StatefulWidget {
   State<_ExampleSubWindow> createState() => _ExampleSubWindowState();
 }
 
-class _ExampleSubWindowState extends State<_ExampleSubWindow>
-    with WindowEvents {
+class _ExampleSubWindowState extends State<_ExampleSubWindow> {
   late final AppLifecycleListener? _appLifecycleListener;
 
   @override
   void initState() {
     super.initState();
     if (Platform.isMacOS) {
-      _appLifecycleListener =
-          AppLifecycleListener(onStateChange: _handleStateChange);
+      _appLifecycleListener = AppLifecycleListener(onStateChange: _handleStateChange);
     }
   }
 
   void _handleStateChange(AppLifecycleState state) {
     // workaround applies for all sub-windows
     if (Platform.isMacOS && state == AppLifecycleState.hidden) {
-      SchedulerBinding.instance
-          .handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      SchedulerBinding.instance.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
     }
   }
 
@@ -279,7 +258,6 @@ class _ExampleSubWindowState extends State<_ExampleSubWindow>
       _appLifecycleListener?.dispose();
     }
     super.dispose();
-    widget.windowController.removeListener(this);
   }
 
   @override

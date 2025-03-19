@@ -15,26 +15,6 @@ namespace {
 
   class FlutterMainWindow : public BaseFlutterWindow {
   public:
-    static FlutterMainWindow* GetInstance(HWND hwnd,
-      const std::shared_ptr<BaseFlutterWindowCallback>& callback,
-      std::unique_ptr<InterWindowEventChannel> inter_window_event_channel,
-      std::unique_ptr<WindowEventsChannel> window_events_channel,
-      flutter::PluginRegistrarWindows* registrar) {
-      if (!instance) {
-        instance = new FlutterMainWindow(hwnd, callback, std::move(inter_window_event_channel), std::move(window_events_channel), registrar);
-      }
-      return instance;
-    }
-
-    ~FlutterMainWindow() {
-      if (mouse_hook_) {
-        UnhookWindowsHookEx(mouse_hook_);
-        mouse_hook_ = nullptr;
-      }
-      instance = nullptr;
-    }
-
-  private:
     FlutterMainWindow(HWND hwnd,
       const std::shared_ptr<BaseFlutterWindowCallback>& callback,
       std::unique_ptr<InterWindowEventChannel> inter_window_event_channel,
@@ -50,34 +30,8 @@ namespace {
         [this](HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
         return HandleWindowProc(hWnd, message, wParam, lParam);
       });
-      mouse_hook_ = SetWindowsHookEx(WH_MOUSE_LL, MouseProc, GetModuleHandle(NULL), 0);
-    }
-
-    static FlutterMainWindow* instance;
-
-    HHOOK mouse_hook_ = nullptr;
-
-    static LRESULT CALLBACK MouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
-      if (nCode >= 0) {
-        MSLLHOOKSTRUCT* hookStruct = (MSLLHOOKSTRUCT*)lParam;
-        if (instance && instance->window_events_channel_) {
-
-          flutter::EncodableMap coordinates;
-          coordinates[flutter::EncodableValue("x")] = flutter::EncodableValue(static_cast<double>(hookStruct->pt.x));
-          coordinates[flutter::EncodableValue("y")] = flutter::EncodableValue(static_cast<double>(hookStruct->pt.y));
-
-          flutter::EncodableMap args;
-          args[flutter::EncodableValue("eventName")] = flutter::EncodableValue("mouse-move");
-          args[flutter::EncodableValue("eventData")] = flutter::EncodableValue(coordinates);
-          
-          instance->window_events_channel_->channel_->InvokeMethod("onEvent", std::make_unique<flutter::EncodableValue>(args));
-        }
-      }
-      return CallNextHookEx(NULL, nCode, wParam, lParam);
     }
   };
-
-  FlutterMainWindow* FlutterMainWindow::instance = nullptr;
 };
 
 // static
@@ -87,6 +41,14 @@ MultiWindowManager* MultiWindowManager::Instance() {
 }
 
 MultiWindowManager::MultiWindowManager() : windows_() {
+  mouse_hook_ = SetWindowsHookEx(WH_MOUSE_LL, MouseProc, GetModuleHandle(NULL), 0);
+}
+
+MultiWindowManager::~MultiWindowManager() {
+  if (mouse_hook_) {
+    UnhookWindowsHookEx(mouse_hook_);
+    mouse_hook_ = nullptr;
+  }
 }
 
 int64_t MultiWindowManager::Create(std::string args, WindowOptions options) {
@@ -124,14 +86,12 @@ void MultiWindowManager::AttachFlutterMainWindow(
       std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
     HandleWindowChannelCall(from_window_id, target_window_id, call, arguments, std::move(result));
   });
-  auto main_window = std::unique_ptr<FlutterMainWindow>(
-    FlutterMainWindow::GetInstance(
-      main_window_handle,
-      shared_from_this(),
-      std::move(inter_window_event_channel),
-      std::move(window_events_channel),
-      registrar
-    )
+  auto main_window = std::make_unique<FlutterMainWindow>(
+    main_window_handle,
+    shared_from_this(),
+    std::move(inter_window_event_channel),
+    std::move(window_events_channel),
+    registrar
   );
   windows_[0] = std::move(main_window);
 }
@@ -350,4 +310,35 @@ void MultiWindowManager::HandleWindowChannelCall(
     return;
   }
   target_window_channel->InvokeMethod(from_window_id, call, arguments, std::move(result));
+}
+
+
+
+LRESULT CALLBACK MultiWindowManager::MouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
+  if (nCode >= 0) {
+    MSLLHOOKSTRUCT* hookStruct = (MSLLHOOKSTRUCT*)lParam;
+    if (MultiWindowManager::Instance()) {
+
+      flutter::EncodableMap coordinates;
+      coordinates[flutter::EncodableValue("x")] = flutter::EncodableValue(static_cast<double>(hookStruct->pt.x));
+      coordinates[flutter::EncodableValue("y")] = flutter::EncodableValue(static_cast<double>(hookStruct->pt.y));
+
+      flutter::EncodableMap args;
+      args[flutter::EncodableValue("eventName")] = flutter::EncodableValue("mouse-move");
+      args[flutter::EncodableValue("eventData")] = flutter::EncodableValue(coordinates);
+
+      std::lock_guard<std::mutex> lock(threadMtx);
+      for (auto& window : MultiWindowManager::Instance()->windows_) {
+        try {
+          auto channel = window.second->GetWindowEventsChannel();
+          if (channel && channel->channel_ && IsWindow(window.second->GetRootWindowHandle()) && !window.second->IsDestroyed() && !window.second->IsClosed()) {
+            channel->channel_->InvokeMethod("onEvent", std::make_unique<flutter::EncodableValue>(args));
+          }
+        } catch (const std::exception& e) {
+          std::cout << "Error: " << e.what() << std::endl;
+        }
+      }
+    }
+  }
+  return CallNextHookEx(NULL, nCode, wParam, lParam);
 }

@@ -10,13 +10,12 @@ import 'extensions.dart';
 
 class WindowControllerImpl extends WindowController {
   final MethodChannel _channel = multiWindowChannel;
+  final MethodChannel _windowEventsChannel = windowEventsChannel;
 
   // the id of this window
   final int _id;
 
-  WindowControllerImpl(this._id) {
-    windowEventsChannel.setMethodCallHandler(_methodCallHandler);
-  }
+  WindowControllerImpl(this._id);
 
   final ObserverList<WindowEvents> _listeners = ObserverList<WindowEvents>();
 
@@ -30,9 +29,8 @@ class WindowControllerImpl extends WindowController {
 
       final String eventName = call.arguments['eventName'];
       final dynamic rawEventData = call.arguments['eventData'];
-      final Map<String, dynamic>? eventData = rawEventData != null 
-          ? Map<String, dynamic>.from(rawEventData as Map)
-          : null;
+      final Map<String, dynamic>? eventData =
+          rawEventData != null ? Map<String, dynamic>.from(rawEventData as Map) : null;
 
       listener.onWindowEvent(eventName, eventData);
       Map<String, Function> funcMap = {
@@ -57,7 +55,11 @@ class WindowControllerImpl extends WindowController {
           listener.onMouseMove(x, y);
         },
       };
-      funcMap[eventName]?.call(eventData);
+      if (eventData != null) {
+        funcMap[eventName]?.call(eventData);
+      } else {
+        funcMap[eventName]?.call();
+      }
     }
   }
 
@@ -76,6 +78,9 @@ class WindowControllerImpl extends WindowController {
       return;
     }
     _listeners.add(listener);
+    if (hasListeners) {
+      _windowEventsChannel.setMethodCallHandler(_methodCallHandler);
+    }
   }
 
   @override
@@ -84,6 +89,9 @@ class WindowControllerImpl extends WindowController {
       return;
     }
     _listeners.remove(listener);
+    if (!hasListeners) {
+      _windowEventsChannel.setMethodCallHandler(null);
+    }
   }
 
   double getDevicePixelRatio() {

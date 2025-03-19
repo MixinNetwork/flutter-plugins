@@ -219,6 +219,7 @@ void BaseFlutterWindow::Close() {
   if (!handle) {
     return;
   }
+  closed_ = true;
   PostMessage(handle, WM_SYSCOMMAND, SC_CLOSE, 0);
 }
 
@@ -561,8 +562,7 @@ bool BaseFlutterWindow::MessageHandler(HWND hWnd, UINT message, WPARAM wParam, L
   return DefWindowProc(window_handle_, message, wParam, lParam);
 }
 
-std::optional<LRESULT> BaseFlutterWindow::HandleWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
-{
+std::optional<LRESULT> BaseFlutterWindow::HandleWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
 
   auto child_content_ = flutter_controller_ ? flutter_controller_->view()->GetNativeWindow() : nullptr;
 

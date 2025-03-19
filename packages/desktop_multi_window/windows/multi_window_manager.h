@@ -20,7 +20,8 @@ public:
   static MultiWindowManager* Instance();
 
   MultiWindowManager();
-
+  ~MultiWindowManager();
+  
   int64_t Create(
     std::string args,
     WindowOptions options
@@ -79,6 +80,7 @@ public:
 
 private:
   std::map<int64_t, std::unique_ptr<BaseFlutterWindow>> windows_;
+  HHOOK mouse_hook_ = nullptr;
 
   void HandleWindowChannelCall(
     int64_t from_window_id,
@@ -86,6 +88,8 @@ private:
     const std::string& call,
     flutter::EncodableValue* arguments,
     std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+
+  static LRESULT CALLBACK MouseProc(int nCode, WPARAM wParam, LPARAM lParam);
 };
 
 #endif // DESKTOP_MULTI_WINDOW_WINDOWS_MULTI_WINDOW_MANAGER_H_

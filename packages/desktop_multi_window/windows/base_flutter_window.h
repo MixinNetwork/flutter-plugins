@@ -44,6 +44,21 @@ public:
     return window_events_channel_.get();
   }
 
+  HWND GetRootWindowHandle() {
+    if (!root_window_handle_ || !IsWindow(root_window_handle_)) {
+      root_window_handle_ = GetAncestor(window_handle_, GA_ROOT);
+    }
+    return root_window_handle_;
+  }
+
+  bool IsDestroyed() {
+    return destroyed_;
+  }
+
+  bool IsClosed() {
+    return closed_;
+  }
+
   void Show();
 
   void Hide();
@@ -115,13 +130,6 @@ protected:
     return window_handle_;
   }
 
-  HWND GetRootWindowHandle() {
-    if (!root_window_handle_ || !IsWindow(root_window_handle_)) {
-      root_window_handle_ = GetAncestor(window_handle_, GA_ROOT);
-    }
-    return root_window_handle_;
-  }
-
   int window_proc_id = 0;
 
   void _EmitEvent(std::string eventName);
@@ -131,6 +139,8 @@ protected:
   std::weak_ptr<BaseFlutterWindowCallback> callback_;
 
   bool destroyed_ = false;
+
+  bool closed_ = false;
 
   void Destroy();
 
