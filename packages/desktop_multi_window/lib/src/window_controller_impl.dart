@@ -35,6 +35,8 @@ class WindowControllerImpl extends WindowController {
       listener.onWindowEvent(eventName, eventData);
       Map<String, Function> funcMap = {
         kWindowEventClose: listener.onWindowClose,
+        kWindowEventShow: listener.onWindowShow,
+        kWindowEventHide: listener.onWindowHide,
         kWindowEventFocus: listener.onWindowFocus,
         kWindowEventBlur: listener.onWindowBlur,
         kWindowEventMaximize: listener.onWindowMaximize,
@@ -304,5 +306,10 @@ class WindowControllerImpl extends WindowController {
       'windowId': _id,
       'backgroundColor': backgroundColor.toJson(),
     });
+  }
+
+  @override
+  Future<void> setIgnoreMouseEvents(bool ignore) async {
+    return await _channel.invokeMethod('setIgnoreMouseEvents', {'windowId': _id, 'ignore': ignore});
   }
 }

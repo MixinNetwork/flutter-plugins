@@ -264,6 +264,14 @@ void MultiWindowManager::SetBackgroundColor(int64_t id, Color backgroundColor) {
   }
 }
 
+void MultiWindowManager::SetIgnoreMouseEvents(int64_t id, bool ignore) {
+  std::lock_guard<std::mutex> lock(threadMtx);
+  auto window = windows_.find(id);
+  if (window != windows_.end()) {
+    window->second->SetIgnoreMouseEvents(ignore);
+  }
+}
+
 flutter::EncodableList MultiWindowManager::GetAllSubWindowIds() {
   std::lock_guard<std::mutex> lock(threadMtx);
   flutter::EncodableList resList = flutter::EncodableList();

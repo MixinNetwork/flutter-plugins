@@ -281,6 +281,13 @@ namespace
       auto window_ids = MultiWindowManager::Instance()->GetAllSubWindowIds();
       result->Success(window_ids);
       return;
+    } else if (method_call.method_name() == "setIgnoreMouseEvents") {
+      auto* arguments = std::get_if<flutter::EncodableMap>(method_call.arguments());
+      auto window_id = arguments->at(flutter::EncodableValue("windowId")).LongValue();
+      auto ignore = std::get<bool>(arguments->at(flutter::EncodableValue("ignore")));
+      MultiWindowManager::Instance()->SetIgnoreMouseEvents(window_id, ignore);
+      result->Success(flutter::EncodableValue(true));
+      return;
     }
     result->NotImplemented();
   }

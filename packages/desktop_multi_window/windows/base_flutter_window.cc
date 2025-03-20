@@ -775,3 +775,17 @@ std::optional<LRESULT> BaseFlutterWindow::HandleWindowProc(HWND hWnd, UINT messa
   }
   return result;
 }
+
+void BaseFlutterWindow::SetIgnoreMouseEvents(bool ignore) {
+  auto handle = GetRootWindowHandle();
+  if (!handle) {
+    return;
+  }
+  LONG ex_style = GetWindowLong(handle, GWL_EXSTYLE);
+  if (ignore)
+    ex_style |= (WS_EX_TRANSPARENT | WS_EX_LAYERED);
+  else
+    ex_style &= ~(WS_EX_TRANSPARENT | WS_EX_LAYERED);
+
+  SetWindowLong(handle, GWL_EXSTYLE, ex_style);
+}

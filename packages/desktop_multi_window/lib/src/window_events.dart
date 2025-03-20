@@ -1,4 +1,6 @@
 const kWindowEventClose = 'close';
+const kWindowEventShow = 'show';
+const kWindowEventHide = 'hide';
 const kWindowEventFocus = 'focus';
 const kWindowEventBlur = 'blur';
 const kWindowEventMaximize = 'maximize';
@@ -20,6 +22,12 @@ const kWindowEventMouseMove = 'mouse-move';
 abstract mixin class WindowEvents {
   /// Emitted when the window is going to be closed.
   void onWindowClose() {}
+
+  /// Emitted when the window is shown.
+  void onWindowShow() {}
+
+  /// Emitted when the window is hidden.
+  void onWindowHide() {}
 
   /// Emitted when the window gains focus.
   void onWindowFocus() {}

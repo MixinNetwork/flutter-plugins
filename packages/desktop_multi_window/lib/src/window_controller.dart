@@ -109,4 +109,7 @@ abstract class WindowController {
 
   /// Available only on macOS.
   Future<void> setFrameAutosaveName(String name);
+
+  /// Whether the window can receive mouse events.
+  Future<void> setIgnoreMouseEvents(bool ignore);
 }

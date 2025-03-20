@@ -105,6 +105,8 @@ public:
 
   void SetStyle(int32_t style, int32_t extended_style);
 
+  void SetIgnoreMouseEvents(bool ignore);
+
   void Center();
 
   std::optional<LRESULT> HandleWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);

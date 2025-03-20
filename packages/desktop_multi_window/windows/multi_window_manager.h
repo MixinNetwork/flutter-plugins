@@ -72,6 +72,8 @@ public:
 
   void SetTitle(int64_t id, const std::string& title);
 
+  void SetIgnoreMouseEvents(int64_t id, bool ignore);
+
   flutter::EncodableList GetAllSubWindowIds();
 
   void OnWindowClose(int64_t id) override;
