@@ -128,7 +128,6 @@ class WindowDelegateProxy: NSObject, NSWindowDelegate {
     eventHandler?.handleWindowDidExitFullScreen()
     originalDelegate?.windowDidExitFullScreen?(notification)
   }
-
   // Forward any unhandled messages to the original delegate
   override func responds(to aSelector: Selector!) -> Bool {
     return super.responds(to: aSelector) || originalDelegate?.responds(to: aSelector) == true
@@ -200,16 +199,19 @@ class BaseFlutterWindow: NSObject {
   }
 
   public func show() {
-    window.setIsVisible(true)
+    // window.setIsVisible(true)
     DispatchQueue.main.async {
-      self.window.makeKeyAndOrderFront(nil)
-      NSApp.activate(ignoringOtherApps: true)
+      // self.window.makeKeyAndOrderFront(nil)
+      // NSApp.activate(ignoringOtherApps: true)
+      self.window.orderFront(nil)
+      self.handleWindowShow()
     }
   }
 
   public func hide() {
     DispatchQueue.main.async {
       self.window.orderOut(nil)
+      self.handleWindowHide()
     }
   }
 
@@ -450,13 +452,18 @@ class BaseFlutterWindow: NSObject {
       } else {
         // ToDo: This might be wrong??
         window.backgroundColor = NSColor.windowBackgroundColor
-        (window.contentViewController as? FlutterViewController)?.backgroundColor = NSColor.windowBackgroundColor
+        (window.contentViewController as? FlutterViewController)?.backgroundColor =
+          NSColor.windowBackgroundColor
       }
       window.styleMask = NSWindow.StyleMask(rawValue: styleMask ?? 0)
       window.collectionBehavior = NSWindow.CollectionBehavior(rawValue: collectionBehavior ?? 0)
       window.level = NSWindow.Level(rawValue: level ?? 0)
       window.isOpaque = isOpaque
       window.hasShadow = hasShadow
+      result(nil)
+    case "setIgnoreMouseEvents":
+      let ignoresMouseEvents = arguments?["ignore"] as? Bool ?? false
+      window.ignoresMouseEvents = ignoresMouseEvents
       result(nil)
     default:
       result(FlutterMethodNotImplemented)
@@ -557,6 +564,14 @@ extension BaseFlutterWindow: WindowEventHandler {
 
   func handleWindowDidExitFullScreen() {
     emitEvent("leave-full-screen")
+  }
+
+  func handleWindowShow() {
+    emitEvent("show")
+  }
+
+  func handleWindowHide() {
+    emitEvent("hide")
   }
 }
 
