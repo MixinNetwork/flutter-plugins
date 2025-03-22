@@ -6,6 +6,7 @@ import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:universal_platform/universal_platform.dart';
 
 void main() {
   runApp(const MyApp());
@@ -75,7 +76,7 @@ class MyApp extends StatelessWidget {
             const ExampleDragTarget(),
             const ExampleDragTarget(),
             const ExampleDragTarget(),
-            if (Platform.isMacOS)
+            if (UniversalPlatform.isMacOS)
               StatefulBuilder(builder: (context, setState) {
                 return Column(
                   children: [
@@ -186,7 +187,7 @@ class _ExampleDragTargetState extends State<ExampleDragTarget> {
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ),
-            if (_list.isNotEmpty && Platform.isMacOS)
+            if (_list.isNotEmpty && UniversalPlatform.isMacOS)
               Align(
                 alignment: Alignment.bottomRight,
                 child: TextButton(

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:desktop_drop/src/drop_item.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
+import 'package:universal_platform/universal_platform.dart';
 
 import 'events.dart';
 import 'utils/platform.dart'
@@ -65,7 +66,7 @@ class DesktopDrop {
         _notifyEvent(DropEnterEvent(location: _offset!));
         break;
       case "updated":
-        if (_offset == null && Platform.isLinux) {
+        if (_offset == null && UniversalPlatform.isLinux) {
           final position = (call.arguments as List).cast<double>();
           _offset = Offset(position[0], position[1]);
           _notifyEvent(DropEnterEvent(location: _offset!));

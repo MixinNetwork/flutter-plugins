@@ -1,11 +1,11 @@
-import 'dart:io' as io;
+import 'package:universal_platform/universal_platform.dart';
 
 class Platform {
-  static bool get isLinux => io.Platform.isLinux;
+  static bool get isLinux => UniversalPlatform.isLinux;
 
-  static bool get isWindows => io.Platform.isWindows;
+  static bool get isWindows => UniversalPlatform.isWindows;
 
-  static bool get isWeb => false;
+  static bool get isWeb => UniversalPlatform.isWeb;
 
-  static bool get isAndroid => io.Platform.isAndroid;
+  static bool get isAndroid => UniversalPlatform.isAndroid;
 }

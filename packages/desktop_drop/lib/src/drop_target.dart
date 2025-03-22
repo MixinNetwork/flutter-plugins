@@ -1,4 +1,5 @@
 import 'package:flutter/widgets.dart';
+import 'package:universal_platform/universal_platform.dart';
 
 import 'channel.dart';
 import 'drop_item.dart';
@@ -155,7 +156,7 @@ class _DropTargetState extends State<DropTarget> {
         localLocation: position,
       );
     } else if (event is DropDoneEvent &&
-        (_status != _DragTargetStatus.idle || Platform.isLinux) &&
+        (_status != _DragTargetStatus.idle || UniversalPlatform.isLinux) &&
         inBounds) {
       _updateStatus(
         _DragTargetStatus.idle,
@@ -211,7 +212,7 @@ class _DropTargetState extends State<DropTarget> {
 }
 
 Offset _scaleHoverPoint(BuildContext context, Offset point) {
-  if (Platform.isWindows || Platform.isAndroid) {
+  if (UniversalPlatform.isWindows || UniversalPlatform.isAndroid) {
     return point.scale(
       1 / MediaQuery.of(context).devicePixelRatio,
       1 / MediaQuery.of(context).devicePixelRatio,
