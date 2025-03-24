@@ -144,7 +144,7 @@ class WindowControllerImpl extends WindowController {
   }
 
   @override
-  Future<void> setFrame(Rect frame, {bool animate = false}) {
+  Future<void> setFrame(Rect frame, {bool animate = false, double devicePixelRatio = 1.0}) {
     return _channel.invokeMethod('setFrame', <String, dynamic>{
       'windowId': _id,
       'left': frame.left,
@@ -152,6 +152,7 @@ class WindowControllerImpl extends WindowController {
       'width': frame.width,
       'height': frame.height,
       'animate': animate,
+      'devicePixelRatio': devicePixelRatio,
     });
   }
 

@@ -47,7 +47,7 @@ abstract class WindowController {
   Future<Rect> getFrame();
 
   /// Set the window frame rect.
-  Future<void> setFrame(Rect frame, {bool animate = false});
+  Future<void> setFrame(Rect frame, {bool animate = false, double devicePixelRatio = 1.0});
 
   /// Get the window size.
   Future<Size> getSize();

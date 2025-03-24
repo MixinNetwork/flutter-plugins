@@ -127,6 +127,12 @@ namespace
         devicePixelRatio = *null_or_devicePixelRatio;
       }
 
+      auto* null_or_animate = std::get_if<bool>(ValueOrNull(*arguments, "animate"));
+      bool animate = false;
+      if (null_or_animate != nullptr) {
+        animate = *null_or_animate;
+      }
+
       auto* null_or_x = std::get_if<double>(ValueOrNull(*arguments, "left"));
       auto* null_or_y = std::get_if<double>(ValueOrNull(*arguments, "top"));
       auto* null_or_width = std::get_if<double>(ValueOrNull(*arguments, "width"));
