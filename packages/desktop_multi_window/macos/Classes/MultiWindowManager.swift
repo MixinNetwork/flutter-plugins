@@ -37,6 +37,85 @@ class MultiWindowManager {
   private var id: Int64 = 0
   private var windows: [Int64: BaseFlutterWindow] = [:]
   private let windowsLock = NSLock()
+  private var eventTap: CFMachPort?
+  private var runLoopSource: CFRunLoopSource?
+
+  init() {
+    setupMouseMonitor()
+  }
+
+  private func setupMouseMonitor() {
+    // Request accessibility permissions if needed
+    if !AXIsProcessTrusted() {
+      debugPrint("Warning: Accessibility permissions not granted. Mouse tracking may not work.")
+    }
+
+    // Create event tap
+    let eventMask = CGEventMask(1 << CGEventType.mouseMoved.rawValue)
+    guard let tap = CGEvent.tapCreate(
+      tap: .cgSessionEventTap,
+      place: .headInsertEventTap,
+      options: .defaultTap,
+      eventsOfInterest: eventMask,
+      callback: { (proxy, type, event, refcon) -> Unmanaged<CGEvent>? in
+        if type == .mouseMoved {
+          let location = event.location
+          let coordinates: [String: Any] = [
+            "x": location.x,
+            "y": location.y
+          ]
+          
+          let args: [String: Any] = [
+            "eventName": "mouse-move",
+            "eventData": coordinates
+          ]
+
+          // Post to main thread since we're in a callback
+          DispatchQueue.main.async {
+            MultiWindowManager.shared.sendMouseEventToWindows(args)
+          }
+        }
+        return Unmanaged.passRetained(event)
+      },
+      userInfo: nil
+    ) else {
+      debugPrint("Failed to create event tap")
+      return
+    }
+
+    eventTap = tap
+
+    // Create a run loop source and add it to the current run loop
+    guard let runLoop = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0) else {
+      debugPrint("Failed to create run loop source")
+      return
+    }
+    runLoopSource = runLoop
+    
+    CFRunLoopAddSource(CFRunLoopGetCurrent(), runLoop, .commonModes)
+    CGEvent.tapEnable(tap: tap, enable: true)
+  }
+
+  private func sendMouseEventToWindows(_ args: [String: Any]) {
+    windowsLock.lock()
+    for (_, window) in windows {
+      window.windowEventsChannel.methodChannel.invokeMethod(
+        "onEvent",
+        arguments: args
+      )
+    }
+    windowsLock.unlock()
+  }
+
+  deinit {
+    if let runLoop = runLoopSource {
+      CFRunLoopRemoveSource(CFRunLoopGetCurrent(), runLoop, .commonModes)
+    }
+    
+    if let tap = eventTap {
+      CGEvent.tapEnable(tap: tap, enable: false)
+    }
+  }
 
   func create(arguments: String, windowOptions: WindowOptions) -> Int64 {
     windowsLock.lock()

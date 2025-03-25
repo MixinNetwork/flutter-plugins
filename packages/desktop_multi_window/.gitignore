@@ -29,3 +29,6 @@
 build/
 
 .editorconfig
+
+# FVM Version Cache
+.fvm/
