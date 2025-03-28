@@ -31,7 +31,8 @@ namespace {
       window_class.hInstance = GetModuleHandle(nullptr);
       window_class.hIcon =
         LoadIcon(window_class.hInstance, IDI_APPLICATION);
-      window_class.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+      // window_class.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+      window_class.hbrBackground = NULL;
       window_class.lpszMenuName = nullptr;
       window_class.lpfnWndProc = wnd_proc;
       RegisterClass(&window_class);

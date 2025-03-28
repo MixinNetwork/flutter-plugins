@@ -140,7 +140,7 @@ void BaseFlutterWindow::SetFrame(double_t left, double_t top, double_t width, do
     static_cast<int>(top),
     static_cast<int>(width),
     static_cast<int>(height),
-    SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED | flags
+    SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED | flags // | SWP_NOREDRAW
   );
 }
 
