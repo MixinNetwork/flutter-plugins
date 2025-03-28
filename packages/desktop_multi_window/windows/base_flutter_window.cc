@@ -113,7 +113,7 @@ void BaseFlutterWindow::Center() {
   SetWindowPos(handle, nullptr, rect.left, rect.top, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
-void BaseFlutterWindow::SetFrame(double_t left, double_t top, double_t width, double_t height, double_t devicePixelRatio, UINT flags) {
+void BaseFlutterWindow::SetFrame(double_t left, double_t top, double_t width, double_t height, UINT flags) {
   auto handle = GetRootWindowHandle();
   if (!handle) {
     return;
@@ -136,10 +136,10 @@ void BaseFlutterWindow::SetFrame(double_t left, double_t top, double_t width, do
   SetWindowPos(
     handle,
     NULL,
-    static_cast<int>(left * devicePixelRatio),
-    static_cast<int>(top * devicePixelRatio),
-    static_cast<int>(width * devicePixelRatio),
-    static_cast<int>(height * devicePixelRatio),
+    static_cast<int>(left),
+    static_cast<int>(top),
+    static_cast<int>(width),
+    static_cast<int>(height),
     SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED | flags
   );
 }
@@ -573,7 +573,7 @@ std::optional<LRESULT> BaseFlutterWindow::HandleWindowProc(HWND hWnd, UINT messa
   std::optional<LRESULT> result = std::nullopt;
 
   switch (message) {
-  case WM_USER + 1: {
+  case WM_USER + 37: {
     if (window_events_channel_ == nullptr || !has_listeners_) {
       return true;
     }
@@ -782,7 +782,7 @@ std::optional<LRESULT> BaseFlutterWindow::HandleWindowProc(HWND hWnd, UINT messa
     break;
   }
   default: {
-    // std::cerr << "default" << std::endl;
+    break;
   }
   }
   return result;

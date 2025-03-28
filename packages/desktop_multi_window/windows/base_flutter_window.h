@@ -77,7 +77,7 @@ public:
 
   RECT GetFrame();
 
-  void SetFrame(double_t x, double_t y, double_t width, double_t height, double_t devicePixelRatio, UINT flags);
+  void SetFrame(double_t x, double_t y, double_t width, double_t height, UINT flags);
 
   void SetBackgroundColor(Color backgroundColor);
 

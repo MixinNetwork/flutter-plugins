@@ -48,7 +48,7 @@ public:
 
   flutter::EncodableMap GetFrame(int64_t id, double_t devicePixelRatio);
 
-  void SetFrame(int64_t id, double_t x, double_t y, double_t width, double_t height, double_t devicePixelRatio, UINT flags);
+  void SetFrame(int64_t id, double_t x, double_t y, double_t width, double_t height, UINT flags);
 
   bool IsFocused(int64_t id);
 

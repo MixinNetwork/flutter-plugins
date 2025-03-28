@@ -128,11 +128,11 @@ void MultiWindowManager::Close(int64_t id) {
   }
 }
 
-void MultiWindowManager::SetFrame(int64_t id, double_t left, double_t top, double_t width, double_t height, double_t devicePixelRatio, UINT flags) {
+void MultiWindowManager::SetFrame(int64_t id, double_t left, double_t top, double_t width, double_t height, UINT flags) {
   std::shared_lock<std::shared_mutex> lock(windows_mutex_);
   auto window = windows_.find(id);
   if (window != windows_.end()) {
-    window->second->SetFrame(left, top, width, height, devicePixelRatio, flags);
+    window->second->SetFrame(left, top, width, height, flags);
   }
 }
 
@@ -360,7 +360,7 @@ LRESULT CALLBACK MultiWindowManager::MouseProc(int nCode, WPARAM wParam, LPARAM 
   for (HWND handle : windowHandles) {
     try {
       auto* args_ptr = new std::shared_ptr<flutter::EncodableMap>(args);
-      if (!PostMessage(handle, WM_USER + 1,
+      if (!PostMessage(handle, WM_USER + 37,
         reinterpret_cast<WPARAM>(args_ptr), 0)) {
         delete args_ptr;
       }
