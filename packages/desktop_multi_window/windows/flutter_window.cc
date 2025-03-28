@@ -136,7 +136,6 @@ FlutterWindow::FlutterWindow(
 
   // hide the window when created.
   ShowWindow(window_handle, SW_HIDE);
-
 }
 
 // static

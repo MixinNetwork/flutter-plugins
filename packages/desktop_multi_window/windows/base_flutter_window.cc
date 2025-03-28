@@ -3,6 +3,7 @@
 //
 
 #include "base_flutter_window.h"
+#include "utils.h"
 
 namespace {
   void CenterRectToMonitor(LPRECT prc) {
@@ -112,7 +113,7 @@ void BaseFlutterWindow::Center() {
   SetWindowPos(handle, nullptr, rect.left, rect.top, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
-void BaseFlutterWindow::SetFrame(double_t left, double_t top, double_t width, double_t height, UINT flags) {
+void BaseFlutterWindow::SetFrame(double_t left, double_t top, double_t width, double_t height, double_t devicePixelRatio, UINT flags) {
   auto handle = GetRootWindowHandle();
   if (!handle) {
     return;
@@ -135,10 +136,10 @@ void BaseFlutterWindow::SetFrame(double_t left, double_t top, double_t width, do
   SetWindowPos(
     handle,
     NULL,
-    static_cast<int>(left),
-    static_cast<int>(top),
-    static_cast<int>(width),
-    static_cast<int>(height),
+    static_cast<int>(left * devicePixelRatio),
+    static_cast<int>(top * devicePixelRatio),
+    static_cast<int>(width * devicePixelRatio),
+    static_cast<int>(height * devicePixelRatio),
     SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED | flags
   );
 }
@@ -542,6 +543,9 @@ void BaseFlutterWindow::_EmitEvent(std::string eventName)
   if (window_events_channel_ == nullptr) {
     return;
   }
+  if (!has_listeners_) {
+    return;
+  }
   flutter::EncodableMap args = flutter::EncodableMap();
   args[flutter::EncodableValue("eventName")] = flutter::EncodableValue(eventName);
   window_events_channel_->channel_->InvokeMethod("onEvent", std::make_unique<flutter::EncodableValue>(args));
@@ -569,6 +573,14 @@ std::optional<LRESULT> BaseFlutterWindow::HandleWindowProc(HWND hWnd, UINT messa
   std::optional<LRESULT> result = std::nullopt;
 
   switch (message) {
+  case WM_USER + 1: {
+    if (window_events_channel_ == nullptr || !has_listeners_) {
+      return true;
+    }
+    auto ptr_to_shared = reinterpret_cast<std::shared_ptr<flutter::EncodableMap>*>(wParam);
+    window_events_channel_->channel_->InvokeMethod("onEvent", std::make_unique<flutter::EncodableValue>(**ptr_to_shared));
+    return true;
+  }
   case WM_FONTCHANGE: {
     if (flutter_controller_) {
       flutter_controller_->engine()->ReloadSystemFonts();

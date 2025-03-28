@@ -99,6 +99,17 @@ namespace
       auto window_id = MultiWindowManager::Instance()->Create(stringArgs, options);
       result->Success(flutter::EncodableValue(window_id));
       return;
+    } else if (method_call.method_name() == "setHasListeners") {
+      auto* arguments = std::get_if<flutter::EncodableMap>(method_call.arguments());
+      auto window_id = arguments->at(flutter::EncodableValue("windowId")).LongValue();
+      auto* null_or_has_listeners = std::get_if<bool>(ValueOrNull(*arguments, "hasListeners"));
+      bool has_listeners = false;
+      if (null_or_has_listeners != nullptr) {
+        has_listeners = *null_or_has_listeners;
+      }
+      MultiWindowManager::Instance()->SetHasListeners(window_id, has_listeners);
+      result->Success(flutter::EncodableValue(true));
+      return;
     } else if (method_call.method_name() == "show") {
       auto* arguments = std::get_if<flutter::EncodableMap>(method_call.arguments());
       auto window_id = arguments->at(flutter::EncodableValue("windowId")).LongValue();
@@ -160,7 +171,7 @@ namespace
         uFlags = SWP_NOSIZE;
       }
 
-      MultiWindowManager::Instance()->SetFrame(window_id, x, y, width, height, uFlags);
+      MultiWindowManager::Instance()->SetFrame(window_id, x, y, width, height, devicePixelRatio, uFlags);
       result->Success();
       return;
     } else if (method_call.method_name() == "getFrame") {

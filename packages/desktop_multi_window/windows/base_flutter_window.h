@@ -44,6 +44,10 @@ public:
     return window_events_channel_.get();
   }
 
+  HWND GetWindowHandle() {
+    return window_handle_;
+  }
+  
   HWND GetRootWindowHandle() {
     if (!root_window_handle_ || !IsWindow(root_window_handle_)) {
       root_window_handle_ = GetAncestor(window_handle_, GA_ROOT);
@@ -59,6 +63,10 @@ public:
     return closed_;
   }
 
+  void SetHasListeners(bool has_listeners) {
+    has_listeners_ = has_listeners;
+  }
+
   void Show();
 
   void Hide();
@@ -69,7 +77,7 @@ public:
 
   RECT GetFrame();
 
-  void SetFrame(double_t x, double_t y, double_t width, double_t height, UINT flags);
+  void SetFrame(double_t x, double_t y, double_t width, double_t height, double_t devicePixelRatio, UINT flags);
 
   void SetBackgroundColor(Color backgroundColor);
 
@@ -111,9 +119,8 @@ public:
 
   std::optional<LRESULT> HandleWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 
-
+  bool has_listeners_ = false;
 protected:
-
 
   int64_t id_;
 
@@ -127,10 +134,6 @@ protected:
   std::unique_ptr<InterWindowEventChannel> inter_window_event_channel_;
 
   std::unique_ptr<WindowEventsChannel> window_events_channel_;
-
-  HWND GetWindowHandle() {
-    return window_handle_;
-  }
 
   int window_proc_id = 0;
 

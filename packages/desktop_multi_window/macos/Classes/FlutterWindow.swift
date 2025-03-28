@@ -320,6 +320,10 @@ class BaseFlutterWindow: NSObject {
     method: String, arguments: [String: Any?]?, result: @escaping FlutterResult
   ) {
     switch method {
+    case "setHasListeners":
+      // let hasListeners = arguments?["hasListeners"] as? Bool ?? false
+      // setHasListeners(hasListeners)
+      result(nil)
     case "show":
       show()
       result(nil)

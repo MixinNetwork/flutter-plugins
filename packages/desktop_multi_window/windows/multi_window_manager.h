@@ -8,6 +8,8 @@
 #include <cstdint>
 #include <string>
 #include <map>
+#include <shared_mutex>
+
 
 #include "base_flutter_window.h"
 #include "flutter_window.h"
@@ -21,7 +23,7 @@ public:
 
   MultiWindowManager();
   ~MultiWindowManager();
-  
+
   int64_t Create(
     std::string args,
     WindowOptions options
@@ -34,6 +36,8 @@ public:
     flutter::PluginRegistrarWindows* registrar
   );
 
+  void SetHasListeners(int64_t id, bool has_listeners);
+
   void Show(int64_t id);
 
   void Hide(int64_t id);
@@ -44,7 +48,7 @@ public:
 
   flutter::EncodableMap GetFrame(int64_t id, double_t devicePixelRatio);
 
-  void SetFrame(int64_t id, double_t x, double_t y, double_t width, double_t height, UINT flags);
+  void SetFrame(int64_t id, double_t x, double_t y, double_t width, double_t height, double_t devicePixelRatio, UINT flags);
 
   bool IsFocused(int64_t id);
 
@@ -82,6 +86,7 @@ public:
 
 private:
   std::map<int64_t, std::unique_ptr<BaseFlutterWindow>> windows_;
+
   HHOOK mouse_hook_ = nullptr;
 
   void HandleWindowChannelCall(

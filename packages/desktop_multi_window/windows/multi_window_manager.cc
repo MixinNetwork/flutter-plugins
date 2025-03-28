@@ -11,7 +11,8 @@
 
 namespace {
   int64_t g_next_id_ = 0;
-  std::mutex threadMtx;
+  std::shared_mutex windows_mutex_;
+
 
   class FlutterMainWindow : public BaseFlutterWindow {
   public:
@@ -40,9 +41,7 @@ MultiWindowManager* MultiWindowManager::Instance() {
   return manager.get();
 }
 
-MultiWindowManager::MultiWindowManager() : windows_() {
-  mouse_hook_ = SetWindowsHookEx(WH_MOUSE_LL, MouseProc, GetModuleHandle(NULL), 0);
-}
+MultiWindowManager::MultiWindowManager() : windows_() {}
 
 MultiWindowManager::~MultiWindowManager() {
   if (mouse_hook_) {
@@ -52,7 +51,7 @@ MultiWindowManager::~MultiWindowManager() {
 }
 
 int64_t MultiWindowManager::Create(std::string args, WindowOptions options) {
-  std::lock_guard<std::mutex> lock(threadMtx);
+  std::unique_lock<std::shared_mutex> lock(windows_mutex_);
   g_next_id_++;
   int64_t id = g_next_id_;
 
@@ -73,7 +72,7 @@ void MultiWindowManager::AttachFlutterMainWindow(
   std::unique_ptr<InterWindowEventChannel> inter_window_event_channel,
   std::unique_ptr<WindowEventsChannel> window_events_channel,
   flutter::PluginRegistrarWindows* registrar) {
-  std::lock_guard<std::mutex> lock(threadMtx);
+  std::unique_lock<std::shared_mutex> lock(windows_mutex_);
   if (windows_.count(0) != 0) {
     std::cout << "Error: main window already exists" << std::endl;
     return;
@@ -94,10 +93,19 @@ void MultiWindowManager::AttachFlutterMainWindow(
     registrar
   );
   windows_[0] = std::move(main_window);
+  mouse_hook_ = SetWindowsHookEx(WH_MOUSE_LL, MouseProc, GetModuleHandle(NULL), 0);
+}
+
+void MultiWindowManager::SetHasListeners(int64_t id, bool has_listeners) {
+  std::shared_lock<std::shared_mutex> lock(windows_mutex_);
+  auto window = windows_.find(id);
+  if (window != windows_.end()) {
+    window->second->SetHasListeners(has_listeners);
+  }
 }
 
 void MultiWindowManager::Show(int64_t id) {
-  std::lock_guard<std::mutex> lock(threadMtx);
+  std::shared_lock<std::shared_mutex> lock(windows_mutex_);
   auto window = windows_.find(id);
   if (window != windows_.end()) {
     window->second->Show();
@@ -105,7 +113,7 @@ void MultiWindowManager::Show(int64_t id) {
 }
 
 void MultiWindowManager::Hide(int64_t id) {
-  std::lock_guard<std::mutex> lock(threadMtx);
+  std::shared_lock<std::shared_mutex> lock(windows_mutex_);
   auto window = windows_.find(id);
   if (window != windows_.end()) {
     window->second->Hide();
@@ -113,23 +121,23 @@ void MultiWindowManager::Hide(int64_t id) {
 }
 
 void MultiWindowManager::Close(int64_t id) {
-  std::lock_guard<std::mutex> lock(threadMtx);
+  std::shared_lock<std::shared_mutex> lock(windows_mutex_);
   auto window = windows_.find(id);
   if (window != windows_.end()) {
     window->second->Close();
   }
 }
 
-void MultiWindowManager::SetFrame(int64_t id, double_t left, double_t top, double_t width, double_t height, UINT flags) {
-  std::lock_guard<std::mutex> lock(threadMtx);
+void MultiWindowManager::SetFrame(int64_t id, double_t left, double_t top, double_t width, double_t height, double_t devicePixelRatio, UINT flags) {
+  std::shared_lock<std::shared_mutex> lock(windows_mutex_);
   auto window = windows_.find(id);
   if (window != windows_.end()) {
-    window->second->SetFrame(left, top, width, height, flags);
+    window->second->SetFrame(left, top, width, height, devicePixelRatio, flags);
   }
 }
 
 flutter::EncodableMap MultiWindowManager::GetFrame(int64_t id, double_t devicePixelRatio) {
-  std::lock_guard<std::mutex> lock(threadMtx);
+  std::shared_lock<std::shared_mutex> lock(windows_mutex_);
   flutter::EncodableMap resultMap = flutter::EncodableMap();
   auto window = windows_.find(id);
   if (window != windows_.end()) {
@@ -149,7 +157,7 @@ flutter::EncodableMap MultiWindowManager::GetFrame(int64_t id, double_t devicePi
 
 
 void MultiWindowManager::SetTitle(int64_t id, const std::string& title) {
-  std::lock_guard<std::mutex> lock(threadMtx);
+  std::shared_lock<std::shared_mutex> lock(windows_mutex_);
   auto window = windows_.find(id);
   if (window != windows_.end()) {
     window->second->SetTitle(title);
@@ -157,7 +165,7 @@ void MultiWindowManager::SetTitle(int64_t id, const std::string& title) {
 }
 
 void MultiWindowManager::Center(int64_t id) {
-  std::lock_guard<std::mutex> lock(threadMtx);
+  std::shared_lock<std::shared_mutex> lock(windows_mutex_);
   auto window = windows_.find(id);
   if (window != windows_.end()) {
     window->second->Center();
@@ -165,7 +173,7 @@ void MultiWindowManager::Center(int64_t id) {
 }
 
 bool MultiWindowManager::IsFocused(int64_t id) {
-  std::lock_guard<std::mutex> lock(threadMtx);
+  std::shared_lock<std::shared_mutex> lock(windows_mutex_);
   auto window = windows_.find(id);
   if (window != windows_.end()) {
     return window->second->IsFocused();
@@ -174,7 +182,7 @@ bool MultiWindowManager::IsFocused(int64_t id) {
 }
 
 bool MultiWindowManager::IsFullScreen(int64_t id) {
-  std::lock_guard<std::mutex> lock(threadMtx);
+  std::shared_lock<std::shared_mutex> lock(windows_mutex_);
   auto window = windows_.find(id);
   if (window != windows_.end()) {
     return window->second->IsFullScreen();
@@ -183,7 +191,7 @@ bool MultiWindowManager::IsFullScreen(int64_t id) {
 }
 
 bool MultiWindowManager::IsMaximized(int64_t id) {
-  std::lock_guard<std::mutex> lock(threadMtx);
+  std::shared_lock<std::shared_mutex> lock(windows_mutex_);
   auto window = windows_.find(id);
   if (window != windows_.end()) {
     return window->second->IsMaximized();
@@ -192,7 +200,7 @@ bool MultiWindowManager::IsMaximized(int64_t id) {
 }
 
 bool MultiWindowManager::IsMinimized(int64_t id) {
-  std::lock_guard<std::mutex> lock(threadMtx);
+  std::shared_lock<std::shared_mutex> lock(windows_mutex_);
   auto window = windows_.find(id);
   if (window != windows_.end()) {
     return window->second->IsMinimized();
@@ -200,7 +208,7 @@ bool MultiWindowManager::IsMinimized(int64_t id) {
 }
 
 bool MultiWindowManager::IsVisible(int64_t id) {
-  std::lock_guard<std::mutex> lock(threadMtx);
+  std::shared_lock<std::shared_mutex> lock(windows_mutex_);
   auto window = windows_.find(id);
   if (window != windows_.end()) {
     return window->second->IsVisible();
@@ -209,7 +217,7 @@ bool MultiWindowManager::IsVisible(int64_t id) {
 }
 
 void MultiWindowManager::Maximize(int64_t id, bool vertically) {
-  std::lock_guard<std::mutex> lock(threadMtx);
+  std::shared_lock<std::shared_mutex> lock(windows_mutex_);
   auto window = windows_.find(id);
   if (window != windows_.end()) {
     window->second->Maximize(vertically);
@@ -217,7 +225,7 @@ void MultiWindowManager::Maximize(int64_t id, bool vertically) {
 }
 
 void MultiWindowManager::Unmaximize(int64_t id) {
-  std::lock_guard<std::mutex> lock(threadMtx);
+  std::shared_lock<std::shared_mutex> lock(windows_mutex_);
   auto window = windows_.find(id);
   if (window != windows_.end()) {
     window->second->Unmaximize();
@@ -225,7 +233,7 @@ void MultiWindowManager::Unmaximize(int64_t id) {
 }
 
 void MultiWindowManager::Minimize(int64_t id) {
-  std::lock_guard<std::mutex> lock(threadMtx);
+  std::shared_lock<std::shared_mutex> lock(windows_mutex_);
   auto window = windows_.find(id);
   if (window != windows_.end()) {
     window->second->Minimize();
@@ -233,7 +241,7 @@ void MultiWindowManager::Minimize(int64_t id) {
 }
 
 void MultiWindowManager::Restore(int64_t id) {
-  std::lock_guard<std::mutex> lock(threadMtx);
+  std::shared_lock<std::shared_mutex> lock(windows_mutex_);
   auto window = windows_.find(id);
   if (window != windows_.end()) {
     window->second->Restore();
@@ -241,7 +249,7 @@ void MultiWindowManager::Restore(int64_t id) {
 }
 
 void MultiWindowManager::SetFullScreen(int64_t id, bool is_full_screen) {
-  std::lock_guard<std::mutex> lock(threadMtx);
+  std::shared_lock<std::shared_mutex> lock(windows_mutex_);
   auto window = windows_.find(id);
   if (window != windows_.end()) {
     window->second->SetFullScreen(is_full_screen);
@@ -249,7 +257,7 @@ void MultiWindowManager::SetFullScreen(int64_t id, bool is_full_screen) {
 }
 
 void MultiWindowManager::SetStyle(int64_t id, int32_t style, int32_t extended_style) {
-  std::lock_guard<std::mutex> lock(threadMtx);
+  std::shared_lock<std::shared_mutex> lock(windows_mutex_);
   auto window = windows_.find(id);
   if (window != windows_.end()) {
     window->second->SetStyle(style, extended_style);
@@ -257,7 +265,7 @@ void MultiWindowManager::SetStyle(int64_t id, int32_t style, int32_t extended_st
 }
 
 void MultiWindowManager::SetBackgroundColor(int64_t id, Color backgroundColor) {
-  std::lock_guard<std::mutex> lock(threadMtx);
+  std::shared_lock<std::shared_mutex> lock(windows_mutex_);
   auto window = windows_.find(id);
   if (window != windows_.end()) {
     window->second->SetBackgroundColor(backgroundColor);
@@ -265,7 +273,7 @@ void MultiWindowManager::SetBackgroundColor(int64_t id, Color backgroundColor) {
 }
 
 void MultiWindowManager::SetIgnoreMouseEvents(int64_t id, bool ignore) {
-  std::lock_guard<std::mutex> lock(threadMtx);
+  std::shared_lock<std::shared_mutex> lock(windows_mutex_);
   auto window = windows_.find(id);
   if (window != windows_.end()) {
     window->second->SetIgnoreMouseEvents(ignore);
@@ -273,7 +281,7 @@ void MultiWindowManager::SetIgnoreMouseEvents(int64_t id, bool ignore) {
 }
 
 flutter::EncodableList MultiWindowManager::GetAllSubWindowIds() {
-  std::lock_guard<std::mutex> lock(threadMtx);
+  std::shared_lock<std::shared_mutex> lock(windows_mutex_);
   flutter::EncodableList resList = flutter::EncodableList();
   for (auto& window : windows_) {
     if (window.first != 0) {
@@ -286,18 +294,14 @@ flutter::EncodableList MultiWindowManager::GetAllSubWindowIds() {
 void MultiWindowManager::OnWindowClose(int64_t id) {}
 
 void MultiWindowManager::OnWindowDestroy(int64_t id) {
-  std::lock_guard<std::mutex> lock(threadMtx);
-  auto window = windows_.find(id);
-  if (window != windows_.end()) {
-    std::thread([this, id]() {
-      std::this_thread::sleep_for(std::chrono::milliseconds(100));
-
-      std::lock_guard<std::mutex> delete_lock(threadMtx);
-      if (windows_.find(id) != windows_.end()) {
-        windows_.erase(id);
-      }
-    }).detach();
-  }
+  std::thread([this, id]() {
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    std::unique_lock<std::shared_mutex> lock(windows_mutex_);
+    if (windows_.find(id) != windows_.end()) {
+      std::cerr << "Erasing window " << id << std::endl;
+      windows_.erase(id);
+    }
+  }).detach();
 }
 
 void MultiWindowManager::HandleWindowChannelCall(
@@ -306,7 +310,7 @@ void MultiWindowManager::HandleWindowChannelCall(
   const std::string& call,
   flutter::EncodableValue* arguments,
   std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
-  std::lock_guard<std::mutex> lock(threadMtx);
+  std::shared_lock<std::shared_mutex> lock(windows_mutex_);
   auto target_window_entry = windows_.find(target_window_id);
   if (target_window_entry == windows_.end()) {
     result->Error("-1", "target window not found.");
@@ -323,30 +327,47 @@ void MultiWindowManager::HandleWindowChannelCall(
 
 
 LRESULT CALLBACK MultiWindowManager::MouseProc(int nCode, WPARAM wParam, LPARAM lParam) {
-  if (nCode >= 0) {
-    MSLLHOOKSTRUCT* hookStruct = (MSLLHOOKSTRUCT*)lParam;
-    if (MultiWindowManager::Instance()) {
+  if (nCode < 0) {
+    return CallNextHookEx(NULL, nCode, wParam, lParam);
+  }
 
-      flutter::EncodableMap coordinates;
-      coordinates[flutter::EncodableValue("x")] = flutter::EncodableValue(static_cast<double>(hookStruct->pt.x));
-      coordinates[flutter::EncodableValue("y")] = flutter::EncodableValue(static_cast<double>(hookStruct->pt.y));
+  auto* manager = MultiWindowManager::Instance();
+  if (!manager) {
+    return CallNextHookEx(NULL, nCode, wParam, lParam);
+  }
 
-      flutter::EncodableMap args;
-      args[flutter::EncodableValue("eventName")] = flutter::EncodableValue("mouse-move");
-      args[flutter::EncodableValue("eventData")] = flutter::EncodableValue(coordinates);
+  MSLLHOOKSTRUCT* hookStruct = (MSLLHOOKSTRUCT*)lParam;
 
-      std::lock_guard<std::mutex> lock(threadMtx);
-      for (auto& window : MultiWindowManager::Instance()->windows_) {
-        try {
-          auto channel = window.second->GetWindowEventsChannel();
-          if (channel && channel->channel_ && IsWindow(window.second->GetRootWindowHandle()) && !window.second->IsDestroyed() && !window.second->IsClosed()) {
-            channel->channel_->InvokeMethod("onEvent", std::make_unique<flutter::EncodableValue>(args));
-          }
-        } catch (const std::exception& e) {
-          std::cout << "Error: " << e.what() << std::endl;
-        }
+  auto coordinates = std::make_shared<flutter::EncodableMap>();
+  (*coordinates)[flutter::EncodableValue("x")] = flutter::EncodableValue(static_cast<double>(hookStruct->pt.x));
+  (*coordinates)[flutter::EncodableValue("y")] = flutter::EncodableValue(static_cast<double>(hookStruct->pt.y));
+
+  auto args = std::make_shared<flutter::EncodableMap>();
+  (*args)[flutter::EncodableValue("eventName")] = flutter::EncodableValue("mouse-move");
+  (*args)[flutter::EncodableValue("eventData")] = flutter::EncodableValue(*coordinates);
+
+  std::vector<HWND> windowHandles;
+  {
+    // std::shared_lock<std::shared_mutex> lock(windows_mutex_);
+    windowHandles.reserve(manager->windows_.size());
+    for (const auto& window : manager->windows_) {
+      if (auto handle = window.second->GetRootWindowHandle()) {
+        windowHandles.push_back(handle);
       }
     }
   }
+
+  for (HWND handle : windowHandles) {
+    try {
+      auto* args_ptr = new std::shared_ptr<flutter::EncodableMap>(args);
+      if (!PostMessage(handle, WM_USER + 1,
+        reinterpret_cast<WPARAM>(args_ptr), 0)) {
+        delete args_ptr;
+      }
+    } catch (const std::exception& e) {
+      std::cerr << "MouseProc error: " << e.what() << std::endl;
+    }
+  }
+
   return CallNextHookEx(NULL, nCode, wParam, lParam);
 }

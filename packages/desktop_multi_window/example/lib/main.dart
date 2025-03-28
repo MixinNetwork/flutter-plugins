@@ -36,12 +36,57 @@ class _ExampleMainWindowState extends State<_ExampleMainWindow> {
 
   late final AppLifecycleListener? _appLifecycleListener;
 
+  // final options = WindowOptions(
+  //   macos: MacOSWindowOptions.nspanel(
+  //     title: 'Sub Window',
+  //     backgroundColor: Colors.transparent,
+  //     level: MacOSWindowLevel.floating,
+  //     styleMask: {MacOSWindowStyleMask.borderless, MacOSWindowStyleMask.nonactivatingPanel, MacOSWindowStyleMask.utility},
+  //     isOpaque: false,
+  //     hasShadow: false,
+  //   ),
+  // );
+
+  final options = WindowOptions(
+    macos: MacOSWindowOptions.nswindow(
+      title: 'Sub Window',
+      backgroundColor: Colors.transparent,
+      level: MacOsWindowLevel.floating,
+      isOpaque: false,
+      hasShadow: false,
+    ),
+    windows: const WindowsWindowOptions(
+      style: WindowsWindowStyle.WS_OVERLAPPEDWINDOW,
+      exStyle: WindowsExtendedWindowStyle.WS_EX_APPWINDOW,
+      width: 1280,
+      height: 720,
+      backgroundColor: Colors.transparent,
+    ),
+  );
+
   @override
   void initState() {
     if (Platform.isMacOS) {
       _appLifecycleListener = AppLifecycleListener(onStateChange: _handleStateChange);
     }
     super.initState();
+    SchedulerBinding.instance.addPostFrameCallback((timeStamp) async {
+      final window = await DesktopMultiWindow.createWindow(
+        jsonEncode({
+          'args1': 'Sub window',
+          'args2': 100,
+          'args3': true,
+          'business': 'business_test',
+        }),
+        options,
+      );
+      window
+        ..setFrame(const Offset(0, 0) & const Size(1280, 720))
+        ..center()
+        ..setTitle('Another window')
+        ..show();
+      await _updateWindowIds();
+    });
     _updateWindowIds();
   }
 
@@ -73,34 +118,6 @@ class _ExampleMainWindowState extends State<_ExampleMainWindow> {
 
   @override
   Widget build(BuildContext context) {
-    // final options = WindowOptions(
-    //   macos: MacOSWindowOptions.nspanel(
-    //     title: 'Sub Window',
-    //     backgroundColor: Colors.transparent,
-    //     level: MacOSWindowLevel.floating,
-    //     styleMask: {MacOSWindowStyleMask.borderless, MacOSWindowStyleMask.nonactivatingPanel, MacOSWindowStyleMask.utility},
-    //     isOpaque: false,
-    //     hasShadow: false,
-    //   ),
-    // );
-
-    final options = WindowOptions(
-      macos: MacOSWindowOptions.nswindow(
-        title: 'Sub Window',
-        backgroundColor: Colors.transparent,
-        level: MacOsWindowLevel.floating,
-        isOpaque: false,
-        hasShadow: false,
-      ),
-      windows: const WindowsWindowOptions(
-        style: WindowsWindowStyle.WS_OVERLAPPEDWINDOW,
-        exStyle: WindowsExtendedWindowStyle.WS_EX_APPWINDOW,
-        width: 1280,
-        height: 720,
-        backgroundColor: Colors.transparent,
-      ),
-    );
-
     return MaterialApp(
       color: Colors.transparent,
       home: Scaffold(

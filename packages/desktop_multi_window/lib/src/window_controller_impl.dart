@@ -82,6 +82,10 @@ class WindowControllerImpl extends WindowController {
     _listeners.add(listener);
     if (hasListeners) {
       _windowEventsChannel.setMethodCallHandler(_methodCallHandler);
+      _channel.invokeMethod('setHasListeners', <String, dynamic>{
+        'windowId': _id,
+        'hasListeners': true,
+      });
     }
   }
 
@@ -93,6 +97,10 @@ class WindowControllerImpl extends WindowController {
     _listeners.remove(listener);
     if (!hasListeners) {
       _windowEventsChannel.setMethodCallHandler(null);
+      _channel.invokeMethod('setHasListeners', <String, dynamic>{
+        'windowId': _id,
+        'hasListeners': false,
+      });
     }
   }
 
