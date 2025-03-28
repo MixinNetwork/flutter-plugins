@@ -1,0 +1,29 @@
+{
+  "workbench.editor.scrollToSwitchTabs": true,
+  "workbench.editor.limit.enabled": true,
+  "dart.closingLabels": false,
+  // copied from: https://dartcode.org/docs/recommended-settings/
+  // Causes the debug view to automatically appear when a breakpoint is hit. This
+  // setting is global and not configurable per-language.
+  "debug.openDebug": "openOnDebugBreak",
+  "[yaml]": {
+    "editor.formatOnSave": true
+  },
+  "editor.bracketPairColorization.enabled": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll": "explicit",
+    "source.organizeImports": "explicit",
+    "quickfix.insertSemicolon": "explicit"
+    // "source.fixAll.eslint": "explicit"  NOTE: causing hangs on save?
+  },
+  "editor.formatOnSave": true,
+  "prettier.singleQuote": true,
+  "prettier.trailingComma": "all",
+  "dart.runPubGetOnPubspecChanges": "never",
+  "xmlTools.splitXmlnsOnFormat": false,
+  "xmlTools.splitAttributesOnFormat": true,
+  "arb-editor.suppressedWarnings": "all",
+  "editor.inlayHints.enabled": "off",
+  "github.copilot.nextEditSuggestions.enabled": true,
+  "editor.dragAndDrop": false
+}

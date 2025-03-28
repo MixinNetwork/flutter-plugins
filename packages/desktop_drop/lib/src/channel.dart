@@ -3,9 +3,11 @@ import 'dart:convert';
 import 'package:desktop_drop/src/drop_item.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
+import 'package:universal_platform/universal_platform.dart';
 
 import 'events.dart';
-import 'utils/platform.dart' if (dart.library.html) 'utils/platform_web.dart';
+import 'utils/platform.dart'
+    if (dart.library.js_interop) 'utils/platform_web.dart';
 import 'web_drop_item.dart';
 
 typedef RawDropListener = void Function(DropEvent);
@@ -39,7 +41,7 @@ class DesktopDrop {
 
   Future<bool> startAccessingSecurityScopedResource(
       {required Uint8List bookmark}) async {
-    Map<String, dynamic> resultMap = Map();
+    Map<String, dynamic> resultMap = {};
     resultMap["apple-bookmark"] = bookmark;
     final bool? result = await _channel.invokeMethod(
         "startAccessingSecurityScopedResource", resultMap);
@@ -49,7 +51,7 @@ class DesktopDrop {
 
   Future<bool> stopAccessingSecurityScopedResource(
       {required Uint8List bookmark}) async {
-    Map<String, dynamic> resultMap = Map();
+    Map<String, dynamic> resultMap = {};
     resultMap["apple-bookmark"] = bookmark;
     final bool result = await _channel.invokeMethod(
         "stopAccessingSecurityScopedResource", resultMap);
@@ -64,7 +66,7 @@ class DesktopDrop {
         _notifyEvent(DropEnterEvent(location: _offset!));
         break;
       case "updated":
-        if (_offset == null && Platform.isLinux) {
+        if (_offset == null && UniversalPlatform.isLinux) {
           final position = (call.arguments as List).cast<double>();
           _offset = Offset(position[0], position[1]);
           _notifyEvent(DropEnterEvent(location: _offset!));

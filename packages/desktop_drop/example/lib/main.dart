@@ -1,11 +1,12 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:cross_file/cross_file.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:cross_file/cross_file.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:universal_platform/universal_platform.dart';
 
 void main() {
   runApp(const MyApp());
@@ -38,7 +39,7 @@ class MyApp extends StatelessWidget {
         )));
       }
 
-      var file = File('$path');
+      var file = File(path);
 
       var contents = await file.readAsBytes();
       var fileSize = contents.length;
@@ -69,17 +70,17 @@ class MyApp extends StatelessWidget {
           runSpacing: 8,
           spacing: 8,
           children: [
-            ExampleDragTarget(),
-            ExampleDragTarget(),
-            ExampleDragTarget(),
-            ExampleDragTarget(),
-            ExampleDragTarget(),
-            ExampleDragTarget(),
-            if (Platform.isMacOS)
+            const ExampleDragTarget(),
+            const ExampleDragTarget(),
+            const ExampleDragTarget(),
+            const ExampleDragTarget(),
+            const ExampleDragTarget(),
+            const ExampleDragTarget(),
+            if (UniversalPlatform.isMacOS)
               StatefulBuilder(builder: (context, setState) {
                 return Column(
                   children: [
-                    Text(
+                    const Text(
                       "Test Apple Bookmark\n1 drag file \n2 save the bookmark,\n3 restart app\n4 choice test button",
                     ),
                     TextButton(
@@ -87,7 +88,7 @@ class MyApp extends StatelessWidget {
                         loadFile(context, true);
                         return;
                       },
-                      child: Text(
+                      child: const Text(
                         "with applemark, suc",
                       ),
                     ),
@@ -96,7 +97,7 @@ class MyApp extends StatelessWidget {
                         loadFile(context, false);
                         return;
                       },
-                      child: Text(
+                      child: const Text(
                         "without applemark, err",
                       ),
                     ),
@@ -175,7 +176,7 @@ class _ExampleDragTargetState extends State<ExampleDragTarget> {
         child: Stack(
           children: [
             if (_list.isEmpty)
-              Center(child: Text("Drop here"))
+              const Center(child: Text("Drop here"))
             else
               Text(_list.map((e) => e.path).join("\n")),
             if (offset != null)
@@ -186,12 +187,12 @@ class _ExampleDragTargetState extends State<ExampleDragTarget> {
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ),
-            if (!_list.isEmpty && Platform.isMacOS)
+            if (_list.isNotEmpty && UniversalPlatform.isMacOS)
               Align(
                 alignment: Alignment.bottomRight,
                 child: TextButton(
                   onPressed: () async {
-                    Map<String, String> data = Map();
+                    Map<String, String> data = {};
                     data["path"] = drop_files[0].path;
 
                     String bookmark =
@@ -204,11 +205,11 @@ class _ExampleDragTargetState extends State<ExampleDragTarget> {
                         await SharedPreferences.getInstance();
                     prefs.setString("apple-bookmark", jsonStr);
 
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                         content: Text(
                             'Save Suc, restart app, and Test Apple Bookmark')));
                   },
-                  child: Text(
+                  child: const Text(
                     'save bookmark',
                     style: TextStyle(fontSize: 14),
                   ),
