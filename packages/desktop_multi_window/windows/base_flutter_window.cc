@@ -575,10 +575,12 @@ std::optional<LRESULT> BaseFlutterWindow::HandleWindowProc(HWND hWnd, UINT messa
   switch (message) {
   case WM_USER + 37: {
     if (window_events_channel_ == nullptr || !has_listeners_) {
+      delete reinterpret_cast<std::shared_ptr<flutter::EncodableMap>*>(wParam);
       return true;
     }
     auto ptr_to_shared = reinterpret_cast<std::shared_ptr<flutter::EncodableMap>*>(wParam);
     window_events_channel_->channel_->InvokeMethod("onEvent", std::make_unique<flutter::EncodableValue>(**ptr_to_shared));
+    delete ptr_to_shared;
     return true;
   }
   case WM_FONTCHANGE: {

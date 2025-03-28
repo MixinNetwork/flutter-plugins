@@ -298,7 +298,6 @@ void MultiWindowManager::OnWindowDestroy(int64_t id) {
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     std::unique_lock<std::shared_mutex> lock(windows_mutex_);
     if (windows_.find(id) != windows_.end()) {
-      std::cerr << "Erasing window " << id << std::endl;
       windows_.erase(id);
     }
   }).detach();
@@ -346,26 +345,24 @@ LRESULT CALLBACK MultiWindowManager::MouseProc(int nCode, WPARAM wParam, LPARAM 
   (*args)[flutter::EncodableValue("eventName")] = flutter::EncodableValue("mouse-move");
   (*args)[flutter::EncodableValue("eventData")] = flutter::EncodableValue(*coordinates);
 
+  auto shared_args = std::make_shared<std::shared_ptr<flutter::EncodableMap>>(args);
+
   std::vector<HWND> windowHandles;
   {
-    // std::shared_lock<std::shared_mutex> lock(windows_mutex_);
     windowHandles.reserve(manager->windows_.size());
     for (const auto& window : manager->windows_) {
       if (auto handle = window.second->GetRootWindowHandle()) {
-        windowHandles.push_back(handle);
+        if (IsWindow(handle) && window.second->has_listeners_) {
+          windowHandles.push_back(handle);
+        }
       }
     }
   }
 
   for (HWND handle : windowHandles) {
-    try {
-      auto* args_ptr = new std::shared_ptr<flutter::EncodableMap>(args);
-      if (!PostMessage(handle, WM_USER + 37,
-        reinterpret_cast<WPARAM>(args_ptr), 0)) {
-        delete args_ptr;
-      }
-    } catch (const std::exception& e) {
-      std::cerr << "MouseProc error: " << e.what() << std::endl;
+    if (IsWindow(handle)) {
+      PostMessage(handle, WM_USER + 37,
+        reinterpret_cast<WPARAM>(new std::shared_ptr<flutter::EncodableMap>(*shared_args)), 0);
     }
   }
 
