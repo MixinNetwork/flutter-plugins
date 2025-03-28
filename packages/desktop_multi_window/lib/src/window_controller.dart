@@ -53,13 +53,13 @@ abstract class WindowController {
   Future<Size> getSize();
 
   /// Set the window size.
-  Future<void> setSize(Size size, {bool animate = false});
+  Future<void> setSize(Size size, {bool animate = false, double devicePixelRatio = 1.0});
 
   /// Get the window position.
   Future<Offset> getPosition();
 
   /// Set the window position.
-  Future<void> setPosition(Offset position, {bool animate = false});
+  Future<void> setPosition(Offset position, {bool animate = false, double devicePixelRatio = 1.0});
 
   /// Center the window on the screen.
   Future<void> center();

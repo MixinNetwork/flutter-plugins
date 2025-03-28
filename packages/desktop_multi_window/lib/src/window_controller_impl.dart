@@ -171,12 +171,13 @@ class WindowControllerImpl extends WindowController {
   }
 
   @override
-  Future<void> setSize(Size size, {bool animate = false}) {
+  Future<void> setSize(Size size, {bool animate = false, double devicePixelRatio = 1.0}) {
     return _channel.invokeMethod('setFrame', <String, dynamic>{
       'windowId': _id,
       'width': size.width,
       'height': size.height,
       'animate': animate,
+      'devicePixelRatio': devicePixelRatio,
     });
   }
 
@@ -187,12 +188,13 @@ class WindowControllerImpl extends WindowController {
   }
 
   @override
-  Future<void> setPosition(Offset position, {bool animate = false}) {
+  Future<void> setPosition(Offset position, {bool animate = false, double devicePixelRatio = 1.0}) {
     return _channel.invokeMethod('setFrame', <String, dynamic>{
       'windowId': _id,
       'left': position.dx,
       'top': position.dy,
       'animate': animate,
+      'devicePixelRatio': devicePixelRatio,
     });
   }
 
