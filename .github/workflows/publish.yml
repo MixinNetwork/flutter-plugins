@@ -14,6 +14,7 @@ on:
           - desktop_drop
           - desktop_lifecycle
           - win_toast
+          - pasteboard
   push:
     tags:
       - 'ogg_opus_player-v[0-9]+.[0-9]+.[0-9]+*'
@@ -22,7 +23,7 @@ on:
       - 'desktop_drop-v[0-9]+.[0-9]+.[0-9]+*'
       - 'desktop_lifecycle-v[0-9]+.[0-9]+.[0-9]+*'
       - 'win_toast-v[0-9]+.[0-9]+.[0-9]+*'
-
+      - 'pasteboard-v[0-9]+.[0-9]+.[0-9]+*'
 jobs:
   publish:
 
@@ -33,7 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # Checkout repository
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - uses: subosito/flutter-action@v2
         with:
@@ -42,7 +43,7 @@ jobs:
       - run: flutter --version
 
       # Setup Dart SDK with JWT token
-      - uses: dart-lang/setup-dart@a57a6c04cf7d4840e88432aad6281d1e125f0d46
+      - uses: dart-lang/setup-dart@e51d8e571e22473a2ddebf0ef8a2123f0ab2c02c
 
       # Parse package from tag, e.g.: ogg_opus_player-v1.0.0
       - name: Parse package name
