@@ -7,7 +7,7 @@ import 'src/pasteboard_platform_web.dart'
 class Pasteboard {
   /// Returns the image data of the pasteboard.
   ///
-  /// available on iOS, desktop and the web.
+  /// available on iOS, Desktop, Web, Android
   static Future<Uint8List?> get image => pasteboard.image;
 
   /// only available on Windows and the web.
@@ -15,13 +15,15 @@ class Pasteboard {
   /// HTML format: https://docs.microsoft.com/en-us/previous-versions/windows/internet-explorer/ie-developer/platform-apis/aa767917(v=vs.85)
   static Future<String?> get html => pasteboard.html;
 
-  /// only available on iOS and the web.
+  /// available on iOS, Android, Web
   ///
   /// set image data to system pasteboard.
   static Future<void> writeImage(Uint8List? image) =>
       pasteboard.writeImage(image);
 
-  /// Only available on desktop platforms.
+  /// available on Desktop, Android.
+  ///
+  /// Android: paths are content uris, must read by content resolver.
   ///
   /// Get files from system pasteboard.
   static Future<List<String>> files() => pasteboard.files();

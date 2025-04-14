@@ -1,3 +1,9 @@
+## 0.4.0
+
+* introduce Android support. thanks to
+  [@Seidko](https://github.com/MixinNetwork/flutter-plugins/pull/362)
+  [@vicajilau](https://github.com/MixinNetwork/flutter-plugins/pull/383)
+
 ## 0.3.0
 
 * bump web version to 1.0.0
