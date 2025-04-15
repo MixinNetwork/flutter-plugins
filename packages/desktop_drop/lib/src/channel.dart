@@ -6,8 +6,6 @@ import 'package:flutter/widgets.dart';
 import 'package:universal_platform/universal_platform.dart';
 
 import 'events.dart';
-import 'utils/platform.dart'
-    if (dart.library.js_interop) 'utils/platform_web.dart';
 import 'web_drop_item.dart';
 
 typedef RawDropListener = void Function(DropEvent);

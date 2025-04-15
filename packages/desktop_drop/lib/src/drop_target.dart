@@ -4,8 +4,6 @@ import 'package:universal_platform/universal_platform.dart';
 import 'channel.dart';
 import 'drop_item.dart';
 import 'events.dart';
-import 'utils/platform.dart'
-    if (dart.library.js_interop) 'utils/platform_web.dart';
 
 @immutable
 class DropDoneDetails {
