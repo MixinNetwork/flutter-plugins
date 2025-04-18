@@ -19,7 +19,7 @@ class MyApp extends StatelessWidget {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     String? jsonStr = prefs.getString("apple-bookmark");
     if (jsonStr == null) return;
-    print(jsonStr);
+    debugPrint(jsonStr);
     Map<String, dynamic> data = json.decode(jsonStr);
     String path = data["path"]! as String;
     String appleBookmarkStr = data["apple-bookmark"]! as String;
@@ -120,7 +120,7 @@ class ExampleDragTarget extends StatefulWidget {
 
 class _ExampleDragTargetState extends State<ExampleDragTarget> {
   final List<XFile> _list = [];
-  final List<DropItem> drop_files = [];
+  final List<DropItem> dropFiles = [];
 
   bool _dragging = false;
 
@@ -146,7 +146,7 @@ class _ExampleDragTargetState extends State<ExampleDragTarget> {
       onDragDone: (detail) async {
         setState(() {
           _list.addAll(detail.files);
-          drop_files.addAll(detail.files);
+          dropFiles.addAll(detail.files);
         });
 
         debugPrint('onDragDone:');
@@ -172,7 +172,7 @@ class _ExampleDragTargetState extends State<ExampleDragTarget> {
       child: Container(
         height: 200,
         width: 200,
-        color: _dragging ? Colors.blue.withOpacity(0.4) : Colors.black26,
+        color: _dragging ? Colors.blue.withValues(alpha: 0.4) : Colors.black26,
         child: Stack(
           children: [
             if (_list.isEmpty)
@@ -193,14 +193,14 @@ class _ExampleDragTargetState extends State<ExampleDragTarget> {
                 child: TextButton(
                   onPressed: () async {
                     Map<String, String> data = {};
-                    data["path"] = drop_files[0].path;
+                    data["path"] = dropFiles[0].path;
 
                     String bookmark =
-                        base64.encode(drop_files[0].extraAppleBookmark!);
+                        base64.encode(dropFiles[0].extraAppleBookmark!);
                     data["apple-bookmark"] = bookmark;
 
                     String jsonStr = json.encode(data);
-                    print(jsonStr);
+                    debugPrint(jsonStr);
                     final SharedPreferences prefs =
                         await SharedPreferences.getInstance();
                     prefs.setString("apple-bookmark", jsonStr);

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.0
+
+Migrate macOS to SPM, fix web build.
+
+* https://github.com/MixinNetwork/flutter-plugins/pull/398
+* https://github.com/MixinNetwork/flutter-plugins/pull/399
+* https://github.com/MixinNetwork/flutter-plugins/pull/403
+
 ## 0.5.0
 
 * upgrade web version to 1.0.0
