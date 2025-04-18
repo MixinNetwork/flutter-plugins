@@ -50,6 +50,8 @@ extension Sqlite3FtsExtension on Database {
       // data/flutter_assets/packages/fts5_simple/dicts
       dictPath = p.join(
           dir, 'data', 'flutter_assets', 'packages', 'fts5_simple', 'dicts');
+    } else if (Platform.isIOS) {
+      return;
     } else {
       assert(false, 'Unsupported platform');
       return;
