@@ -435,7 +435,7 @@ void BaseFlutterWindow::SetFullScreen(bool is_full_screen) {
   }
 }
 
-void BaseFlutterWindow::SetStyle(int32_t style, int32_t extended_style) {
+void BaseFlutterWindow::SetStyle(int32_t new_style, int32_t new_extended_style) {
   auto handle = GetRootWindowHandle();
   if (!handle) {
     return;
@@ -445,78 +445,107 @@ void BaseFlutterWindow::SetStyle(int32_t style, int32_t extended_style) {
   RECT windowRect;
   GetWindowRect(handle, &windowRect);
 
-  // Store current visibility state
+  // Store current visibility and maximized state
   bool wasVisible = IsWindowVisible(handle);
   bool wasMaximized = IsZoomed(handle);
 
+  // It's often safer to restore a maximized window before changing its style,
+  // as styles can affect the non-client area and window frame calculations.
   if (wasMaximized) {
-    // Restore the window before changing styles if it's maximized
     ShowWindow(handle, SW_RESTORE);
+    // Give Windows a moment to process the restore, especially before style changes.
+    // This can prevent visual glitches or incorrect sizing/positioning issues.
+    // Test if this is needed in your specific scenario.
+    // MSG msg; // Process pending messages to ensure SW_RESTORE is handled
+    // while (PeekMessage(&msg, handle, 0, 0, PM_REMOVE)) {
+    //     TranslateMessage(&msg);
+    //     DispatchMessage(&msg);
+    // }
+    // Alternatively, a small Sleep can sometimes work, but processing messages is cleaner.
+    // For simplicity here, we'll proceed, but be aware if issues arise.
   }
 
-  // Set the new styles
-  SetWindowLongPtr(handle, GWL_STYLE, style);
-  SetWindowLongPtr(handle, GWL_EXSTYLE, extended_style);
+  // Get current styles to compare later if needed, though we are setting them directly
+  // LONG_PTR current_style = GetWindowLongPtr(handle, GWL_STYLE);
+  // LONG_PTR current_extended_style = GetWindowLongPtr(handle, GWL_EXSTYLE);
 
-  // Update the window's frame
+  // Set the new styles
+  // Note: SetWindowLongPtr might not immediately apply all visual changes without SetWindowPos.
+  SetWindowLongPtr(handle, GWL_STYLE, new_style);
+  SetWindowLongPtr(handle, GWL_EXSTYLE, new_extended_style);
+
+  // Determine how to handle Z-order based on the new extended style.
+  HWND hWndInsertAfterValue = nullptr; // Default: Don't change Z-order from current relative position.
+  // However, SWP_NOZORDER would be needed to guarantee this.
+  // Without SWP_NOZORDER, it might come to top of its non-topmost peers.
+
+  UINT flags = SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE;
+  // We will use the original position and size, so NOMOVE and NOSIZE are appropriate
+  // unless we intend to resize/reposition based on `windowRect` (which we are).
+  // So, remove NOMOVE and NOSIZE and use the stored rect.
+
+  flags = SWP_FRAMECHANGED | SWP_NOACTIVATE;
+
+
+  if (new_extended_style & WS_EX_TOPMOST) {
+    hWndInsertAfterValue = HWND_TOPMOST;
+  } else {
+    // If it was previously topmost and now it's not, make it non-topmost.
+    // If it wasn't topmost and still isn't, HWND_NOTOPMOST is safe.
+    hWndInsertAfterValue = HWND_NOTOPMOST;
+    // If you want to preserve its current Z-order among non-topmost windows,
+    // you could use `nullptr` for hWndInsertAfterValue and add `SWP_NOZORDER` to flags.
+    // But since this function *sets* styles, explicitly setting HWND_NOTOPMOST
+    // if WS_EX_TOPMOST is not present is clearer.
+  }
+
+  // Apply the style changes, re-apply position/size, and Z-order.
+  // SetWindowPos is crucial for making many style changes take full effect.
   SetWindowPos(
     handle,
-    nullptr,
+    hWndInsertAfterValue, // This handles the Z-order (e.g., topmost)
     windowRect.left,
     windowRect.top,
     windowRect.right - windowRect.left,
     windowRect.bottom - windowRect.top,
-    SWP_FRAMECHANGED | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE |
-    (wasVisible ? SWP_SHOWWINDOW : SWP_HIDEWINDOW)
+    flags | (wasVisible ? SWP_SHOWWINDOW : SWP_HIDEWINDOW)
+    // SWP_NOOWNERZORDER: Usually good to include if you don't want to affect owned windows' Z-order.
+    // Not strictly necessary here for the primary goal.
   );
 
-  // Get the new client area
-  // RECT newClientRect;
-  // GetClientRect(handle, &newClientRect);
+  // The Flutter engine's view (child of `handle`) should be automatically
+  // resized by the engine when `handle` receives WM_SIZE messages as a result of
+  // `SetWindowPos` if the size changed or `SWP_FRAMECHANGED` was used.
+  // The commented-out code for finding and resizing "FlutterMultiWindow" etc.
+  // is generally not needed and can interfere with Flutter's own layout.
 
-  // Find the Flutter view - try different class names that might be used
-  // HWND flutterView = NULL;
-  // const wchar_t* possibleClassNames[] = {
-  //     L"FlutterMultiWindow",
-  //     L"FLUTTER_RUNNER_WIN32_WINDOW",
-  //     L"FLUTTERVIEW"
-  // };
-
-  // for (const auto& className : possibleClassNames) {
-  //   flutterView = FindWindowEx(handle, NULL, className, NULL);
-  //   if (flutterView) break;
-  // }
-
-  // // If we found the Flutter view, resize it to fill the client area
-  // if (flutterView) {
-  //   SetWindowPos(
-  //     flutterView,
-  //     NULL,
-  //     0, 0,
-  //     newClientRect.right, newClientRect.bottom,
-  //     SWP_NOZORDER
-  //   );
-  // } else {
-  //   // If we couldn't find the Flutter view by class name, try the first child window
-  //   flutterView = GetWindow(handle, GW_CHILD);
-  //   if (flutterView) {
-  //     SetWindowPos(
-  //       flutterView,
-  //       NULL,
-  //       0, 0,
-  //       newClientRect.right, newClientRect.bottom,
-  //       SWP_NOZORDER
-  //     );
-  //   }
-  // }
-
-  // Restore maximized state if needed
+  // Restore maximized state if it was maximized before.
+  // This should happen *after* styles are fully applied and window is positioned.
   if (wasMaximized) {
     ShowWindow(handle, SW_MAXIMIZE);
   }
 
-  // Force a complete redraw
-  RedrawWindow(handle, NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW | RDW_FRAME | RDW_ALLCHILDREN);
+  // Optionally, force a repaint of the window and its children if SetWindowPos
+  // with SWP_FRAMECHANGED isn't sufficient for all visual updates.
+  // RedrawWindow(handle, NULL, NULL, RDW_INVALIDATE | RDW_UPDATENOW | RDW_FRAME | RDW_ALLCHILDREN);
+  // SWP_FRAMECHANGED usually triggers the necessary repainting. Test if this is needed.
+}
+
+void BaseFlutterWindow::SetTopmost() {
+  auto handle = GetRootWindowHandle();
+  if (!handle) {
+    return;
+  }
+  SetWindowPos(handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+}
+
+bool BaseFlutterWindow::IsTopmost() {
+  auto handle = GetRootWindowHandle();
+  if (!handle) {
+    return false;
+  }
+  LONG exStyle = GetWindowLong(handle, GWL_EXSTYLE);
+  return (exStyle & WS_EX_TOPMOST) != 0;
 }
 
 void BaseFlutterWindow::Destroy() {

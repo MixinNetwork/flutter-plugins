@@ -10,7 +10,6 @@
 #include <map>
 #include <shared_mutex>
 
-
 #include "base_flutter_window.h"
 #include "flutter_window.h"
 #include "utils.h"

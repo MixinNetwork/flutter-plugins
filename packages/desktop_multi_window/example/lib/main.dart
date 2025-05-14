@@ -71,6 +71,12 @@ class _ExampleMainWindowState extends State<_ExampleMainWindow> {
     }
     super.initState();
     SchedulerBinding.instance.addPostFrameCallback((timeStamp) async {
+      final controller = WindowController.main();
+      controller.setStyle(
+        extendedStyle: WindowsExtendedWindowStyle.WS_EX_TOPMOST | WindowsExtendedWindowStyle.WS_EX_TOOLWINDOW,
+        style: WindowsWindowStyle.WS_POPUP,
+      );
+      
       final window = await DesktopMultiWindow.createWindow(
         jsonEncode({
           'args1': 'Sub window',

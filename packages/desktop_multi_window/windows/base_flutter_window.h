@@ -113,6 +113,10 @@ public:
 
   void SetStyle(int32_t style, int32_t extended_style);
 
+  void SetTopmost();
+
+  bool IsTopmost();
+
   void SetIgnoreMouseEvents(bool ignore);
 
   void Center();
@@ -120,6 +124,7 @@ public:
   std::optional<LRESULT> HandleWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 
   bool has_listeners_ = false;
+
 protected:
 
   int64_t id_;

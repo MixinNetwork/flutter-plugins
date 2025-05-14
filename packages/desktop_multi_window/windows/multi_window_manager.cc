@@ -155,7 +155,6 @@ flutter::EncodableMap MultiWindowManager::GetFrame(int64_t id, double_t devicePi
   return resultMap;
 }
 
-
 void MultiWindowManager::SetTitle(int64_t id, const std::string& title) {
   std::shared_lock<std::shared_mutex> lock(windows_mutex_);
   auto window = windows_.find(id);
