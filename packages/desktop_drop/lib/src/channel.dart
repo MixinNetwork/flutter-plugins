@@ -104,6 +104,31 @@ class DesktopDrop {
         );
         _offset = null;
         break;
+      case "performOperation_ios":
+        final rawList = call.arguments as List;
+        final files = rawList.map((e) {
+          final map = e as Map;
+          return DropItemFile(
+            map["path"] ?? '', // Optional, null for non-files
+            mimeType: map["mime"] as String?,
+            // Important: use this to detect image/text/etc
+            name: map["name"] as String?,
+            // From filename or text label
+            length: map["length"] as int?,
+            bytes: map["bytes"] as Uint8List?,
+            // Includes text data as bytes
+            extraAppleBookmark: map["apple-bookmark"] as Uint8List?,
+          );
+        }).toList();
+
+        _notifyEvent(
+          DropDoneEvent(
+            location: _offset ?? Offset.zero,
+            files: files,
+          ),
+        );
+        _offset = null;
+        break;
 
       case "performOperation_linux":
         // gtk notify 'exit' before 'performOperation'.
