@@ -9,13 +9,13 @@ import 'package:win_toast/win_toast.dart';
 void main() async {
   final dir = await getApplicationDocumentsDirectory();
   final logPath = p.join(dir.path, 'log');
-  await initLogger(logPath);
+  initLogger(logPath);
   i('logPath: $logPath');
   runApp(const MyApp());
 }
 
 class MyApp extends StatefulWidget {
-  const MyApp({Key? key}) : super(key: key);
+  const MyApp({super.key});
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -99,7 +99,7 @@ class _MyAppState extends State<MyApp> {
 }
 
 class MainPage extends StatefulWidget {
-  const MainPage({Key? key}) : super(key: key);
+  const MainPage({super.key});
 
   @override
   State<MainPage> createState() => _MainPageState();
