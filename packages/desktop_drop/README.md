@@ -9,6 +9,7 @@ A plugin which allows user dragging files to your flutter desktop applications.
 | Windows | ✅          |
 | Linux   | ✅          |
 | macOS   | ✅          |
+| IOS     | ✅          |
 | Android | ✅(preview) |
 | Web     | ✅          |
 

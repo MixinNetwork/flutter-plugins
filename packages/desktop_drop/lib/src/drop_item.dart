@@ -4,15 +4,19 @@ import 'package:cross_file/cross_file.dart';
 
 abstract class DropItem extends XFile {
   Uint8List? extraAppleBookmark;
+  Uint8List? bytes;
+
   DropItem(
     super.path, {
     super.mimeType,
     super.name,
     super.length,
-    super.bytes,
+    this.bytes,
     super.lastModified,
     this.extraAppleBookmark,
-  });
+  }) : super(
+          bytes: bytes,
+        );
 
   DropItem.fromData(
     super.bytes, {
