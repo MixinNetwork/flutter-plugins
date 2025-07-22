@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.1
+
+* Version bump for package release.
+
 ## 0.6.0
 
 Migrate macOS to SPM, fix web build.
