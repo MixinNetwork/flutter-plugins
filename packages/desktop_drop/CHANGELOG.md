@@ -2,7 +2,7 @@
 
 ## 0.6.1
 
-* Version bump for package release.
+* Fix desktop_drop Linux snap build failure due to missing stdlib.h include (#425)
 
 ## 0.6.0
 
