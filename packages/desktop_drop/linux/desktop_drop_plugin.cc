@@ -2,6 +2,7 @@
 
 #include <flutter_linux/flutter_linux.h>
 #include <gtk/gtk.h>
+#include <stdlib.h>
 #include <sys/utsname.h>
 
 #define DESKTOP_DROP_PLUGIN(obj) \
@@ -66,7 +67,7 @@ static void desktop_drop_plugin_class_init(DesktopDropPluginClass *klass) {
 }
 
 static void desktop_drop_plugin_init(DesktopDropPlugin *self) {
-  const char * desktopEnv = std::getenv("XDG_CURRENT_DESKTOP");
+  const char * desktopEnv = getenv("XDG_CURRENT_DESKTOP");
   if (desktopEnv) {
     const char * lowercaseDesktopEnv = g_ascii_strdown(desktopEnv, -1);
 
