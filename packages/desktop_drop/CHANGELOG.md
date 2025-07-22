@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.1
+
+* Fix desktop_drop Linux snap build failure due to missing stdlib.h include (#425)
+
 ## 0.6.0
 
 Migrate macOS to SPM, fix web build.
