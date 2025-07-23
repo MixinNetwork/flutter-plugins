@@ -1,22 +1,38 @@
 import 'dart:ui';
 
+import 'macos/window_level.dart';
 import 'window_controller_impl.dart';
+import 'window_events.dart';
 
 /// The [WindowController] instance that is used to control this window.
 abstract class WindowController {
+  static final List<WindowController> _controllers = [];
+
   WindowController();
 
   factory WindowController.fromWindowId(int id) {
-    return WindowControllerMainImpl(id);
+    final controller = _controllers.firstWhere(
+      (controller) => controller.windowId == id,
+      orElse: () {
+        final controller = WindowControllerImpl(id);
+        _controllers.add(controller);
+        return controller;
+      },
+    );
+    return controller;
   }
 
   factory WindowController.main() {
-    return WindowControllerMainImpl(0);
+    return WindowController.fromWindowId(0);
   }
 
   /// The id of the window.
   /// 0 means the main window.
   int get windowId;
+
+  void addListener(WindowEvents listener);
+
+  void removeListener(WindowEvents listener);
 
   /// Close the window.
   Future<void> close();
@@ -27,14 +43,62 @@ abstract class WindowController {
   /// Hide the window.
   Future<void> hide();
 
+  /// Get the window frame rect.
+  Future<Rect> getFrame();
+
   /// Set the window frame rect.
-  Future<void> setFrame(Rect frame);
+  Future<void> setFrame(Rect frame, {bool animate = false, double devicePixelRatio = 1.0});
+
+  /// Get the window size.
+  Future<Size> getSize();
+
+  /// Set the window size.
+  Future<void> setSize(Size size, {bool animate = false, double devicePixelRatio = 1.0});
+
+  /// Get the window position.
+  Future<Offset> getPosition();
+
+  /// Set the window position.
+  Future<void> setPosition(Offset position, {bool animate = false, double devicePixelRatio = 1.0});
 
   /// Center the window on the screen.
   Future<void> center();
 
   /// Set the window's title.
   Future<void> setTitle(String title);
+
+  Future<bool> isFocused();
+
+  Future<bool> isVisible();
+
+  Future<bool> isMaximized();
+
+  Future<void> maximize({bool vertically = false});
+
+  Future<void> unmaximize();
+
+  Future<bool> isMinimized();
+
+  Future<void> minimize();
+
+  Future<void> restore();
+
+  Future<bool> isFullScreen();
+
+  Future<void> setFullScreen(bool isFullScreen);
+
+  Future<void> setStyle({
+    int? styleMask,
+    int? collectionBehavior,
+    MacOsWindowLevel? level,
+    bool? isOpaque,
+    bool? hasShadow,
+    Color? backgroundColor,
+    int? style,
+    int? extendedStyle,
+  });
+
+  Future<void> setBackgroundColor(Color backgroundColor);
 
   /// Whether the window can be resized. Available only on macOS.
   ///
@@ -45,4 +109,7 @@ abstract class WindowController {
 
   /// Available only on macOS.
   Future<void> setFrameAutosaveName(String name);
+
+  /// Whether the window can receive mouse events.
+  Future<void> setIgnoreMouseEvents(bool ignore);
 }
