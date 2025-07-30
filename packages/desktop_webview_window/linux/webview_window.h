@@ -24,49 +24,54 @@ void get_cookies_callback(WebKitCookieManager *manager, GAsyncResult *res,
 GList *get_cookies_sync(WebKitWebView *web_view);
 
 class WebviewWindow {
- public:
-  WebviewWindow(FlMethodChannel *method_channel, int64_t window_id,
-                std::function<void()> on_close_callback,
-                const std::string &title, int width, int height,
-                int title_bar_height);
+public:
+    WebviewWindow(FlMethodChannel *method_channel, int64_t window_id,
+                  std::function<void()> on_close_callback,
+                  const std::string &title, int width, int height,
+                  int title_bar_height);
 
-  virtual ~WebviewWindow();
+    virtual ~WebviewWindow();
 
-  void Navigate(const char *url);
+    void Navigate(const char *url);
 
-  void RunJavaScriptWhenContentReady(const char *java_script);
+    void RunJavaScriptWhenContentReady(const char *java_script);
 
-  void Close();
+    void Close();
 
-  void SetApplicationNameForUserAgent(const std::string &app_name);
+    void SetApplicationNameForUserAgent(const std::string &app_name);
 
-  void OnLoadChanged(WebKitLoadEvent load_event);
+    void OnLoadChanged(WebKitLoadEvent load_event);
 
-  void GoBack();
+    void GoBack();
 
-  void GoForward();
+    void GoForward();
 
-  void Reload();
+    void Reload();
 
-  void StopLoading();
+    void StopLoading();
 
-  FlValue* GetAllCookies();
+    FlValue *GetAllCookies();
 
-  gboolean DecidePolicy(WebKitPolicyDecision *decision,
-                        WebKitPolicyDecisionType type);
+    gboolean DecidePolicy(WebKitPolicyDecision *decision,
+                          WebKitPolicyDecisionType type);
 
-  void EvaluateJavaScript(const char *java_script, FlMethodCall *call);
+    void EvaluateJavaScript(const char *java_script, FlMethodCall *call);
 
- private:
-  FlMethodChannel *method_channel_;
-  int64_t window_id_;
-  std::function<void()> on_close_callback_;
+    void RegisterJavaScriptChannel(const std::string &name);
 
-  std::string default_user_agent_;
+    void UnregisterJavaScriptChannel(const std::string &name);
 
-  GtkWidget *window_ = nullptr;
-  GtkWidget *webview_ = nullptr;
-  GtkBox *box_ = nullptr;
+
+private:
+    FlMethodChannel *method_channel_;
+    int64_t window_id_;
+    std::function<void()> on_close_callback_;
+
+    std::string default_user_agent_;
+
+    GtkWidget *window_ = nullptr;
+    GtkWidget *webview_ = nullptr;
+    GtkBox *box_ = nullptr;
 };
 
 #endif  // WEBVIEW_WINDOW_LINUX_WEBVIEW_WINDOW_H_
