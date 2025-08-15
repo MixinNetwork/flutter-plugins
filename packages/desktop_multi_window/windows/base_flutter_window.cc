@@ -233,7 +233,6 @@ void BaseFlutterWindow::Show() {
   
   // Bring window to front
   ::SetWindowPos(handle, HWND_TOP, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE);
-  SetForegroundWindow(handle);
 }
 
 void BaseFlutterWindow::Hide() {
