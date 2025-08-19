@@ -133,6 +133,13 @@ void BaseFlutterWindow::SetFrame(double_t left, double_t top, double_t width, do
   // int adjustedHeight = rect.bottom - rect.top;
 
   // Move and resize the window
+  UINT baseFlags = SWP_NOZORDER | SWP_NOACTIVATE;
+  
+  // Only add SWP_FRAMECHANGED if we're actually changing size or if explicitly requested
+  if (!(flags & SWP_NOSIZE)) {
+    baseFlags |= SWP_FRAMECHANGED;
+  }
+  
   SetWindowPos(
     handle,
     NULL,
@@ -140,7 +147,7 @@ void BaseFlutterWindow::SetFrame(double_t left, double_t top, double_t width, do
     static_cast<int>(top),
     static_cast<int>(width),
     static_cast<int>(height),
-    SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED | flags // | SWP_NOREDRAW
+    baseFlags | flags // | SWP_NOREDRAW
   );
 }
 
