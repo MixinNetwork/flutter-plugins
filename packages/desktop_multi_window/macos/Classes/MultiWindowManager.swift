@@ -61,11 +61,13 @@ class MultiWindowManager {
       debugPrint("window \(windowId) not exists.")
       return
     }
+    onClose(windowId)
     window.close()
   }
 
   func closeAll() {
     windows.forEach { _, value in
+      onClose(windowId)
       value.close()
     }
   }
