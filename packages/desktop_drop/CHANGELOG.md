@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.7.0
+
+[macOS] Robust multi-source drag & drop.
+
+* Prefer `public.file-url` / legacy filename arrays when present; fall back to
+  `NSFilePromiseReceiver` (file promises) otherwise.
+* Handle directories (`isDirectory`) and surface as `DropItemDirectory`.
+* Add `fromPromise` to `DropItem` so apps can distinguish promise-based drops.
+* Generate security-scoped bookmarks only for paths outside the app container
+  (skip/empty for promise files in `.../tmp/Drops/...`).
+* Per-drop unique destination for promised files to avoid name collisions.
+* Thread-safe collection of drop results when receiving promises.
+* Dart guards: no-op `start/stopAccessingSecurityScopedResource` on empty
+  bookmarks.
+* Bump macOS minimum to 10.13 (SPM/Podspec).
+
 ## 0.6.1
 
 * Fix desktop_drop Linux snap build failure due to missing stdlib.h include (#425)
