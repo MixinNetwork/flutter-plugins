@@ -84,13 +84,36 @@ class DropTarget: NSView {
   init(frame frameRect: NSRect, channel: FlutterMethodChannel) {
     self.channel = channel
     super.init(frame: frameRect)
+    self.wantsLayer = true
+    self.layer?.backgroundColor = NSColor.clear.cgColor
   }
 
   required init?(coder: NSCoder) {
     fatalError("init(coder:) has not been implemented")
   }
 
+  override func hitTest(_ point: NSPoint) -> NSView? {
+    if !isDragging {
+      return nil
+    }
+    if NSApp.currentEvent?.type == .leftMouseDragged ||
+       NSApp.currentEvent?.type == .rightMouseDragged {
+      return super.hitTest(point)
+    }
+    return nil
+  }
+
+  private var isDragging = false
+
+  private func isDragEvent(_ event: NSEvent?) -> Bool {
+    guard let event = event else { return false }
+    return event.type == .leftMouseDragged ||
+           event.type == .rightMouseDragged ||
+           event.type == .otherMouseDragged
+  }
+
   override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+    isDragging = true
     channel.invokeMethod("entered", arguments: convertPoint(sender.draggingLocation))
     return .copy
   }
@@ -101,7 +124,12 @@ class DropTarget: NSView {
   }
 
   override func draggingExited(_ sender: NSDraggingInfo?) {
+    isDragging = false
     channel.invokeMethod("exited", arguments: nil)
+  }
+
+  override func draggingEnded(_ sender: NSDraggingInfo) {
+    isDragging = false
   }
 
   /// Create a per-drop destination for promised files (avoids name collisions).
@@ -193,10 +221,59 @@ class DropTarget: NSView {
     group.notify(queue: .main) {
       self.channel.invokeMethod("performOperation_macos", arguments: items)
     }
+    isDragging = false
     return true
   }
 
   func convertPoint(_ location: NSPoint) -> [CGFloat] {
     return [location.x, bounds.height - location.y]
+  }
+
+  override func mouseDown(with event: NSEvent) {
+    if !isDragging && !isDragEvent(event) {
+      nextResponder?.mouseDown(with: event)
+    } else {
+      super.mouseDown(with: event)
+    }
+  }
+
+  override func mouseUp(with event: NSEvent) {
+    if !isDragging && !isDragEvent(event) {
+      nextResponder?.mouseUp(with: event)
+    } else {
+      super.mouseUp(with: event)
+    }
+  }
+
+  override func mouseDragged(with event: NSEvent) {
+    if !isDragging && !isDragEvent(event) {
+      nextResponder?.mouseDragged(with: event)
+    } else {
+      super.mouseDragged(with: event)
+    }
+  }
+
+  override func mouseMoved(with event: NSEvent) {
+    if !isDragging && !isDragEvent(event) {
+      nextResponder?.mouseMoved(with: event)
+    } else {
+      super.mouseMoved(with: event)
+    }
+  }
+
+  override func rightMouseDown(with event: NSEvent) {
+    if !isDragging && !isDragEvent(event) {
+      nextResponder?.rightMouseDown(with: event)
+    } else {
+      super.rightMouseDown(with: event)
+    }
+  }
+
+  override func rightMouseUp(with event: NSEvent) {
+    if !isDragging && !isDragEvent(event) {
+      nextResponder?.rightMouseUp(with: event)
+    } else {
+      super.rightMouseUp(with: event)
+    }
   }
 }
