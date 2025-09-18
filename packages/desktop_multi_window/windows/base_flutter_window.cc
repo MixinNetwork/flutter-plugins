@@ -23,7 +23,7 @@ void CenterRectToMonitor(LPRECT prc) {
   mi.cbSize = sizeof(mi);
   GetMonitorInfo(hMonitor, &mi);
 
-  rc = mi.rcMonitor;
+  rc = mi.rcWork;
 
   prc->left = rc.left + (rc.right - rc.left - w) / 2;
   prc->top = rc.top + (rc.bottom - rc.top - h) / 2;
