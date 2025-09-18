@@ -1,3 +1,6 @@
+## 0.1.3
+* support android 15 16k page size
+
 ## 0.1.2
 
 * export native c header file
