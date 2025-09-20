@@ -5,7 +5,7 @@ Pod::Spec.new do |s|
   s.description      = <<-DESC
   Cross-platform drag-and-drop plugin for Flutter, extended to support iOS via UIDropInteraction.
   DESC
-  s.homepage         = 'https://github.com/your-org/desktop_drop'
+  s.homepage         = 'https://github.com/flutter-plugins/desktop_drop'
   s.license          = { :file => '../LICENSE' }
   s.author           = { 'Your Name' => 'your.email@example.com' }
   s.source           = { :path => '.' }

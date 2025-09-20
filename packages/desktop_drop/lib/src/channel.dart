@@ -107,27 +107,25 @@ class DesktopDrop {
         _notifyEvent(
           DropDoneEvent(
             location: _offset ?? Offset.zero,
-            files: items
-                .map((raw) {
-                  final path = raw["path"] as String;
-                  final bookmark = raw["apple-bookmark"] as Uint8List?;
-                  final isDir = (raw["isDirectory"] as bool?) ?? false;
-                  final fromPromise = (raw["fromPromise"] as bool?) ?? false;
-                  if (isDir) {
-                    return DropItemDirectory(
-                      path,
-                      const [],
-                      extraAppleBookmark: bookmark,
-                      fromPromise: fromPromise,
-                    );
-                  }
-                  return DropItemFile(
-                    path,
-                    extraAppleBookmark: bookmark,
-                    fromPromise: fromPromise,
-                  );
-                })
-                .toList(),
+            files: items.map((raw) {
+              final path = raw["path"] as String;
+              final bookmark = raw["apple-bookmark"] as Uint8List?;
+              final isDir = (raw["isDirectory"] as bool?) ?? false;
+              final fromPromise = (raw["fromPromise"] as bool?) ?? false;
+              if (isDir) {
+                return DropItemDirectory(
+                  path,
+                  const [],
+                  extraAppleBookmark: bookmark,
+                  fromPromise: fromPromise,
+                );
+              }
+              return DropItemFile(
+                path,
+                extraAppleBookmark: bookmark,
+                fromPromise: fromPromise,
+              );
+            }).toList(),
           ),
         );
         _offset = null;
@@ -136,6 +134,15 @@ class DesktopDrop {
         final rawList = call.arguments as List;
         final files = rawList.map((e) {
           final map = e as Map;
+          if ((map["bytes"] as Uint8List?) != null) {
+            return DropItemFile.fromData(
+              (map["bytes"] as Uint8List),
+              path: map["path"],
+              mimeType: map["mime"] as String?,
+              name: map["name"] as String?,
+              length: map["length"] as int?,
+            );
+          }
           return DropItemFile(
             map["path"] ?? '', // Optional, null for non-files
             mimeType: map["mime"] as String?,

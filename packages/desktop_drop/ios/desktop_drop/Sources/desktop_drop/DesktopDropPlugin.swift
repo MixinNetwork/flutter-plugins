@@ -244,7 +244,7 @@ public class DesktopDropPlugin: NSObject, FlutterPlugin, UIDropInteractionDelega
     ) {
         if typeIdentifier == "public.image", let image = UIImage(data: data), let pngData = image.pngData() {
             resultItems.add([
-                "path": NSNull(),
+                "path": nil,
                 "name": name,
                 "mime": "image/png",
                 "length": pngData.count,
@@ -252,7 +252,7 @@ public class DesktopDropPlugin: NSObject, FlutterPlugin, UIDropInteractionDelega
             ])
         } else {
             resultItems.add([
-                "path": NSNull(),
+                "path": nil,
                 "name": name,
                 "mime": mime,
                 "length": data.count,
