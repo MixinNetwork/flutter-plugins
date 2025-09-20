@@ -27,3 +27,9 @@ if (GTest_FOUND)
     add_test(NAME UnitTests COMMAND UnitTests)
 endif ()
 
+
+if (ANDROID)
+  # Support Android 15 16k page size
+  target_link_options(mixin_logger PRIVATE "-Wl,-z,max-page-size=16384")
+endif()
+

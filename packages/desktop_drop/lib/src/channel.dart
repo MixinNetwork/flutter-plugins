@@ -37,8 +37,17 @@ class DesktopDrop {
     });
   }
 
+  /// macOS: Attempt to start security-scoped access for a bookmarked URL.
+  ///
+  /// Pass the [DropItem.extraAppleBookmark] bytes from a dropped file that
+  /// originated outside the app container. Returns `true` if access began.
+  ///
+  /// If [bookmark] is empty, this function returns `false` and does not
+  /// invoke the platform call. Promise files written under your container do
+  /// not require security-scoped access.
   Future<bool> startAccessingSecurityScopedResource(
       {required Uint8List bookmark}) async {
+    if (bookmark.isEmpty) return false;
     Map<String, dynamic> resultMap = {};
     resultMap["apple-bookmark"] = bookmark;
     final bool? result = await _channel.invokeMethod(
@@ -47,8 +56,13 @@ class DesktopDrop {
     return result;
   }
 
+  /// macOS: Stop security-scoped access previously started.
+  ///
+  /// If [bookmark] is empty, this function returns `true` and does not
+  /// invoke the platform call, acting as a no-op.
   Future<bool> stopAccessingSecurityScopedResource(
       {required Uint8List bookmark}) async {
+    if (bookmark.isEmpty) return true;
     Map<String, dynamic> resultMap = {};
     resultMap["apple-bookmark"] = bookmark;
     final bool result = await _channel.invokeMethod(
@@ -89,16 +103,30 @@ class DesktopDrop {
         _offset = null;
         break;
       case "performOperation_macos":
-        // final paths = (call.arguments as List).cast<Map<String?, Object?>>();
-        final paths = call.arguments as List;
+        final items = (call.arguments as List).cast<Map>();
         _notifyEvent(
           DropDoneEvent(
             location: _offset ?? Offset.zero,
-            files: paths
-                .map((e) => DropItemFile(
-                      e["path"] as String,
-                      extraAppleBookmark: e["apple-bookmark"] as Uint8List?,
-                    ))
+            files: items
+                .map((raw) {
+                  final path = raw["path"] as String;
+                  final bookmark = raw["apple-bookmark"] as Uint8List?;
+                  final isDir = (raw["isDirectory"] as bool?) ?? false;
+                  final fromPromise = (raw["fromPromise"] as bool?) ?? false;
+                  if (isDir) {
+                    return DropItemDirectory(
+                      path,
+                      const [],
+                      extraAppleBookmark: bookmark,
+                      fromPromise: fromPromise,
+                    );
+                  }
+                  return DropItemFile(
+                    path,
+                    extraAppleBookmark: bookmark,
+                    fromPromise: fromPromise,
+                  );
+                })
                 .toList(),
           ),
         );

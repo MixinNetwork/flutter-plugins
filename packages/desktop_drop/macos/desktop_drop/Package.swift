@@ -6,7 +6,7 @@ import PackageDescription
 let package = Package(
     name: "desktop_drop",
     platforms: [
-        .macOS("10.11")
+        .macOS("10.13")
     ],
     products: [
         .library(name: "desktop-drop", targets: ["desktop_drop"])

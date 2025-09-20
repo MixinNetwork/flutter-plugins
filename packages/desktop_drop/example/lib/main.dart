@@ -128,7 +128,7 @@ class _ExampleDragTargetState extends State<ExampleDragTarget> {
       debugPrint('  |' * depth +
           '> ${file.path} ${file.name}'
               '  ${file.path.isNotEmpty ? (await file.lastModified()) : ''}'
-              '  ${file.path.isNotEmpty ? (await file.length()) : file.bytes?.length}'
+              '  ${file.path.isNotEmpty ? (await file.length()) : ''}'
               '  ${file.mimeType}');
       if (file is DropItemDirectory) {
         printFiles(file.children, depth + 1);

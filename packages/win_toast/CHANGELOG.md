@@ -1,3 +1,7 @@
+## 0.4.0
+
+* fix: build fail on latest visual studio ([#422](https://github.com/MixinNetwork/flutter-plugins/pull/422))
+
 ## 0.3.1
 
 * Fix not working if packaged by msix([#375](https://github.com/MixinNetwork/flutter-plugins/pull/375))
