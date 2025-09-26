@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:js_interop';
 
-import 'package:desktop_drop/desktop_drop.dart';
 import 'package:desktop_drop/desktop_drop_web_file.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
