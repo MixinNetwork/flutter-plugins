@@ -49,3 +49,15 @@ final result =
     await DesktopMultiWindow.invokeMethod(windowId!, "method_name", "arguments");
 debugPrint("onSend result: $result");
 ```
+
+### Use plugins in Sub window
+
+Because each window created by this plugin has its own dedicated Flutter engine, and method channels cannot be shared between engines, the new window cannot directly call plugins registered with the main Flutter engine.
+
+The solution is to manually register the required plugins.
+
+https://github.com/MixinNetwork/flutter-plugins/blob/985d81661d00715a37ba1767ab2d22ff64641d43/packages/desktop_multi_window/example/windows/runner/flutter_window.cpp#L32-L38
+
+https://github.com/MixinNetwork/flutter-plugins/blob/985d81661d00715a37ba1767ab2d22ff64641d43/packages/desktop_multi_window/example/macos/Runner/MainFlutterWindow.swift#L15-L18
+
+https://github.com/MixinNetwork/flutter-plugins/blob/985d81661d00715a37ba1767ab2d22ff64641d43/packages/desktop_multi_window/example/linux/my_application.cc#L65-L69
