@@ -26,6 +26,8 @@ flutter:
     platforms:
       macos:
         pluginClass: DesktopDropPlugin
+      ios:
+        pluginClass: DesktopDropPlugin
       linux:
         pluginClass: DesktopDropPlugin
       windows:

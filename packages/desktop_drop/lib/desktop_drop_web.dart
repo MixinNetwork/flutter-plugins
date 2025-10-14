@@ -1,11 +1,11 @@
 import 'dart:async';
-
-import 'package:web/web.dart' as web;
 import 'dart:js_interop';
 
+import 'package:desktop_drop/desktop_drop_web_file.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_web_plugins/flutter_web_plugins.dart';
+import 'package:web/web.dart' as web;
 
 import 'src/web_drop_item.dart';
 
@@ -69,8 +69,10 @@ class DesktopDropWeb {
 
     final web.File file = await fileCompleter.future;
 
+    final url = web.URL.createObjectURL(file);
+    DesktopDropWebFile().webFileMap[url] = file;
     return WebDropItem(
-      uri: web.URL.createObjectURL(file),
+      uri: url,
       name: file.name,
       size: file.size,
       lastModified: DateTime.fromMillisecondsSinceEpoch(file.lastModified),
@@ -78,7 +80,6 @@ class DesktopDropWeb {
       type: file.type,
       children: [],
     );
-
   }
 
   void _registerEvents() {

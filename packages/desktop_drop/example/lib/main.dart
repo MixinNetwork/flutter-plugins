@@ -72,11 +72,7 @@ class MyApp extends StatelessWidget {
           children: [
             const ExampleDragTarget(),
             const ExampleDragTarget(),
-            const ExampleDragTarget(),
-            const ExampleDragTarget(),
-            const ExampleDragTarget(),
-            const ExampleDragTarget(),
-            if (UniversalPlatform.isMacOS)
+            if (UniversalPlatform.isApple)
               StatefulBuilder(builder: (context, setState) {
                 return Column(
                   children: [
@@ -131,8 +127,8 @@ class _ExampleDragTargetState extends State<ExampleDragTarget> {
     for (final file in files) {
       debugPrint('  |' * depth +
           '> ${file.path} ${file.name}'
-              '  ${await file.lastModified()}'
-              '  ${await file.length()}'
+              '  ${file.path.isNotEmpty ? (await file.lastModified()) : ''}'
+              '  ${file.path.isNotEmpty ? (await file.length()) : ''}'
               '  ${file.mimeType}');
       if (file is DropItemDirectory) {
         printFiles(file.children, depth + 1);
@@ -187,7 +183,7 @@ class _ExampleDragTargetState extends State<ExampleDragTarget> {
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ),
-            if (_list.isNotEmpty && UniversalPlatform.isMacOS)
+            if (_list.isNotEmpty && UniversalPlatform.isApple)
               Align(
                 alignment: Alignment.bottomRight,
                 child: TextButton(

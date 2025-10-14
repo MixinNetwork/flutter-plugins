@@ -28,6 +28,8 @@ abstract class DropItem extends XFile {
   ///
   /// In this case, the original source path is not available by design.
   final bool fromPromise;
+
+
   DropItem(
     super.path, {
     super.mimeType,
