@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.1
+
+* [Android] Upgrade Android compileSdk and Kotlin version. (#444) 
+
 ## 0.7.0
 
 [macOS] Robust multi-source drag & drop.
