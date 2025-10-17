@@ -1,11 +1,8 @@
 # Changelog
 
-## 0.7.1
-
-* [Android] Upgrade Android compileSdk and Kotlin version. (#444) 
-
 ## 0.7.0
 
+[Android] Upgrade Android compileSdk and Kotlin version. (#444) 
 [macOS] Robust multi-source drag & drop.
 
 * Prefer `public.file-url` / legacy filename arrays when present; fall back to
