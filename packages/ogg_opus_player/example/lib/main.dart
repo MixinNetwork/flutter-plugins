@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:ogg_opus_player/ogg_opus_player.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 late AudioSession session;
 
@@ -226,6 +227,16 @@ class _RecorderExampleState extends State<_RecorderExample> {
         if (_recorder == null)
           IconButton(
             onPressed: () async {
+              final status = await Permission.microphone.request();
+              if (!status.isGranted) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('need microphone permission')),
+                  );
+                }
+                return;
+              }
+
               final file = File(_recordedPath);
               if (file.existsSync()) {
                 File(_recordedPath).deleteSync();
@@ -247,23 +258,34 @@ class _RecorderExampleState extends State<_RecorderExample> {
             icon: const Icon(Icons.keyboard_voice_outlined),
           )
         else
-          IconButton(
-            onPressed: () async {
-              await _recorder?.stop();
-              debugPrint('recording stopped');
-              debugPrint('duration: ${await _recorder?.duration()}');
-              debugPrint('waveform: ${await _recorder?.getWaveformData()}');
-              _recorder?.dispose();
-              setState(() {
-                _recorder = null;
-                session.setActive(
-                  false,
-                  avAudioSessionSetActiveOptions:
-                      AVAudioSessionSetActiveOptions.notifyOthersOnDeactivation,
-                );
-              });
-            },
-            icon: const Icon(Icons.stop),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator.adaptive(),
+              ),
+              IconButton(
+                onPressed: () async {
+                  await _recorder?.stop();
+                  debugPrint('recording stopped');
+                  debugPrint('duration: ${await _recorder?.duration()}');
+                  debugPrint('waveform: ${await _recorder?.getWaveformData()}');
+                  _recorder?.dispose();
+                  setState(() {
+                    _recorder = null;
+                    session.setActive(
+                      false,
+                      avAudioSessionSetActiveOptions:
+                          AVAudioSessionSetActiveOptions
+                              .notifyOthersOnDeactivation,
+                    );
+                  });
+                },
+                icon: const Icon(Icons.stop),
+              ),
+            ],
           ),
         const SizedBox(height: 8),
         if (_recorder == null && File(_recordedPath).existsSync())

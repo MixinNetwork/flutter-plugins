@@ -58,3 +58,8 @@ elseif (WIN32)
 endif ()
 
 target_compile_definitions(ogg_opus_player PUBLIC DART_SHARED_LIB)
+
+if (ANDROID)
+  # Support Android 15 16k page size.
+  target_link_options(ogg_opus_player PRIVATE "-Wl,-z,max-page-size=16384")
+endif()

@@ -2,11 +2,17 @@ package one.mixin.oggOpusPlayer
 
 import android.content.Context
 import android.util.Log
-import com.google.android.exoplayer2.*
-import com.google.android.exoplayer2.audio.AudioAttributes
-import com.google.android.exoplayer2.source.ProgressiveMediaSource
-import com.google.android.exoplayer2.trackselection.DefaultTrackSelector
-import com.google.android.exoplayer2.upstream.DefaultDataSource
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
+import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
+
 
 typealias OnPlayerStatusChangedCallback = (AudioPlayer) -> Unit
 
@@ -16,6 +22,7 @@ enum class Status {
     Paused,
 }
 
+@UnstableApi
 class AudioPlayer(
     context: Context,
     path: String,

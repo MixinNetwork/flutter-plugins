@@ -5,8 +5,7 @@ version '1.0'
 
 buildscript {
 
-    ext.kotlin_version = '1.6.10'
-    ext.exoplayerVersion = '2.18.1'
+    ext.kotlin_version = "2.1.0"
 
     repositories {
         google()
@@ -14,7 +13,7 @@ buildscript {
     }
 
     dependencies {
-        classpath 'com.android.tools.build:gradle:7.1.2'
+        classpath 'com.android.tools.build:gradle:8.9.1'
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
     }
 }
@@ -34,11 +33,11 @@ android {
     
     // Bumping the plugin compileSdkVersion requires all clients of this plugin
     // to bump the version in their app.
-    compileSdkVersion 31
+    compileSdkVersion 36
 
     // Bumping the plugin ndkVersion requires all clients of this plugin to bump
     // the version in their app and to download a newer version of the NDK.
-    ndkVersion "21.1.6352462"
+    ndkVersion android.ndkVersion
 
     // Invoke the shared CMake build with the Android Gradle Plugin.
     externalNativeBuild {
@@ -56,12 +55,12 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
     }
 
     kotlinOptions {
-        jvmTarget = '1.8'
+        jvmTarget = '11'
     }
 
     sourceSets {
@@ -69,11 +68,12 @@ android {
     }
 
     defaultConfig {
-        minSdkVersion 21
+        minSdkVersion 24
     }
 }
 
 dependencies {
-    implementation "com.google.android.exoplayer:exoplayer-core:${exoplayerVersion}"
-
+    def media3_version = "1.8.0"
+    implementation "androidx.media3:media3-common:$media3_version"
+    implementation "androidx.media3:media3-exoplayer:$media3_version"
 }
