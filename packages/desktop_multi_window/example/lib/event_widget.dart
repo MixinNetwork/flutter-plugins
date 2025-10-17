@@ -41,6 +41,8 @@ class MessageItem {
 
 class _EventWidgetState extends State<EventWidget> {
   final messages = <MessageItem>[];
+  int? _selectedWindowId;
+  List<int> _windowIds = [0];
 
   final textInputController = TextEditingController();
 
@@ -49,6 +51,7 @@ class _EventWidgetState extends State<EventWidget> {
   @override
   void initState() {
     super.initState();
+    _updateWindowIds();
     DesktopMultiWindow.setMethodHandler(_handleMethodCallback);
   }
 
@@ -58,8 +61,18 @@ class _EventWidgetState extends State<EventWidget> {
     super.dispose();
   }
 
-  Future<dynamic> _handleMethodCallback(
-      MethodCall call, int fromWindowId) async {
+  Future<void> _updateWindowIds() async {
+    // Get all sub-window IDs
+    final List<int> subWindowIds = await DesktopMultiWindow.getAllSubWindowIds();
+    setState(() {
+      // Combine main window (0) with sub-window IDs
+      _windowIds = [0, ...subWindowIds];
+      // Set default selection if none selected
+      _selectedWindowId ??= _windowIds.first;
+    });
+  }
+
+  Future<dynamic> _handleMethodCallback(MethodCall call, int fromWindowId) async {
     if (call.arguments.toString() == "ping") {
       return "pong";
     }
@@ -82,11 +95,13 @@ class _EventWidgetState extends State<EventWidget> {
       if (text.isEmpty) {
         return;
       }
-      final windowId = int.tryParse(windowInputController.text);
-      textInputController.clear();
-      final result =
-          await DesktopMultiWindow.invokeMethod(windowId!, "onSend", text);
-      debugPrint("onSend result: $result");
+      if (_selectedWindowId != null) {
+        textInputController.clear();
+        final result = await DesktopMultiWindow.invokeMethod(_selectedWindowId!, "onSend", text);
+        debugPrint("onSend result: $result");
+      } else {
+        debugPrint("No window selected");
+      }
     }
 
     return Column(
@@ -95,36 +110,79 @@ class _EventWidgetState extends State<EventWidget> {
           child: ListView.builder(
             itemCount: messages.length,
             reverse: true,
-            itemBuilder: (context, index) =>
-                _MessageItemWidget(item: messages[index]),
+            itemBuilder: (context, index) => _MessageItemWidget(item: messages[index]),
           ),
         ),
-        Row(
-          children: [
-            SizedBox(
-              width: 100,
-              child: TextField(
-                controller: windowInputController,
-                decoration: const InputDecoration(
-                  labelText: 'Window ID',
-                ),
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 4,
+                offset: const Offset(0, -1),
               ),
-            ),
-            Expanded(
-              child: TextField(
-                controller: textInputController,
-                decoration: const InputDecoration(
-                  hintText: 'Enter message',
+            ],
+          ),
+          child: Row(
+            children: [
+              const Text('To: '),
+              MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: DropdownButton<int>(
+                  value: _selectedWindowId,
+                  items: _windowIds.map((int id) {
+                    return DropdownMenuItem<int>(
+                      value: id,
+                      child: Text(id == 0 ? 'Main Window' : 'Window $id'),
+                    );
+                  }).toList(),
+                  onTap: () {
+                    // Update window list before showing dropdown
+                    _updateWindowIds();
+                  },
+                  onChanged: (int? newValue) {
+                    setState(() {
+                      _selectedWindowId = newValue;
+                    });
+                  },
                 ),
-                onSubmitted: (text) => submit(),
               ),
-            ),
-            IconButton(
-              icon: const Icon(Icons.send),
-              onPressed: submit,
-            ),
-          ],
+              const SizedBox(width: 16),
+              Expanded(
+                child: TextField(
+                  controller: textInputController,
+                  decoration: InputDecoration(
+                    hintText: 'Enter message',
+                    filled: true,
+                    fillColor: Theme.of(context).colorScheme.surface,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(
+                        color: Theme.of(context).colorScheme.outline,
+                      ),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                  ),
+                  onSubmitted: (text) => submit(),
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                icon: const Icon(Icons.send),
+                onPressed: submit,
+                tooltip: 'Send message',
+                style: IconButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                  foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );

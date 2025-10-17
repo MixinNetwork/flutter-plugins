@@ -4,7 +4,7 @@ version: 0.2.1
 homepage: https://github.com/MixinNetwork/flutter-plugins/tree/main/packages/desktop_multi_window
 
 environment:
-  sdk: ">=2.17.0 <3.0.0"
+  sdk: ">=3.0.0 <4.0.0"
   flutter: ">=3.0.0"
 
 dependencies:
