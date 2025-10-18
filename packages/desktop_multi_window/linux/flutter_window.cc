@@ -1,7 +1,3 @@
-//
-// Created by yangbin on 2022/1/11.
-//
-
 #include "flutter_window.h"
 
 #include <iostream>
@@ -21,10 +17,10 @@ gboolean on_close_clicked(GtkWidget *widget, GdkEvent *event, gpointer user_data
 }
 
 FlutterWindow::FlutterWindow(
-    int64_t id,
+    const std::string& id,
     const std::string &args,
     const std::shared_ptr<FlutterWindowCallback> &callback
-) : callback_(callback), id_(id) {
+) : callback_(callback), id_(id), window_argument_(args) {
   window_ = gtk_window_new(GTK_WINDOW_TOPLEVEL);
   gtk_window_set_default_size(GTK_WINDOW(window_), 1280, 720);
   gtk_window_set_title(GTK_WINDOW(window_), "");
@@ -40,9 +36,8 @@ FlutterWindow::FlutterWindow(
     }
   }), this);
 
-  g_autoptr(FlDartProject)
-      project = fl_dart_project_new();
-  const char *entrypoint_args[] = {"multi_window", g_strdup_printf("%ld", id_), args.c_str(), nullptr};
+  g_autoptr(FlDartProject) project = fl_dart_project_new();
+  const char *entrypoint_args[] = {"multi_window", id.c_str(), args.c_str(), nullptr};
   fl_dart_project_set_dart_entrypoint_arguments(project, const_cast<char **>(entrypoint_args));
 
   auto fl_view = fl_view_new(project);
@@ -52,19 +47,32 @@ FlutterWindow::FlutterWindow(
   if (_g_window_created_callback) {
     _g_window_created_callback(FL_PLUGIN_REGISTRY(fl_view));
   }
-  g_autoptr(FlPluginRegistrar)
-      desktop_multi_window_registrar =
+  g_autoptr(FlPluginRegistrar) desktop_multi_window_registrar =
       fl_plugin_registry_get_registrar_for_plugin(FL_PLUGIN_REGISTRY(fl_view), "DesktopMultiWindowPlugin");
-  desktop_multi_window_plugin_register_with_registrar_internal(desktop_multi_window_registrar);
-
-  window_channel_ = WindowChannel::RegisterWithRegistrar(desktop_multi_window_registrar, id_);
+  desktop_multi_window_plugin_register_with_registrar_internal(desktop_multi_window_registrar, this);
 
   gtk_widget_grab_focus(GTK_WIDGET(fl_view));
   gtk_widget_hide(GTK_WIDGET(window_));
 }
 
-WindowChannel *FlutterWindow::GetWindowChannel() {
-  return window_channel_.get();
+void FlutterWindow::HandleWindowMethod(
+    const gchar* method,
+    FlValue* arguments,
+    FlMethodCall* method_call) {
+  g_autoptr(FlMethodResponse) response = nullptr;
+  
+  if (strcmp(method, "window_show") == 0) {
+    Show();
+    response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
+  } else if (strcmp(method, "window_hide") == 0) {
+    Hide();
+    response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
+  } else {
+    g_autofree gchar* error_msg = g_strdup_printf("unknown method: %s", method);
+    response = FL_METHOD_RESPONSE(fl_method_error_response_new("-1", error_msg, nullptr));
+  }
+  
+  fl_method_call_respond(method_call, response, nullptr);
 }
 
 FlutterWindow::~FlutterWindow() = default;
