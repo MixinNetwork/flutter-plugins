@@ -1,7 +1,3 @@
-//
-// Created by yangbin on 2022/1/11.
-//
-
 #include "flutter_window.h"
 
 #include "flutter_windows.h"
@@ -9,7 +5,6 @@
 #include "tchar.h"
 
 #include <iostream>
-#include <utility>
 
 #include "include/desktop_multi_window/desktop_multi_window_plugin.h"
 #include "multi_window_plugin_internal.h"
@@ -76,10 +71,10 @@ void EnableFullDpiSupportIfAvailable(HWND hwnd) {
 }
 
 FlutterWindow::FlutterWindow(
-    int64_t id,
+    const std::string& id,
     std::string args,
     const std::shared_ptr<FlutterWindowCallback> &callback
-) : callback_(callback), id_(id), window_handle_(nullptr), scale_factor_(1) {
+) : callback_(callback), id_(id), window_argument_(args), window_handle_(nullptr), scale_factor_(1) {
   RegisterWindowClass(FlutterWindow::WndProc);
 
   const POINT target_point = {static_cast<LONG>(10),
@@ -97,7 +92,8 @@ FlutterWindow::FlutterWindow(
   RECT frame;
   GetClientRect(window_handle, &frame);
   flutter::DartProject project(L"data");
-  project.set_dart_entrypoint_arguments({"multi_window", std::to_string(id), std::move(args)});
+  std::vector<std::string> entrypoint_args = {"multi_window", id, args};
+  project.set_dart_entrypoint_arguments(entrypoint_args);
   flutter_controller_ = std::make_unique<flutter::FlutterViewController>(
       frame.right - frame.left, frame.bottom - frame.top, project);
   // Ensure that basic setup of the controller was successful.
@@ -108,10 +104,8 @@ FlutterWindow::FlutterWindow(
   SetParent(view_handle, window_handle);
   MoveWindow(view_handle, 0, 0, frame.right - frame.left, frame.bottom - frame.top, true);
 
-  InternalMultiWindowPluginRegisterWithRegistrar(
-      flutter_controller_->engine()->GetRegistrarForPlugin("DesktopMultiWindowPlugin"));
-  window_channel_ = WindowChannel::RegisterWithRegistrar(
-      flutter_controller_->engine()->GetRegistrarForPlugin("DesktopMultiWindowPlugin"), id_);
+  auto registrar = flutter_controller_->engine()->GetRegistrarForPlugin("DesktopMultiWindowPlugin");
+  InternalMultiWindowPluginRegisterWithRegistrar(registrar, this);
 
   if (_g_window_created_callback) {
     _g_window_created_callback(flutter_controller_.get());
@@ -210,10 +204,22 @@ LRESULT FlutterWindow::MessageHandler(HWND hwnd, UINT message, WPARAM wparam, LP
   return DefWindowProc(window_handle_, message, wparam, lparam);
 }
 
-void FlutterWindow::Destroy() {
-  if (window_channel_) {
-    window_channel_ = nullptr;
+void FlutterWindow::HandleWindowMethod(
+    const std::string& method,
+    const flutter::EncodableMap* arguments,
+    std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
+  if (method == "window_show") {
+    Show();
+    result->Success();
+  } else if (method == "window_hide") {
+    Hide();
+    result->Success();
+  } else {
+    result->Error("-1", "unknown method: " + method);
   }
+}
+
+void FlutterWindow::Destroy() {
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
   }
