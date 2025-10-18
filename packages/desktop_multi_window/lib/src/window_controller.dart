@@ -20,7 +20,7 @@ class WindowController {
       WindowConfiguration configuration) async {
     final windowId = await _channel.invokeMethod<String>(
       'createWindow',
-      jsonEncode(configuration.toJson()),
+      configuration.toJson(),
     );
     assert(windowId != null, 'windowId is null');
     assert(windowId!.isNotEmpty, 'windowId is empty');

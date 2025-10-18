@@ -8,6 +8,7 @@
 
 #include "include/desktop_multi_window/desktop_multi_window_plugin.h"
 #include "multi_window_plugin_internal.h"
+#include "window_configuration.h"
 
 namespace {
 
@@ -26,9 +27,8 @@ void RegisterWindowClass(WNDPROC wnd_proc) {
     window_class.cbClsExtra = 0;
     window_class.cbWndExtra = 0;
     window_class.hInstance = GetModuleHandle(nullptr);
-    window_class.hIcon =
-        LoadIcon(window_class.hInstance, IDI_APPLICATION);
-    window_class.hbrBackground = (HBRUSH) (COLOR_WINDOW + 1);
+    window_class.hIcon = LoadIcon(window_class.hInstance, IDI_APPLICATION);
+    window_class.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
     window_class.lpszMenuName = nullptr;
     window_class.lpfnWndProc = wnd_proc;
     RegisterClass(&window_class);
@@ -46,7 +46,7 @@ void UnregisterWindowClass() {
 
 // Scale helper to convert logical scaler values to physical using passed in
 // scale factor
-inline int Scale(int source, double scale_factor) {
+inline int Scale(double source, double scale_factor) {
   return static_cast<int>(source * scale_factor);
 }
 
@@ -60,7 +60,7 @@ void EnableFullDpiSupportIfAvailable(HWND hwnd) {
     return;
   }
   auto enable_non_client_dpi_scaling =
-      reinterpret_cast<EnableNonClientDpiScaling *>(
+      reinterpret_cast<EnableNonClientDpiScaling*>(
           GetProcAddress(user32_module, "EnableNonClientDpiScaling"));
   if (enable_non_client_dpi_scaling != nullptr) {
     enable_non_client_dpi_scaling(hwnd);
@@ -68,31 +68,37 @@ void EnableFullDpiSupportIfAvailable(HWND hwnd) {
   }
 }
 
-}
+}  // namespace
 
 FlutterWindow::FlutterWindow(
     const std::string& id,
-    std::string args,
-    const std::shared_ptr<FlutterWindowCallback> &callback
-) : callback_(callback), id_(id), window_argument_(args), window_handle_(nullptr), scale_factor_(1) {
+    const flutter::EncodableMap* args,
+    const std::shared_ptr<FlutterWindowCallback>& callback)
+    : callback_(callback),
+      id_(id),
+      window_handle_(nullptr),
+      scale_factor_(1) {
   RegisterWindowClass(FlutterWindow::WndProc);
 
-  const POINT target_point = {static_cast<LONG>(10),
-                              static_cast<LONG>(10)};
+  WindowConfiguration config = WindowConfiguration::FromEncodableMap(args);
+  window_argument_ = config.arguments;
+
+  const POINT target_point = {static_cast<LONG>(config.frame.left), static_cast<LONG>(config.frame.top)};
   HMONITOR monitor = MonitorFromPoint(target_point, MONITOR_DEFAULTTONEAREST);
   UINT dpi = FlutterDesktopGetDpiForMonitor(monitor);
   scale_factor_ = dpi / 96.0;
 
-  HWND window_handle = CreateWindow(
-      kFlutterWindowClassName, L"", WS_OVERLAPPEDWINDOW,
-      Scale(target_point.x, scale_factor_), Scale(target_point.y, scale_factor_),
-      Scale(1280, scale_factor_), Scale(720, scale_factor_),
-      nullptr, nullptr, GetModuleHandle(nullptr), this);
+  HWND window_handle =
+      CreateWindow(kFlutterWindowClassName, L"", WS_OVERLAPPEDWINDOW,
+                   Scale(target_point.x, scale_factor_),
+                   Scale(target_point.y, scale_factor_),
+                   Scale(config.frame.width, scale_factor_), Scale(config.frame.height, scale_factor_),
+                   nullptr, nullptr, GetModuleHandle(nullptr), this);
 
   RECT frame;
   GetClientRect(window_handle, &frame);
   flutter::DartProject project(L"data");
-  std::vector<std::string> entrypoint_args = {"multi_window", id, args};
+  std::vector<std::string> entrypoint_args = {"multi_window", id, window_argument_};
   project.set_dart_entrypoint_arguments(entrypoint_args);
   flutter_controller_ = std::make_unique<flutter::FlutterViewController>(
       frame.right - frame.left, frame.bottom - frame.top, project);
@@ -102,9 +108,11 @@ FlutterWindow::FlutterWindow(
   }
   auto view_handle = flutter_controller_->view()->GetNativeWindow();
   SetParent(view_handle, window_handle);
-  MoveWindow(view_handle, 0, 0, frame.right - frame.left, frame.bottom - frame.top, true);
+  MoveWindow(view_handle, 0, 0, frame.right - frame.left,
+             frame.bottom - frame.top, true);
 
-  auto registrar = flutter_controller_->engine()->GetRegistrarForPlugin("DesktopMultiWindowPlugin");
+  auto registrar = flutter_controller_->engine()->GetRegistrarForPlugin(
+      "DesktopMultiWindowPlugin");
   InternalMultiWindowPluginRegisterWithRegistrar(registrar, this);
 
   if (_g_window_created_callback) {
@@ -113,42 +121,51 @@ FlutterWindow::FlutterWindow(
 
   // hide the window when created.
   ShowWindow(window_handle, SW_HIDE);
-
 }
 
 // static
-FlutterWindow *FlutterWindow::GetThisFromHandle(HWND window) noexcept {
-  return reinterpret_cast<FlutterWindow *>(
+FlutterWindow* FlutterWindow::GetThisFromHandle(HWND window) noexcept {
+  return reinterpret_cast<FlutterWindow*>(
       GetWindowLongPtr(window, GWLP_USERDATA));
 }
 
 // static
-LRESULT CALLBACK FlutterWindow::WndProc(HWND window, UINT message, WPARAM wparam, LPARAM lparam) {
+LRESULT CALLBACK FlutterWindow::WndProc(HWND window,
+                                        UINT message,
+                                        WPARAM wparam,
+                                        LPARAM lparam) {
   if (message == WM_NCCREATE) {
-    auto window_struct = reinterpret_cast<CREATESTRUCT *>(lparam);
-    SetWindowLongPtr(window, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(window_struct->lpCreateParams));
+    auto window_struct = reinterpret_cast<CREATESTRUCT*>(lparam);
+    SetWindowLongPtr(window, GWLP_USERDATA,
+                     reinterpret_cast<LONG_PTR>(window_struct->lpCreateParams));
 
-    auto that = static_cast<FlutterWindow *>(window_struct->lpCreateParams);
+    auto that = static_cast<FlutterWindow*>(window_struct->lpCreateParams);
     EnableFullDpiSupportIfAvailable(window);
     that->window_handle_ = window;
-  } else if (FlutterWindow *that = GetThisFromHandle(window)) {
+  } else if (FlutterWindow* that = GetThisFromHandle(window)) {
     return that->MessageHandler(window, message, wparam, lparam);
   }
 
   return DefWindowProc(window, message, wparam, lparam);
 }
 
-LRESULT FlutterWindow::MessageHandler(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam) {
-
+LRESULT FlutterWindow::MessageHandler(HWND hwnd,
+                                      UINT message,
+                                      WPARAM wparam,
+                                      LPARAM lparam) {
   // Give Flutter, including plugins, an opportunity to handle window messages.
   if (flutter_controller_) {
-    std::optional<LRESULT> result = flutter_controller_->HandleTopLevelWindowProc(hwnd, message, wparam, lparam);
+    std::optional<LRESULT> result =
+        flutter_controller_->HandleTopLevelWindowProc(hwnd, message, wparam,
+                                                      lparam);
     if (result) {
       return *result;
     }
   }
 
-  auto child_content_ = flutter_controller_ ? flutter_controller_->view()->GetNativeWindow() : nullptr;
+  auto child_content_ = flutter_controller_
+                            ? flutter_controller_->view()->GetNativeWindow()
+                            : nullptr;
 
   switch (message) {
     case WM_FONTCHANGE: {
@@ -172,7 +189,7 @@ LRESULT FlutterWindow::MessageHandler(HWND hwnd, UINT message, WPARAM wparam, LP
       break;
     }
     case WM_DPICHANGED: {
-      auto newRectSize = reinterpret_cast<RECT *>(lparam);
+      auto newRectSize = reinterpret_cast<RECT*>(lparam);
       LONG newWidth = newRectSize->right - newRectSize->left;
       LONG newHeight = newRectSize->bottom - newRectSize->top;
 
@@ -198,7 +215,8 @@ LRESULT FlutterWindow::MessageHandler(HWND hwnd, UINT message, WPARAM wparam, LP
       }
       return 0;
     }
-    default: break;
+    default:
+      break;
   }
 
   return DefWindowProc(window_handle_, message, wparam, lparam);
@@ -236,6 +254,7 @@ FlutterWindow::~FlutterWindow() {
   UnregisterWindowClass();
 }
 
-void DesktopMultiWindowSetWindowCreatedCallback(WindowCreatedCallback callback) {
+void DesktopMultiWindowSetWindowCreatedCallback(
+    WindowCreatedCallback callback) {
   _g_window_created_callback = callback;
 }

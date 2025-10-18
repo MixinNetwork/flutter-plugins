@@ -8,51 +8,48 @@
 #include <cstdint>
 #include <memory>
 
+#include "flutter/encodable_value.h"
 #include "flutter/event_channel.h"
+#include "flutter/method_channel.h"
 #include "flutter/plugin_registrar.h"
 #include "flutter/plugin_registrar_windows.h"
-#include "flutter/method_channel.h"
-#include "flutter/encodable_value.h"
 
 class WindowChannel : public flutter::Plugin {
+ public:
+  using Argument = flutter::EncodableValue;
 
-public:
+  static std::unique_ptr<WindowChannel> RegisterWithRegistrar(
+      FlutterDesktopPluginRegistrarRef registrar,
+      int64_t window_id);
 
-    using Argument = flutter::EncodableValue;
+  WindowChannel(int64_t window_id,
+                std::unique_ptr<flutter::MethodChannel<Argument>> channel);
 
-    static std::unique_ptr<WindowChannel>
-    RegisterWithRegistrar(FlutterDesktopPluginRegistrarRef registrar, int64_t window_id);
+  ~WindowChannel() override;
 
-    WindowChannel(int64_t window_id, std::unique_ptr<flutter::MethodChannel<Argument>> channel);
+  void InvokeMethod(
+      int64_t from_window_id,
+      const std::string& method,
+      Argument* arguments,
+      std::unique_ptr<flutter::MethodResult<Argument>> result = nullptr);
 
-    ~WindowChannel() override;
+  using MethodCallHandler = std::function<void(
+      int64_t from_window_id,
+      int64_t target_window_id,
+      const std::string& call,
+      Argument* arguments,
+      std::unique_ptr<flutter::MethodResult<Argument>> result)>;
 
-    void InvokeMethod(
-            int64_t from_window_id,
-            const std::string &method,
-            Argument *arguments,
-            std::unique_ptr<flutter::MethodResult<Argument>> result = nullptr
-    );
+  void SetMethodCallHandler(MethodCallHandler handler) {
+    handler_ = std::move(handler);
+  }
 
-    using MethodCallHandler = std::function<void(
-            int64_t from_window_id,
-            int64_t target_window_id,
-            const std::string &call,
-            Argument *arguments,
-            std::unique_ptr<flutter::MethodResult<Argument>> result)>;
+ private:
+  int64_t window_id_;
 
-    void SetMethodCallHandler(MethodCallHandler handler) {
-        handler_ = std::move(handler);
-    }
+  MethodCallHandler handler_;
 
-private:
-    int64_t window_id_;
-
-    MethodCallHandler handler_;
-
-    std::unique_ptr<flutter::MethodChannel<Argument>> channel_;
-
+  std::unique_ptr<flutter::MethodChannel<Argument>> channel_;
 };
 
-
-#endif //DESKTOP_MULTI_WINDOW_WINDOW_CHANNEL_H
+#endif  // DESKTOP_MULTI_WINDOW_WINDOW_CHANNEL_H

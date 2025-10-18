@@ -2,23 +2,25 @@
 #define DESKTOP_MULTI_WINDOW_WINDOWS_MULTI_WINDOW_MANAGER_H_
 
 #include <cstdint>
-#include <string>
 #include <map>
+#include <string>
 
-#include "flutter_plugin_registrar.h"
 #include "base_flutter_window.h"
+#include "flutter_plugin_registrar.h"
 #include "flutter_window.h"
 
-class MultiWindowManager : public std::enable_shared_from_this<MultiWindowManager>, public FlutterWindowCallback {
-
+class MultiWindowManager
+    : public std::enable_shared_from_this<MultiWindowManager>,
+      public FlutterWindowCallback {
  public:
-  static MultiWindowManager *Instance();
+  static MultiWindowManager* Instance();
 
   MultiWindowManager();
 
-  std::string Create(std::string args);
+  std::string Create(const flutter::EncodableMap* args);
 
-  void AttachFlutterMainWindow(HWND main_window_handle, FlutterDesktopPluginRegistrarRef registrar);
+  void AttachFlutterMainWindow(HWND main_window_handle,
+                               FlutterDesktopPluginRegistrarRef registrar);
 
   BaseFlutterWindow* GetWindow(const std::string& window_id);
 
@@ -27,9 +29,7 @@ class MultiWindowManager : public std::enable_shared_from_this<MultiWindowManage
   void OnWindowDestroy(const std::string& id) override;
 
  private:
-
   std::map<std::string, std::unique_ptr<BaseFlutterWindow>> windows_;
-
 };
 
-#endif //DESKTOP_MULTI_WINDOW_WINDOWS_MULTI_WINDOW_MANAGER_H_
+#endif  // DESKTOP_MULTI_WINDOW_WINDOWS_MULTI_WINDOW_MANAGER_H_
