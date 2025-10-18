@@ -1,111 +1,57 @@
-//
-//  FlutterWindow.swift
-//  flutter_multi_window
-//
-//  Created by Bin Yang on 2022/1/10.
-//
 import Cocoa
 import FlutterMacOS
 import Foundation
 
-class BaseFlutterWindow: NSObject {
-  private let window: NSWindow
-  let windowChannel: WindowChannel
+typealias WindowId = String
 
-  init(window: NSWindow, channel: WindowChannel) {
-    self.window = window
-    self.windowChannel = channel
-    super.init()
-  }
-
-  func show() {
-    window.makeKeyAndOrderFront(nil)
-    NSApp.activate(ignoringOtherApps: true)
-  }
-
-  func hide() {
-    window.orderOut(nil)
-  }
-
-  func center() {
-    window.center()
-  }
-
-  func setFrame(frame: NSRect) {
-    window.setFrame(frame, display: false, animate: true)
-  }
-
-  func setTitle(title: String) {
-    window.title = title
-  }
-
-  func resizable(resizable: Bool) {
-    if (resizable) {
-      window.styleMask.insert(.resizable)
-    } else {
-      window.styleMask.remove(.resizable)
+extension WindowId {
+    static func generate() -> WindowId {
+        return UUID().uuidString
     }
-  }
-
-  func close() {
-    window.close()
-  }
-
-  func setFrameAutosaveName(name: String) {
-    window.setFrameAutosaveName(name)
-  }
 }
 
-class FlutterWindow: BaseFlutterWindow {
-  let windowId: Int64
+class CustomWindow: NSWindow {
+    
+    init(configuration: WindowConfiguration) {
+        super.init(contentRect: NSRect(x: 0, y: 0, width: 100, height: 100), styleMask: configuration.getStyleMask(), backing: .buffered, defer: false)
+        
+        self.title = configuration.title
+        self.titleVisibility = configuration.hideTitleBar ? .hidden : .visible
+        self.titlebarAppearsTransparent = configuration.hideTitleBar
+        self.isReleasedWhenClosed = true
+        
+        setFrameTopLeftPoint(configuration.frame.toTopLeftPoint())
+        setContentSize(configuration.frame.toContentSize())
 
-  let window: NSWindow
-
-  weak var delegate: WindowManagerDelegate?
-
-  init(id: Int64, arguments: String) {
-    windowId = id
-    window = NSWindow(
-      contentRect: NSRect(x: 0, y: 0, width: 480, height: 270),
-      styleMask: [.miniaturizable, .closable, .resizable, .titled, .fullSizeContentView],
-      backing: .buffered, defer: false)
-    let project = FlutterDartProject()
-    project.dartEntrypointArguments = ["multi_window", "\(windowId)", arguments]
-    let flutterViewController = FlutterViewController(project: project)
-    window.contentViewController = flutterViewController
-
-    let plugin = flutterViewController.registrar(forPlugin: "FlutterMultiWindowPlugin")
-    FlutterMultiWindowPlugin.registerInternal(with: plugin)
-    let windowChannel = WindowChannel.register(with: plugin, windowId: id)
-    // Give app a chance to register plugin.
-    FlutterMultiWindowPlugin.onWindowCreatedCallback?(flutterViewController)
-
-    super.init(window: window, channel: windowChannel)
-
-    window.delegate = self
-    window.isReleasedWhenClosed = false
-    window.titleVisibility = .hidden
-    window.titlebarAppearsTransparent = true
-  }
-
-  deinit {
-    debugPrint("release window resource")
-    window.delegate = nil
-    if let flutterViewController = window.contentViewController as? FlutterViewController {
-      flutterViewController.engine.shutDownEngine()
     }
-    window.contentViewController = nil
-    window.windowController = nil
-  }
+
+   
 }
 
-extension FlutterWindow: NSWindowDelegate {
-  func windowWillClose(_ notification: Notification) {
-    delegate?.onClose(windowId: windowId)
-  }
-
-  func windowShouldClose(_ sender: NSWindow) -> Bool {
-    delegate?.onClose(windowId: windowId)
-    return true
-  }
+class FlutterWindow {
+    let windowId: WindowId
+    let windowArgument: String
+    private(set) var window: NSWindow
+    
+    init(windowId: WindowId, windowArgument: String, window: NSWindow) {
+        self.windowId = windowId
+        self.windowArgument = windowArgument
+        self.window = window
+    }
+    
+    func handleWindowMethod(method: String, arguments: Any?, result: @escaping FlutterResult) {
+        switch method {
+        case "window_show":
+            window.makeKeyAndOrderFront(nil)
+            window.setIsVisible(true)
+            NSApp.activate(ignoringOtherApps: true)
+            result(nil)
+        case "window_hide":
+            window.orderOut(nil)
+            result(nil)
+        default:
+            result(FlutterError(code: "-1", message: "unknown method \(method)", details: nil))
+        }
+    }
+    
 }
