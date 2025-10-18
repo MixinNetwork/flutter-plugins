@@ -10,6 +10,7 @@
 #include <iostream>
 #include "flutter_window.h"
 #include "multi_window_plugin_internal.h"
+#include "window_configuration.h"
 
 namespace {
 
@@ -76,9 +77,11 @@ MultiWindowManager::MultiWindowManager() : windows_() {}
 
 std::string MultiWindowManager::Create(const flutter::EncodableMap* args) {
   std::string window_id = GenerateWindowId();
-
-  auto window = std::make_unique<FlutterWindow>(window_id, args, shared_from_this());
+  WindowConfiguration config = WindowConfiguration::FromEncodableMap(args);
+  auto window =
+      std::make_unique<FlutterWindow>(window_id, config, shared_from_this());
   windows_[window_id] = std::move(window);
+  static_cast<FlutterWindow*>(windows_[window_id].get())->Initialize(config);
   return window_id;
 }
 
@@ -94,12 +97,12 @@ void MultiWindowManager::AttachFlutterMainWindow(
   }
 
   const std::string window_id = GenerateWindowId();
-  auto window = std::make_unique<FlutterMainWindow>(
-      window_id, window_handle, registrar);
+  auto window =
+      std::make_unique<FlutterMainWindow>(window_id, window_handle, registrar);
   windows_[window_id] = std::move(window);
 
-  InternalMultiWindowPluginRegisterWithRegistrar(
-      registrar, windows_[window_id].get());
+  InternalMultiWindowPluginRegisterWithRegistrar(registrar,
+                                                 windows_[window_id].get());
 }
 
 BaseFlutterWindow* MultiWindowManager::GetWindow(const std::string& window_id) {

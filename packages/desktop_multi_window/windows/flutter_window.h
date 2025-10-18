@@ -10,6 +10,7 @@
 #include <string>
 
 #include "base_flutter_window.h"
+#include "window_configuration.h"
 
 class FlutterWindowCallback {
  public:
@@ -21,9 +22,11 @@ class FlutterWindowCallback {
 class FlutterWindow : public BaseFlutterWindow {
  public:
   FlutterWindow(const std::string& id,
-                const flutter::EncodableMap* args,
+                const WindowConfiguration config,
                 const std::shared_ptr<FlutterWindowCallback>& callback);
   ~FlutterWindow() override;
+
+  void Initialize(const WindowConfiguration config);
 
   std::string GetWindowId() const override { return id_; }
 
