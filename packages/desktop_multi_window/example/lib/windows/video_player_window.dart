@@ -8,11 +8,17 @@ class VideoPlayerWindow extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       home: Scaffold(
-        appBar: AppBar(title: const Text('Video Player Window')),
+        appBar: PreferredSize(
+          preferredSize: const Size.fromHeight(kWindowCaptionHeight),
+          child: WindowCaption(
+            brightness: Theme.of(context).brightness,
+            title: const Text('Video Player Window'),
+          ),
+        ),
         body: Center(
           child: TextButton(
             onPressed: () {
-              windowManager.center();
+              windowManager.center(animate: true);
             },
             child: const Text('Center'),
           ),

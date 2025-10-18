@@ -20,7 +20,11 @@ Future<void> main(List<String> args) async {
     case WindowArguments.businessIdMain:
       runApp(const ExampleMainWindow());
     case WindowArguments.businessIdVideoPlayer:
+      await windowManager.setTitle("Video Player");
+      await windowManager.setSize(const Size(800, 600));
+      await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
+      await windowManager.center();
       runApp(const VideoPlayerWindow());
   }
-  await windowController.show();
+  await windowManager.show();
 }

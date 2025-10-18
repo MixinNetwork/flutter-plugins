@@ -13,16 +13,9 @@ extension WindowId {
 class CustomWindow: NSWindow {
     
     init(configuration: WindowConfiguration) {
-        super.init(contentRect: NSRect(x: 0, y: 0, width: 100, height: 100), styleMask: configuration.getStyleMask(), backing: .buffered, defer: false)
+        super.init(contentRect: NSRect(x: 0, y: 0, width: 800, height: 600), styleMask: [.miniaturizable, .closable, .titled, .resizable], backing: .buffered, defer: false)
         
-        self.title = configuration.title
-        self.titleVisibility = configuration.hideTitleBar ? .hidden : .visible
-        self.titlebarAppearsTransparent = configuration.hideTitleBar
         self.isReleasedWhenClosed = true
-        
-        setFrameTopLeftPoint(configuration.frame.toTopLeftPoint())
-        setContentSize(configuration.frame.toContentSize())
-
     }
 
    

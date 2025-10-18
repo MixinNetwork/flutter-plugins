@@ -76,31 +76,22 @@ FlutterWindow::FlutterWindow(
     : callback_(callback),
       id_(id),
       window_handle_(nullptr),
-      scale_factor_(1), 
+      scale_factor_(1),
       window_argument_(config.arguments) {
   RegisterWindowClass(FlutterWindow::WndProc);
-
-
-
 }
 
 void FlutterWindow::Initialize(const WindowConfiguration config) {
-  const POINT target_point = {static_cast<LONG>(config.frame.left), static_cast<LONG>(config.frame.top)};
-  HMONITOR monitor = MonitorFromPoint(target_point, MONITOR_DEFAULTTONEAREST);
-  UINT dpi = FlutterDesktopGetDpiForMonitor(monitor);
-  scale_factor_ = dpi / 96.0;
-
   HWND window_handle =
       CreateWindow(kFlutterWindowClassName, L"", WS_OVERLAPPEDWINDOW,
-                   Scale(target_point.x, scale_factor_),
-                   Scale(target_point.y, scale_factor_),
-                   Scale(config.frame.width, scale_factor_), Scale(config.frame.height, scale_factor_),
-                   nullptr, nullptr, GetModuleHandle(nullptr), this);
+                   CW_USEDEFAULT, CW_USEDEFAULT, 800, 600, nullptr, nullptr,
+                   GetModuleHandle(nullptr), this);
 
   RECT frame;
   GetClientRect(window_handle, &frame);
   flutter::DartProject project(L"data");
-  std::vector<std::string> entrypoint_args = {"multi_window", id_, window_argument_};
+  std::vector<std::string> entrypoint_args = {"multi_window", id_,
+                                              window_argument_};
   project.set_dart_entrypoint_arguments(entrypoint_args);
   flutter_controller_ = std::make_unique<flutter::FlutterViewController>(
       frame.right - frame.left, frame.bottom - frame.top, project);
@@ -120,22 +111,8 @@ void FlutterWindow::Initialize(const WindowConfiguration config) {
   if (_g_window_created_callback) {
     _g_window_created_callback(flutter_controller_.get());
   }
-  if (!config.title.empty()) {
-    std::wstring wtitle(config.title.begin(), config.title.end());
-    SetWindowTextW(window_handle, wtitle.c_str());
-  } 
 
-  ShowWindow(window_handle,
-             config.hidden_at_launch ? SW_HIDE : SW_SHOW);
-
-  if (config.hide_title_bar) {
-    LONG_PTR style = GetWindowLongPtr(window_handle, GWL_STYLE);
-    style &= ~WS_CAPTION;
-    SetWindowLongPtr(window_handle, GWL_STYLE, style);
-    SetWindowPos(window_handle, nullptr, 0, 0, 0, 0,
-                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
-  }
-  
+  ShowWindow(window_handle, config.hidden_at_launch ? SW_HIDE : SW_SHOW);
 }
 
 // static

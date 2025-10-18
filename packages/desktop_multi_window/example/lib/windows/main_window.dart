@@ -23,9 +23,7 @@ class _ExampleMainWindowState extends State<ExampleMainWindow> {
               onPressed: () async {
                 final controller = await WindowController.create(
                   WindowConfiguration(
-                    title: "Video Player",
-                    hideTitleBar: true,
-                    hiddenAtLaunch: false,
+                    hiddenAtLaunch: true,
                     arguments: const VideoPlayerWindowArguments(
                       videoUrl: '',
                     ).toArguments(),

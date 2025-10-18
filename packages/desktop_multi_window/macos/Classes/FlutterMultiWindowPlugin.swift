@@ -100,9 +100,6 @@ class MultiWindowManager :NSObject{
         project.dartEntrypointArguments = ["multi_window", windowId, config.arguments]
         let flutterViewController = FlutterViewController(project: project)
         window.contentViewController = flutterViewController
-        
-        window.setFrameTopLeftPoint(config.frame.toTopLeftPoint())
-        window.setContentSize(config.frame.toContentSize())
 
         window.orderFront(nil)
         window.setIsVisible(!config.hiddenAtLaunch)
