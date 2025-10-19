@@ -5,6 +5,7 @@
 list(APPEND FLUTTER_PLUGIN_LIST
   desktop_lifecycle
   desktop_multi_window
+  fvp
   screen_retriever_linux
   window_manager
 )

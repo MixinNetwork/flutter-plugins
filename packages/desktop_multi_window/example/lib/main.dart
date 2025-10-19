@@ -8,6 +8,7 @@ import 'package:window_manager/window_manager.dart';
 import 'windows/argumet.dart';
 import 'windows/main_window.dart';
 import 'windows/video_player_window.dart';
+import 'package:fvp/fvp.dart' as fvp;
 
 Future<void> main(List<String> args) async {
   i('App started with arguments: $args');
@@ -20,6 +21,8 @@ Future<void> main(List<String> args) async {
     case WindowArguments.businessIdMain:
       runApp(const ExampleMainWindow());
     case WindowArguments.businessIdVideoPlayer:
+      fvp.registerWith();
+
       await windowManager.setTitle("Video Player");
       await windowManager.setSize(const Size(800, 600));
       await windowManager.setTitleBarStyle(TitleBarStyle.hidden);

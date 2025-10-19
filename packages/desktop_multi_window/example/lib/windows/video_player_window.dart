@@ -17,7 +17,7 @@ class VideoPlayerWindow extends StatelessWidget {
             title: const Text('Video Player Window'),
           ),
         ),
-        body: const VideoPlayerView(),
+        body: Text('Hello'),
       ),
     );
   }
@@ -123,12 +123,14 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
                 child: const Text("Pause"),
               ),
               ElevatedButton(
-                onPressed: () => controller?.seekTo(
-                  Duration(
-                    milliseconds:
-                        controller!.value.position.inMilliseconds + 10 * 1000,
-                  ),
-                ),
+                onPressed:
+                    () => controller?.seekTo(
+                      Duration(
+                        milliseconds:
+                            controller!.value.position.inMilliseconds +
+                            10 * 1000,
+                      ),
+                    ),
                 child: const Text("Forward"),
               ),
               ElevatedButton(

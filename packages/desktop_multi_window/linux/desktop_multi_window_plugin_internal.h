@@ -3,10 +3,10 @@
 
 #include "flutter_linux/flutter_linux.h"
 
-class BaseFlutterWindow;
+class FlutterWindow;
 
 void desktop_multi_window_plugin_register_with_registrar_internal(
-    FlPluginRegistrar *registrar,
-    BaseFlutterWindow* window);
+    FlPluginRegistrar* registrar,
+    FlutterWindow* window);
 
-#endif //DESKTOP_MULTI_WINDOW_LINUX_DESKTOP_MULTI_WINDOW_PLUGIN_INTERNAL_H_
+#endif  // DESKTOP_MULTI_WINDOW_LINUX_DESKTOP_MULTI_WINDOW_PLUGIN_INTERNAL_H_
