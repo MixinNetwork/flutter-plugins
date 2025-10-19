@@ -6,8 +6,11 @@
 
 #include "desktop_multi_window_plugin_internal.h"
 #include "flutter_window.h"
-#include "window_configuration.h"
 #include "include/desktop_multi_window/desktop_multi_window_plugin.h"
+#include "window_configuration.h"
+#ifdef GDK_WINDOWING_X11
+#include <gdk/gdkx.h>
+#endif
 
 namespace {
 
@@ -48,23 +51,45 @@ MultiWindowManager::~MultiWindowManager() = default;
 std::string MultiWindowManager::Create(FlValue* args) {
   WindowConfiguration config = WindowConfiguration::FromFlValue(args);
   std::string window_id = GenerateWindowId();
-  
-  // Create GTK window
-  GtkWidget* gtk_window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-  gtk_window_set_default_size(GTK_WINDOW(gtk_window), 1280, 720);
-  gtk_window_set_title(GTK_WINDOW(gtk_window), "");
-  gtk_window_set_position(GTK_WINDOW(gtk_window), GTK_WIN_POS_CENTER);
-  gtk_widget_show(GTK_WIDGET(gtk_window));
 
-  // Setup destroy signal handler
-  g_signal_connect(gtk_window, "destroy",
-                   G_CALLBACK(+[](GtkWidget*, gpointer arg) {
-                     auto* window_id_ptr = static_cast<std::string*>(arg);
-                     MultiWindowManager::Instance()->OnWindowClose(*window_id_ptr);
-                     MultiWindowManager::Instance()->OnWindowDestroy(*window_id_ptr);
-                     delete window_id_ptr;
-                   }),
-                   new std::string(window_id));
+  // Create GTK window
+  GtkApplication* app = GTK_APPLICATION(g_application_get_default());
+  GtkWindow* window = GTK_WINDOW(gtk_application_window_new(app));
+  gtk_application_add_window(app, window);
+
+  gboolean use_header_bar = TRUE;
+#ifdef GDK_WINDOWING_X11
+  GdkScreen* screen = gtk_window_get_screen(window);
+  if (GDK_IS_X11_SCREEN(screen)) {
+    const gchar* wm_name = gdk_x11_screen_get_window_manager_name(screen);
+    if (g_strcmp0(wm_name, "GNOME Shell") != 0) {
+      use_header_bar = FALSE;
+    }
+  }
+#endif
+  if (use_header_bar) {
+    GtkHeaderBar* header_bar = GTK_HEADER_BAR(gtk_header_bar_new());
+    gtk_widget_show(GTK_WIDGET(header_bar));
+    gtk_header_bar_set_title(header_bar, "");
+    gtk_header_bar_set_show_close_button(header_bar, TRUE);
+    gtk_window_set_titlebar(window, GTK_WIDGET(header_bar));
+  } else {
+    gtk_window_set_title(window, "");
+  }
+
+  gtk_window_set_default_size(window, 1280, 720);
+
+  gtk_window_set_title(window, "");
+  if (config.hidden_at_launch) {
+    gtk_widget_realize(GTK_WIDGET(window));
+  } else {
+    gtk_widget_show(GTK_WIDGET(window));
+  }
+
+  // Create FlutterWindow instance
+  auto w =
+      std::make_unique<FlutterWindow>(window_id, config.arguments, GTK_WIDGET(window));
+  windows_[window_id] = std::move(w);
 
   // Setup Flutter project
   g_autoptr(FlDartProject) project = fl_dart_project_new();
@@ -76,30 +101,48 @@ std::string MultiWindowManager::Create(FlValue* args) {
   // Create Flutter view
   auto fl_view = fl_view_new(project);
   gtk_widget_show(GTK_WIDGET(fl_view));
-  gtk_container_add(GTK_CONTAINER(gtk_window), GTK_WIDGET(fl_view));
+  gtk_container_add(GTK_CONTAINER(window), GTK_WIDGET(fl_view));
+
+  // Issues from flutter/engine: https://github.com/flutter/engine/pull/40033
+  // Prevent delete-event from flutter engine shell, which will quit the whole appplication
+  // when the window is closed.
+  // this can be done by [window_manager] plugin, but we need it here if user is not using that plugin.
+  guint handler_id = g_signal_handler_find(window, G_SIGNAL_MATCH_DATA, 0, 0, NULL, NULL, fl_view);
+  if (handler_id > 0) {
+    g_signal_handler_disconnect(window, handler_id);
+  }
 
   // Call window created callback
   if (_g_window_created_callback) {
     _g_window_created_callback(FL_PLUGIN_REGISTRY(fl_view));
   }
 
+  // Setup destroy signal handler
+  g_signal_connect(
+      GTK_WIDGET(window), "destroy", G_CALLBACK(+[](GtkWidget* widget, gpointer arg) {
+        g_warning("Window destroyed");
+        auto* window_id_ptr = static_cast<std::string*>(arg);
+
+        GtkWidget* child = gtk_bin_get_child(GTK_BIN(widget));
+        if (child && FL_IS_VIEW(child)) {
+          gtk_container_remove(GTK_CONTAINER(widget), child);
+        }
+
+        MultiWindowManager::Instance()->OnWindowClose(*window_id_ptr);
+        MultiWindowManager::Instance()->OnWindowDestroy(*window_id_ptr);
+        delete window_id_ptr;
+      }),
+      new std::string(window_id));
+
   // Register plugin
   g_autoptr(FlPluginRegistrar) desktop_multi_window_registrar =
       fl_plugin_registry_get_registrar_for_plugin(FL_PLUGIN_REGISTRY(fl_view),
                                                   "DesktopMultiWindowPlugin");
 
-  // Create FlutterWindow instance
-  auto window = std::make_unique<FlutterWindow>(window_id, config.arguments, gtk_window);
-  windows_[window_id] = std::move(window);
-
   desktop_multi_window_plugin_register_with_registrar_internal(
       desktop_multi_window_registrar, windows_[window_id].get());
 
   gtk_widget_grab_focus(GTK_WIDGET(fl_view));
-
-  if (config.hidden_at_launch) {
-    gtk_widget_hide(GTK_WIDGET(gtk_window));
-  }
 
   return window_id;
 }
@@ -109,13 +152,13 @@ void MultiWindowManager::AttachMainWindow(GtkWidget* window_widget,
   // check window widget is in windows_
   for (const auto& pair : windows_) {
     if (pair.second->GetWindow() == GTK_WINDOW(window_widget)) {
-      g_critical("AttachMainWindow : main window already exists.");
       return;
     }
   }
 
   const std::string main_window_id = GenerateWindowId();
-  auto window = std::make_unique<FlutterWindow>(main_window_id, "", window_widget);
+  auto window =
+      std::make_unique<FlutterWindow>(main_window_id, "", window_widget);
   windows_[main_window_id] = std::move(window);
 
   desktop_multi_window_plugin_register_with_registrar_internal(

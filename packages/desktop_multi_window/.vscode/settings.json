@@ -1,29 +1,4 @@
 {
-    "configurations": [
-        {
-            "name": "Windows",
-            "includePath": [
-                "${workspaceFolder}/packages/desktop_multi_window/windows/**",
-                "${workspaceFolder}/packages/desktop_multi_window/windows/include/**"
-            ],
-            "defines": [
-                "_DEBUG",
-                "UNICODE",
-                "_UNICODE",
-                "FLUTTER_PLUGIN_IMPL"
-            ],
-            "compilerPath": "cl.exe",
-            "cStandard": "c17",
-            "cppStandard": "c++17",
-            "intelliSenseEngine": "default",
-            "browse": {
-                "path": [
-                    "${workspaceFolder}/packages/desktop_multi_window/windows"
-                ]
-            }
-        }
-    ],
-    "version": 4,
     "C_Cpp.clang_format_fallbackStyle": "Chromium",
     "files.associations": {
         "algorithm": "cpp",

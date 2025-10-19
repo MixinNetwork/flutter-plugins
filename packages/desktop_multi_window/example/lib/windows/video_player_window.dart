@@ -10,15 +10,22 @@ class VideoPlayerWindow extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       home: Scaffold(
-        appBar: PreferredSize(
-          preferredSize: const Size.fromHeight(kWindowCaptionHeight),
-          child: WindowCaption(
-            brightness: Theme.of(context).brightness,
-            title: const Text('Video Player Window'),
+          appBar: PreferredSize(
+            preferredSize: const Size.fromHeight(kWindowCaptionHeight),
+            child: WindowCaption(
+              brightness: Theme.of(context).brightness,
+              title: const Text('Video Player Window'),
+            ),
           ),
-        ),
-        body: Text('Hello'),
-      ),
+          body: TextButton(
+              onPressed: () {
+                debugPrint('center window');
+                windowManager.getBounds().then((bounds) {
+                  debugPrint('current bounds: $bounds');
+                });
+                windowManager.center();
+              },
+              child: Text('data'))),
     );
   }
 }
@@ -51,25 +58,22 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
 
     //controller = WinVideoPlayerController.file(File("E:\\Downloads\\0.FDM\\sample-file-1.flac"));
 
-    controller!
-        .initialize()
-        .then((value) {
-          if (controller!.value.isInitialized) {
-            controller!.play();
-            setState(() {});
+    controller!.initialize().then((value) {
+      if (controller!.value.isInitialized) {
+        controller!.play();
+        setState(() {});
 
-            controller!.addListener(() {
-              if (controller!.value.isCompleted) {
-                i("ui: player completed, pos=${controller!.value.position}");
-              }
-            });
-          } else {
-            i("video file load failed");
+        controller!.addListener(() {
+          if (controller!.value.isCompleted) {
+            i("ui: player completed, pos=${controller!.value.position}");
           }
-        })
-        .catchError((e) {
-          i("controller.initialize() error occurs: $e");
         });
+      } else {
+        i("video file load failed");
+      }
+    }).catchError((e) {
+      i("controller.initialize() error occurs: $e");
+    });
     setState(() {});
   }
 
@@ -104,9 +108,9 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
                   return Text(
                     timeStr,
                     style: Theme.of(context).textTheme.headlineMedium!.copyWith(
-                      color: Colors.white,
-                      backgroundColor: Colors.black54,
-                    ),
+                          color: Colors.white,
+                          backgroundColor: Colors.black54,
+                        ),
                   );
                 }),
               ),
@@ -123,14 +127,12 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
                 child: const Text("Pause"),
               ),
               ElevatedButton(
-                onPressed:
-                    () => controller?.seekTo(
-                      Duration(
-                        milliseconds:
-                            controller!.value.position.inMilliseconds +
-                            10 * 1000,
-                      ),
-                    ),
+                onPressed: () => controller?.seekTo(
+                  Duration(
+                    milliseconds:
+                        controller!.value.position.inMilliseconds + 10 * 1000,
+                  ),
+                ),
                 child: const Text("Forward"),
               ),
               ElevatedButton(

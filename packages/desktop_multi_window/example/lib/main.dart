@@ -23,11 +23,20 @@ Future<void> main(List<String> args) async {
     case WindowArguments.businessIdVideoPlayer:
       fvp.registerWith();
 
-      await windowManager.setTitle("Video Player");
-      await windowManager.setSize(const Size(800, 600));
-      await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
+      WindowOptions windowOptions = const WindowOptions(
+        size: Size(800, 600),
+        center: true,
+        backgroundColor: Colors.transparent,
+        skipTaskbar: false,
+        titleBarStyle: TitleBarStyle.hidden,
+        windowButtonVisibility: false,
+      );
+      windowManager.waitUntilReadyToShow(windowOptions, () async {
+        await windowManager.show();
+        await windowManager.focus();
+      });
+      // await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
       await windowManager.center();
       runApp(const VideoPlayerWindow());
   }
-  await windowManager.show();
 }

@@ -78,7 +78,8 @@ static void desktop_multi_window_plugin_dispose(GObject* object) {
 }
 
 static void desktop_multi_window_plugin_class_init(
-    DesktopMultiWindowPluginClass* klass) {
+    DesktopMultiWindowPluginClass
+* klass) {
   G_OBJECT_CLASS(klass)->dispose = desktop_multi_window_plugin_dispose;
 }
 
