@@ -36,12 +36,15 @@ DesktopMultiWindowPlugin::DesktopMultiWindowPlugin(
             << window_->GetWindowId() << " argument: " << window_->GetWindowArgument()
             << std::endl;
   auto channel =
-      std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+      std::make_shared<flutter::MethodChannel<flutter::EncodableValue>>(
           registrar->messenger(), "mixin.one/desktop_multi_window",
           &flutter::StandardMethodCodec::GetInstance());
   channel->SetMethodCallHandler([this](const auto& call, auto result) {
     HandleMethodCall(call, std::move(result));
   });
+  
+  // Set channel to window for event notifications
+  window_->SetChannel(channel);
 }
 
 DesktopMultiWindowPlugin::~DesktopMultiWindowPlugin() = default;
@@ -80,6 +83,10 @@ void DesktopMultiWindowPlugin::HandleMethodCall(
     definition[flutter::EncodableValue("windowArgument")] =
         flutter::EncodableValue(window_->GetWindowArgument());
     result->Success(flutter::EncodableValue(definition));
+    return;
+  } else if (method == "getAllWindows") {
+    auto windows = MultiWindowManager::Instance()->GetAllWindows();
+    result->Success(flutter::EncodableValue(windows));
     return;
   }
 

@@ -82,6 +82,10 @@ std::string MultiWindowManager::Create(const flutter::EncodableMap* args) {
       std::make_unique<FlutterWindow>(window_id, config, shared_from_this());
   windows_[window_id] = std::move(window);
   static_cast<FlutterWindow*>(windows_[window_id].get())->Initialize(config);
+  
+  // Notify all windows about the change
+  NotifyWindowsChanged();
+  
   return window_id;
 }
 
@@ -103,6 +107,9 @@ void MultiWindowManager::AttachFlutterMainWindow(
 
   InternalMultiWindowPluginRegisterWithRegistrar(registrar,
                                                  windows_[window_id].get());
+  
+  // Notify all windows about the change
+  NotifyWindowsChanged();
 }
 
 BaseFlutterWindow* MultiWindowManager::GetWindow(const std::string& window_id) {
@@ -113,8 +120,46 @@ BaseFlutterWindow* MultiWindowManager::GetWindow(const std::string& window_id) {
   return nullptr;
 }
 
+flutter::EncodableList MultiWindowManager::GetAllWindows() {
+  flutter::EncodableList windows;
+  for (const auto& [id, window] : windows_) {
+    flutter::EncodableMap window_info;
+    window_info[flutter::EncodableValue("windowId")] =
+        flutter::EncodableValue(window->GetWindowId());
+    window_info[flutter::EncodableValue("windowArgument")] =
+        flutter::EncodableValue(window->GetWindowArgument());
+    windows.push_back(flutter::EncodableValue(window_info));
+  }
+  return windows;
+}
+
+std::vector<std::string> MultiWindowManager::GetAllWindowIds() {
+  std::vector<std::string> window_ids;
+  for (const auto& [id, window] : windows_) {
+    window_ids.push_back(id);
+  }
+  return window_ids;
+}
+
+void MultiWindowManager::NotifyWindowsChanged() {
+  auto window_ids = GetAllWindowIds();
+  flutter::EncodableList window_ids_list;
+  for (const auto& id : window_ids) {
+    window_ids_list.push_back(flutter::EncodableValue(id));
+  }
+  
+  flutter::EncodableMap data;
+  data[flutter::EncodableValue("windowIds")] = flutter::EncodableValue(window_ids_list);
+  
+  for (const auto& [id, window] : windows_) {
+    window->NotifyWindowEvent("onWindowsChanged", data);
+  }
+}
+
 void MultiWindowManager::OnWindowClose(const std::string& id) {}
 
 void MultiWindowManager::OnWindowDestroy(const std::string& id) {
+  std::cout << "Window destroyed: " << id << std::endl;
   windows_.erase(id);
+  NotifyWindowsChanged();
 }

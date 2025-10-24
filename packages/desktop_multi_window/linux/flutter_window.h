@@ -22,6 +22,10 @@ class FlutterWindow {
 
   GtkWindow* GetWindow() { return GTK_WINDOW(window_); }
 
+  void SetChannel(FlMethodChannel* channel);
+
+  void NotifyWindowEvent(const gchar* event, FlValue* data);
+
   void Show();
 
   void Hide();
@@ -34,6 +38,7 @@ class FlutterWindow {
   std::string id_;
   std::string window_argument_;
   GtkWidget* window_ = nullptr;
+  FlMethodChannel* channel_ = nullptr;
 };
 
 #endif  // DESKTOP_MULTI_WINDOW_WINDOWS_FLUTTER_WINDOW_H_

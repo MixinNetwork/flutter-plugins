@@ -5,52 +5,121 @@
 //  Created by Bin Yang on 2022/1/28.
 //
 
+import FlutterMacOS
 import Foundation
 
-import FlutterMacOS
+typealias ChannelId = String
 
-typealias MethodHandler = (Int64, Int64, String, Any?, @escaping FlutterResult) -> Void
+private class ChannelRegistry {
+  static let shared = ChannelRegistry()
+
+  private let lock = NSLock()
+  private let map = NSMapTable<NSString, AnyObject>.strongToWeakObjects()
+
+  private init() {}
+
+  func register(_ channel: String, window: WindowChannel) {
+    lock.lock(); defer { lock.unlock() }
+    map.setObject(window as AnyObject, forKey: channel as NSString)
+  }
+
+  func unregister(_ channel: String) {
+    lock.lock(); defer { lock.unlock() }
+    map.removeObject(forKey: channel as NSString)
+  }
+
+  func get(_ channel: String) -> WindowChannel? {
+    lock.lock(); defer { lock.unlock() }
+    return map.object(forKey: channel as NSString) as? WindowChannel
+  }
+
+  func contains(_ channel: String) -> Bool {
+    lock.lock(); defer { lock.unlock() }
+    return map.object(forKey: channel as NSString) != nil
+  }
+}
+
 
 class WindowChannel: NSObject, FlutterPlugin {
   public static func register(with registrar: FlutterPluginRegistrar) {
-    fatalError()
-  }
-
-  public static func register(with registrar: FlutterPluginRegistrar, windowId: Int64) -> WindowChannel {
-    let channel = FlutterMethodChannel(name: "mixin.one/flutter_multi_window_channel", binaryMessenger: registrar.messenger)
-    let instance = WindowChannel(windowId: windowId, methodChannel: channel)
+    let channel = FlutterMethodChannel(
+      name: "mixin.one/desktop_multi_window/channels", binaryMessenger: registrar.messenger)
+    let instance = WindowChannel(methodChannel: channel)
     registrar.addMethodCallDelegate(instance, channel: channel)
-    return instance
   }
 
-  init(windowId: Int64, methodChannel: FlutterMethodChannel) {
-    self.windowId = windowId
+  init(methodChannel: FlutterMethodChannel) {
     self.methodChannel = methodChannel
     super.init()
   }
 
-  var methodHandler: MethodHandler?
-
   private let methodChannel: FlutterMethodChannel
 
-  private let windowId: Int64
+  private var methodChannels: [String] = []
 
   func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
-    let args = call.arguments as! [String: Any?]
-    let targetWindowId = args["targetWindowId"] as! Int64
-    let arguments = args["arguments"] ?? nil
-    if let handler = methodHandler {
-      handler(windowId, targetWindowId, call.method, arguments, result)
-    } else {
-      debugPrint("method handler not set.")
+    switch call.method {
+    case "registerMethodHandler":
+      let arguments = call.arguments as! [String: Any?]
+      let channel = arguments["channel"] as! String
+
+      // check if channel already registered
+      if ChannelRegistry.shared.contains(channel) {
+        result(
+          FlutterError(
+            code: "CHANNEL_ALREADY_REGISTERED", message: "channel \(channel) already registered",
+            details: nil))
+        return
+      }
+      ChannelRegistry.shared.register(channel, window: self)
+
+      methodChannels.append(channel)
+
+      result(nil)
+    case "unregisterMethodHandler":
+      let arguments = call.arguments as! [String: Any?]
+      let channel = arguments["channel"] as! String
+
+      ChannelRegistry.shared.unregister(channel)
+
+      if let index = methodChannels.firstIndex(of: channel) {
+        methodChannels.remove(at: index)
+      }
+
+      result(nil)
+    case "invokeMethod":
+      let arguments = call.arguments as! [String: Any?]
+      let channel = arguments["channel"] as! String
+
+      if let targetChannel = ChannelRegistry.shared.get(channel) {
+        targetChannel.invokeMethod(channel: channel, arguments: call.arguments, result: result)
+      } else {
+        result(
+          FlutterError(
+            code: "CHANNEL_UNREGISTERED", message: "unknown registered channel \(channel)",
+            details: nil))
+      }
+    default:
+      result(FlutterMethodNotImplemented)
     }
   }
 
-  func invokeMethod(fromWindowId: Int64, method: String, arguments: Any?, result: @escaping FlutterResult) {
-    let args = [
-      "fromWindowId": fromWindowId,
-      "arguments": arguments,
-    ]
-    methodChannel.invokeMethod(method, arguments: args, result: result)
+  func invokeMethod(channel: String, arguments: Any?, result: @escaping FlutterResult) {
+    // check channelIds contains channel
+    if !methodChannels.contains(channel) {
+      result(
+        FlutterError(
+          code: "CHANNEL_NOT_FOUND", message: "channel \(channel) not found in this engine",
+          details: nil))
+      return
+    }
+    methodChannel.invokeMethod("methodCall", arguments: arguments, result: result)
+  }
+
+  deinit {
+      debugPrint("WindowChannel deinit")
+    for channel in methodChannels {
+      ChannelRegistry.shared.unregister(channel)
+    }
   }
 }

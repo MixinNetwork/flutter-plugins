@@ -27,11 +27,10 @@ struct WindowConfiguration: Codable {
         arguments: "",
         hiddenAtLaunch: false
     )
-    
-    static func fromJson(_ jsonString: String) -> WindowConfiguration {
-        guard !jsonString.isEmpty,
-              let jsonData = jsonString.data(using: .utf8) else {
-            debugPrint("invalid json string: \(jsonString)")
+
+    static func fromJson(_ json: [String: Any?]) -> WindowConfiguration {
+        guard let jsonData = try? JSONSerialization.data(withJSONObject: json, options: []) else {
+            debugPrint("invalid json object: \(json)")
             return defaultConfiguration
         }
         

@@ -144,6 +144,9 @@ std::string MultiWindowManager::Create(FlValue* args) {
 
   gtk_widget_grab_focus(GTK_WIDGET(fl_view));
 
+  // Notify all windows about the change
+  NotifyWindowsChanged();
+
   return window_id;
 }
 
@@ -163,6 +166,9 @@ void MultiWindowManager::AttachMainWindow(GtkWidget* window_widget,
 
   desktop_multi_window_plugin_register_with_registrar_internal(
       registrar, windows_[main_window_id].get());
+  
+  // Notify all windows about the change
+  NotifyWindowsChanged();
 }
 
 FlutterWindow* MultiWindowManager::GetWindow(const std::string& window_id) {
@@ -173,10 +179,49 @@ FlutterWindow* MultiWindowManager::GetWindow(const std::string& window_id) {
   return nullptr;
 }
 
+FlValue* MultiWindowManager::GetAllWindows() {
+  g_autoptr(FlValue) windows = fl_value_new_list();
+  for (const auto& pair : windows_) {
+    g_autoptr(FlValue) window_info = fl_value_new_map();
+    fl_value_set_string_take(window_info, "windowId",
+                             fl_value_new_string(pair.second->GetWindowId().c_str()));
+    fl_value_set_string_take(window_info, "windowArgument",
+                             fl_value_new_string(pair.second->GetWindowArgument().c_str()));
+    fl_value_append_take(windows, fl_value_ref(window_info));
+  }
+  return fl_value_ref(windows);
+}
+
+std::vector<std::string> MultiWindowManager::GetAllWindowIds() {
+  std::vector<std::string> window_ids;
+  for (const auto& pair : windows_) {
+    window_ids.push_back(pair.first);
+  }
+  return window_ids;
+}
+
+void MultiWindowManager::NotifyWindowsChanged() {
+  auto window_ids = GetAllWindowIds();
+  
+  g_autoptr(FlValue) window_ids_list = fl_value_new_list();
+  for (const auto& id : window_ids) {
+    fl_value_append_take(window_ids_list, fl_value_new_string(id.c_str()));
+  }
+  
+  g_autoptr(FlValue) data = fl_value_new_map();
+  fl_value_set_string_take(data, "windowIds", fl_value_ref(window_ids_list));
+  
+  for (const auto& pair : windows_) {
+    pair.second->NotifyWindowEvent("onWindowsChanged", data);
+  }
+}
+
 void MultiWindowManager::OnWindowClose(const std::string& id) {}
 
 void MultiWindowManager::OnWindowDestroy(const std::string& id) {
+  g_warning("Window destroyed: %s", id.c_str());
   windows_.erase(id);
+  NotifyWindowsChanged();
 }
 
 void desktop_multi_window_plugin_set_window_created_callback(

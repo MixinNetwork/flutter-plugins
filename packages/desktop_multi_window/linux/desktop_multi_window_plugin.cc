@@ -66,6 +66,9 @@ static void desktop_multi_window_plugin_handle_method_call(
                              fl_value_new_string(window_argument.c_str()));
 
     response = FL_METHOD_RESPONSE(fl_method_success_response_new(definition));
+  } else if (strcmp(method, "getAllWindows") == 0) {
+    auto windows = MultiWindowManager::Instance()->GetAllWindows();
+    response = FL_METHOD_RESPONSE(fl_method_success_response_new(windows));
   } else {
     response = FL_METHOD_RESPONSE(fl_method_not_implemented_response_new());
   }
@@ -100,11 +103,14 @@ void desktop_multi_window_plugin_register_with_registrar_internal(
   plugin->window = window;
 
   g_autoptr(FlStandardMethodCodec) codec = fl_standard_method_codec_new();
-  g_autoptr(FlMethodChannel) channel = fl_method_channel_new(
+  FlMethodChannel* channel = fl_method_channel_new(
       fl_plugin_registrar_get_messenger(registrar),
       "mixin.one/desktop_multi_window", FL_METHOD_CODEC(codec));
   fl_method_channel_set_method_call_handler(
       channel, method_call_cb, g_object_ref(plugin), g_object_unref);
+
+  // Set channel to window for event notifications
+  window->SetChannel(channel);
 
   g_object_unref(plugin);
 }

@@ -9,6 +9,16 @@ FlutterWindow::FlutterWindow(const std::string& id,
 
 FlutterWindow::~FlutterWindow() = default;
 
+void FlutterWindow::SetChannel(FlMethodChannel* channel) {
+  channel_ = channel;
+}
+
+void FlutterWindow::NotifyWindowEvent(const gchar* event, FlValue* data) {
+  if (channel_) {
+    fl_method_channel_invoke_method(channel_, event, data, nullptr, nullptr, nullptr);
+  }
+}
+
 void FlutterWindow::Show() {
   if (window_) {
     gtk_widget_show(GTK_WIDGET(window_));

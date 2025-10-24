@@ -6,6 +6,7 @@
 #include <string>
 
 #include <flutter/encodable_value.h>
+#include <flutter/method_channel.h>
 #include <flutter/method_result.h>
 
 class BaseFlutterWindow {
@@ -22,11 +23,18 @@ class BaseFlutterWindow {
       std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>>
           result) = 0;
 
+  void SetChannel(std::shared_ptr<flutter::MethodChannel<flutter::EncodableValue>> channel);
+
+  void NotifyWindowEvent(const std::string& event, const flutter::EncodableMap& data);
+
   void Show();
 
   void Hide();
 
   virtual HWND GetWindowHandle() = 0;
+
+ protected:
+  std::shared_ptr<flutter::MethodChannel<flutter::EncodableValue>> channel_;
 };
 
 #endif  // MULTI_WINDOW_WINDOWS_BASE_FLUTTER_WINDOW_H_

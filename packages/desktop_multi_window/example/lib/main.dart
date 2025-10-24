@@ -13,7 +13,8 @@ import 'package:fvp/fvp.dart' as fvp;
 Future<void> main(List<String> args) async {
   i('App started with arguments: $args');
   WidgetsFlutterBinding.ensureInitialized();
-  await windowManager.ensureInitialized();
+  initializeMultiWindow();
+  // await windowManager.ensureInitialized();
   final windowController = await WindowController.fromCurrentEngine();
   final arguments = WindowArguments.fromArguments(windowController.arguments);
   i('Window arguments: $arguments');
@@ -23,20 +24,20 @@ Future<void> main(List<String> args) async {
     case WindowArguments.businessIdVideoPlayer:
       fvp.registerWith();
 
-      WindowOptions windowOptions = const WindowOptions(
-        size: Size(800, 600),
-        center: true,
-        backgroundColor: Colors.transparent,
-        skipTaskbar: false,
-        titleBarStyle: TitleBarStyle.hidden,
-        windowButtonVisibility: false,
-      );
-      windowManager.waitUntilReadyToShow(windowOptions, () async {
-        await windowManager.show();
-        await windowManager.focus();
-      });
+      // WindowOptions windowOptions = const WindowOptions(
+      //   size: Size(800, 600),
+      //   center: true,
+      //   backgroundColor: Colors.transparent,
+      //   skipTaskbar: false,
+      //   titleBarStyle: TitleBarStyle.hidden,
+      //   windowButtonVisibility: false,
+      // );
+      // windowManager.waitUntilReadyToShow(windowOptions, () async {
+      //   await windowManager.show();
+      //   await windowManager.focus();
+      // });
       // await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
-      await windowManager.center();
+      // await windowManager.center();
       runApp(const VideoPlayerWindow());
   }
 }

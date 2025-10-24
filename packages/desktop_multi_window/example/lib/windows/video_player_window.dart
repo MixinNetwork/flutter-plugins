@@ -1,7 +1,10 @@
+import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter/material.dart';
 import 'package:mixin_logger/mixin_logger.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:video_player/video_player.dart';
+
+const _channel = WindowMethodChannel('example_video_player_window');
 
 class VideoPlayerWindow extends StatelessWidget {
   const VideoPlayerWindow({super.key});
@@ -9,24 +12,16 @@ class VideoPlayerWindow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      home: Scaffold(
-          appBar: PreferredSize(
-            preferredSize: const Size.fromHeight(kWindowCaptionHeight),
-            child: WindowCaption(
-              brightness: Theme.of(context).brightness,
-              title: const Text('Video Player Window'),
-            ),
-          ),
-          body: TextButton(
-              onPressed: () {
-                debugPrint('center window');
-                windowManager.getBounds().then((bounds) {
-                  debugPrint('current bounds: $bounds');
-                });
-                windowManager.center();
-              },
-              child: Text('data'))),
-    );
+        home: Scaffold(
+      // appBar: PreferredSize(
+      //   preferredSize: const Size.fromHeight(kWindowCaptionHeight),
+      //   child: WindowCaption(
+      //     brightness: Theme.of(context).brightness,
+      //     title: const Text('Video Player Window'),
+      //   ),
+      // ),
+      body: const VideoPlayerView(),
+    ));
   }
 }
 
@@ -81,12 +76,16 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
   void initState() {
     super.initState();
     reload();
+    _channel.setMethodCallHandler((call) async {
+      d('Received method call: ${call.method} with arguments: ${call.arguments}');
+    });
   }
 
   @override
   void dispose() {
     super.dispose();
     controller?.dispose();
+    _channel.setMethodCallHandler(null);
   }
 
   @override

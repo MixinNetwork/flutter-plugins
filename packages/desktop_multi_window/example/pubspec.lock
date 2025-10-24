@@ -471,9 +471,10 @@ packages:
   window_manager:
     dependency: "direct main"
     description:
-      path: "/home/boyan/workspace/temp/window_manager/packages/window_manager"
-      relative: false
-    source: path
+      name: window_manager
+      sha256: "7eb6d6c4164ec08e1bf978d6e733f3cebe792e2a23fb07cbca25c2872bfdbdcd"
+      url: "https://pub.dev"
+    source: hosted
     version: "0.5.1"
   xdg_directories:
     dependency: transitive

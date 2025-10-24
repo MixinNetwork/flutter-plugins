@@ -27,11 +27,17 @@ class MultiWindowManager
 
   FlutterWindow* GetWindow(const std::string& window_id);
 
+  FlValue* GetAllWindows();
+
+  std::vector<std::string> GetAllWindowIds();
+
   void OnWindowClose(const std::string& id);
 
   void OnWindowDestroy(const std::string& id);
 
  private:
+  void NotifyWindowsChanged();
+
   std::map<std::string, std::unique_ptr<FlutterWindow>> windows_;
 };
 
