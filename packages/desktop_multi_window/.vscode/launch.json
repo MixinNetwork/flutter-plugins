@@ -8,10 +8,27 @@
       "program": "lib/main.dart"
     },
     {
-      "name": "C++ Attach",
+      "name": "C++ Attach(Debug)",
       "type": "cppdbg",
       "request": "attach",
-      "program": "${workspaceFolder}/example/build/linux/x64/debug/bundle/desktop_multi_window_example",
+      "linux": {
+        "program": "${workspaceFolder}/example/build/linux/x64/debug/bundle/desktop_multi_window_example",
+        "MIMode": "gdb",
+      },
+      "processId": "${command:pickProcess}",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ]
+    },
+    {
+      "name": "C++ Attach(Profile)",
+      "type": "cppdbg",
+      "request": "attach",
+      "program": "${workspaceFolder}/example/build/linux/x64/profile/bundle/desktop_multi_window_example",
       "processId": "${command:pickProcess}",
       "MIMode": "gdb",
       "setupCommands": [
@@ -23,10 +40,4 @@
       ]
     }
   ],
-  "compounds": [
-    {
-      "name": "Flutter + C++",
-      "configurations": ["Flutter", "C++ Attach"]
-    }
-  ]
 }

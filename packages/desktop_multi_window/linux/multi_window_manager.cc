@@ -160,11 +160,9 @@ void MultiWindowManager::AttachMainWindow(GtkWidget* window_widget,
 
 void MultiWindowManager::ObserveWindowClose(const std::string& window_id,
                                             GtkWindow* window) {
-  // Setup destroy signal handler
   g_signal_connect(
       GTK_WIDGET(window), "destroy",
       G_CALLBACK(+[](GtkWidget* widget, gpointer arg) {
-        g_warning("Window destroyed");
         auto* window_id_ptr = static_cast<std::string*>(arg);
 
         GtkWidget* child = gtk_bin_get_child(GTK_BIN(widget));

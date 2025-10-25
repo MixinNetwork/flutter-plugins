@@ -71,7 +71,7 @@ class _ExampleMainWindowState extends State<ExampleMainWindow> {
                         'Created sample window: ${controller.windowId} ${controller.arguments}',
                       );
                     },
-                    child: const Text('Launch sample window (single instance)'),
+                    child: const Text('Sample window (single instance)'),
                   ),
                   TextButton(
                     onPressed: () async {
@@ -86,7 +86,29 @@ class _ExampleMainWindowState extends State<ExampleMainWindow> {
                         'Created sample window: ${controller.windowId} ${controller.arguments}',
                       );
                     },
-                    child: const Text('Launch sample window (multi instance)'),
+                    child: const Text('Sample window (multi instance)'),
+                  ),
+                  TextButton(
+                    onPressed: () async {
+                      final controllers =
+                          List<WindowController>.empty(growable: true);
+                      for (int i = 0; i < 15; i++) {
+                        final controller = await WindowController.create(
+                          WindowConfiguration(
+                            hiddenAtLaunch: true,
+                            arguments:
+                                const SampleWindowArguments().toArguments(),
+                          ),
+                        );
+                        controllers.add(controller);
+                      }
+                      d('Created batch sample windows: ${controllers.length}');
+                      await Future.delayed(const Duration(seconds: 5));
+                      for (var controller in controllers) {
+                        await controller.close();
+                      }
+                    },
+                    child: const Text('Batch sample window'),
                   ),
                 ],
               ),
