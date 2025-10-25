@@ -1,5 +1,6 @@
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_multi_window_example/extensions/window_controller.dart';
 import 'package:mixin_logger/mixin_logger.dart';
 
 import '../widgets/window_list.dart';
@@ -41,6 +42,32 @@ class _ExampleMainWindowState extends State<ExampleMainWindow> {
                   );
                 },
                 child: const Text('Launch video player window'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  // check existing windows
+                  final controllers = WindowController.getAll();
+                  for (var controller in await controllers) {
+                    final args =
+                        WindowArguments.fromArguments(controller.arguments);
+                    if (args.businessId == WindowArguments.businessIdSample) {
+                      await controller.center();
+                      await controller.show();
+                      return;
+                    }
+                  }
+
+                  final controller = await WindowController.create(
+                    WindowConfiguration(
+                      hiddenAtLaunch: true,
+                      arguments: const SampleWindowArguments().toArguments(),
+                    ),
+                  );
+                  d(
+                    'Created sample window: ${controller.windowId} ${controller.arguments}',
+                  );
+                },
+                child: const Text('Launch sample window (single instance)'),
               ),
               TextButton(
                 onPressed: () async {

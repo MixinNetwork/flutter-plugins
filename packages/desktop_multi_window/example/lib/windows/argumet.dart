@@ -5,6 +5,7 @@ abstract class WindowArguments {
 
   static const String businessIdMain = 'main';
   static const String businessIdVideoPlayer = 'video_player';
+  static const String businessIdSample = 'sample';
 
   factory WindowArguments.fromArguments(String arguments) {
     if (arguments == '') {
@@ -15,6 +16,8 @@ abstract class WindowArguments {
     switch (businessId) {
       case businessIdVideoPlayer:
         return VideoPlayerWindowArguments.fromJson(json);
+      case businessIdSample:
+        return SampleWindowArguments.fromJson(json);
       default:
         throw Exception('Unknown businessId: $businessId');
     }
@@ -62,4 +65,20 @@ class VideoPlayerWindowArguments extends WindowArguments {
 
   @override
   String get businessId => WindowArguments.businessIdVideoPlayer;
+}
+
+class SampleWindowArguments extends WindowArguments {
+  const SampleWindowArguments();
+
+  factory SampleWindowArguments.fromJson(Map<String, dynamic> json) {
+    return const SampleWindowArguments();
+  }
+
+  @override
+  Map<String, dynamic> toJson() {
+    return {};
+  }
+
+  @override
+  String get businessId => WindowArguments.businessIdSample;
 }

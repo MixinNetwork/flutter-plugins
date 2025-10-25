@@ -124,6 +124,7 @@ class MultiWindowManager: NSObject {
         flutterWindow.setChannel(channel)
 
         observeWindowClose(window: window, windowId: windowId)
+
         notifyWindowsChanged()
 
         return windowId
@@ -138,11 +139,9 @@ class MultiWindowManager: NSObject {
     }
 
     private func removeWindow(windowId: WindowId) {
-        guard windows[windowId] != nil else {
-            return
+        if windows.removeValue(forKey: windowId) != nil {
+            notifyWindowsChanged()
         }
-        windows.removeValue(forKey: windowId)
-        notifyWindowsChanged()
     }
 
     func getAllWindowIds() -> [WindowId] {
@@ -171,10 +170,10 @@ class MultiWindowManager: NSObject {
         let channel = FlutterMethodChannel(
             name: "mixin.one/desktop_multi_window", binaryMessenger: registrar.messenger)
         registrar.addMethodCallDelegate(FlutterMultiWindowPlugin(window: window), channel: channel)
-        
+
         // register window method channel plugin
         WindowChannel.register(with: registrar)
-        
+
         return channel
     }
 
