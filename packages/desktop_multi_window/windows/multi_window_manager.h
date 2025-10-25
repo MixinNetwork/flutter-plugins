@@ -24,6 +24,8 @@ class MultiWindowManager {
 
   void RemoveWindow(const std::string& window_id);
 
+  void RemoveManagedFlutterWindowLater(const std::string& window_id);
+
   flutter::EncodableList GetAllWindows();
 
   std::vector<std::string> GetAllWindowIds();
@@ -31,9 +33,12 @@ class MultiWindowManager {
  private:
   void NotifyWindowsChanged();
 
+  void CleanupRemovedWindows();
+
   std::map<std::string, std::unique_ptr<FlutterWindowWrapper>> windows_;
   std::map<std::string, std::unique_ptr<FlutterWindow>>
       managed_flutter_windows_;
+  std::vector<std::string> pending_remove_ids_;
 };
 
 #endif  // DESKTOP_MULTI_WINDOW_WINDOWS_MULTI_WINDOW_MANAGER_H_

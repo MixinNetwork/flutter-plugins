@@ -43,7 +43,7 @@ MultiWindowManager* MultiWindowManager::Instance() {
 MultiWindowManager::MultiWindowManager() : windows_() {}
 
 std::string MultiWindowManager::Create(const flutter::EncodableMap* args) {
-  if (windows_.size() >= 15) {
+  if (windows_.size() >= 25) {
     std::cerr << "ERROR: Maximum window limit (15) reached!" << std::endl;
     return "";
   }
@@ -86,6 +86,8 @@ std::string MultiWindowManager::Create(const flutter::EncodableMap* args) {
 
   // Notify all windows about the change
   NotifyWindowsChanged();
+
+  CleanupRemovedWindows();
 
   return window_id;
 }
@@ -147,9 +149,30 @@ void MultiWindowManager::RemoveWindow(const std::string& window_id) {
   auto it = windows_.find(window_id);
   if (it != windows_.end()) {
     windows_.erase(it);
-    // managed_flutter_windows_.erase(window_id);
     NotifyWindowsChanged();
   }
+  
+  // quit application if no windows left
+  if (windows_.empty()) {
+    PostQuitMessage(0);
+  }
+}
+
+void MultiWindowManager::RemoveManagedFlutterWindowLater(
+    const std::string& window_id) {
+  pending_remove_ids_.push_back(window_id);
+}
+
+// FIXME:maybe need a more robust way to cleanup removed windows
+void MultiWindowManager::CleanupRemovedWindows() {
+  for (auto& id : pending_remove_ids_) {
+    auto it = managed_flutter_windows_.find(id);
+    if (it != managed_flutter_windows_.end()) {
+      std::cout << "Destroyed managed flutter window: " << id << std::endl;
+      managed_flutter_windows_.erase(it);
+    }
+  }
+  pending_remove_ids_.clear();
 }
 
 void MultiWindowManager::NotifyWindowsChanged() {

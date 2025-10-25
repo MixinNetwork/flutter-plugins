@@ -9,20 +9,23 @@ namespace {
 ///
 /// Redefined in case the developer's machine has a Windows SDK older than
 /// version 10.0.22000.0.
-/// See: https://docs.microsoft.com/windows/win32/api/dwmapi/ne-dwmapi-dwmwindowattribute
+/// See:
+/// https://docs.microsoft.com/windows/win32/api/dwmapi/ne-dwmapi-dwmwindowattribute
 #ifndef DWMWA_USE_IMMERSIVE_DARK_MODE
 #define DWMWA_USE_IMMERSIVE_DARK_MODE 20
 #endif
 
-constexpr const wchar_t kWindowClassName[] = L"FLUTTER_MULTI_WINDOW_WIN32_WINDOW";
+constexpr const wchar_t kWindowClassName[] =
+    L"FLUTTER_MULTI_WINDOW_WIN32_WINDOW";
 
 /// Registry key for app theme preference.
 ///
 /// A value of 0 indicates apps should use dark mode. A non-zero or missing
 /// value indicates apps should use light mode.
 constexpr const wchar_t kGetPreferredBrightnessRegKey[] =
-  L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize";
-constexpr const wchar_t kGetPreferredBrightnessRegValue[] = L"AppsUseLightTheme";
+    L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize";
+constexpr const wchar_t kGetPreferredBrightnessRegValue[] =
+    L"AppsUseLightTheme";
 
 // The number of Win32Window objects that currently exist.
 static int g_active_window_count = 0;
@@ -93,7 +96,15 @@ const wchar_t* WindowClassRegistrar::GetWindowClass() {
     window_class.cbClsExtra = 0;
     window_class.cbWndExtra = 0;
     window_class.hInstance = GetModuleHandle(nullptr);
-    window_class.hIcon = (HICON)LoadImage(GetModuleHandle(NULL), TEXT("IDI_APP_ICON"), IMAGE_ICON, 0, 0, LR_DEFAULTSIZE | LR_SHARED);
+
+    TCHAR exePath[MAX_PATH];
+    GetModuleFileName(NULL, exePath, MAX_PATH);
+    HICON hIcon = ExtractIcon(GetModuleHandle(NULL), exePath, 0);
+    if (hIcon) {
+      window_class.hIcon = hIcon;
+    } else {
+      window_class.hIcon = LoadIcon(window_class.hInstance, IDI_APPLICATION);
+    }
 
     window_class.hbrBackground = 0;
     window_class.lpszMenuName = nullptr;
@@ -115,13 +126,17 @@ Win32Window::Win32Window() {
 
 Win32Window::~Win32Window() {
   --g_active_window_count;
-  Destroy();
+  if (g_active_window_count == 0) {
+    WindowClassRegistrar::GetInstance()->UnregisterWindowClass();
+  }
 }
 
 bool Win32Window::Create(const std::wstring& title,
                          const Point& origin,
                          const Size& size) {
-  Destroy();
+  if (window_handle_) {
+    return false;
+  }
 
   const wchar_t* window_class =
       WindowClassRegistrar::GetInstance()->GetWindowClass();
@@ -273,10 +288,10 @@ void Win32Window::OnDestroy() {
 void Win32Window::UpdateTheme(HWND const window) {
   DWORD light_mode;
   DWORD light_mode_size = sizeof(light_mode);
-  LSTATUS result = RegGetValue(HKEY_CURRENT_USER, kGetPreferredBrightnessRegKey,
-                               kGetPreferredBrightnessRegValue,
-                               RRF_RT_REG_DWORD, nullptr, &light_mode,
-                               &light_mode_size);
+  LSTATUS result =
+      RegGetValue(HKEY_CURRENT_USER, kGetPreferredBrightnessRegKey,
+                  kGetPreferredBrightnessRegValue, RRF_RT_REG_DWORD, nullptr,
+                  &light_mode, &light_mode_size);
 
   if (result == ERROR_SUCCESS) {
     BOOL enable_dark_mode = light_mode == 0;

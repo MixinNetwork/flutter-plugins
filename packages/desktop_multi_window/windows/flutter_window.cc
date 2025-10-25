@@ -6,6 +6,7 @@
 
 #include <iostream>
 
+#include "multi_window_manager.h"
 #include "multi_window_plugin_internal.h"
 
 FlutterWindow::FlutterWindow(const std::string& id,
@@ -39,6 +40,7 @@ void FlutterWindow::OnDestroy() {
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
   }
+  MultiWindowManager::Instance()->RemoveManagedFlutterWindowLater(id_);
 }
 
 LRESULT FlutterWindow::MessageHandler(HWND hwnd,
