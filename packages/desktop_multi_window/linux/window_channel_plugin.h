@@ -1,0 +1,8 @@
+#ifndef DESKTOP_MULTI_WINDOW_LINUX_WINDOW_CHANNEL_PLUGIN_H_
+#define DESKTOP_MULTI_WINDOW_LINUX_WINDOW_CHANNEL_PLUGIN_H_
+
+#include <flutter_linux/flutter_linux.h>
+
+void window_channel_plugin_register_with_registrar(FlPluginRegistrar* registrar);
+
+#endif  // DESKTOP_MULTI_WINDOW_LINUX_WINDOW_CHANNEL_PLUGIN_H_

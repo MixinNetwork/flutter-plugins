@@ -10,7 +10,7 @@ add_library(${PLUGIN_NAME} SHARED
   "desktop_multi_window_plugin.cpp"
   "multi_window_manager.cc"
   "flutter_window.cc"
-  "window_channel.cc"
+  "window_channel_plugin.cc"
   "base_flutter_window.cc")
 apply_standard_settings(${PLUGIN_NAME})
 set_target_properties(${PLUGIN_NAME} PROPERTIES

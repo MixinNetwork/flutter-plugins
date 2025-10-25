@@ -14,7 +14,7 @@ class BaseFlutterWindow {
   virtual ~BaseFlutterWindow() = default;
 
   virtual std::string GetWindowId() const = 0;
-
+s
   virtual std::string GetWindowArgument() const = 0;
 
   virtual void HandleWindowMethod(

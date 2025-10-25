@@ -1,5 +1,6 @@
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_multi_window_example/extensions/window_controller.dart';
 
 import '../windows/argumet.dart';
 
@@ -46,9 +47,24 @@ class _WindowListState extends State<WindowList> {
         ),
         for (var i = 0; i < _controllers.length; i++)
           ListTile(
-            title: Text('Window ID: ${_controllers[i].windowId}'),
-            subtitle: Text('Arguments: ${_windowArguments[i]}'),
-          ),
+              title: Text('Window ID: ${_controllers[i].windowId}'),
+              subtitle: Text('Arguments: ${_windowArguments[i]}'),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                      onPressed: () {
+                        _controllers[i].center();
+                      },
+                      icon: const Icon(Icons.center_focus_strong)),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () async {
+                      await _controllers[i].close();
+                    },
+                  ),
+                ],
+              )),
       ],
     );
   }

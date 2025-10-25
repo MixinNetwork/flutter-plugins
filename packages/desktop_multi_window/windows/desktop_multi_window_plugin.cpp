@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "multi_window_manager.h"
+#include "window_channel_plugin.h"
 
 namespace {
 
@@ -45,6 +46,9 @@ DesktopMultiWindowPlugin::DesktopMultiWindowPlugin(
   
   // Set channel to window for event notifications
   window_->SetChannel(channel);
+  
+  // Register WindowChannel plugin for each engine
+  WindowChannelPluginRegisterWithRegistrar(registrar);
 }
 
 DesktopMultiWindowPlugin::~DesktopMultiWindowPlugin() = default;

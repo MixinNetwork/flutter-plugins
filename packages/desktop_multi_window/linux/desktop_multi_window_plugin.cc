@@ -8,6 +8,7 @@
 #include "desktop_multi_window_plugin_internal.h"
 #include "flutter_window.h"
 #include "multi_window_manager.h"
+#include "window_channel_plugin.h"
 
 #define DESKTOP_MULTI_WINDOW_PLUGIN(obj)                                     \
   (G_TYPE_CHECK_INSTANCE_CAST((obj), desktop_multi_window_plugin_get_type(), \
@@ -111,6 +112,9 @@ void desktop_multi_window_plugin_register_with_registrar_internal(
 
   // Set channel to window for event notifications
   window->SetChannel(channel);
+
+  // Register WindowChannel plugin for each engine
+  window_channel_plugin_register_with_registrar(registrar);
 
   g_object_unref(plugin);
 }

@@ -30,7 +30,7 @@ class _ExampleMainWindowState extends State<ExampleMainWindow> {
                 onPressed: () async {
                   final controller = await WindowController.create(
                     WindowConfiguration(
-                      hiddenAtLaunch: false,
+                      hiddenAtLaunch: true,
                       arguments: const VideoPlayerWindowArguments(
                         videoUrl: '',
                       ).toArguments(),
@@ -43,10 +43,14 @@ class _ExampleMainWindowState extends State<ExampleMainWindow> {
                 child: const Text('Launch video player window'),
               ),
               TextButton(
-                onPressed: () {
+                onPressed: () async {
                   const channel =
                       WindowMethodChannel('example_video_player_window');
-                  channel.invokeMethod('play');
+                  channel.setMethodCallHandler((call) async {
+                    d('Main window received method call: ${call.method} ${call.arguments}');
+                  });
+                  final result = await channel.invokeMethod('play');
+                  d('Invoked play method on video player window, result: $result');
                 },
                 child: const Text('Play'),
               ),

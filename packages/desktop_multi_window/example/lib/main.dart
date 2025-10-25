@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:mixin_logger/mixin_logger.dart';
 import 'package:window_manager/window_manager.dart';
 
+import 'extensions/window_controller.dart';
 import 'windows/argumet.dart';
 import 'windows/main_window.dart';
 import 'windows/video_player_window.dart';
@@ -14,8 +15,9 @@ Future<void> main(List<String> args) async {
   i('App started with arguments: $args');
   WidgetsFlutterBinding.ensureInitialized();
   initializeMultiWindow();
-  // await windowManager.ensureInitialized();
+  await windowManager.ensureInitialized();
   final windowController = await WindowController.fromCurrentEngine();
+  windowController.doCustomInitialize();
   final arguments = WindowArguments.fromArguments(windowController.arguments);
   i('Window arguments: $arguments');
   switch (arguments.businessId) {
@@ -24,20 +26,20 @@ Future<void> main(List<String> args) async {
     case WindowArguments.businessIdVideoPlayer:
       fvp.registerWith();
 
-      // WindowOptions windowOptions = const WindowOptions(
-      //   size: Size(800, 600),
-      //   center: true,
-      //   backgroundColor: Colors.transparent,
-      //   skipTaskbar: false,
-      //   titleBarStyle: TitleBarStyle.hidden,
-      //   windowButtonVisibility: false,
-      // );
-      // windowManager.waitUntilReadyToShow(windowOptions, () async {
-      //   await windowManager.show();
-      //   await windowManager.focus();
-      // });
-      // await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
-      // await windowManager.center();
+      WindowOptions windowOptions = const WindowOptions(
+        size: Size(800, 600),
+        center: true,
+        backgroundColor: Colors.transparent,
+        skipTaskbar: false,
+        titleBarStyle: TitleBarStyle.hidden,
+        windowButtonVisibility: false,
+      );
+      windowManager.waitUntilReadyToShow(windowOptions, () async {
+        await windowManager.show();
+        await windowManager.focus();
+      });
+      await windowManager.setTitleBarStyle(TitleBarStyle.hidden);
+      await windowManager.center();
       runApp(const VideoPlayerWindow());
   }
 }

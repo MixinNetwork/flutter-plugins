@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import 'window_channel.dart';
 import 'window_configuration.dart';
 
 final _onWindowsChangedNotifier = ValueNotifier<int>(0);
@@ -13,10 +14,16 @@ Listenable get onWindowsChanged => _onWindowsChangedNotifier;
 
 /// The [WindowController] instance that is used to control this window.
 class WindowController {
-  WindowController._(this.windowId, this.arguments);
+  WindowController._(this.windowId, this.arguments)
+      : _windowChannel = WindowMethodChannel(
+          'mixin.one/window_controller/$windowId',
+          mode: ChannelMode.unidirectional,
+        );
 
   final String windowId;
   final String arguments;
+
+  final WindowMethodChannel _windowChannel;
 
   factory WindowController.fromWindowId(String id) =>
       WindowController._(id, '');
@@ -72,11 +79,14 @@ class WindowController {
 
   Future<void> hide() => _callWindowMethod('window_hide', {});
 
-  Future<void> invokeMethod(String method, [dynamic arguments]) =>
-      _callWindowMethod('window_invoke_method', {
-        'method': method,
-        'arguments': arguments,
-      });
+  @optionalTypeArgs
+  Future<T?> invokeMethod<T>(String method, [dynamic arguments]) =>
+      _windowChannel.invokeMethod<T>(method, arguments);
+
+  Future<void> setWindowMethodHandler(
+      Future<dynamic> Function(MethodCall call)? handler) {
+    return _windowChannel.setMethodCallHandler(handler);
+  }
 
   @override
   bool operator ==(Object other) {
@@ -99,7 +109,6 @@ class WindowController {
 final _channel = MethodChannel('mixin.one/desktop_multi_window');
 
 void initializeMultiWindow() {
-  debugPrint('Setting up method call handler for desktop_multi_window');
   _channel.setMethodCallHandler((call) async {
     switch (call.method) {
       case 'onWindowsChanged':

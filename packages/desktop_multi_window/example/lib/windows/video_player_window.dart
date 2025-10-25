@@ -13,13 +13,13 @@ class VideoPlayerWindow extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
         home: Scaffold(
-      // appBar: PreferredSize(
-      //   preferredSize: const Size.fromHeight(kWindowCaptionHeight),
-      //   child: WindowCaption(
-      //     brightness: Theme.of(context).brightness,
-      //     title: const Text('Video Player Window'),
-      //   ),
-      // ),
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(kWindowCaptionHeight),
+        child: WindowCaption(
+          brightness: Theme.of(context).brightness,
+          title: const Text('Video Player Window'),
+        ),
+      ),
       body: const VideoPlayerView(),
     ));
   }
@@ -78,7 +78,9 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
     reload();
     _channel.setMethodCallHandler((call) async {
       d('Received method call: ${call.method} with arguments: ${call.arguments}');
+      return 'from video player window';
     });
+    _channel.invokeMethod('ready');
   }
 
   @override
