@@ -131,7 +131,7 @@ void desktop_multi_window_plugin_register_with_registrar(
   auto window = gtk_widget_get_toplevel(GTK_WIDGET(view));
   if (GTK_IS_WINDOW(window)) {
     MultiWindowManager::Instance()->AttachMainWindow(window, registrar);
-  } else { // 变体
+  } else { // variant
     g_critical("can not find GtkWindow instance for main window.");
   }
 }
