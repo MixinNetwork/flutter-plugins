@@ -1,58 +1,44 @@
-//
-// Created by yangbin on 2022/1/11.
-//
-
 #ifndef DESKTOP_MULTI_WINDOW_WINDOWS_MULTI_WINDOW_MANAGER_H_
 #define DESKTOP_MULTI_WINDOW_WINDOWS_MULTI_WINDOW_MANAGER_H_
 
 #include <cstdint>
-#include <string>
 #include <map>
+#include <string>
 
-#include "base_flutter_window.h"
+#include "flutter_plugin_registrar.h"
 #include "flutter_window.h"
+#include "flutter_window_wrapper.h"
 
-class MultiWindowManager : public std::enable_shared_from_this<MultiWindowManager>, public FlutterWindowCallback {
-
+class MultiWindowManager {
  public:
-  static MultiWindowManager *Instance();
+  static MultiWindowManager* Instance();
 
   MultiWindowManager();
 
-  int64_t Create(std::string args);
+  std::string Create(const flutter::EncodableMap* args);
 
-  void AttachFlutterMainWindow(HWND main_window_handle, std::unique_ptr<WindowChannel> window_channel);
+  void AttachFlutterMainWindow(HWND main_window_handle,
+                               FlutterDesktopPluginRegistrarRef registrar);
 
-  void Show(int64_t id);
+  FlutterWindowWrapper* GetWindow(const std::string& window_id);
 
-  void Hide(int64_t id);
+  void RemoveWindow(const std::string& window_id);
 
-  void Close(int64_t id);
+  void RemoveManagedFlutterWindowLater(const std::string& window_id);
 
-  void SetFrame(int64_t id, double_t x, double_t y, double_t width, double_t height);
+  flutter::EncodableList GetAllWindows();
 
-  void Center(int64_t id);
-
-  void SetTitle(int64_t id, const std::string &title);
-
-  flutter::EncodableList GetAllSubWindowIds();
-
-  void OnWindowClose(int64_t id) override;
-
-  void OnWindowDestroy(int64_t id) override;
+  std::vector<std::string> GetAllWindowIds();
 
  private:
+  void NotifyWindowsChanged();
 
-  std::map<int64_t, std::unique_ptr<BaseFlutterWindow>> windows_;
+  void CleanupRemovedWindows();
 
-  void HandleWindowChannelCall(
-      int64_t from_window_id,
-      int64_t target_window_id,
-      const std::string &call,
-      flutter::EncodableValue *arguments,
-      std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result
-  );
-
+  std::map<std::string, std::unique_ptr<FlutterWindowWrapper>> windows_;
+  std::map<std::string, std::unique_ptr<FlutterWindow>>
+      managed_flutter_windows_;
+  std::vector<std::string> pending_remove_ids_;
 };
 
-#endif //DESKTOP_MULTI_WINDOW_WINDOWS_MULTI_WINDOW_MANAGER_H_
+#endif  // DESKTOP_MULTI_WINDOW_WINDOWS_MULTI_WINDOW_MANAGER_H_

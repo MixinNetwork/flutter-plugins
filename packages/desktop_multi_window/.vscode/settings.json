@@ -1,0 +1,4 @@
+{
+    "C_Cpp.clang_format_fallbackStyle": "Chromium",
+    "C_Cpp.autoAddFileAssociations": false,
+}

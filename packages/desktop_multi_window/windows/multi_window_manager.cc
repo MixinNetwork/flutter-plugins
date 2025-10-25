@@ -1,168 +1,190 @@
-//
-// Created by yangbin on 2022/1/11.
-//
-
 #include "multi_window_manager.h"
 
+#include <rpc.h>
+#include <iomanip>
 #include <memory>
+#include <random>
+#include <sstream>
+#pragma comment(lib, "rpcrt4.lib")
 
+#include <iostream>
 #include "flutter_window.h"
+#include "flutter_window_wrapper.h"
+#include "include/desktop_multi_window/desktop_multi_window_plugin.h"
+#include "multi_window_plugin_internal.h"
+#include "win32_window.h"
+#include "window_configuration.h"
 
 namespace {
-int64_t g_next_id_ = 0;
 
-class FlutterMainWindow : public BaseFlutterWindow {
+std::string GenerateWindowId() {
+  UUID uuid;
+  UuidCreate(&uuid);
 
- public:
+  RPC_CSTR uuid_str = nullptr;
+  UuidToStringA(&uuid, &uuid_str);
 
-  FlutterMainWindow(HWND hwnd, std::unique_ptr<WindowChannel> window_channel)
-      : hwnd_(hwnd), channel_(std::move(window_channel)) {
+  std::string result(reinterpret_cast<char*>(uuid_str));
+  RpcStringFreeA(&uuid_str);
 
-  }
-
-  ~FlutterMainWindow() override = default;
-
-  WindowChannel *GetWindowChannel() override {
-    return channel_.get();
-  }
-
- protected:
-
-  HWND GetWindowHandle() override {
-    return hwnd_;
-  }
-
- private:
-
-  HWND hwnd_;
-
-  std::unique_ptr<WindowChannel> channel_;
-
-};
-
+  return result;
 }
 
+WindowCreatedCallback _g_window_created_callback = nullptr;
+
+}  // namespace
+
 // static
-MultiWindowManager *MultiWindowManager::Instance() {
+MultiWindowManager* MultiWindowManager::Instance() {
   static auto manager = std::make_shared<MultiWindowManager>();
   return manager.get();
 }
 
-MultiWindowManager::MultiWindowManager() : windows_() {
+MultiWindowManager::MultiWindowManager() : windows_() {}
 
-}
+std::string MultiWindowManager::Create(const flutter::EncodableMap* args) {
+  std::string window_id = GenerateWindowId();
+  WindowConfiguration config = WindowConfiguration::FromEncodableMap(args);
 
-int64_t MultiWindowManager::Create(std::string args) {
-  g_next_id_++;
-  int64_t id = g_next_id_;
+  auto flutter_window = std::make_unique<FlutterWindow>(window_id, config);
 
-  auto window = std::make_unique<FlutterWindow>(id, std::move(args), shared_from_this());
-  auto channel = window->GetWindowChannel();
-  channel->SetMethodCallHandler([this](int64_t from_window_id,
-                                       int64_t target_window_id,
-                                       const std::string &call,
-                                       flutter::EncodableValue *arguments,
-                                       std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
-    HandleWindowChannelCall(from_window_id, target_window_id, call, arguments, std::move(result));
-  });
-  windows_[id] = std::move(window);
-  return id;
+  std::wstring title = L"";
+  Win32Window::Point origin(10, 10);
+  Win32Window::Size size(800, 600);
+
+  if (!flutter_window->Create(title, origin, size)) {
+    std::cerr << "Failed to create window." << std::endl;
+    return "";
+  }
+
+  ::ShowWindow(flutter_window->GetHandle(),
+               config.hidden_at_launch ? SW_HIDE : SW_SHOW);
+
+  auto wrapper = std::make_unique<FlutterWindowWrapper>(
+      window_id, flutter_window->GetHandle(), config.arguments);
+
+  windows_[window_id] = std::move(wrapper);
+
+  if (_g_window_created_callback) {
+    _g_window_created_callback(flutter_window->GetFlutterViewController());
+  }
+  auto registrar = flutter_window->GetFlutterViewController()
+                       ->engine()
+                       ->GetRegistrarForPlugin("DesktopMultiWindowPlugin");
+  InternalMultiWindowPluginRegisterWithRegistrar(registrar,
+                                                 windows_[window_id].get());
+
+  // keep flutter_window alive
+  managed_flutter_windows_[window_id] = std::move(flutter_window);
+
+  // Notify all windows about the change
+  NotifyWindowsChanged();
+
+  CleanupRemovedWindows();
+
+  return window_id;
 }
 
 void MultiWindowManager::AttachFlutterMainWindow(
-    HWND main_window_handle,
-    std::unique_ptr<WindowChannel> window_channel) {
-  if (windows_.count(0) != 0) {
-    std::cout << "Error: main window already exists" << std::endl;
-    return;
-  }
-  window_channel->SetMethodCallHandler(
-      [this](int64_t from_window_id,
-             int64_t target_window_id,
-             const std::string &call,
-             flutter::EncodableValue *arguments,
-             std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
-        HandleWindowChannelCall(from_window_id, target_window_id, call, arguments, std::move(result));
-      });
-  windows_[0] = std::make_unique<FlutterMainWindow>(main_window_handle, std::move(window_channel));
-}
-
-void MultiWindowManager::Show(int64_t id) {
-  auto window = windows_.find(id);
-  if (window != windows_.end()) {
-    window->second->Show();
-  }
-}
-
-void MultiWindowManager::Hide(int64_t id) {
-  auto window = windows_.find(id);
-  if (window != windows_.end()) {
-    window->second->Hide();
-  }
-}
-
-void MultiWindowManager::Close(int64_t id) {
-  auto window = windows_.find(id);
-  if (window != windows_.end()) {
-    window->second->Close();
-  }
-}
-
-void MultiWindowManager::SetFrame(int64_t id, double x, double y, double width, double height) {
-  auto window = windows_.find(id);
-  if (window != windows_.end()) {
-    window->second->SetBounds(x, y, width, height);
-  }
-}
-
-void MultiWindowManager::SetTitle(int64_t id, const std::string &title) {
-  auto window = windows_.find(id);
-  if (window != windows_.end()) {
-    window->second->SetTitle(title);
-  }
-}
-
-void MultiWindowManager::Center(int64_t id) {
-  auto window = windows_.find(id);
-  if (window != windows_.end()) {
-    window->second->Center();
-  }
-}
-
-flutter::EncodableList MultiWindowManager::GetAllSubWindowIds() {
-  flutter::EncodableList resList = flutter::EncodableList();
-  for (auto &window : windows_) {
-    if (window.first != 0) {
-      resList.push_back(flutter::EncodableValue(window.first));
+    HWND window_handle,
+    FlutterDesktopPluginRegistrarRef registrar) {
+  // check if window already exists
+  for (const auto& [id, window] : windows_) {
+    if (GetAncestor(window->GetWindowHandle(), GA_ROOT) == window_handle) {
+      return;
     }
   }
-  return resList;
+
+  const std::string window_id = GenerateWindowId();
+  auto wrapper =
+      std::make_unique<FlutterWindowWrapper>(window_id, window_handle);
+
+  windows_[window_id] = std::move(wrapper);
+
+  InternalMultiWindowPluginRegisterWithRegistrar(registrar,
+                                                 windows_[window_id].get());
+
+  // Notify all windows about the change
+  NotifyWindowsChanged();
 }
 
-void MultiWindowManager::OnWindowClose(int64_t id) {
-}
-
-void MultiWindowManager::OnWindowDestroy(int64_t id) {
-  windows_.erase(id);
-}
-
-void MultiWindowManager::HandleWindowChannelCall(
-    int64_t from_window_id,
-    int64_t target_window_id,
-    const std::string &call,
-    flutter::EncodableValue *arguments,
-    std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result
-) {
-  auto target_window_entry = windows_.find(target_window_id);
-  if (target_window_entry == windows_.end()) {
-    result->Error("-1", "target window not found.");
-    return;
+FlutterWindowWrapper* MultiWindowManager::GetWindow(
+    const std::string& window_id) {
+  auto it = windows_.find(window_id);
+  if (it != windows_.end()) {
+    return it->second.get();
   }
-  auto target_window_channel = target_window_entry->second->GetWindowChannel();
-  if (!target_window_channel) {
-    result->Error("-1", "target window channel not found.");
-    return;
-  }
-  target_window_channel->InvokeMethod(from_window_id, call, arguments, std::move(result));
+  return nullptr;
 }
 
+flutter::EncodableList MultiWindowManager::GetAllWindows() {
+  flutter::EncodableList windows;
+  for (const auto& [id, window] : windows_) {
+    flutter::EncodableMap window_info;
+    window_info[flutter::EncodableValue("windowId")] =
+        flutter::EncodableValue(window->GetWindowId());
+    window_info[flutter::EncodableValue("windowArgument")] =
+        flutter::EncodableValue(window->GetWindowArgument());
+    windows.push_back(flutter::EncodableValue(window_info));
+  }
+  return windows;
+}
+
+std::vector<std::string> MultiWindowManager::GetAllWindowIds() {
+  std::vector<std::string> window_ids;
+  for (const auto& [id, window] : windows_) {
+    window_ids.push_back(id);
+  }
+  return window_ids;
+}
+
+void MultiWindowManager::RemoveWindow(const std::string& window_id) {
+  auto it = windows_.find(window_id);
+  if (it != windows_.end()) {
+    windows_.erase(it);
+    NotifyWindowsChanged();
+  }
+  
+  // quit application if no windows left
+  if (windows_.empty()) {
+    PostQuitMessage(0);
+  }
+}
+
+void MultiWindowManager::RemoveManagedFlutterWindowLater(
+    const std::string& window_id) {
+  pending_remove_ids_.push_back(window_id);
+}
+
+// FIXME:maybe need a more robust way to cleanup removed windows
+void MultiWindowManager::CleanupRemovedWindows() {
+  for (auto& id : pending_remove_ids_) {
+    auto it = managed_flutter_windows_.find(id);
+    if (it != managed_flutter_windows_.end()) {
+      std::cout << "Destroyed managed flutter window: " << id << std::endl;
+      managed_flutter_windows_.erase(it);
+    }
+  }
+  pending_remove_ids_.clear();
+}
+
+void MultiWindowManager::NotifyWindowsChanged() {
+  auto window_ids = GetAllWindowIds();
+  flutter::EncodableList window_ids_list;
+  for (const auto& id : window_ids) {
+    window_ids_list.push_back(flutter::EncodableValue(id));
+  }
+
+  flutter::EncodableMap data;
+  data[flutter::EncodableValue("windowIds")] =
+      flutter::EncodableValue(window_ids_list);
+
+  for (const auto& [id, window] : windows_) {
+    window->NotifyWindowEvent("onWindowsChanged", data);
+  }
+}
+
+void DesktopMultiWindowSetWindowCreatedCallback(
+    WindowCreatedCallback callback) {
+  _g_window_created_callback = callback;
+}

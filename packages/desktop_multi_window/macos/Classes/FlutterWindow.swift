@@ -1,111 +1,95 @@
-//
-//  FlutterWindow.swift
-//  flutter_multi_window
-//
-//  Created by Bin Yang on 2022/1/10.
-//
 import Cocoa
 import FlutterMacOS
 import Foundation
 
-class BaseFlutterWindow: NSObject {
-  private let window: NSWindow
-  let windowChannel: WindowChannel
+typealias WindowId = String
 
-  init(window: NSWindow, channel: WindowChannel) {
-    self.window = window
-    self.windowChannel = channel
-    super.init()
-  }
-
-  func show() {
-    window.makeKeyAndOrderFront(nil)
-    NSApp.activate(ignoringOtherApps: true)
-  }
-
-  func hide() {
-    window.orderOut(nil)
-  }
-
-  func center() {
-    window.center()
-  }
-
-  func setFrame(frame: NSRect) {
-    window.setFrame(frame, display: false, animate: true)
-  }
-
-  func setTitle(title: String) {
-    window.title = title
-  }
-
-  func resizable(resizable: Bool) {
-    if (resizable) {
-      window.styleMask.insert(.resizable)
-    } else {
-      window.styleMask.remove(.resizable)
+extension WindowId {
+    static func generate() -> WindowId {
+        return UUID().uuidString
     }
-  }
-
-  func close() {
-    window.close()
-  }
-
-  func setFrameAutosaveName(name: String) {
-    window.setFrameAutosaveName(name)
-  }
 }
 
-class FlutterWindow: BaseFlutterWindow {
-  let windowId: Int64
+class CustomWindow: NSWindow {
 
-  let window: NSWindow
+    init(configuration: WindowConfiguration) {
+        super.init(
+            contentRect: NSRect(x: 10, y: 10, width: 800, height: 600),
+            styleMask: [.miniaturizable, .closable, .titled, .resizable], backing: .buffered,
+            defer: false)
 
-  weak var delegate: WindowManagerDelegate?
-
-  init(id: Int64, arguments: String) {
-    windowId = id
-    window = NSWindow(
-      contentRect: NSRect(x: 0, y: 0, width: 480, height: 270),
-      styleMask: [.miniaturizable, .closable, .resizable, .titled, .fullSizeContentView],
-      backing: .buffered, defer: false)
-    let project = FlutterDartProject()
-    project.dartEntrypointArguments = ["multi_window", "\(windowId)", arguments]
-    let flutterViewController = FlutterViewController(project: project)
-    window.contentViewController = flutterViewController
-
-    let plugin = flutterViewController.registrar(forPlugin: "FlutterMultiWindowPlugin")
-    FlutterMultiWindowPlugin.registerInternal(with: plugin)
-    let windowChannel = WindowChannel.register(with: plugin, windowId: id)
-    // Give app a chance to register plugin.
-    FlutterMultiWindowPlugin.onWindowCreatedCallback?(flutterViewController)
-
-    super.init(window: window, channel: windowChannel)
-
-    window.delegate = self
-    window.isReleasedWhenClosed = false
-    window.titleVisibility = .hidden
-    window.titlebarAppearsTransparent = true
-  }
-
-  deinit {
-    debugPrint("release window resource")
-    window.delegate = nil
-    if let flutterViewController = window.contentViewController as? FlutterViewController {
-      flutterViewController.engine.shutDownEngine()
+        self.isReleasedWhenClosed = true
     }
-    window.contentViewController = nil
-    window.windowController = nil
-  }
+
+    deinit {
+        debugPrint("Child window deinit")
+    }
+
 }
 
-extension FlutterWindow: NSWindowDelegate {
-  func windowWillClose(_ notification: Notification) {
-    delegate?.onClose(windowId: windowId)
-  }
+class FlutterWindow: NSObject {
+    let windowId: WindowId
+    let windowArgument: String
+    private(set) var window: NSWindow
+    private var channel: FlutterMethodChannel?
 
-  func windowShouldClose(_ sender: NSWindow) -> Bool {
-    delegate?.onClose(windowId: windowId)
-    return true
-  }
+    init(windowId: WindowId, windowArgument: String, window: NSWindow) {
+        self.windowId = windowId
+        self.windowArgument = windowArgument
+        self.window = window
+        super.init()
+
+        // https://github.com/MixinNetwork/flutter-plugins/issues/412
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(didChangeOcclusionState),
+            name: NSApplication.willBecomeActiveNotification,
+            object: nil
+        )
+
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(didChangeOcclusionState),
+            name: NSApplication.didResignActiveNotification,
+            object: nil
+        )
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    @objc func didChangeOcclusionState(_ notification: Notification) {
+        if let controller = window.contentViewController as? FlutterViewController {
+            controller.engine.handleDidChangeOcclusionState(notification)
+        }
+    }
+
+    func setChannel(_ channel: FlutterMethodChannel) {
+        self.channel = channel
+    }
+
+    func notifyWindowEvent(_ event: String, data: [String: Any]) {
+        if let channel = channel {
+            channel.invokeMethod(event, arguments: data)
+        } else {
+            debugPrint("Channel not set for window \(windowId), cannot notify event \(event)")
+        }
+    }
+
+    func handleWindowMethod(method: String, arguments: Any?, result: @escaping FlutterResult) {
+        switch method {
+        case "window_show":
+            window.makeKeyAndOrderFront(nil)
+            window.setIsVisible(true)
+            NSApp.activate(ignoringOtherApps: true)
+            result(nil)
+        case "window_hide":
+            window.orderOut(nil)
+            result(nil)
+        default:
+            result(FlutterError(code: "-1", message: "unknown method \(method)", details: nil))
+        }
+    }
+
 }

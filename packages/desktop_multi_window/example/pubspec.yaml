@@ -3,10 +3,10 @@ description: Demonstrates how to use the flutter_multi_window plugin.
 
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
-publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+publish_to: "none" # Remove this line if you wish to publish to pub.dev
 
 environment:
-  sdk: ">=2.14.0 <3.0.0"
+  sdk: ">=3.5.0 <4.0.0"
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
@@ -30,6 +30,13 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.2
   desktop_lifecycle: ^0.1.0
+  mixin_logger: ^0.1.3
+  window_manager:
+    git:
+      url: https://github.com/boyan01/window_manager.git
+      path: packages/window_manager
+      ref: 6fae92d21b4c80ce1b8f71c1190d7970cf722bd4
+  fvp: ^0.35.0
 
 dev_dependencies:
   flutter_test:
@@ -47,7 +54,6 @@ dev_dependencies:
 
 # The following section is specific to Flutter.
 flutter:
-
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.

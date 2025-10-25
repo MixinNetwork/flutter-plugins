@@ -1,3 +1,7 @@
+## 0.3.0
+
+* [BREAK CHANGE] rewritten, please refer to readme
+
 ## 0.2.1
 
 * bug fixed
