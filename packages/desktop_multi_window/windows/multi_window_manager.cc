@@ -43,13 +43,6 @@ MultiWindowManager* MultiWindowManager::Instance() {
 MultiWindowManager::MultiWindowManager() : windows_() {}
 
 std::string MultiWindowManager::Create(const flutter::EncodableMap* args) {
-  if (windows_.size() >= 25) {
-    std::cerr << "ERROR: Maximum window limit (15) reached!" << std::endl;
-    return "";
-  }
-
-  std::cout << "Creating window #" << (windows_.size() + 1) << std::endl;
-
   std::string window_id = GenerateWindowId();
   WindowConfiguration config = WindowConfiguration::FromEncodableMap(args);
 

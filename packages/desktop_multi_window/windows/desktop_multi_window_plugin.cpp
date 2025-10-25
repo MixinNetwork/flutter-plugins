@@ -49,8 +49,6 @@ DesktopMultiWindowPlugin::DesktopMultiWindowPlugin(
 }
 
 DesktopMultiWindowPlugin::~DesktopMultiWindowPlugin() {
-  std::cout << "DesktopMultiWindowPlugin destroyed for window: "
-            << window_->GetWindowId() << std::endl;
    MultiWindowManager::Instance()->RemoveWindow(window_->GetWindowId());
 }
 

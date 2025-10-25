@@ -42,8 +42,6 @@ Future<void> main(List<String> args) async {
       runApp(const VideoPlayerWindow());
 
     case WindowArguments.businessIdSample:
-      fvp.registerWith();
-
       WindowOptions windowOptions = const WindowOptions(
         size: Size(600, 400),
         center: true,
