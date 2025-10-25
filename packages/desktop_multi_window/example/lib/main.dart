@@ -15,7 +15,6 @@ import 'package:fvp/fvp.dart' as fvp;
 Future<void> main(List<String> args) async {
   i('App started with arguments: $args');
   WidgetsFlutterBinding.ensureInitialized();
-  initializeMultiWindow();
   await windowManager.ensureInitialized();
   final windowController = await WindowController.fromCurrentEngine();
   windowController.doCustomInitialize();

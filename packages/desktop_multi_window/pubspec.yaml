@@ -1,10 +1,10 @@
 name: desktop_multi_window
 description: A flutter plugin that create and manager multi window in desktop.
-version: 0.2.1
+version: 0.3.0
 homepage: https://github.com/MixinNetwork/flutter-plugins/tree/main/packages/desktop_multi_window
 
 environment:
-  sdk: ">=2.17.0 <3.0.0"
+  sdk: ">=3.0.0"
   flutter: ">=3.0.0"
 
 dependencies:

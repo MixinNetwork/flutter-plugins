@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_multi_window_example/extensions/window_controller.dart';
+import 'package:mixin_logger/mixin_logger.dart';
 
 import '../windows/argumet.dart';
 
@@ -15,16 +18,24 @@ class _WindowListState extends State<WindowList> {
   var _controllers = <WindowController>[];
   var _windowArguments = <WindowArguments>[];
 
+  StreamSubscription<void>? _windowsChangedSubscription;
+
   @override
   void initState() {
     super.initState();
     _refreshWindows();
-    onWindowsChanged.addListener(_refreshWindows);
+    _windowsChangedSubscription = onWindowsChanged.listen((_) {
+      i('Windows changed event received1');
+      _refreshWindows();
+    });
+    onWindowsChanged.listen((_) {
+      i('Windows changed event received2');
+    });
   }
 
   @override
   void dispose() {
-    onWindowsChanged.removeListener(_refreshWindows);
+    _windowsChangedSubscription?.cancel();
     super.dispose();
   }
 

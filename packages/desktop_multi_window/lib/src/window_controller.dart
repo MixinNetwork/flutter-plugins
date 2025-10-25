@@ -6,11 +6,16 @@ import 'package:flutter/services.dart';
 import 'window_channel.dart';
 import 'window_configuration.dart';
 
-final _onWindowsChangedNotifier = ValueNotifier<int>(0);
+final _windowEvent = _windowEventAsStream();
 
 /// A listenable that notifies when the windows list changes.
 /// Listen to this to be notified when windows are created or destroyed.
-Listenable get onWindowsChanged => _onWindowsChangedNotifier;
+Stream<void> get onWindowsChanged => _windowEvent.map((call) {
+      if (call.method == 'onWindowsChanged') {
+        return call.method;
+      }
+      return null;
+    }).where((event) => event != null);
 
 /// The [WindowController] instance that is used to control this window.
 class WindowController {
@@ -85,6 +90,17 @@ class WindowController {
 
   Future<void> setWindowMethodHandler(
       Future<dynamic> Function(MethodCall call)? handler) {
+    assert(() {
+      scheduleMicrotask(() async {
+        final c = await WindowController.fromCurrentEngine();
+        if (c.windowId != windowId) {
+          throw FlutterError(
+              'setWindowMethodHandler can only be called on the current window controller. '
+              'Current windowId: ${c.windowId}, this windowId: $windowId');
+        }
+      });
+      return true;
+    }());
     return _windowChannel.setMethodCallHandler(handler);
   }
 
@@ -108,15 +124,17 @@ class WindowController {
 
 final _channel = MethodChannel('mixin.one/desktop_multi_window');
 
-void initializeMultiWindow() {
-  _channel.setMethodCallHandler((call) async {
-    switch (call.method) {
-      case 'onWindowsChanged':
-        // Handle windows changed event - just trigger notification
-        _onWindowsChangedNotifier.value++;
-        break;
-      default:
-        throw MissingPluginException('Not implemented method: ${call.method}');
-    }
-  });
+Stream<MethodCall> _windowEventAsStream() {
+  late StreamController<MethodCall> controller;
+  controller = StreamController<MethodCall>.broadcast(
+    onListen: () {
+      _channel.setMethodCallHandler((call) async {
+        controller.add(call);
+      });
+    },
+    onCancel: () {
+      _channel.setMethodCallHandler(null);
+    },
+  );
+  return controller.stream;
 }
