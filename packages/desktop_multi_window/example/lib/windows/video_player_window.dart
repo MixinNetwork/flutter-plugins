@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter/material.dart';
 import 'package:mixin_logger/mixin_logger.dart';
@@ -33,7 +35,7 @@ class VideoPlayerView extends StatefulWidget {
   State<VideoPlayerView> createState() => _VideoPlayerViewState();
 }
 
-class _VideoPlayerViewState extends State<VideoPlayerView> {
+class _VideoPlayerViewState extends State<VideoPlayerView> with WindowListener {
   VideoPlayerController? controller;
   final httpHeaders = <String, String>{
     "User-Agent": "ergerthertherth",
@@ -81,6 +83,16 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
       return 'from video player window';
     });
     _channel.invokeMethod('ready');
+    windowManager.setPreventClose(true);
+    windowManager.addListener(this);
+  }
+
+  @override
+  void onWindowClose() async {
+    i("Video player window onWindowClose called.");
+    controller?.dispose();
+    await windowManager.setPreventClose(false);
+    await windowManager.close();
   }
 
   @override
@@ -88,6 +100,7 @@ class _VideoPlayerViewState extends State<VideoPlayerView> {
     super.dispose();
     controller?.dispose();
     _channel.setMethodCallHandler(null);
+    windowManager.removeListener(this);
   }
 
   @override

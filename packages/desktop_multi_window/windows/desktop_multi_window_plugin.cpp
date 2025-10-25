@@ -7,6 +7,7 @@
 
 #include <memory>
 
+#include "flutter_window_wrapper.h"
 #include "multi_window_manager.h"
 #include "window_channel_plugin.h"
 
@@ -14,7 +15,7 @@ namespace {
 
 class DesktopMultiWindowPlugin : public flutter::Plugin {
  public:
-  DesktopMultiWindowPlugin(BaseFlutterWindow* window,
+  DesktopMultiWindowPlugin(FlutterWindowWrapper* window,
                            flutter::PluginRegistrarWindows* registrar);
 
   ~DesktopMultiWindowPlugin() override;
@@ -24,18 +25,14 @@ class DesktopMultiWindowPlugin : public flutter::Plugin {
       const flutter::MethodCall<flutter::EncodableValue>& method_call,
       std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
 
-  BaseFlutterWindow* window_;
+  FlutterWindowWrapper* window_;
   flutter::PluginRegistrarWindows* registrar_;
 };
 
 DesktopMultiWindowPlugin::DesktopMultiWindowPlugin(
-    BaseFlutterWindow* window,
+    FlutterWindowWrapper* window,
     flutter::PluginRegistrarWindows* registrar)
     : window_(window), registrar_(registrar) {
-
-  std::cout << "DesktopMultiWindowPlugin initialized for window: "
-            << window_->GetWindowId() << " argument: " << window_->GetWindowArgument()
-            << std::endl;
   auto channel =
       std::make_shared<flutter::MethodChannel<flutter::EncodableValue>>(
           registrar->messenger(), "mixin.one/desktop_multi_window",
@@ -43,15 +40,19 @@ DesktopMultiWindowPlugin::DesktopMultiWindowPlugin(
   channel->SetMethodCallHandler([this](const auto& call, auto result) {
     HandleMethodCall(call, std::move(result));
   });
-  
+
   // Set channel to window for event notifications
   window_->SetChannel(channel);
-  
+
   // Register WindowChannel plugin for each engine
   WindowChannelPluginRegisterWithRegistrar(registrar);
 }
 
-DesktopMultiWindowPlugin::~DesktopMultiWindowPlugin() = default;
+DesktopMultiWindowPlugin::~DesktopMultiWindowPlugin() {
+  std::cout << "DesktopMultiWindowPlugin destroyed for window: "
+            << window_->GetWindowId() << std::endl;
+   MultiWindowManager::Instance()->RemoveWindow(window_->GetWindowId());
+}
 
 void DesktopMultiWindowPlugin::HandleMethodCall(
     const flutter::MethodCall<flutter::EncodableValue>& method_call,
@@ -76,8 +77,7 @@ void DesktopMultiWindowPlugin::HandleMethodCall(
 
   if (method == "createWindow") {
     auto args = std::get_if<flutter::EncodableMap>(method_call.arguments());
-    auto window_id =
-        MultiWindowManager::Instance()->Create(args);
+    auto window_id = MultiWindowManager::Instance()->Create(args);
     result->Success(flutter::EncodableValue(window_id));
     return;
   } else if (method == "getWindowDefinition") {
@@ -110,10 +110,11 @@ void DesktopMultiWindowPluginRegisterWithRegistrar(
 
 void InternalMultiWindowPluginRegisterWithRegistrar(
     FlutterDesktopPluginRegistrarRef registrar,
-    BaseFlutterWindow* window) {
+    FlutterWindowWrapper* window) {
   auto plugin_registrar =
       flutter::PluginRegistrarManager::GetInstance()
           ->GetRegistrar<flutter::PluginRegistrarWindows>(registrar);
-  auto plugin = std::make_unique<DesktopMultiWindowPlugin>(window, plugin_registrar);
+  auto plugin =
+      std::make_unique<DesktopMultiWindowPlugin>(window, plugin_registrar);
   plugin_registrar->AddPlugin(std::move(plugin));
 }

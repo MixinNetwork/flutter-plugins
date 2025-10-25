@@ -26,8 +26,10 @@
         {
             "name": "Win32",
             "includePath": [
-                "${workspaceFolder}/packages/desktop_multi_window/windows/**",
-                "${workspaceFolder}/packages/desktop_multi_window/windows/include/**"
+                "${workspaceFolder}/example/windows/*",
+                "${workspaceFolder}/example/windows/flutter/ephemeral/*",
+                "${workspaceFolder}/example/windows/flutter/ephemeral/cpp_client_wrapper/**",
+                "${workspaceFolder}/windows/**"
             ],
             "defines": [
                 "_DEBUG",
@@ -40,7 +42,8 @@
             "cppStandard": "c++17",
             "browse": {
                 "path": [
-                    "${workspaceFolder}/packages/desktop_multi_window/windows"
+                    "${workspaceFolder}/windows",
+                    "${workspaceFolder}/example/windows/flutter/ephemeral/cpp_client_wrapper/**"
                 ]
             }
         }

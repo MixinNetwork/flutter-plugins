@@ -43,31 +43,52 @@ class _ExampleMainWindowState extends State<ExampleMainWindow> {
                 },
                 child: const Text('Launch video player window'),
               ),
-              TextButton(
-                onPressed: () async {
-                  // check existing windows
-                  final controllers = WindowController.getAll();
-                  for (var controller in await controllers) {
-                    final args =
-                        WindowArguments.fromArguments(controller.arguments);
-                    if (args.businessId == WindowArguments.businessIdSample) {
-                      await controller.center();
-                      await controller.show();
-                      return;
-                    }
-                  }
+              Row(
+                children: [
+                  TextButton(
+                    onPressed: () async {
+                      // check existing windows
+                      final controllers = WindowController.getAll();
+                      for (var controller in await controllers) {
+                        final args =
+                            WindowArguments.fromArguments(controller.arguments);
+                        if (args.businessId ==
+                            WindowArguments.businessIdSample) {
+                          await controller.center();
+                          await controller.show();
+                          return;
+                        }
+                      }
 
-                  final controller = await WindowController.create(
-                    WindowConfiguration(
-                      hiddenAtLaunch: true,
-                      arguments: const SampleWindowArguments().toArguments(),
-                    ),
-                  );
-                  d(
-                    'Created sample window: ${controller.windowId} ${controller.arguments}',
-                  );
-                },
-                child: const Text('Launch sample window (single instance)'),
+                      final controller = await WindowController.create(
+                        WindowConfiguration(
+                          hiddenAtLaunch: true,
+                          arguments:
+                              const SampleWindowArguments().toArguments(),
+                        ),
+                      );
+                      d(
+                        'Created sample window: ${controller.windowId} ${controller.arguments}',
+                      );
+                    },
+                    child: const Text('Launch sample window (single instance)'),
+                  ),
+                  TextButton(
+                    onPressed: () async {
+                      final controller = await WindowController.create(
+                        WindowConfiguration(
+                          hiddenAtLaunch: true,
+                          arguments:
+                              const SampleWindowArguments().toArguments(),
+                        ),
+                      );
+                      d(
+                        'Created sample window: ${controller.windowId} ${controller.arguments}',
+                      );
+                    },
+                    child: const Text('Launch sample window (multi instance)'),
+                  ),
+                ],
               ),
               TextButton(
                 onPressed: () async {

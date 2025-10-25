@@ -162,7 +162,7 @@ class ChannelRegistry {
       bidirectional_channels_;
 };
 
-class WindowChannelPlugin {
+class WindowChannelPlugin : public flutter::Plugin {
  public:
   WindowChannelPlugin(flutter::PluginRegistrarWindows* registrar)
       : registrar_(registrar) {

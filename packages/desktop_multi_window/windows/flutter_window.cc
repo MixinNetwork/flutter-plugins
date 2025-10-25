@@ -6,145 +6,45 @@
 
 #include <iostream>
 
-#include "include/desktop_multi_window/desktop_multi_window_plugin.h"
 #include "multi_window_plugin_internal.h"
 
-namespace {
+FlutterWindow::FlutterWindow(const std::string& id,
+                             const WindowConfiguration config)
+    : id_(id), window_argument_(config.arguments) {}
 
-WindowCreatedCallback _g_window_created_callback = nullptr;
+bool FlutterWindow::OnCreate() {
+  // Called when the window is created
+  RECT frame = GetClientArea();
 
-TCHAR kFlutterWindowClassName[] = _T("FlutterMultiWindow");
-
-int32_t class_registered_ = 0;
-
-void RegisterWindowClass(WNDPROC wnd_proc) {
-  if (class_registered_ == 0) {
-    WNDCLASS window_class{};
-    window_class.hCursor = LoadCursor(nullptr, IDC_ARROW);
-    window_class.lpszClassName = kFlutterWindowClassName;
-    window_class.style = CS_HREDRAW | CS_VREDRAW;
-    window_class.cbClsExtra = 0;
-    window_class.cbWndExtra = 0;
-    window_class.hInstance = GetModuleHandle(nullptr);
-    window_class.hIcon = LoadIcon(window_class.hInstance, IDI_APPLICATION);
-    window_class.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
-    window_class.lpszMenuName = nullptr;
-    window_class.lpfnWndProc = wnd_proc;
-    RegisterClass(&window_class);
-  }
-  class_registered_++;
-}
-
-void UnregisterWindowClass() {
-  class_registered_--;
-  if (class_registered_ != 0) {
-    return;
-  }
-  UnregisterClass(kFlutterWindowClassName, nullptr);
-}
-
-// Scale helper to convert logical scaler values to physical using passed in
-// scale factor
-inline int Scale(double source, double scale_factor) {
-  return static_cast<int>(source * scale_factor);
-}
-
-using EnableNonClientDpiScaling = BOOL __stdcall(HWND hwnd);
-
-// Dynamically loads the |EnableNonClientDpiScaling| from the User32 module.
-// This API is only needed for PerMonitor V1 awareness mode.
-void EnableFullDpiSupportIfAvailable(HWND hwnd) {
-  HMODULE user32_module = LoadLibraryA("User32.dll");
-  if (!user32_module) {
-    return;
-  }
-  auto enable_non_client_dpi_scaling =
-      reinterpret_cast<EnableNonClientDpiScaling*>(
-          GetProcAddress(user32_module, "EnableNonClientDpiScaling"));
-  if (enable_non_client_dpi_scaling != nullptr) {
-    enable_non_client_dpi_scaling(hwnd);
-    FreeLibrary(user32_module);
-  }
-}
-
-}  // namespace
-
-FlutterWindow::FlutterWindow(
-    const std::string& id,
-    const WindowConfiguration config,
-    const std::shared_ptr<FlutterWindowCallback>& callback)
-    : callback_(callback),
-      id_(id),
-      window_handle_(nullptr),
-      scale_factor_(1),
-      window_argument_(config.arguments) {
-  RegisterWindowClass(FlutterWindow::WndProc);
-}
-
-void FlutterWindow::Initialize(const WindowConfiguration config) {
-  HWND window_handle =
-      CreateWindow(kFlutterWindowClassName, L"", WS_OVERLAPPEDWINDOW,
-                   CW_USEDEFAULT, CW_USEDEFAULT, 800, 600, nullptr, nullptr,
-                   GetModuleHandle(nullptr), this);
-
-  RECT frame;
-  GetClientRect(window_handle, &frame);
   flutter::DartProject project(L"data");
   std::vector<std::string> entrypoint_args = {"multi_window", id_,
                                               window_argument_};
   project.set_dart_entrypoint_arguments(entrypoint_args);
   flutter_controller_ = std::make_unique<flutter::FlutterViewController>(
       frame.right - frame.left, frame.bottom - frame.top, project);
+
   // Ensure that basic setup of the controller was successful.
   if (!flutter_controller_->engine() || !flutter_controller_->view()) {
     std::cerr << "Failed to setup FlutterViewController." << std::endl;
+    return false;
   }
+
   auto view_handle = flutter_controller_->view()->GetNativeWindow();
-  SetParent(view_handle, window_handle);
-  MoveWindow(view_handle, 0, 0, frame.right - frame.left,
-             frame.bottom - frame.top, true);
+  SetChildContent(view_handle);
 
-  auto registrar = flutter_controller_->engine()->GetRegistrarForPlugin(
-      "DesktopMultiWindowPlugin");
-  InternalMultiWindowPluginRegisterWithRegistrar(registrar, this);
-
-  if (_g_window_created_callback) {
-    _g_window_created_callback(flutter_controller_.get());
-  }
-
-  ShowWindow(window_handle, config.hidden_at_launch ? SW_HIDE : SW_SHOW);
+  return true;
 }
 
-// static
-FlutterWindow* FlutterWindow::GetThisFromHandle(HWND window) noexcept {
-  return reinterpret_cast<FlutterWindow*>(
-      GetWindowLongPtr(window, GWLP_USERDATA));
-}
-
-// static
-LRESULT CALLBACK FlutterWindow::WndProc(HWND window,
-                                        UINT message,
-                                        WPARAM wparam,
-                                        LPARAM lparam) {
-  if (message == WM_NCCREATE) {
-    auto window_struct = reinterpret_cast<CREATESTRUCT*>(lparam);
-    SetWindowLongPtr(window, GWLP_USERDATA,
-                     reinterpret_cast<LONG_PTR>(window_struct->lpCreateParams));
-
-    auto that = static_cast<FlutterWindow*>(window_struct->lpCreateParams);
-    EnableFullDpiSupportIfAvailable(window);
-    that->window_handle_ = window;
-  } else if (FlutterWindow* that = GetThisFromHandle(window)) {
-    return that->MessageHandler(window, message, wparam, lparam);
+void FlutterWindow::OnDestroy() {
+  if (flutter_controller_) {
+    flutter_controller_ = nullptr;
   }
-
-  return DefWindowProc(window, message, wparam, lparam);
 }
 
 LRESULT FlutterWindow::MessageHandler(HWND hwnd,
-                                      UINT message,
-                                      WPARAM wparam,
-                                      LPARAM lparam) {
+                                      UINT const message,
+                                      WPARAM const wparam,
+                                      LPARAM const lparam) noexcept {
   // Give Flutter, including plugins, an opportunity to handle window messages.
   if (flutter_controller_) {
     std::optional<LRESULT> result =
@@ -155,98 +55,15 @@ LRESULT FlutterWindow::MessageHandler(HWND hwnd,
     }
   }
 
-  auto child_content_ = flutter_controller_
-                            ? flutter_controller_->view()->GetNativeWindow()
-                            : nullptr;
-
   switch (message) {
-    case WM_FONTCHANGE: {
+    case WM_FONTCHANGE:
       flutter_controller_->engine()->ReloadSystemFonts();
       break;
-    }
-    case WM_DESTROY: {
-      Destroy();
-      if (!destroyed_) {
-        destroyed_ = true;
-        if (auto callback = callback_.lock()) {
-          callback->OnWindowDestroy(id_);
-        }
-      }
-      return 0;
-    }
-    case WM_CLOSE: {
-      if (auto callback = callback_.lock()) {
-        callback->OnWindowClose(id_);
-      }
-      break;
-    }
-    case WM_DPICHANGED: {
-      auto newRectSize = reinterpret_cast<RECT*>(lparam);
-      LONG newWidth = newRectSize->right - newRectSize->left;
-      LONG newHeight = newRectSize->bottom - newRectSize->top;
-
-      SetWindowPos(hwnd, nullptr, newRectSize->left, newRectSize->top, newWidth,
-                   newHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-
-      return 0;
-    }
-    case WM_SIZE: {
-      RECT rect;
-      GetClientRect(window_handle_, &rect);
-      if (child_content_ != nullptr) {
-        // Size and position the child window.
-        MoveWindow(child_content_, rect.left, rect.top, rect.right - rect.left,
-                   rect.bottom - rect.top, TRUE);
-      }
-      return 0;
-    }
-
-    case WM_ACTIVATE: {
-      if (child_content_ != nullptr) {
-        SetFocus(child_content_);
-      }
-      return 0;
-    }
-    default:
-      break;
   }
 
-  return DefWindowProc(window_handle_, message, wparam, lparam);
-}
-
-void FlutterWindow::HandleWindowMethod(
-    const std::string& method,
-    const flutter::EncodableMap* arguments,
-    std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
-  if (method == "window_show") {
-    Show();
-    result->Success();
-  } else if (method == "window_hide") {
-    Hide();
-    result->Success();
-  } else {
-    result->Error("-1", "unknown method: " + method);
-  }
-}
-
-void FlutterWindow::Destroy() {
-  if (flutter_controller_) {
-    flutter_controller_ = nullptr;
-  }
-  if (window_handle_) {
-    DestroyWindow(window_handle_);
-    window_handle_ = nullptr;
-  }
+  return Win32Window::MessageHandler(hwnd, message, wparam, lparam);
 }
 
 FlutterWindow::~FlutterWindow() {
-  if (window_handle_) {
-    std::cout << "window_handle leak." << std::endl;
-  }
-  UnregisterWindowClass();
-}
-
-void DesktopMultiWindowSetWindowCreatedCallback(
-    WindowCreatedCallback callback) {
-  _g_window_created_callback = callback;
+  // Cleanup is handled by Win32Window::Destroy()
 }

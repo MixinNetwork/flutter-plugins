@@ -9,7 +9,10 @@
 
 #include <iostream>
 #include "flutter_window.h"
+#include "flutter_window_wrapper.h"
+#include "include/desktop_multi_window/desktop_multi_window_plugin.h"
 #include "multi_window_plugin_internal.h"
+#include "win32_window.h"
 #include "window_configuration.h"
 
 namespace {
@@ -27,43 +30,7 @@ std::string GenerateWindowId() {
   return result;
 }
 
-class FlutterMainWindow : public BaseFlutterWindow {
- public:
-  FlutterMainWindow(const std::string& window_id,
-                    HWND hwnd,
-                    FlutterDesktopPluginRegistrarRef registrar)
-      : window_id_(window_id), hwnd_(hwnd), registrar_(registrar) {}
-
-  ~FlutterMainWindow() override = default;
-
-  std::string GetWindowId() const override { return window_id_; }
-
-  std::string GetWindowArgument() const override { return ""; }
-
-  void HandleWindowMethod(
-      const std::string& method,
-      const flutter::EncodableMap* arguments,
-      std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result)
-      override {
-    if (method == "window_show") {
-      Show();
-      result->Success();
-    } else if (method == "window_hide") {
-      Hide();
-      result->Success();
-    } else {
-      result->Error("-1", "unknown method: " + method);
-    }
-  }
-
- protected:
-  HWND GetWindowHandle() override { return hwnd_; }
-
- private:
-  std::string window_id_;
-  HWND hwnd_;
-  FlutterDesktopPluginRegistrarRef registrar_;
-};
+WindowCreatedCallback _g_window_created_callback = nullptr;
 
 }  // namespace
 
@@ -76,43 +43,78 @@ MultiWindowManager* MultiWindowManager::Instance() {
 MultiWindowManager::MultiWindowManager() : windows_() {}
 
 std::string MultiWindowManager::Create(const flutter::EncodableMap* args) {
+  if (windows_.size() >= 15) {
+    std::cerr << "ERROR: Maximum window limit (15) reached!" << std::endl;
+    return "";
+  }
+
+  std::cout << "Creating window #" << (windows_.size() + 1) << std::endl;
+
   std::string window_id = GenerateWindowId();
   WindowConfiguration config = WindowConfiguration::FromEncodableMap(args);
-  auto window =
-      std::make_unique<FlutterWindow>(window_id, config, shared_from_this());
-  windows_[window_id] = std::move(window);
-  static_cast<FlutterWindow*>(windows_[window_id].get())->Initialize(config);
-  
+
+  auto flutter_window = std::make_unique<FlutterWindow>(window_id, config);
+
+  std::wstring title = L"";
+  Win32Window::Point origin(10, 10);
+  Win32Window::Size size(800, 600);
+
+  if (!flutter_window->Create(title, origin, size)) {
+    std::cerr << "Failed to create window." << std::endl;
+    return "";
+  }
+
+  ::ShowWindow(flutter_window->GetHandle(),
+               config.hidden_at_launch ? SW_HIDE : SW_SHOW);
+
+  auto wrapper = std::make_unique<FlutterWindowWrapper>(
+      window_id, flutter_window->GetHandle(), config.arguments);
+
+  windows_[window_id] = std::move(wrapper);
+
+  if (_g_window_created_callback) {
+    _g_window_created_callback(flutter_window->GetFlutterViewController());
+  }
+  auto registrar = flutter_window->GetFlutterViewController()
+                       ->engine()
+                       ->GetRegistrarForPlugin("DesktopMultiWindowPlugin");
+  InternalMultiWindowPluginRegisterWithRegistrar(registrar,
+                                                 windows_[window_id].get());
+
+  // keep flutter_window alive
+  managed_flutter_windows_[window_id] = std::move(flutter_window);
+
   // Notify all windows about the change
   NotifyWindowsChanged();
-  
+
   return window_id;
 }
 
 void MultiWindowManager::AttachFlutterMainWindow(
     HWND window_handle,
     FlutterDesktopPluginRegistrarRef registrar) {
-  // check if  window already exists
+  // check if window already exists
   for (const auto& [id, window] : windows_) {
     if (GetAncestor(window->GetWindowHandle(), GA_ROOT) == window_handle) {
-      std::cout << "Main window already attached: " << id << std::endl;
       return;
     }
   }
 
   const std::string window_id = GenerateWindowId();
-  auto window =
-      std::make_unique<FlutterMainWindow>(window_id, window_handle, registrar);
-  windows_[window_id] = std::move(window);
+  auto wrapper =
+      std::make_unique<FlutterWindowWrapper>(window_id, window_handle);
+
+  windows_[window_id] = std::move(wrapper);
 
   InternalMultiWindowPluginRegisterWithRegistrar(registrar,
                                                  windows_[window_id].get());
-  
+
   // Notify all windows about the change
   NotifyWindowsChanged();
 }
 
-BaseFlutterWindow* MultiWindowManager::GetWindow(const std::string& window_id) {
+FlutterWindowWrapper* MultiWindowManager::GetWindow(
+    const std::string& window_id) {
   auto it = windows_.find(window_id);
   if (it != windows_.end()) {
     return it->second.get();
@@ -141,25 +143,32 @@ std::vector<std::string> MultiWindowManager::GetAllWindowIds() {
   return window_ids;
 }
 
+void MultiWindowManager::RemoveWindow(const std::string& window_id) {
+  auto it = windows_.find(window_id);
+  if (it != windows_.end()) {
+    windows_.erase(it);
+    // managed_flutter_windows_.erase(window_id);
+    NotifyWindowsChanged();
+  }
+}
+
 void MultiWindowManager::NotifyWindowsChanged() {
   auto window_ids = GetAllWindowIds();
   flutter::EncodableList window_ids_list;
   for (const auto& id : window_ids) {
     window_ids_list.push_back(flutter::EncodableValue(id));
   }
-  
+
   flutter::EncodableMap data;
-  data[flutter::EncodableValue("windowIds")] = flutter::EncodableValue(window_ids_list);
-  
+  data[flutter::EncodableValue("windowIds")] =
+      flutter::EncodableValue(window_ids_list);
+
   for (const auto& [id, window] : windows_) {
     window->NotifyWindowEvent("onWindowsChanged", data);
   }
 }
 
-void MultiWindowManager::OnWindowClose(const std::string& id) {}
-
-void MultiWindowManager::OnWindowDestroy(const std::string& id) {
-  std::cout << "Window destroyed: " << id << std::endl;
-  windows_.erase(id);
-  NotifyWindowsChanged();
+void DesktopMultiWindowSetWindowCreatedCallback(
+    WindowCreatedCallback callback) {
+  _g_window_created_callback = callback;
 }

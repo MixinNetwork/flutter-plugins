@@ -3,8 +3,6 @@
 #include <dwmapi.h>
 #include <flutter_windows.h>
 
-#include "resource.h"
-
 namespace {
 
 /// Window attribute that enables dark mode window decorations.
@@ -16,7 +14,7 @@ namespace {
 #define DWMWA_USE_IMMERSIVE_DARK_MODE 20
 #endif
 
-constexpr const wchar_t kWindowClassName[] = L"FLUTTER_RUNNER_WIN32_WINDOW";
+constexpr const wchar_t kWindowClassName[] = L"FLUTTER_MULTI_WINDOW_WIN32_WINDOW";
 
 /// Registry key for app theme preference.
 ///
@@ -95,8 +93,8 @@ const wchar_t* WindowClassRegistrar::GetWindowClass() {
     window_class.cbClsExtra = 0;
     window_class.cbWndExtra = 0;
     window_class.hInstance = GetModuleHandle(nullptr);
-    window_class.hIcon =
-        LoadIcon(window_class.hInstance, MAKEINTRESOURCE(IDI_APP_ICON));
+    window_class.hIcon = (HICON)LoadImage(GetModuleHandle(NULL), TEXT("IDI_APP_ICON"), IMAGE_ICON, 0, 0, LR_DEFAULTSIZE | LR_SHARED);
+
     window_class.hbrBackground = 0;
     window_class.lpszMenuName = nullptr;
     window_class.lpfnWndProc = Win32Window::WndProc;
