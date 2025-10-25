@@ -22,8 +22,8 @@ std::string GenerateWindowId() {
   uint64_t part1 = dis(gen);
   uint64_t part2 = dis(gen);
 
-  part1 = (part1 & 0xFFFFFFFFFFFF0FFFULL) | 0x0000000000004000ULL;  // 版本 4
-  part2 = (part2 & 0x3FFFFFFFFFFFFFFFULL) | 0x8000000000000000ULL;  // 变体
+  part1 = (part1 & 0xFFFFFFFFFFFF0FFFULL) | 0x0000000000004000ULL;
+  part2 = (part2 & 0x3FFFFFFFFFFFFFFFULL) | 0x8000000000000000ULL;
 
   char uuid_str[37];
   snprintf(uuid_str, sizeof(uuid_str), "%08x-%04x-%04x-%04x-%012llx",
@@ -87,8 +87,8 @@ std::string MultiWindowManager::Create(FlValue* args) {
   }
 
   // Create FlutterWindow instance
-  auto w =
-      std::make_unique<FlutterWindow>(window_id, config.arguments, GTK_WIDGET(window));
+  auto w = std::make_unique<FlutterWindow>(window_id, config.arguments,
+                                           GTK_WIDGET(window));
   windows_[window_id] = std::move(w);
 
   // Setup Flutter project
@@ -104,10 +104,12 @@ std::string MultiWindowManager::Create(FlValue* args) {
   gtk_container_add(GTK_CONTAINER(window), GTK_WIDGET(fl_view));
 
   // Issues from flutter/engine: https://github.com/flutter/engine/pull/40033
-  // Prevent delete-event from flutter engine shell, which will quit the whole appplication
-  // when the window is closed.
-  // this can be done by [window_manager] plugin, but we need it here if user is not using that plugin.
-  guint handler_id = g_signal_handler_find(window, G_SIGNAL_MATCH_DATA, 0, 0, NULL, NULL, fl_view);
+  // Prevent delete-event from flutter engine shell, which will quit the whole
+  // appplication when the window is closed. this can be done by
+  // [window_manager] plugin, but we need it here if user is not using that
+  // plugin.
+  guint handler_id = g_signal_handler_find(window, G_SIGNAL_MATCH_DATA, 0, 0,
+                                           NULL, NULL, fl_view);
   if (handler_id > 0) {
     g_signal_handler_disconnect(window, handler_id);
   }
@@ -117,23 +119,7 @@ std::string MultiWindowManager::Create(FlValue* args) {
     _g_window_created_callback(FL_PLUGIN_REGISTRY(fl_view));
   }
 
-  // Setup destroy signal handler
-  g_signal_connect(
-      GTK_WIDGET(window), "destroy", G_CALLBACK(+[](GtkWidget* widget, gpointer arg) {
-        g_warning("Window destroyed");
-        auto* window_id_ptr = static_cast<std::string*>(arg);
-
-        GtkWidget* child = gtk_bin_get_child(GTK_BIN(widget));
-        if (child && FL_IS_VIEW(child)) {
-          gtk_container_remove(GTK_CONTAINER(widget), child);
-        }
-
-        MultiWindowManager::Instance()->OnWindowClose(*window_id_ptr);
-        MultiWindowManager::Instance()->OnWindowDestroy(*window_id_ptr);
-        delete window_id_ptr;
-      }),
-      new std::string(window_id));
-
+  ObserveWindowClose(window_id, window);
   // Register plugin
   g_autoptr(FlPluginRegistrar) desktop_multi_window_registrar =
       fl_plugin_registry_get_registrar_for_plugin(FL_PLUGIN_REGISTRY(fl_view),
@@ -164,11 +150,32 @@ void MultiWindowManager::AttachMainWindow(GtkWidget* window_widget,
       std::make_unique<FlutterWindow>(main_window_id, "", window_widget);
   windows_[main_window_id] = std::move(window);
 
+  ObserveWindowClose(main_window_id, GTK_WINDOW(window_widget));
   desktop_multi_window_plugin_register_with_registrar_internal(
       registrar, windows_[main_window_id].get());
-  
+
   // Notify all windows about the change
   NotifyWindowsChanged();
+}
+
+void MultiWindowManager::ObserveWindowClose(const std::string& window_id,
+                                            GtkWindow* window) {
+  // Setup destroy signal handler
+  g_signal_connect(
+      GTK_WIDGET(window), "destroy",
+      G_CALLBACK(+[](GtkWidget* widget, gpointer arg) {
+        g_warning("Window destroyed");
+        auto* window_id_ptr = static_cast<std::string*>(arg);
+
+        GtkWidget* child = gtk_bin_get_child(GTK_BIN(widget));
+        if (child && FL_IS_VIEW(child)) {
+          gtk_container_remove(GTK_CONTAINER(widget), child);
+        }
+
+        MultiWindowManager::Instance()->RemoveWindow(*window_id_ptr);
+        delete window_id_ptr;
+      }),
+      new std::string(window_id));
 }
 
 FlutterWindow* MultiWindowManager::GetWindow(const std::string& window_id) {
@@ -183,10 +190,12 @@ FlValue* MultiWindowManager::GetAllWindows() {
   g_autoptr(FlValue) windows = fl_value_new_list();
   for (const auto& pair : windows_) {
     g_autoptr(FlValue) window_info = fl_value_new_map();
-    fl_value_set_string_take(window_info, "windowId",
-                             fl_value_new_string(pair.second->GetWindowId().c_str()));
-    fl_value_set_string_take(window_info, "windowArgument",
-                             fl_value_new_string(pair.second->GetWindowArgument().c_str()));
+    fl_value_set_string_take(
+        window_info, "windowId",
+        fl_value_new_string(pair.second->GetWindowId().c_str()));
+    fl_value_set_string_take(
+        window_info, "windowArgument",
+        fl_value_new_string(pair.second->GetWindowArgument().c_str()));
     fl_value_append_take(windows, fl_value_ref(window_info));
   }
   return fl_value_ref(windows);
@@ -202,25 +211,23 @@ std::vector<std::string> MultiWindowManager::GetAllWindowIds() {
 
 void MultiWindowManager::NotifyWindowsChanged() {
   auto window_ids = GetAllWindowIds();
-  
+
   g_autoptr(FlValue) window_ids_list = fl_value_new_list();
   for (const auto& id : window_ids) {
     fl_value_append_take(window_ids_list, fl_value_new_string(id.c_str()));
   }
-  
+
   g_autoptr(FlValue) data = fl_value_new_map();
   fl_value_set_string_take(data, "windowIds", fl_value_ref(window_ids_list));
-  
+
   for (const auto& pair : windows_) {
     pair.second->NotifyWindowEvent("onWindowsChanged", data);
   }
 }
 
-void MultiWindowManager::OnWindowClose(const std::string& id) {}
-
-void MultiWindowManager::OnWindowDestroy(const std::string& id) {
-  g_warning("Window destroyed: %s", id.c_str());
-  windows_.erase(id);
+void MultiWindowManager::RemoveWindow(const std::string& window_id) {
+  g_warning("RemoveWindow: %s", window_id.c_str());
+  windows_.erase(window_id);
   NotifyWindowsChanged();
 }
 

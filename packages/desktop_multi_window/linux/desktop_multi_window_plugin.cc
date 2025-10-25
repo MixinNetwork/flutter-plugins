@@ -27,8 +27,6 @@ G_DEFINE_TYPE(DesktopMultiWindowPlugin,
 static void desktop_multi_window_plugin_handle_method_call(
     DesktopMultiWindowPlugin* self,
     FlMethodCall* method_call) {
-  g_autoptr(FlMethodResponse) response;
-
   const gchar* method = fl_method_call_get_name(method_call);
 
   // Check if this is a window-specific method (starts with "window_")
@@ -36,22 +34,30 @@ static void desktop_multi_window_plugin_handle_method_call(
     auto* args = fl_method_call_get_args(method_call);
     auto window_id_value = fl_value_lookup_string(args, "windowId");
     if (window_id_value == nullptr) {
-      response = FL_METHOD_RESPONSE(
+      g_autoptr(FlMethodResponse) response = FL_METHOD_RESPONSE(
           fl_method_error_response_new("-1", "windowId is required", nullptr));
-    } else {
-      const gchar* window_id = fl_value_get_string(window_id_value);
-      auto window = MultiWindowManager::Instance()->GetWindow(window_id);
-      if (!window) {
-        g_autofree gchar* error_msg =
-            g_strdup_printf("failed to find target window: %s", window_id);
-        response = FL_METHOD_RESPONSE(
-            fl_method_error_response_new("-1", error_msg, nullptr));
-      } else {
-        window->HandleWindowMethod(method, args, method_call);
-        return;  // Window handles the response
-      }
+      fl_method_call_respond(method_call, response, nullptr);
+      return;
     }
-  } else if (strcmp(method, "createWindow") == 0) {
+    
+    const gchar* window_id = fl_value_get_string(window_id_value);
+    auto window = MultiWindowManager::Instance()->GetWindow(window_id);
+    if (!window) {
+      g_autofree gchar* error_msg =
+          g_strdup_printf("failed to find target window: %s", window_id);
+      g_autoptr(FlMethodResponse) response = FL_METHOD_RESPONSE(
+          fl_method_error_response_new("-1", error_msg, nullptr));
+      fl_method_call_respond(method_call, response, nullptr);
+      return;
+    }
+    
+    window->HandleWindowMethod(method, args, method_call);
+    return;  // Window handles the response
+  }
+
+  g_autoptr(FlMethodResponse) response = nullptr;
+  
+  if (strcmp(method, "createWindow") == 0) {
     auto* args = fl_method_call_get_args(method_call);
     auto window_id = MultiWindowManager::Instance()->Create(args);
     response = FL_METHOD_RESPONSE(
@@ -125,7 +131,7 @@ void desktop_multi_window_plugin_register_with_registrar(
   auto window = gtk_widget_get_toplevel(GTK_WIDGET(view));
   if (GTK_IS_WINDOW(window)) {
     MultiWindowManager::Instance()->AttachMainWindow(window, registrar);
-  } else {
+  } else { // 变体
     g_critical("can not find GtkWindow instance for main window.");
   }
 }

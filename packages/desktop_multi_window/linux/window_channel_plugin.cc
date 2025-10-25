@@ -1,5 +1,6 @@
 #include "window_channel_plugin.h"
 
+#include <algorithm>
 #include <cstring>
 #include <map>
 #include <memory>

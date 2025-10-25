@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <map>
 #include <string>
+#include <vector>
 
 #include <flutter_linux/flutter_linux.h>
 #include <gtk/gtk.h>
@@ -31,11 +32,13 @@ class MultiWindowManager
 
   std::vector<std::string> GetAllWindowIds();
 
-  void OnWindowClose(const std::string& id);
-
-  void OnWindowDestroy(const std::string& id);
+  void RemoveWindow(const std::string& window_id);
 
  private:
+
+  void ObserveWindowClose(const std::string& window_id,
+                            GtkWindow* window);
+
   void NotifyWindowsChanged();
 
   std::map<std::string, std::unique_ptr<FlutterWindow>> windows_;
