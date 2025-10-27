@@ -274,7 +274,6 @@ class WindowChannel: NSObject, FlutterPlugin {
   }
 
   deinit {
-    debugPrint("WindowChannel deinit")
     for channel in methodChannels {
       ChannelRegistry.shared.unregister(channel, window: self)
     }

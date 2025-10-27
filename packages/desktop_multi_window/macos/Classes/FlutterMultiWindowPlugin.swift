@@ -3,10 +3,13 @@ import FlutterMacOS
 
 public class FlutterMultiWindowPlugin: NSObject, FlutterPlugin {
 
-    private let window: FlutterWindow
+    private let windowId: WindowId
+    private let windowArgument: String
+    
 
     init(window: FlutterWindow) {
-        self.window = window
+        self.windowId = window.windowId
+        self.windowArgument = window.windowArgument
         super.init()
     }
 
@@ -55,8 +58,8 @@ public class FlutterMultiWindowPlugin: NSObject, FlutterPlugin {
             result(windowId)
         case "getWindowDefinition":
             let definition: [String: Any] = [
-                "windowId": window.windowId,
-                "windowArgument": window.windowArgument,
+                "windowId": windowId,
+                "windowArgument": windowArgument,
             ]
             result(definition)
         case "getAllWindows":
@@ -91,8 +94,6 @@ class MultiWindowManager: NSObject {
         let channel = registerMultiWindowChannel(window: flutterWindow, with: registrar)
         flutterWindow.setChannel(channel)
 
-        observeWindowClose(window: window, windowId: windowId)
-
         notifyWindowsChanged()
     }
 
@@ -123,22 +124,12 @@ class MultiWindowManager: NSObject {
         let channel = registerMultiWindowChannel(window: flutterWindow, with: registrar)
         flutterWindow.setChannel(channel)
 
-        observeWindowClose(window: window, windowId: windowId)
-
         notifyWindowsChanged()
 
         return windowId
     }
 
-    private func observeWindowClose(window: NSWindow, windowId: WindowId) {
-        NotificationCenter.default.addObserver(
-            forName: NSWindow.willCloseNotification, object: window, queue: nil
-        ) { [weak self] _ in
-            self?.removeWindow(windowId: windowId)
-        }
-    }
-
-    private func removeWindow(windowId: WindowId) {
+    func removeWindow(windowId: WindowId) {
         if windows.removeValue(forKey: windowId) != nil {
             notifyWindowsChanged()
         }

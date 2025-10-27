@@ -90,25 +90,31 @@ class _ExampleMainWindowState extends State<ExampleMainWindow> {
                   ),
                   TextButton(
                     onPressed: () async {
-                      final controllers =
-                          List<WindowController>.empty(growable: true);
                       for (int i = 0; i < 15; i++) {
-                        final controller = await WindowController.create(
+                        await WindowController.create(
                           WindowConfiguration(
                             hiddenAtLaunch: true,
                             arguments:
                                 const SampleWindowArguments().toArguments(),
                           ),
                         );
-                        controllers.add(controller);
-                      }
-                      d('Created batch sample windows: ${controllers.length}');
-                      await Future.delayed(const Duration(seconds: 5));
-                      for (var controller in controllers) {
-                        await controller.close();
                       }
                     },
                     child: const Text('Batch sample window'),
+                  ),
+                  TextButton(
+                    onPressed: () async {
+                      final controllers = WindowController.getAll();
+                      for (var controller in await controllers) {
+                        final args =
+                            WindowArguments.fromArguments(controller.arguments);
+                        if (args.businessId ==
+                            WindowArguments.businessIdSample) {
+                          await controller.close();
+                        }
+                      }
+                    },
+                    child: const Text('Close all sample windows'),
                   ),
                 ],
               ),

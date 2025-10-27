@@ -60,7 +60,7 @@ EXTERNAL SOURCES:
 SPEC CHECKSUMS:
   desktop_lifecycle: e4d2ff93af77bbbd473fe1a61773fdf9c5a79c91
   desktop_multi_window: 93667594ccc4b88d91a97972fd3b1b89667fa80a
-  FlutterMacOS: d0db08ddef1a9af05a5ec4b724367152bb0500b1
+  FlutterMacOS: 8f6f14fa908a6fb3fba0cd85dbd81ec4b251fb24
   fvp: ecee65308dd86ae46e3c6d5d42cd2aad48095ef5
   mdk: baa616b93f696c7066df0e5ebe057badfa9c462b
   mixin_logger: 6b31328b08f546a8defd32cd910370562fc48405

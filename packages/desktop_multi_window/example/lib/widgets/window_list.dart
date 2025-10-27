@@ -28,9 +28,6 @@ class _WindowListState extends State<WindowList> {
       i('Windows changed event received1');
       _refreshWindows();
     });
-    onWindowsChanged.listen((_) {
-      i('Windows changed event received2');
-    });
   }
 
   @override

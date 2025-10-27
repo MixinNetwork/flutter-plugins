@@ -18,7 +18,7 @@ class CustomWindow: NSWindow {
             styleMask: [.miniaturizable, .closable, .titled, .resizable], backing: .buffered,
             defer: false)
 
-        self.isReleasedWhenClosed = true
+        self.isReleasedWhenClosed = false
     }
 
     deinit {
@@ -33,30 +33,49 @@ class FlutterWindow: NSObject {
     private(set) var window: NSWindow
     private var channel: FlutterMethodChannel?
 
+    private var willBecomeActiveObserver: NSObjectProtocol?
+    private var didResignActiveObserver: NSObjectProtocol?
+    private var closeObserver: NSObjectProtocol?
+
     init(windowId: WindowId, windowArgument: String, window: NSWindow) {
         self.windowId = windowId
         self.windowArgument = windowArgument
         self.window = window
         super.init()
 
-        // https://github.com/MixinNetwork/flutter-plugins/issues/412
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(didChangeOcclusionState),
-            name: NSApplication.willBecomeActiveNotification,
-            object: nil
-        )
+        willBecomeActiveObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.willBecomeActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            self?.didChangeOcclusionState(notification)
+        }
 
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(didChangeOcclusionState),
-            name: NSApplication.didResignActiveNotification,
-            object: nil
-        )
+        didResignActiveObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didResignActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            self?.didChangeOcclusionState(notification)
+        }
+
+        closeObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification, object: window, queue: .main
+        ) { [windowId] _ in
+            MultiWindowManager.shared.removeWindow(windowId: windowId)
+        }
     }
 
     deinit {
-        NotificationCenter.default.removeObserver(self)
+        if let willBecomeActiveObserver = willBecomeActiveObserver {
+            NotificationCenter.default.removeObserver(willBecomeActiveObserver)
+        }
+        if let didResignActiveObserver = didResignActiveObserver {
+            NotificationCenter.default.removeObserver(didResignActiveObserver)
+        }
+        if let closeObserver = closeObserver {
+            NotificationCenter.default.removeObserver(closeObserver)
+        }
     }
 
     @objc func didChangeOcclusionState(_ notification: Notification) {
