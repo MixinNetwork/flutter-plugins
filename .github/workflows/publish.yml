@@ -15,6 +15,7 @@ on:
           - desktop_lifecycle
           - win_toast
           - pasteboard
+          - desktop_multi_window
   push:
     tags:
       - 'ogg_opus_player-v[0-9]+.[0-9]+.[0-9]+*'
@@ -24,6 +25,7 @@ on:
       - 'desktop_lifecycle-v[0-9]+.[0-9]+.[0-9]+*'
       - 'win_toast-v[0-9]+.[0-9]+.[0-9]+*'
       - 'pasteboard-v[0-9]+.[0-9]+.[0-9]+*'
+      - 'desktop_multi_window-v[0-9]+.[0-9]+.[0-9]+*'
 jobs:
   publish:
 
