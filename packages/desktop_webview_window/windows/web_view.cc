@@ -81,27 +81,34 @@ void WebView::OnWebviewControllerCreated() {
   if (!webview_controller_) {
     return;
   }
-  webview_controller_->get_CoreWebView2(&webview_);
-
-  if (!webview_) {
+  
+  HRESULT hr = webview_controller_->get_CoreWebView2(&webview_);
+  if (FAILED(hr) || !webview_) {
     std::cerr << "failed to get core webview" << std::endl;
     return;
   }
 
-  ICoreWebView2Settings *settings;
-  webview_->get_Settings(&settings);
+  wil::com_ptr<ICoreWebView2Settings> settings;
+  hr = webview_->get_Settings(&settings);
+  if (FAILED(hr) || !settings) {
+    std::cerr << "failed to get settings" << std::endl;
+    return;
+  }
+  
   settings->put_IsScriptEnabled(true);
   settings->put_IsZoomControlEnabled(false);
   settings->put_AreDefaultContextMenusEnabled(false);
   settings->put_IsStatusBarEnabled(false);
   settings->put_IsWebMessageEnabled(true);
 
-  ICoreWebView2Settings2 *settings2;
-  auto hr = settings->QueryInterface(IID_PPV_ARGS(&settings2));
-  if (SUCCEEDED(hr)) {
-    LPWSTR user_agent[256];
-    settings2->get_UserAgent(user_agent);
-    default_user_agent_ = std::wstring(*user_agent);
+  wil::com_ptr<ICoreWebView2Settings2> settings2;
+  hr = settings->QueryInterface(IID_PPV_ARGS(&settings2));
+  if (SUCCEEDED(hr) && settings2) {
+    wil::unique_cotaskmem_string user_agent;
+    hr = settings2->get_UserAgent(&user_agent);
+    if (SUCCEEDED(hr) && user_agent) {
+      default_user_agent_ = std::wstring(user_agent.get());
+    }
   }
 
   UpdateBounds();
@@ -111,9 +118,11 @@ void WebView::OnWebviewControllerCreated() {
       Callback<ICoreWebView2NewWindowRequestedEventHandler>(
           [](ICoreWebView2 *sender,
              ICoreWebView2NewWindowRequestedEventArgs *args) {
-            LPWSTR url;
-            args->get_Uri(&url);
-            sender->Navigate(url);
+            wil::unique_cotaskmem_string url;
+            HRESULT hr = args->get_Uri(&url);
+            if (SUCCEEDED(hr) && url) {
+              sender->Navigate(url.get());
+            }
             args->put_Handled(true);
             return S_OK;
           })
@@ -158,17 +167,28 @@ void WebView::OnWebviewControllerCreated() {
                 }));
 
             if (triggerOnUrlRequestedEvent) {
-              LPWSTR uri;
-              args->get_Uri(&uri);
+              wil::unique_cotaskmem_string uri;
+              HRESULT hr = args->get_Uri(&uri);
+              if (FAILED(hr) || !uri) {
+                args->put_Cancel(true);
+                return S_OK;
+              }
+
+              // Capture URI string before async callback
+              std::wstring uri_string(uri.get());
 
               auto result_handler =
                   std::make_unique<flutter::MethodResultFunctions<>>(
-                      [uri, sender,
+                      [uri_string, sender,
                        this](const flutter::EncodableValue *success_value) {
-                        const bool letPass = std::get<bool>(*success_value);
+                        bool letPass = false;
+                        if (success_value && 
+                            std::holds_alternative<bool>(*success_value)) {
+                          letPass = std::get<bool>(*success_value);
+                        }
                         if (letPass) {
                           this->setTriggerOnUrlRequestedEvent(false);
-                          sender->Navigate(uri);
+                          sender->Navigate(uri_string.c_str());
                         }
                       },
                       nullptr, nullptr);
@@ -181,7 +201,7 @@ void WebView::OnWebviewControllerCreated() {
                            flutter::EncodableValue(web_view_id_)},
                           {flutter::EncodableValue("url"),
                            flutter::EncodableValue(
-                               wide_to_utf8(std::wstring(uri)))},
+                               wide_to_utf8(uri_string))},
                       }),
                   std::move(result_handler));
 
@@ -248,7 +268,8 @@ void WebView::UpdateBounds() {
   // Resize WebView to fit the bounds of the parent window
   RECT bounds;
   GetClientRect(view_window_.get(), &bounds);
-  webview_controller_->put_Bounds(bounds);
+  if (webview_controller_) 
+    webview_controller_->put_Bounds(bounds);
 }
 
 void WebView::Navigate(const std::wstring &url) {
@@ -268,11 +289,14 @@ void WebView::AddScriptToExecuteOnDocumentCreated(
 
 void WebView::SetApplicationNameForUserAgent(const std::wstring &name) {
   if (webview_) {
-    ICoreWebView2Settings *settings;
-    webview_->get_Settings(&settings);
-    ICoreWebView2Settings2 *settings2;
-    auto hr = settings->QueryInterface(IID_PPV_ARGS(&settings2));
-    if (SUCCEEDED(hr)) {
+    wil::com_ptr<ICoreWebView2Settings> settings;
+    HRESULT hr = webview_->get_Settings(&settings);
+    if (FAILED(hr) || !settings) {
+      return;
+    }
+    wil::com_ptr<ICoreWebView2Settings2> settings2;
+    hr = settings->QueryInterface(IID_PPV_ARGS(&settings2));
+    if (SUCCEEDED(hr) && settings2) {
       settings2->put_UserAgent((default_user_agent_ + name).c_str());
     }
   }
@@ -326,46 +350,66 @@ void WebView::GetAllCookies(
         Callback<ICoreWebView2GetCookiesCompletedHandler>(
             [result = std::move(result)](
                 HRESULT hr, ICoreWebView2CookieList *cookieList) -> HRESULT {
+              if (FAILED(hr) || !cookieList) {
+                result->Error("0", "Failed to get cookies");
+                return S_OK;
+              }
+
               UINT cookieCount;
-              cookieList->get_Count(&cookieCount);
+              hr = cookieList->get_Count(&cookieCount);
+              if (FAILED(hr)) {
+                result->Error("0", "Failed to get cookie count");
+                return S_OK;
+              }
 
               std::vector<flutter::EncodableValue> cookies;
               for (UINT i = 0; i < cookieCount; ++i) {
                 wil::com_ptr<ICoreWebView2Cookie> cookie;
-                cookieList->GetValueAtIndex(i, &cookie);
+                hr = cookieList->GetValueAtIndex(i, &cookie);
+                if (FAILED(hr) || !cookie) {
+                  continue;
+                }
 
-                LPWSTR name;
-                LPWSTR value;
-                LPWSTR domain;
-                LPWSTR path;
+                wil::unique_cotaskmem_string name;
+                wil::unique_cotaskmem_string value;
+                wil::unique_cotaskmem_string domain;
+                wil::unique_cotaskmem_string path;
                 double expires;
                 BOOL isSecure;
                 BOOL isHttpOnly;
                 BOOL isSessionOnly;
 
-                cookie->get_Name(&name);
-                cookie->get_Value(&value);
-                cookie->get_Domain(&domain);
-                cookie->get_Path(&path);
-                cookie->get_Expires(&expires);
-                cookie->get_IsSecure(&isSecure);
-                cookie->get_IsHttpOnly(&isHttpOnly);
-                cookie->get_IsSession(&isSessionOnly);
+                hr = cookie->get_Name(&name);
+                if (FAILED(hr)) continue;
+                hr = cookie->get_Value(&value);
+                if (FAILED(hr)) continue;
+                hr = cookie->get_Domain(&domain);
+                if (FAILED(hr)) continue;
+                hr = cookie->get_Path(&path);
+                if (FAILED(hr)) continue;
+                hr = cookie->get_Expires(&expires);
+                if (FAILED(hr)) continue;
+                hr = cookie->get_IsSecure(&isSecure);
+                if (FAILED(hr)) continue;
+                hr = cookie->get_IsHttpOnly(&isHttpOnly);
+                if (FAILED(hr)) continue;
+                hr = cookie->get_IsSession(&isSessionOnly);
+                if (FAILED(hr)) continue;
 
                 std::map<flutter::EncodableValue, flutter::EncodableValue>
                     cookieMap;
                 cookieMap[flutter::EncodableValue("name")] =
                     flutter::EncodableValue(
-                        webview_window::ConvertLPCWSTRToString(name));
+                        webview_window::ConvertLPCWSTRToString(name.get()));
                 cookieMap[flutter::EncodableValue("value")] =
                     flutter::EncodableValue(
-                        webview_window::ConvertLPCWSTRToString(value));
+                        webview_window::ConvertLPCWSTRToString(value.get()));
                 cookieMap[flutter::EncodableValue("domain")] =
                     flutter::EncodableValue(
-                        webview_window::ConvertLPCWSTRToString(domain));
+                        webview_window::ConvertLPCWSTRToString(domain.get()));
                 cookieMap[flutter::EncodableValue("path")] =
                     flutter::EncodableValue(
-                        webview_window::ConvertLPCWSTRToString(path));
+                        webview_window::ConvertLPCWSTRToString(path.get()));
 
                 if (expires >= 0) {
                   cookieMap[flutter::EncodableValue(std::string("expires"))] =
@@ -431,8 +475,12 @@ void WebView::ExecuteJavaScript(
               if (error != S_OK) {
                 completer->Error("0", "Error executing JavaScript");
               } else {
-                completer->Success(flutter::EncodableValue(
-                    wide_to_utf8(std::wstring(result))));
+                if (result) {
+                  completer->Success(flutter::EncodableValue(
+                      wide_to_utf8(std::wstring(result))));
+                } else {
+                  completer->Success(flutter::EncodableValue(""));
+                }
               }
               return S_OK;
             })
