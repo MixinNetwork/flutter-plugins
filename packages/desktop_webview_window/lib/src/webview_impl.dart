@@ -245,8 +245,14 @@ class WebviewImpl extends Webview {
 
   @override
   void removeOnWebMessageReceivedCallback(
-      OnWebMessageReceivedCallback callback) {
+    OnWebMessageReceivedCallback callback,
+  ) {
     _onWebMessageReceivedCallbacks.remove(callback);
+  }
+
+  @override
+  void removeAllWebMessageReceivedCallback() {
+    _onWebMessageReceivedCallbacks.clear();
   }
 
   @override

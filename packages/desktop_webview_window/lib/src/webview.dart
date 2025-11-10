@@ -6,8 +6,8 @@ typedef JavaScriptMessageHandler = void Function(String name, dynamic body);
 
 typedef PromptHandler = String Function(String prompt, String defaultText);
 
-typedef OnHistoryChangedCallback = void Function(
-    bool canGoBack, bool canGoForward);
+typedef OnHistoryChangedCallback =
+    void Function(bool canGoBack, bool canGoForward);
 
 /// Callback when WebView start to load a URL.
 /// [url] is the URL string.
@@ -27,7 +27,9 @@ abstract class Webview {
   ///
   /// available: macOS (10.10+)
   void registerJavaScriptMessageHandler(
-      String name, JavaScriptMessageHandler handler);
+    String name,
+    JavaScriptMessageHandler handler,
+  );
 
   /// available: macOS
   void unregisterJavaScriptMessageHandler(String name);
@@ -83,7 +85,10 @@ abstract class Webview {
   void addOnWebMessageReceivedCallback(OnWebMessageReceivedCallback callback);
 
   void removeOnWebMessageReceivedCallback(
-      OnWebMessageReceivedCallback callback);
+    OnWebMessageReceivedCallback callback,
+  );
+
+  void removeAllWebMessageReceivedCallback();
 
   /// Close the web view window.
   void close();
