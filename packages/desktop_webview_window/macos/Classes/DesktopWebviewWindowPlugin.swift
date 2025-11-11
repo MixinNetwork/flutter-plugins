@@ -110,7 +110,7 @@ public class DesktopWebviewWindowPlugin: NSObject, FlutterPlugin {
         result(FlutterError(code: "0", message: "can not find webview for id: \(viewId)", details: nil))
         return
       }
-      wc.webViewController.addJavascriptInterface(name: name)
+      wc.webViewController.removeJavascriptInterface(name: name)
       result(nil)
       break
     case "clearAll":
