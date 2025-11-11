@@ -1,3 +1,8 @@
+## 0.2.5
+
+* Add support for `registerJavaScriptMessageHandler` and `unregisterJavaScriptMessageHandler` on
+  Linux. Use `window.webkit.messageHandlers.<handlerName>.postMessage(<message>)` in js
+
 ## 0.2.4
 
 * Add backward compatibility with webkit2gtk-4.0 on Linux
@@ -9,16 +14,22 @@
 ## 0.2.2
 
 * fix memory leak on macOS after close webview window.
-* Show and Hide Webview window by [@Iri-Hor](https://github.com/Iri-Hor) in [#268](https://github.com/MixinNetwork/flutter-plugins/pull/268)
+* Show and Hide Webview window by [@Iri-Hor](https://github.com/Iri-Hor)
+  in [#268](https://github.com/MixinNetwork/flutter-plugins/pull/268)
 
 ## 0.2.1
 
 * add Windows attentions to readme.
 * fix linux close sub window cause app exited.
 * fix linux webview title bar expanded unexpected.
-* More control over webview position and size under windows. [#206](https://github.com/MixinNetwork/flutter-plugins/pull/206) by [Lukas Heinze](https://github.com/Iri-Hor)
-* fix zone mismatch [#250](https://github.com/MixinNetwork/flutter-plugins/pull/250) by [CD](https://github.com/459217974)
-* fix linux webkit2gtk deprecated error [#246](https://github.com/MixinNetwork/flutter-plugins/pull/246) by [Zhiqiang Zhang](https://github.com/zhangzqs)
+* More control over webview position and size under
+  windows. [#206](https://github.com/MixinNetwork/flutter-plugins/pull/206)
+  by [Lukas Heinze](https://github.com/Iri-Hor)
+* fix zone mismatch [#250](https://github.com/MixinNetwork/flutter-plugins/pull/250)
+  by [CD](https://github.com/459217974)
+* fix linux webkit2gtk deprecated
+  error [#246](https://github.com/MixinNetwork/flutter-plugins/pull/246)
+  by [Zhiqiang Zhang](https://github.com/zhangzqs)
 
 ## 0.2.0
 
@@ -63,7 +74,8 @@ NOTE: contains break change. more details see readme.
 
 ## 0.0.6
 
-fix swift definition conflict on macOS.  [flutter-plugins#17](https://github.com/MixinNetwork/flutter-plugins/issues/17)
+fix swift definition conflict on
+macOS.  [flutter-plugins#17](https://github.com/MixinNetwork/flutter-plugins/issues/17)
 
 ## 0.0.5
 
