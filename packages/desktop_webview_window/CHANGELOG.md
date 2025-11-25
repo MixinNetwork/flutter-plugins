@@ -1,3 +1,8 @@
+## 0.2.5
+
+* Add support for `registerJavaScriptMessageHandler` and `unregisterJavaScriptMessageHandler` on
+  Linux. Use `window.webkit.messageHandlers.<handlerName>.postMessage(<message>)` in js code
+
 ## 0.2.4
 
 * Add backward compatibility with webkit2gtk-4.0 on Linux

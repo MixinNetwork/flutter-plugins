@@ -25,7 +25,7 @@ class WebviewImpl extends Webview {
 
   final ValueNotifier<bool> _isNavigating = ValueNotifier<bool>(false);
 
-  OnUrlRequestCallback? _onUrlRequestCallback = null;
+  OnUrlRequestCallback? _onUrlRequestCallback;
 
   final Set<OnWebMessageReceivedCallback> _onWebMessageReceivedCallbacks = {};
 
@@ -85,7 +85,7 @@ class WebviewImpl extends Webview {
   @override
   void registerJavaScriptMessageHandler(
       String name, JavaScriptMessageHandler handler) {
-    if (!Platform.isMacOS) {
+    if (!Platform.isMacOS || !Platform.isLinux) {
       return;
     }
     assert(!_closed);
@@ -103,7 +103,7 @@ class WebviewImpl extends Webview {
 
   @override
   void unregisterJavaScriptMessageHandler(String name) {
-    if (!Platform.isMacOS) {
+    if (!Platform.isMacOS || !Platform.isLinux) {
       return;
     }
     if (_closed) {
@@ -269,7 +269,7 @@ class WebviewImpl extends Webview {
       "viewId": viewId,
       "javaScriptString": javaScript,
     });
-    if (result is String || result == null) {
+    if (result is String?) {
       return result;
     }
     return json.encode(result);

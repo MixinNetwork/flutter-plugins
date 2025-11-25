@@ -57,6 +57,10 @@ class WebviewWindow {
 
   void EvaluateJavaScript(const char *java_script, FlMethodCall *call);
 
+  void RegisterJavaScriptChannel(const std::string &name);
+
+  void UnregisterJavaScriptChannel(const std::string &name);
+
  private:
   FlMethodChannel *method_channel_;
   int64_t window_id_;
