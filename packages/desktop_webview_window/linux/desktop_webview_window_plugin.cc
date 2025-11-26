@@ -3,7 +3,6 @@
 #include <flutter_linux/flutter_linux.h>
 #include <gtk/gtk.h>
 #include <webkit2/webkit2.h>
-#include <sys/utsname.h>
 
 #include <cstring>
 #include <map>
@@ -262,7 +261,7 @@ static void webview_window_plugin_handle_method_call(
     auto *js =
         fl_value_get_string(fl_value_lookup_string(args, "javaScriptString"));
     self->windows->at(window_id)->EvaluateJavaScript(js, method_call);
-  } else if (strcmp(method, "registerJavaScripInterface") == 0) {
+  } else if (strcmp(method, "registerJavaScriptInterface") == 0) {
     auto *args = fl_method_call_get_args(method_call);
     if (fl_value_get_type(args) != FL_VALUE_TYPE_MAP) {
       fl_method_call_respond_error(method_call, "0", "args is not map", nullptr, nullptr);
@@ -278,7 +277,7 @@ static void webview_window_plugin_handle_method_call(
     }
     self->windows->at(window_id)->RegisterJavaScriptChannel(channel_name);
     fl_method_call_respond_success(method_call, nullptr, nullptr);
-  } else if (strcmp(method, "unregisterJavaScripInterface") == 0) {
+  } else if (strcmp(method, "unregisterJavaScriptInterface") == 0) {
     auto *args = fl_method_call_get_args(method_call);
     if (fl_value_get_type(args) != FL_VALUE_TYPE_MAP) {
       fl_method_call_respond_error(method_call, "0", "args is not map", nullptr, nullptr);

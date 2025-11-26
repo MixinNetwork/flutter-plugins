@@ -3,10 +3,10 @@
 //
 
 #include "webview_window.h"
-
 #include <utility>
-
 #include "message_channel_plugin.h"
+#include <unordered_map>
+#include <string>
 
 #if WEBKIT_MAJOR_VERSION < 2 || \
     (WEBKIT_MAJOR_VERSION == 2 && WEBKIT_MINOR_VERSION < 40)
@@ -175,6 +175,13 @@ WebviewWindow::WebviewWindow(FlMethodChannel *method_channel, int64_t window_id,
 }
 
 WebviewWindow::~WebviewWindow() {
+  if (webview_ != nullptr) {
+    WebKitUserContentManager *manager = webkit_web_view_get_user_content_manager(WEBKIT_WEB_VIEW(webview_));
+    for (auto &entry : js_channel_handler_ids_) {
+      g_signal_handler_disconnect(manager, entry.second);
+    }
+    js_channel_handler_ids_.clear();
+  }
   g_object_unref(method_channel_);
   printf("~WebviewWindow\n");
 }
@@ -373,7 +380,8 @@ void WebviewWindow::RegisterJavaScriptChannel(const std::string &name) {
     WebKitUserContentManager *manager =
             webkit_web_view_get_user_content_manager(WEBKIT_WEB_VIEW(webview_));
 
-    webkit_user_content_manager_register_script_message_handler(manager, name.c_str());
+    webkit_user_content_manager_register_script_message_handler(
+            manager, name.c_str());
 
     struct HandlerData {
         WebviewWindow *self;
@@ -381,8 +389,13 @@ void WebviewWindow::RegisterJavaScriptChannel(const std::string &name) {
     };
 
     HandlerData *data = new HandlerData{this, name};
+    auto it = js_channel_handler_ids_.find(name);
+    if (it != js_channel_handler_ids_.end()) {
+        g_signal_handler_disconnect(manager, it->second);
+        js_channel_handler_ids_.erase(it);
+    }
 
-    g_signal_connect_data(
+    gulong handler_id = g_signal_connect_data(
             manager,
             ("script-message-received::" + name).c_str(),
             G_CALLBACK(+[](WebKitUserContentManager *manager,
@@ -400,16 +413,18 @@ void WebviewWindow::RegisterJavaScriptChannel(const std::string &name) {
                         FlValue *args = fl_value_new_map();
                         fl_value_set_string(args, "name",
                                             fl_value_new_string(handler_name.c_str()));
-                        fl_value_set_string(args, "body", fl_value_new_string(str_value));
-                        fl_value_set_string(args, "id", fl_value_new_int(self->window_id_));
+                        fl_value_set_string(args, "body",
+                                            fl_value_new_string(str_value));
+                        fl_value_set_string(args, "id",
+                                            fl_value_new_int(self->window_id_));
 
                         fl_method_channel_invoke_method(
                                 self->method_channel_,
                                 "onJavaScriptMessage",
                                 args,
-                                nullptr,  // cancellable
-                                nullptr,  // callback
-                                nullptr); // user_data
+                                nullptr,
+                                nullptr,
+                                nullptr);
 
                         g_free(str_value);
                     }
@@ -420,11 +435,22 @@ void WebviewWindow::RegisterJavaScriptChannel(const std::string &name) {
                 delete static_cast<HandlerData *>(user_data);
             },
             static_cast<GConnectFlags>(0));
+
+    js_channel_handler_ids_[name] = handler_id;
 }
+
 
 void WebviewWindow::UnregisterJavaScriptChannel(const std::string &name) {
     WebKitUserContentManager *manager =
             webkit_web_view_get_user_content_manager(WEBKIT_WEB_VIEW(webview_));
 
-    webkit_user_content_manager_unregister_script_message_handler(manager, name.c_str());
+    auto it = js_channel_handler_ids_.find(name);
+    if (it != js_channel_handler_ids_.end()) {
+        g_signal_handler_disconnect(manager, it->second);
+        js_channel_handler_ids_.erase(it);
+    }
+
+    webkit_user_content_manager_unregister_script_message_handler(
+            manager, name.c_str());
 }
+

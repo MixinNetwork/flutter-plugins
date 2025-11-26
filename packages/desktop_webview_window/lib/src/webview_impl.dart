@@ -85,7 +85,7 @@ class WebviewImpl extends Webview {
   @override
   void registerJavaScriptMessageHandler(
       String name, JavaScriptMessageHandler handler) {
-    if (!Platform.isMacOS || !Platform.isLinux) {
+    if (!Platform.isMacOS && !Platform.isLinux) {
       return;
     }
     assert(!_closed);
@@ -95,7 +95,7 @@ class WebviewImpl extends Webview {
     assert(name.isNotEmpty);
     assert(!_javaScriptMessageHandlers.containsKey(name));
     _javaScriptMessageHandlers[name] = handler;
-    channel.invokeMethod("registerJavaScripInterface", {
+    channel.invokeMethod("registerJavaScriptInterface", {
       "viewId": viewId,
       "name": name,
     });
@@ -103,13 +103,13 @@ class WebviewImpl extends Webview {
 
   @override
   void unregisterJavaScriptMessageHandler(String name) {
-    if (!Platform.isMacOS || !Platform.isLinux) {
+    if (!Platform.isMacOS && !Platform.isLinux) {
       return;
     }
     if (_closed) {
       return;
     }
-    channel.invokeMethod("unregisterJavaScripInterface", {
+    channel.invokeMethod("unregisterJavaScriptInterface", {
       "viewId": viewId,
       "name": name,
     });
@@ -269,7 +269,7 @@ class WebviewImpl extends Webview {
       "viewId": viewId,
       "javaScriptString": javaScript,
     });
-    if (result is String?) {
+    if (result == null || result is String) {
       return result;
     }
     return json.encode(result);

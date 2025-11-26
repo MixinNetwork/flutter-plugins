@@ -73,7 +73,7 @@ public class DesktopWebviewWindowPlugin: NSObject, FlutterPlugin {
       wc.webViewController.load(url: parsedUrl)
       result(nil)
       break
-    case "registerJavaScripInterface":
+    case "registerJavaScriptInterface":
       guard let argument = call.arguments as? [String: Any?] else {
         result(FlutterError(code: "0", message: "arg is not map", details: nil))
         return
@@ -93,7 +93,7 @@ public class DesktopWebviewWindowPlugin: NSObject, FlutterPlugin {
       wc.webViewController.addJavascriptInterface(name: name)
       result(nil)
       break
-    case "unregisterJavaScripInterface":
+    case "unregisterJavaScriptInterface":
       guard let argument = call.arguments as? [String: Any?] else {
         result(FlutterError(code: "0", message: "arg is not map", details: nil))
         return

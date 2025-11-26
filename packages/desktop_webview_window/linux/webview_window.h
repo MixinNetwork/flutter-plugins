@@ -12,6 +12,7 @@
 
 #include <functional>
 #include <string>
+#include <unordered_map>
 
 typedef struct {
     GMainLoop *loop;
@@ -71,6 +72,8 @@ class WebviewWindow {
   GtkWidget *window_ = nullptr;
   GtkWidget *webview_ = nullptr;
   GtkBox *box_ = nullptr;
+
+  std::unordered_map<std::string, gulong> js_channel_handler_ids_;
 };
 
 #endif  // WEBVIEW_WINDOW_LINUX_WEBVIEW_WINDOW_H_
