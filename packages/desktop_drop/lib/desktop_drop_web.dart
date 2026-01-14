@@ -87,14 +87,34 @@ class DesktopDropWeb {
 
       final items = event.dataTransfer!.items;
 
-      Future.wait(List.generate(items.length, (index) {
+      Future.wait<WebDropItem?>(List.generate(items.length, (index) {
         final item = items[index];
-        final entry = item.webkitGetAsEntry()!;
-        return _entryToWebDropItem(entry);
+        final entry = item.webkitGetAsEntry();
+        if (entry != null) {
+          return _entryToWebDropItem(entry);
+        }
+        final file = item.getAsFile();
+        if (file != null) {
+          return WebDropItem(
+            uri: web.URL.createObjectURL(file),
+            name: file.name,
+            size: file.size,
+            lastModified:
+                DateTime.fromMillisecondsSinceEpoch(file.lastModified),
+            relativePath: null,
+            type: file.type,
+            children: [],
+          );
+        }
+        return Future.value(null);
       })).then((webItems) {
+        final items = webItems.whereType<WebDropItem>().toList();
+        if (items.isEmpty) {
+          return;
+        }
         channel.invokeMethod(
           "performOperation_web",
-          webItems.map((e) => e.toJson()).toList(),
+          items.map((e) => e.toJson()).toList(),
         );
       }).catchError((e, s) {
         debugPrint('desktop_drop_web: $e $s');
