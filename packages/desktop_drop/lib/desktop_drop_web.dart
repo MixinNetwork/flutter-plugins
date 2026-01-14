@@ -69,16 +69,26 @@ class DesktopDropWeb {
 
     final web.File file = await fileCompleter.future;
 
+    return _fileToWebDropItem(
+      file,
+      relativePath: entry.fullPath,
+    );
+
+  }
+
+  WebDropItem _fileToWebDropItem(
+    web.File file, {
+    String? relativePath,
+  }) {
     return WebDropItem(
       uri: web.URL.createObjectURL(file),
       name: file.name,
       size: file.size,
       lastModified: DateTime.fromMillisecondsSinceEpoch(file.lastModified),
-      relativePath: entry.fullPath,
+      relativePath: relativePath,
       type: file.type,
       children: [],
     );
-
   }
 
   void _registerEvents() {
@@ -87,7 +97,7 @@ class DesktopDropWeb {
 
       final items = event.dataTransfer!.items;
 
-      Future.wait<WebDropItem?>(List.generate(items.length, (index) {
+      Future.wait(List.generate(items.length, (index) {
         final item = items[index];
         final entry = item.webkitGetAsEntry();
         if (entry != null) {
@@ -95,15 +105,9 @@ class DesktopDropWeb {
         }
         final file = item.getAsFile();
         if (file != null) {
-          return WebDropItem(
-            uri: web.URL.createObjectURL(file),
-            name: file.name,
-            size: file.size,
-            lastModified:
-                DateTime.fromMillisecondsSinceEpoch(file.lastModified),
+          return _fileToWebDropItem(
+            file,
             relativePath: null,
-            type: file.type,
-            children: [],
           );
         }
         return Future.value(null);
