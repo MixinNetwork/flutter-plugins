@@ -65,7 +65,7 @@ class PasteboardPlatformIO implements PasteboardPlatform {
     if (Platform.isIOS || Platform.isMacOS || Platform.isAndroid) {
       await _channel.invokeMethod<void>('writeImage', image);
     } else if (Platform.isWindows) {
-      final file = await File(GetTempFileName()).create();
+      final file = await File(_getTempFileName()).create();
       file.writeAsBytesSync(image);
       await _channel
           .invokeMethod<Object>('writeImage', {'fileName': file.path});
@@ -85,11 +85,11 @@ class PasteboardPlatformIO implements PasteboardPlatform {
   }
 }
 
-String GetTempFileName() {
+String _getTempFileName() {
   final dir = Directory.systemTemp;
   String tempFileName;
 
-  var uuid = Uuid();
+  const uuid = Uuid();
 
   while (true) {
     tempFileName = p.join(dir.path, uuid.v1().toString());
