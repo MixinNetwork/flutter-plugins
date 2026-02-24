@@ -1,3 +1,7 @@
+## 0.5.0
+
+* add SPM Support. [@vicajilau](https://github.com/MixinNetwork/flutter-plugins/pull/463)
+
 ## 0.4.0
 
 * introduce Android support. thanks to
