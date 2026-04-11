@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' show FontFeature;
 
@@ -77,6 +78,9 @@ enum _SelectionMenuAction {
 
 class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
   static const double _codeToolbarHeight = 36;
+  static const double _autoScrollActivationZone = 56;
+  static const double _autoScrollMaxSpeed = 960;
+  static const Duration _autoScrollTickInterval = Duration(milliseconds: 16);
 
   final List<TapGestureRecognizer> _recognizers = <TapGestureRecognizer>[];
   final Map<String, _CachedBlockRow> _cachedBlockRows =
@@ -101,14 +105,17 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
   final Map<String, GlobalKey<SelectableMarkdownTableBlockState>>
       _tableBlockKeys =
       <String, GlobalKey<SelectableMarkdownTableBlockState>>{};
+  final GlobalKey _scrollableKey = GlobalKey(debugLabel: 'markdown-scrollable');
 
   Duration? _lastPrimaryDownTimestamp;
   Offset? _lastPrimaryDownPosition;
   int _consecutiveTapCount = 0;
   DocumentPosition? _dragBasePosition;
   Offset? _dragStartPointerPosition;
+  Offset? _lastDragPointerPosition;
   bool _isDraggingSelection = false;
   bool _clearSelectionOnPointerUp = false;
+  Timer? _autoScrollTimer;
 
   ScrollController get _effectiveScrollController =>
       widget.scrollController ?? _fallbackScrollController;
@@ -138,6 +145,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
   @override
   void dispose() {
     _disposeRecognizers();
+    _stopAutoScroll();
     _fallbackScrollController.dispose();
     _selectionFocusNode.dispose();
     super.dispose();
@@ -152,6 +160,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     final scrollable = Scrollbar(
       controller: scrollController,
       child: ListView.builder(
+        key: _scrollableKey,
         controller: scrollController,
         primary: false,
         physics: widget.physics,
@@ -402,6 +411,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
 
     _dragBasePosition = position;
     _dragStartPointerPosition = event.position;
+    _lastDragPointerPosition = event.position;
     _isDraggingSelection = true;
     _clearSelectionOnPointerUp = widget.selectionController!.hasSelection;
   }
@@ -417,19 +427,12 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     final dragStartPointerPosition = _dragStartPointerPosition;
     if (dragStartPointerPosition != null &&
         (event.position - dragStartPointerPosition).distance < kTouchSlop) {
+      _lastDragPointerPosition = event.position;
       return;
     }
-    final position = _tableBoundaryPositionForDrag(
-          event.position,
-          anchor: _dragBasePosition!,
-        ) ??
-        _hitTestPosition(event.position, clamp: true);
-    if (position == null) {
-      return;
-    }
-    widget.selectionController!.setSelection(
-      DocumentSelection(base: _dragBasePosition!, extent: position),
-    );
+    _lastDragPointerPosition = event.position;
+    _updateDragSelectionAt(event.position);
+    _updateAutoScroll();
   }
 
   void _handlePointerUp(PointerUpEvent event) {
@@ -442,7 +445,9 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     _isDraggingSelection = false;
     _dragBasePosition = null;
     _dragStartPointerPosition = null;
+    _lastDragPointerPosition = null;
     _clearSelectionOnPointerUp = false;
+    _stopAutoScroll();
     if (shouldClearSelection) {
       widget.selectionController!.clear();
     }
@@ -452,7 +457,121 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     _isDraggingSelection = false;
     _dragBasePosition = null;
     _dragStartPointerPosition = null;
+    _lastDragPointerPosition = null;
     _clearSelectionOnPointerUp = false;
+    _stopAutoScroll();
+  }
+
+  void _updateDragSelectionAt(Offset globalPosition) {
+    if (widget.selectionController == null || _dragBasePosition == null) {
+      return;
+    }
+    final position = _tableBoundaryPositionForDrag(
+          globalPosition,
+          anchor: _dragBasePosition!,
+        ) ??
+        _hitTestPosition(globalPosition, clamp: true);
+    if (position == null) {
+      return;
+    }
+    widget.selectionController!.setSelection(
+      DocumentSelection(base: _dragBasePosition!, extent: position),
+    );
+  }
+
+  void _updateAutoScroll() {
+    if (_autoScrollVelocity() == 0) {
+      _stopAutoScroll();
+      return;
+    }
+    _autoScrollTimer ??= Timer.periodic(
+      _autoScrollTickInterval,
+      (_) => _handleAutoScrollTick(),
+    );
+  }
+
+  void _handleAutoScrollTick() {
+    if (!_isDraggingSelection) {
+      _stopAutoScroll();
+      return;
+    }
+    final scrollController = _effectiveScrollController;
+    if (!scrollController.hasClients) {
+      _stopAutoScroll();
+      return;
+    }
+    final velocity = _autoScrollVelocity();
+    if (velocity == 0) {
+      _stopAutoScroll();
+      return;
+    }
+
+    final position = scrollController.position;
+    final nextOffset = (position.pixels +
+            velocity * _autoScrollTickInterval.inMilliseconds / 1000)
+        .clamp(position.minScrollExtent, position.maxScrollExtent);
+    if ((nextOffset - position.pixels).abs() < 0.5) {
+      _stopAutoScroll();
+      return;
+    }
+    scrollController.jumpTo(nextOffset);
+    final globalPosition = _lastDragPointerPosition;
+    if (globalPosition != null) {
+      _updateDragSelectionAt(globalPosition);
+    }
+  }
+
+  void _stopAutoScroll() {
+    _autoScrollTimer?.cancel();
+    _autoScrollTimer = null;
+  }
+
+  double _autoScrollVelocity() {
+    final globalPosition = _lastDragPointerPosition;
+    final viewportRect = _scrollViewportRect;
+    final scrollController = _effectiveScrollController;
+    if (globalPosition == null ||
+        viewportRect == null ||
+        !scrollController.hasClients) {
+      return 0;
+    }
+    final position = scrollController.position;
+    if (position.maxScrollExtent <= position.minScrollExtent) {
+      return 0;
+    }
+
+    if (globalPosition.dy < viewportRect.top + _autoScrollActivationZone &&
+        position.pixels > position.minScrollExtent) {
+      final proximity = 1 -
+          ((globalPosition.dy - viewportRect.top) / _autoScrollActivationZone)
+              .clamp(0.0, 1.0);
+      return -_autoScrollSpeedForProximity(proximity);
+    }
+    if (globalPosition.dy > viewportRect.bottom - _autoScrollActivationZone &&
+        position.pixels < position.maxScrollExtent) {
+      final proximity = ((globalPosition.dy -
+                  (viewportRect.bottom - _autoScrollActivationZone)) /
+              _autoScrollActivationZone)
+          .clamp(0.0, 1.0);
+      return _autoScrollSpeedForProximity(proximity);
+    }
+    return 0;
+  }
+
+  double _autoScrollSpeedForProximity(double proximity) {
+    if (proximity <= 0) {
+      return 0;
+    }
+    return math.max(80, proximity * proximity * _autoScrollMaxSpeed);
+  }
+
+  Rect? get _scrollViewportRect {
+    final renderObject = _scrollableKey.currentContext?.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.hasSize) {
+      return null;
+    }
+    final origin = renderObject.localToGlobal(Offset.zero);
+    return origin & renderObject.size;
   }
 
   void _updateTapCount(PointerDownEvent event) {
@@ -1719,22 +1838,25 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     for (final entry in indexedDescriptors) {
       final contentContext = contentKeys[entry.itemIndex].currentContext;
       final contentRenderObject = contentContext?.findRenderObject();
+      Rect? contentRect;
+      List<_IndexedBlockDescriptor>? childEntries;
+      int? childOffset;
       if (contentRenderObject is RenderBox && contentRenderObject.hasSize) {
-        final rect = contentRenderObject.localToGlobal(Offset.zero) &
+        contentRect = contentRenderObject.localToGlobal(Offset.zero) &
             contentRenderObject.size;
-        if (rect.contains(globalPosition)) {
-          final childEntries = _buildIndexedBlockDescriptors(
-            block.items[entry.itemIndex].children,
-            indentLevel: entry.contentIndentLevel,
-            separator: '\n',
-          );
-          final childOffset = _resolveIndexedBlockTextOffsetInRoot(
-            context,
-            rootRenderObject: rootRenderObject,
-            entries: childEntries,
-            childKeys: _listItemChildKeysFor(block, entry.itemIndex),
-            globalPosition: globalPosition,
-          );
+        childEntries = _buildIndexedBlockDescriptors(
+          block.items[entry.itemIndex].children,
+          indentLevel: entry.contentIndentLevel,
+          separator: '\n',
+        );
+        childOffset = _resolveIndexedBlockTextOffsetInRoot(
+          context,
+          rootRenderObject: rootRenderObject,
+          entries: childEntries,
+          childKeys: _listItemChildKeysFor(block, entry.itemIndex),
+          globalPosition: globalPosition,
+        );
+        if (contentRect.contains(globalPosition)) {
           return entry.startOffset + entry.prefixLength + (childOffset ?? 0);
         }
       }
@@ -1747,6 +1869,10 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
         if (rect.contains(globalPosition)) {
           final localRowPosition =
               rowRenderObject.globalToLocal(globalPosition);
+          final markerWidth = math.min(
+            markdownListMarkerWidth(block, entry.itemIndex),
+            rowRenderObject.size.width,
+          );
           final markerExtent = _resolveListMarkerExtent(
             block: block,
             itemIndex: entry.itemIndex,
@@ -1754,10 +1880,36 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
             contentRenderObject:
                 contentRenderObject is RenderBox ? contentRenderObject : null,
           );
+          if (localRowPosition.dx <= markerWidth) {
+            return entry.startOffset;
+          }
+          if (contentRect != null &&
+              childEntries != null &&
+              globalPosition.dy >= contentRect.top &&
+              globalPosition.dy <= contentRect.bottom) {
+            final projectedChildOffset = _resolveIndexedBlockTextOffsetInRoot(
+              context,
+              rootRenderObject: rootRenderObject,
+              entries: childEntries,
+              childKeys: _listItemChildKeysFor(block, entry.itemIndex),
+              globalPosition: Offset(
+                contentRect.left + 1,
+                globalPosition.dy.clamp(
+                  contentRect.top + 0.5,
+                  contentRect.bottom - 0.5,
+                ),
+              ),
+            );
+            if (projectedChildOffset != null) {
+              return entry.startOffset +
+                  entry.prefixLength +
+                  projectedChildOffset;
+            }
+          }
           if (localRowPosition.dx <= markerExtent) {
             return entry.startOffset;
           }
-          return entry.startOffset + entry.prefixLength;
+          return entry.startOffset + entry.prefixLength + (childOffset ?? 0);
         }
       }
     }

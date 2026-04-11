@@ -1073,6 +1073,54 @@ return value;
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('drag selection auto-scrolls near the viewport edge',
+      (tester) async {
+    final selectionController = MarkdownSelectionController();
+    final buffer = StringBuffer();
+    for (var index = 0; index < 40; index++) {
+      if (index > 0) {
+        buffer.writeln();
+        buffer.writeln();
+      }
+      buffer.write('Paragraph $index');
+    }
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            height: 220,
+            child: MarkdownWidget(
+              data: buffer.toString(),
+              selectionController: selectionController,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final listFinder = find.byType(ListView);
+    final start =
+        tester.getTopLeft(find.text('Paragraph 0')) + const Offset(2, 8);
+    final edgeTarget = tester.getBottomLeft(listFinder) - const Offset(-4, 6);
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: start);
+    await gesture.down(start);
+    await tester.pump();
+    await gesture.moveTo(edgeTarget);
+    await tester.pump(const Duration(milliseconds: 250));
+    await tester.pump(const Duration(milliseconds: 250));
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    final scrollableState =
+        tester.state<ScrollableState>(find.byType(Scrollable));
+    expect(scrollableState.position.pixels, greaterThan(0));
+    expect(selectionController.hasSelection, isTrue);
+    expect(selectionController.selectedPlainText, contains('Paragraph 0'));
+    expect(selectionController.selectedPlainText, contains('Paragraph'));
+  });
+
   testWidgets('copy and select-all shortcuts use the custom selection', (
     tester,
   ) async {
@@ -1236,6 +1284,39 @@ return value;
     expect(selectionController.selectedPlainText, 'First');
   });
 
+  testWidgets('dragging from an ordered list marker includes the prefix', (
+    tester,
+  ) async {
+    final selectionController = MarkdownSelectionController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: '3. ABCDEFG',
+            selectionController: selectionController,
+          ),
+        ),
+      ),
+    );
+
+    final markerFinder = find.text('3.');
+    final textFinder = find.text('ABCDEFG');
+    final start = tester.getTopLeft(markerFinder) + const Offset(1, 1);
+    final end = tester.getTopRight(textFinder) + const Offset(8, 8);
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: start);
+    await gesture.down(start);
+    await tester.pump();
+    await gesture.moveTo(end);
+    await tester.pump();
+    await gesture.up();
+    await tester.pump();
+
+    expect(selectionController.hasSelection, isTrue);
+    expect(selectionController.selectedPlainText, startsWith('3.'));
+  });
+
   testWidgets('list marker selection aligns with first content line', (
     tester,
   ) async {
@@ -1387,6 +1468,63 @@ return value;
         isTrue,
       );
     }
+  });
+
+  testWidgets(
+      'wrapped list hit testing keeps content selection in the line gutter', (
+    tester,
+  ) async {
+    final selectionController = MarkdownSelectionController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 320,
+            child: MarkdownWidget(
+              data:
+                  '3. Use the theme button in the app bar to switch the reading surface.',
+              selectionController: selectionController,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final listBlockFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is SelectableMarkdownBlock &&
+          widget.spec.plainText.contains('Use the theme button'),
+    );
+    final listBlock = tester.widget<SelectableMarkdownBlock>(listBlockFinder);
+    final listContext = tester.element(listBlockFinder);
+    final listSize = tester.getSize(listBlockFinder);
+    final fullSelectionRects = listBlock.spec.selectionRectResolver!(
+      listContext,
+      listSize,
+      DocumentRange(
+        start: const DocumentPosition(
+          blockIndex: 0,
+          path: PathInBlock(<int>[0]),
+          textOffset: 0,
+        ),
+        end: DocumentPosition(
+          blockIndex: 0,
+          path: const PathInBlock(<int>[0]),
+          textOffset: listBlock.spec.plainText.length,
+        ),
+      ),
+    )..sort((a, b) => a.top.compareTo(b.top));
+
+    expect(fullSelectionRects.length, greaterThanOrEqualTo(2));
+    final secondLineRect = fullSelectionRects[1];
+    final resolvedOffset = listBlock.spec.textOffsetResolver!(
+      listContext,
+      listSize,
+      Offset(secondLineRect.left - 2, secondLineRect.center.dy),
+    );
+
+    expect(resolvedOffset, greaterThan(3));
   });
 
   test('pretext selection rects merge overlapping inline style boxes', () {
