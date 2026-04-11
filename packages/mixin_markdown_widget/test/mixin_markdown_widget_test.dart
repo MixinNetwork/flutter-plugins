@@ -835,6 +835,37 @@ return value;
     expect(selectionController.selectedPlainText, 'Hello\n\nWorld');
   });
 
+  testWidgets('dragging from blank space starts a text selection',
+      (tester) async {
+    final selectionController = MarkdownSelectionController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: '# Hello\n\nWorld',
+            selectionController: selectionController,
+          ),
+        ),
+      ),
+    );
+
+    final helloTopLeft = tester.getTopLeft(find.text('Hello'));
+    final start = helloTopLeft - const Offset(12, -8);
+    final end = tester.getBottomRight(find.text('World')) - const Offset(1, 8);
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: start);
+    await gesture.down(start);
+    await tester.pump();
+    await gesture.moveTo(end);
+    await tester.pump();
+    await gesture.up();
+    await tester.pump();
+
+    expect(selectionController.hasSelection, isTrue);
+    expect(selectionController.selectedPlainText, 'Hello\n\nWorld');
+  });
+
   testWidgets('clicking blank space clears the current selection', (
     tester,
   ) async {

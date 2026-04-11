@@ -373,7 +373,9 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       return;
     }
 
-    final position = _hitTestPosition(event.position, clamp: false);
+    final exactPosition = _hitTestPosition(event.position, clamp: false);
+    final position =
+        exactPosition ?? _hitTestPosition(event.position, clamp: true);
     if (position == null) {
       widget.selectionController!.clear();
       _clearSelectionOnPointerUp = false;
@@ -381,7 +383,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     }
 
     _updateTapCount(event);
-    if (_consecutiveTapCount >= 3) {
+    if (exactPosition != null && _consecutiveTapCount >= 3) {
       _selectBlockAt(position.blockIndex);
       _isDraggingSelection = false;
       _dragBasePosition = null;
@@ -389,7 +391,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       _clearSelectionOnPointerUp = false;
       return;
     }
-    if (_consecutiveTapCount == 2) {
+    if (exactPosition != null && _consecutiveTapCount == 2) {
       _selectWordAt(position);
       _isDraggingSelection = false;
       _dragBasePosition = null;
