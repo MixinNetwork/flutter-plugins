@@ -1161,6 +1161,14 @@ class _MarkdownAstBuilder {
             ),
           );
           break;
+        case 'math':
+          inlines.add(
+            MathInline(
+              tex: node.textContent,
+              displayStyle: node.attributes['display'] == 'true',
+            ),
+          );
+          break;
         case 'code':
           inlines.add(InlineCode(text: node.textContent));
           break;

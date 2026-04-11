@@ -23,6 +23,7 @@ enum MarkdownInlineKind {
   subscript,
   superscript,
   link,
+  math,
   inlineCode,
   softBreak,
   hardBreak,
@@ -347,6 +348,18 @@ class LinkInline extends InlineNode {
   final String destination;
   final String? title;
   final List<InlineNode> children;
+}
+
+@immutable
+class MathInline extends InlineNode {
+  const MathInline({
+    required this.tex,
+    this.displayStyle = false,
+    super.sourceRange,
+  }) : super(kind: MarkdownInlineKind.math);
+
+  final String tex;
+  final bool displayStyle;
 }
 
 @immutable

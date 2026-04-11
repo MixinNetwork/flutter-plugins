@@ -4,6 +4,7 @@ import 'dart:ui' show PointerDeviceKind;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
 import 'package:mixin_markdown_widget/src/render/local_image_provider_io.dart';
@@ -32,6 +33,23 @@ int _countStyledDescendantSpans(InlineSpan span, TextStyle? rootStyle) {
   return count;
 }
 
+Iterable<WidgetSpan> _collectWidgetSpans(InlineSpan span) sync* {
+  if (span is WidgetSpan) {
+    yield span;
+    return;
+  }
+  if (span is! TextSpan) {
+    return;
+  }
+  final children = span.children;
+  if (children == null) {
+    return;
+  }
+  for (final child in children) {
+    yield* _collectWidgetSpans(child);
+  }
+}
+
 Iterable<InlineNode> _flattenInlineNodes(List<InlineNode> inlines) sync* {
   for (final inline in inlines) {
     yield inline;
@@ -58,6 +76,7 @@ Iterable<InlineNode> _flattenInlineNodes(List<InlineNode> inlines) sync* {
         yield* _flattenInlineNodes((inline as LinkInline).children);
         break;
       case MarkdownInlineKind.text:
+      case MarkdownInlineKind.math:
       case MarkdownInlineKind.inlineCode:
       case MarkdownInlineKind.softBreak:
       case MarkdownInlineKind.hardBreak:
@@ -95,6 +114,9 @@ String _inlinePlainText(List<InlineNode> inlines) {
         break;
       case MarkdownInlineKind.link:
         buffer.write(_inlinePlainText((inline as LinkInline).children));
+        break;
+      case MarkdownInlineKind.math:
+        buffer.write((inline as MathInline).tex);
         break;
       case MarkdownInlineKind.inlineCode:
         buffer.write((inline as InlineCode).text);
@@ -287,6 +309,66 @@ Term
         MarkdownInlineKind.link,
         MarkdownInlineKind.inlineCode,
       ]),
+    );
+  });
+
+  test('parses and serializes inline and display math', () {
+    const input = r'''
+Inline $a^2+b^2=c^2$ and \(e^{i\pi}+1=0\).
+
+$$
+\int_0^1 x^2 dx
+$$
+''';
+
+    final document = const MarkdownDocumentParser().parse(input);
+
+    expect(document.blocks, hasLength(2));
+
+    final paragraph = document.blocks.first as ParagraphBlock;
+    final mathInlines = _flattenInlineNodes(paragraph.inlines)
+        .whereType<MathInline>()
+        .toList(growable: false);
+    expect(mathInlines, hasLength(2));
+    expect(mathInlines[0].displayStyle, isFalse);
+    expect(mathInlines[0].tex, 'a^2+b^2=c^2');
+    expect(mathInlines[1].displayStyle, isFalse);
+    expect(mathInlines[1].tex, r'e^{i\pi}+1=0');
+
+    final display = document.blocks[1] as ParagraphBlock;
+    expect(display.inlines.single, isA<MathInline>());
+    expect((display.inlines.single as MathInline).displayStyle, isTrue);
+    expect((display.inlines.single as MathInline).tex, r'\int_0^1 x^2 dx');
+
+    final controller = MarkdownController(data: input);
+    expect(
+      controller.plainText,
+      'Inline a^2+b^2=c^2 and e^{i\\pi}+1=0.\n\n\\int_0^1 x^2 dx',
+    );
+  });
+
+  test('parses backslash inline math with surrounding whitespace', () {
+    const input =
+        r'Quadratic formula: \( x = \frac{-b \pm \sqrt{b^2-4ac}}{2a} \).';
+
+    final document = const MarkdownDocumentParser().parse(input);
+
+    expect(document.blocks, hasLength(1));
+    final paragraph = document.blocks.single as ParagraphBlock;
+    final mathInlines = _flattenInlineNodes(paragraph.inlines)
+        .whereType<MathInline>()
+        .toList(growable: false);
+    expect(mathInlines, hasLength(1));
+    expect(mathInlines.single.displayStyle, isFalse);
+    expect(
+      mathInlines.single.tex,
+      r'x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}',
+    );
+
+    final controller = MarkdownController(data: input);
+    expect(
+      controller.plainText,
+      r'Quadratic formula: x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}.',
     );
   });
 
@@ -509,6 +591,68 @@ Paragraph body
     );
 
     expect(find.byType(MarkdownPretextTextBlock), findsOneWidget);
+  });
+
+  testWidgets('renders math with flutter_math_fork and skips pretext', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: r'Inline $a^2+b^2=c^2$ and $$\int_0^1 x^2 dx$$',
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byType(Math), findsNWidgets(2));
+    expect(find.byType(MarkdownPretextTextBlock), findsNothing);
+  });
+
+  testWidgets('aligns inline math to the text baseline', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: r'Inline $a^2+b^2=c^2$ formula.',
+          ),
+        ),
+      ),
+    );
+
+    final textWidget = tester.widget<Text>(
+      find
+          .descendant(
+            of: find.byType(MarkdownWidget),
+            matching: find.byType(Text),
+          )
+          .first,
+    );
+    final widgetSpans = _collectWidgetSpans(textWidget.textSpan!).toList();
+
+    expect(widgetSpans, hasLength(1));
+    expect(widgetSpans.single.alignment, PlaceholderAlignment.baseline);
+    expect(widgetSpans.single.baseline, TextBaseline.alphabetic);
+  });
+
+  testWidgets('renders backslash inline math with surrounding whitespace', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data:
+                r'Quadratic formula: \( x = \frac{-b \pm \sqrt{b^2-4ac}}{2a} \).',
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byType(Math), findsOneWidget);
+    expect(find.textContaining(r'\('), findsNothing);
+    expect(find.textContaining(r'\)'), findsNothing);
   });
 
   testWidgets('tap on links still triggers onTapLink when selection is enabled',

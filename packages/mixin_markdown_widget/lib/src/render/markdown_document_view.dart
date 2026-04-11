@@ -5,6 +5,7 @@ import 'dart:ui' show FontFeature;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_math_fork/flutter_math.dart';
 
 import '../clipboard/plain_text_serializer.dart';
 import '../core/document.dart';
@@ -804,19 +805,43 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       case MarkdownBlockKind.heading:
         final heading = block as HeadingBlock;
         final style = widget.theme.headingStyleForLevel(heading.level);
+        if (_inlinesContainMath(heading.inlines)) {
+          return SelectableBlockSpec(
+            child: _buildTextBlock(
+              style: style,
+              inlines: heading.inlines,
+              textAlign: _resolvedInlineTextAlign(heading.inlines),
+            ),
+            plainText: _flattenInlineText(heading.inlines),
+            hitTestBehavior: SelectableBlockHitTestBehavior.block,
+          );
+        }
         final plainText = _flattenInlineText(heading.inlines);
         return _buildPretextTextSpec(
           plainText: plainText,
           runs: _buildPretextRuns(style, heading.inlines),
           fallbackStyle: style,
+          textAlign: _resolvedInlineTextAlign(heading.inlines),
         );
       case MarkdownBlockKind.paragraph:
         final paragraph = block as ParagraphBlock;
+        if (_inlinesContainMath(paragraph.inlines)) {
+          return SelectableBlockSpec(
+            child: _buildTextBlock(
+              style: widget.theme.bodyStyle,
+              inlines: paragraph.inlines,
+              textAlign: _resolvedInlineTextAlign(paragraph.inlines),
+            ),
+            plainText: _flattenInlineText(paragraph.inlines),
+            hitTestBehavior: SelectableBlockHitTestBehavior.block,
+          );
+        }
         final plainText = _flattenInlineText(paragraph.inlines);
         return _buildPretextTextSpec(
           plainText: plainText,
           runs: _buildPretextRuns(widget.theme.bodyStyle, paragraph.inlines),
           fallbackStyle: widget.theme.bodyStyle,
+          textAlign: _resolvedInlineTextAlign(paragraph.inlines),
         );
       case MarkdownBlockKind.quote:
         final quoteBlock = block as QuoteBlock;
@@ -1172,6 +1197,13 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
               ),
             )
             .toList(growable: false);
+      case MarkdownInlineKind.math:
+        return <MarkdownPretextInlineRun>[
+          MarkdownPretextInlineRun(
+            text: (inline as MathInline).tex,
+            style: baseStyle.merge(widget.theme.inlineCodeStyle),
+          ),
+        ];
       case MarkdownInlineKind.inlineCode:
         final code = inline as InlineCode;
         return <MarkdownPretextInlineRun>[
@@ -1276,6 +1308,8 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       switch (inline.kind) {
         case MarkdownInlineKind.link:
           return true;
+        case MarkdownInlineKind.math:
+          break;
         case MarkdownInlineKind.emphasis:
           if (_inlinesContainLinks((inline as EmphasisInline).children)) {
             return true;
@@ -1326,6 +1360,12 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     required List<InlineNode> inlines,
     TextAlign textAlign = TextAlign.start,
   }) {
+    if (_inlinesContainMath(inlines)) {
+      return Text.rich(
+        _buildTextSpan(style, inlines),
+        textAlign: textAlign,
+      );
+    }
     return MarkdownPretextTextBlock.rich(
       runs: _buildPretextRuns(style, inlines),
       fallbackStyle: style,
@@ -1525,6 +1565,12 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     List<InlineNode> inlines,
     TextAlign textAlign,
   ) {
+    if (_inlinesContainMath(inlines)) {
+      return Text.rich(
+        _buildTextSpan(style, inlines),
+        textAlign: textAlign,
+      );
+    }
     return MarkdownPretextTextBlock.rich(
       runs: _buildPretextRuns(style, inlines),
       fallbackStyle: style,
@@ -3087,15 +3133,29 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     switch (block.kind) {
       case MarkdownBlockKind.heading:
         final heading = block as HeadingBlock;
+        if (_inlinesContainMath(heading.inlines)) {
+          return _plainTextDescriptor(
+            _flattenInlineText(heading.inlines),
+            widget.theme.headingStyleForLevel(heading.level),
+          );
+        }
         return _descriptorFromInlines(
           widget.theme.headingStyleForLevel(heading.level),
           heading.inlines,
+          textAlign: _resolvedInlineTextAlign(heading.inlines),
         );
       case MarkdownBlockKind.paragraph:
         final paragraph = block as ParagraphBlock;
+        if (_inlinesContainMath(paragraph.inlines)) {
+          return _plainTextDescriptor(
+            _flattenInlineText(paragraph.inlines),
+            widget.theme.bodyStyle,
+          );
+        }
         return _descriptorFromInlines(
           widget.theme.bodyStyle,
           paragraph.inlines,
+          textAlign: _resolvedInlineTextAlign(paragraph.inlines),
         );
       case MarkdownBlockKind.quote:
         return _buildQuoteSelectableDescriptor(block as QuoteBlock);
@@ -3347,6 +3407,32 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
             children: _buildInlineSpans(linkStyle, link.children),
           ),
         ];
+      case MarkdownInlineKind.math:
+        final math = inline as MathInline;
+        final child = Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: math.displayStyle ? 0 : 2,
+            vertical: math.displayStyle ? 6 : 0,
+          ),
+          child: Math.tex(
+            math.tex,
+            mathStyle: math.displayStyle ? MathStyle.display : MathStyle.text,
+            textStyle: baseStyle,
+            onErrorFallback: (error) => Text(
+              math.tex,
+              style: baseStyle.merge(widget.theme.inlineCodeStyle),
+            ),
+          ),
+        );
+        return <InlineSpan>[
+          WidgetSpan(
+            alignment: math.displayStyle
+                ? PlaceholderAlignment.middle
+                : PlaceholderAlignment.baseline,
+            baseline: math.displayStyle ? null : TextBaseline.alphabetic,
+            child: child,
+          ),
+        ];
       case MarkdownInlineKind.inlineCode:
         final code = inline as InlineCode;
         return <InlineSpan>[
@@ -3412,6 +3498,9 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
         case MarkdownInlineKind.link:
           buffer.write(_flattenInlineText((inline as LinkInline).children));
           break;
+        case MarkdownInlineKind.math:
+          buffer.write((inline as MathInline).tex);
+          break;
         case MarkdownInlineKind.inlineCode:
           buffer.write((inline as InlineCode).text);
           break;
@@ -3426,6 +3515,71 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       }
     }
     return buffer.toString();
+  }
+
+  bool _inlinesContainMath(List<InlineNode> inlines) {
+    for (final inline in inlines) {
+      switch (inline.kind) {
+        case MarkdownInlineKind.math:
+          return true;
+        case MarkdownInlineKind.emphasis:
+          if (_inlinesContainMath((inline as EmphasisInline).children)) {
+            return true;
+          }
+          break;
+        case MarkdownInlineKind.strong:
+          if (_inlinesContainMath((inline as StrongInline).children)) {
+            return true;
+          }
+          break;
+        case MarkdownInlineKind.strikethrough:
+          if (_inlinesContainMath((inline as StrikethroughInline).children)) {
+            return true;
+          }
+          break;
+        case MarkdownInlineKind.highlight:
+          if (_inlinesContainMath((inline as HighlightInline).children)) {
+            return true;
+          }
+          break;
+        case MarkdownInlineKind.subscript:
+          if (_inlinesContainMath((inline as SubscriptInline).children)) {
+            return true;
+          }
+          break;
+        case MarkdownInlineKind.superscript:
+          if (_inlinesContainMath((inline as SuperscriptInline).children)) {
+            return true;
+          }
+          break;
+        case MarkdownInlineKind.link:
+          if (_inlinesContainMath((inline as LinkInline).children)) {
+            return true;
+          }
+          break;
+        case MarkdownInlineKind.text:
+        case MarkdownInlineKind.inlineCode:
+        case MarkdownInlineKind.softBreak:
+        case MarkdownInlineKind.hardBreak:
+        case MarkdownInlineKind.image:
+          break;
+      }
+    }
+    return false;
+  }
+
+  TextAlign _resolvedInlineTextAlign(List<InlineNode> inlines) {
+    return _isStandaloneDisplayMath(inlines)
+        ? TextAlign.center
+        : TextAlign.start;
+  }
+
+  bool _isStandaloneDisplayMath(List<InlineNode> inlines) {
+    if (inlines.length != 1) {
+      return false;
+    }
+    final inline = inlines.single;
+    return inline is MathInline && inline.displayStyle;
   }
 }
 

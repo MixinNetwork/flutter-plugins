@@ -3,6 +3,7 @@ import 'package:markdown/markdown.dart' as md;
 List<md.BlockSyntax> buildMarkdownBlockSyntaxes() {
   return <md.BlockSyntax>[
     const md.FencedCodeBlockSyntax(),
+    const MarkdownMathBlockSyntax(),
     const md.HeaderWithIdSyntax(),
     const md.SetextHeaderWithIdSyntax(),
     const md.TableSyntax(),
@@ -15,6 +16,8 @@ List<md.BlockSyntax> buildMarkdownBlockSyntaxes() {
 
 List<md.InlineSyntax> buildMarkdownInlineSyntaxes() {
   return <md.InlineSyntax>[
+    MarkdownDollarMathSyntax(),
+    MarkdownBackslashMathSyntax(),
     MarkdownInlineHtmlTagSyntax(),
     MarkdownHighlightSyntax(),
     MarkdownSubscriptSyntax(),
@@ -25,6 +28,42 @@ List<md.InlineSyntax> buildMarkdownInlineSyntaxes() {
     md.AutolinkExtensionSyntax(),
     md.InlineHtmlSyntax(),
   ];
+}
+
+class MarkdownMathBlockSyntax extends md.BlockSyntax {
+  const MarkdownMathBlockSyntax();
+
+  static final RegExp _openingPattern = RegExp(r'^\s{0,3}(\$\$|\\\[)\s*$');
+
+  @override
+  RegExp get pattern => _openingPattern;
+
+  @override
+  md.Node parse(md.BlockParser parser) {
+    final match = _openingPattern.firstMatch(parser.current.content)!;
+    final opening = match.group(1)!;
+    final closing = opening == r'\[' ? r'\]' : r'$$';
+    final lines = <String>[];
+
+    parser.advance();
+    while (!parser.isDone) {
+      if (_isClosingFence(parser.current.content, closing)) {
+        parser.advance();
+        break;
+      }
+      lines.add(parser.current.content);
+      parser.advance();
+    }
+
+    final math = md.Element.text('math', _trimMathContent(lines.join('\n')))
+      ..attributes['display'] = 'true';
+    return md.Element('p', <md.Node>[math]);
+  }
+
+  bool _isClosingFence(String line, String closing) {
+    return RegExp(r'^\s{0,3}' + RegExp.escape(closing) + r'\s*$')
+        .hasMatch(line);
+  }
 }
 
 class MarkdownDefinitionListSyntax extends md.BlockSyntax {
@@ -205,6 +244,92 @@ class MarkdownInlineHtmlTagSyntax extends md.InlineSyntax {
   }
 }
 
+class MarkdownDollarMathSyntax extends md.InlineSyntax {
+  MarkdownDollarMathSyntax() : super(r'\$', startCharacter: 0x24);
+
+  @override
+  bool tryMatch(md.InlineParser parser, [int? startMatchPos]) {
+    startMatchPos ??= parser.pos;
+    if (parser.source.codeUnitAt(startMatchPos) != 0x24) {
+      return false;
+    }
+
+    final isDisplay = startMatchPos + 1 < parser.source.length &&
+        parser.source.codeUnitAt(startMatchPos + 1) == 0x24;
+    final delimiter = isDisplay ? r'$$' : r'$';
+    final match = _extractDelimitedMath(
+      parser.source,
+      startMatchPos,
+      openDelimiter: delimiter,
+      closeDelimiter: delimiter,
+      allowBoundaryWhitespace: isDisplay,
+    );
+    if (match == null) {
+      return false;
+    }
+
+    parser.writeText();
+    parser.addNode(
+      md.Element.text('math', match.content)
+        ..attributes['display'] = '$isDisplay',
+    );
+    parser.consume(match.sourceLength);
+    return true;
+  }
+
+  @override
+  bool onMatch(md.InlineParser parser, Match match) {
+    throw UnimplementedError('MarkdownDollarMathSyntax overrides tryMatch.');
+  }
+}
+
+class MarkdownBackslashMathSyntax extends md.InlineSyntax {
+  MarkdownBackslashMathSyntax() : super(r'\\', startCharacter: 0x5C);
+
+  @override
+  bool tryMatch(md.InlineParser parser, [int? startMatchPos]) {
+    startMatchPos ??= parser.pos;
+    if (parser.source.codeUnitAt(startMatchPos) != 0x5C ||
+        startMatchPos + 1 >= parser.source.length) {
+      return false;
+    }
+
+    final next = parser.source.codeUnitAt(startMatchPos + 1);
+    final isInline = next == 0x28;
+    final isDisplay = next == 0x5B;
+    if (!isInline && !isDisplay) {
+      return false;
+    }
+
+    final openDelimiter = isInline ? r'\(' : r'\[';
+    final closeDelimiter = isInline ? r'\)' : r'\]';
+    final match = _extractDelimitedMath(
+      parser.source,
+      startMatchPos,
+      openDelimiter: openDelimiter,
+      closeDelimiter: closeDelimiter,
+      allowBoundaryWhitespace: true,
+      trimBoundaryWhitespace: isInline,
+    );
+    if (match == null) {
+      return false;
+    }
+
+    parser.writeText();
+    parser.addNode(
+      md.Element.text('math', match.content)
+        ..attributes['display'] = '${!isInline}',
+    );
+    parser.consume(match.sourceLength);
+    return true;
+  }
+
+  @override
+  bool onMatch(md.InlineParser parser, Match match) {
+    throw UnimplementedError('MarkdownBackslashMathSyntax overrides tryMatch.');
+  }
+}
+
 class MarkdownDoubleTildeStrikethroughSyntax extends md.DelimiterSyntax {
   MarkdownDoubleTildeStrikethroughSyntax()
       : super(
@@ -345,4 +470,79 @@ abstract class _DelimitedInlineSyntax extends md.InlineSyntax {
   bool onMatch(md.InlineParser parser, Match match) {
     throw UnimplementedError('_DelimitedInlineSyntax overrides tryMatch.');
   }
+}
+
+_DelimitedMathMatch? _extractDelimitedMath(
+  String source,
+  int start, {
+  required String openDelimiter,
+  required String closeDelimiter,
+  required bool allowBoundaryWhitespace,
+  bool trimBoundaryWhitespace = false,
+}) {
+  final contentStart = start + openDelimiter.length;
+  if (contentStart >= source.length) {
+    return null;
+  }
+
+  if (!allowBoundaryWhitespace &&
+      RegExp(r'\s').hasMatch(source[contentStart])) {
+    return null;
+  }
+
+  var searchIndex = contentStart;
+  while (searchIndex < source.length) {
+    final closingIndex = source.indexOf(closeDelimiter, searchIndex);
+    if (closingIndex < 0) {
+      return null;
+    }
+    if (_isEscapedCharacter(source, closingIndex)) {
+      searchIndex = closingIndex + 1;
+      continue;
+    }
+
+    final content = source.substring(contentStart, closingIndex);
+    if (content.isEmpty) {
+      return null;
+    }
+    if (!allowBoundaryWhitespace &&
+        (RegExp(r'^\s').hasMatch(content) ||
+            RegExp(r'\s$').hasMatch(content))) {
+      searchIndex = closingIndex + 1;
+      continue;
+    }
+    final normalized = _trimMathContent(content);
+    return _DelimitedMathMatch(
+      content: trimBoundaryWhitespace ? normalized.trim() : normalized,
+      sourceLength: closingIndex + closeDelimiter.length - start,
+    );
+  }
+
+  return null;
+}
+
+class _DelimitedMathMatch {
+  const _DelimitedMathMatch({
+    required this.content,
+    required this.sourceLength,
+  });
+
+  final String content;
+  final int sourceLength;
+}
+
+String _trimMathContent(String content) {
+  return content
+      .replaceFirst(RegExp(r'^\n+'), '')
+      .replaceFirst(RegExp(r'\n+$'), '');
+}
+
+bool _isEscapedCharacter(String source, int index) {
+  var slashCount = 0;
+  var cursor = index - 1;
+  while (cursor >= 0 && source.codeUnitAt(cursor) == 0x5C) {
+    slashCount += 1;
+    cursor -= 1;
+  }
+  return slashCount.isOdd;
 }

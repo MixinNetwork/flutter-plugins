@@ -19,6 +19,7 @@
 - `Ctrl/Cmd+C` to copy the current custom selection, `Ctrl/Cmd+A` to select all, and `Ctrl/Cmd+Shift+C` to copy the full document as predictable plain text
 - Append-only incremental reparsing for `appendChunk`, with stable prefix block reuse
 - `pretext`-backed inline rendering for headings, paragraphs, list item text, quote text, and table cells, including rich inline emphasis/link/code runs
+- Math rendering powered by `flutter_math_fork`, including `$...$`, `$$...$$`, `\(...\)`, and `\[...\]`
 - Extended markdown syntax support for heading IDs, autolinks, emoji shortcodes, footnotes, task lists, definition lists, strikethrough, highlight, subscript, and superscript
 - Common inline HTML tag support for `em`, `strong`, `del`, `mark`, `sub`, `sup`, `code`, and `br`
 - Unified custom selection behavior even when no external `MarkdownSelectionController` is supplied
@@ -47,6 +48,17 @@ class ExamplePage extends StatelessWidget {
 }
 ```
 
+Math syntax is available out of the box:
+
+```markdown
+Inline: $a^2+b^2=c^2$
+
+Display:
+$$
+\int_0^1 x^2 \, dx
+$$
+```
+
 For streaming or incremental updates, keep a controller and append chunks as they arrive:
 
 ```dart
@@ -61,7 +73,7 @@ selectionController.selectAll();
 
 ## Current scope
 
-This implementation now includes syntax-highlighted code blocks, character-level code selection, table cell range selection with TSV copy semantics, a document-level plain-text serializer, a model-level selection controller, custom pointer hit testing, and controller-managed draft/committed streaming state. `appendChunk` reparses only the unstable trailing block instead of the full document, unchanged cacheable blocks are reused across document updates, and inline text in headings, paragraphs, list item bodies, quote bodies, and table cells now shares the same `pretext`-backed inline rendering path even with rich inline formatting. In addition to the original CommonMark-style blocks, the package now covers task lists, definition lists, footnotes, heading IDs, autolinks, emoji shortcodes, highlight, subscript, superscript, and a small safe subset of inline HTML tags.
+This implementation now includes syntax-highlighted code blocks, character-level code selection, table cell range selection with TSV copy semantics, a document-level plain-text serializer, a model-level selection controller, custom pointer hit testing, and controller-managed draft/committed streaming state. `appendChunk` reparses only the unstable trailing block instead of the full document, unchanged cacheable blocks are reused across document updates, and inline text in headings, paragraphs, list item bodies, quote bodies, and table cells now shares the same `pretext`-backed inline rendering path even with rich inline formatting. In addition to the original CommonMark-style blocks, the package now covers task lists, definition lists, footnotes, heading IDs, autolinks, emoji shortcodes, highlight, subscript, superscript, TeX math, and a small safe subset of inline HTML tags.
 
 Run `flutter test benchmark/incremental_append_benchmark.dart` from this package to compare full reparsing against append-only incremental parsing.
 

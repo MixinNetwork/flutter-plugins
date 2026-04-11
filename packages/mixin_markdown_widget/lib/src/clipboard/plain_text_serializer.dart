@@ -354,6 +354,9 @@ class MarkdownPlainTextSerializer extends MarkdownCopySerializer {
             buffer.write('$label (${link.destination})');
           }
           break;
+        case MarkdownInlineKind.math:
+          buffer.write((inline as MathInline).tex);
+          break;
         case MarkdownInlineKind.inlineCode:
           buffer.write((inline as InlineCode).text);
           break;
