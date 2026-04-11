@@ -29,6 +29,8 @@ class MarkdownPretextTextBlock extends StatelessWidget {
     super.key,
     required this.text,
     required this.style,
+    this.textAlign = TextAlign.start,
+    this.intrinsicWidthSafe = false,
   })  : runs = null,
         fallbackStyle = style;
 
@@ -36,6 +38,8 @@ class MarkdownPretextTextBlock extends StatelessWidget {
     super.key,
     required this.runs,
     required this.fallbackStyle,
+    this.textAlign = TextAlign.start,
+    this.intrinsicWidthSafe = false,
   })  : text = '',
         style = fallbackStyle;
 
@@ -43,17 +47,27 @@ class MarkdownPretextTextBlock extends StatelessWidget {
   final TextStyle style;
   final List<MarkdownPretextInlineRun>? runs;
   final TextStyle fallbackStyle;
+  final TextAlign textAlign;
+  final bool intrinsicWidthSafe;
 
   @override
   Widget build(BuildContext context) {
     final textScaler =
         MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling;
-    final layout = _computeLayout(
-      maxWidth: MediaQuery.sizeOf(context).width,
-      textScaleFactor: textScaler.scale(1.0),
-    );
-    if (layout.lines.isEmpty) {
-      return const SizedBox.shrink();
+    final textDirection = Directionality.of(context);
+    if (intrinsicWidthSafe) {
+      return Text.rich(
+        _buildFullSpan(
+          runs: runs ??
+              <MarkdownPretextInlineRun>[
+                MarkdownPretextInlineRun(text: text, style: style),
+              ],
+          fallbackStyle: fallbackStyle,
+        ),
+        textAlign: textAlign,
+        textScaler: textScaler,
+        textDirection: textDirection,
+      );
     }
 
     return LayoutBuilder(
@@ -61,7 +75,11 @@ class MarkdownPretextTextBlock extends StatelessWidget {
         final constrainedLayout = _computeLayout(
           maxWidth: constraints.maxWidth,
           textScaleFactor: textScaler.scale(1.0),
+          textDirection: textDirection,
         );
+        if (constrainedLayout.lines.isEmpty) {
+          return const SizedBox.shrink();
+        }
         return Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -70,11 +88,15 @@ class MarkdownPretextTextBlock extends StatelessWidget {
               SizedBox(
                 width: double.infinity,
                 height: constrainedLayout.lineHeight,
-                child: Text.rich(
-                  line.span,
-                  maxLines: 1,
-                  overflow: TextOverflow.clip,
-                  textScaler: textScaler,
+                child: Padding(
+                  padding: EdgeInsets.only(left: line.leadingOffset),
+                  child: Text.rich(
+                    line.span,
+                    maxLines: 1,
+                    overflow: TextOverflow.clip,
+                    textScaler: textScaler,
+                    textAlign: textAlign,
+                  ),
                 ),
               ),
           ],
@@ -86,6 +108,7 @@ class MarkdownPretextTextBlock extends StatelessWidget {
   MarkdownPretextLayoutResult _computeLayout({
     required double maxWidth,
     required double textScaleFactor,
+    required TextDirection textDirection,
   }) {
     final runs = this.runs;
     if (runs != null) {
@@ -94,6 +117,8 @@ class MarkdownPretextTextBlock extends StatelessWidget {
         fallbackStyle: fallbackStyle,
         maxWidth: maxWidth,
         textScaleFactor: textScaleFactor,
+        textAlign: textAlign,
+        textDirection: textDirection,
       );
     }
 
@@ -102,6 +127,8 @@ class MarkdownPretextTextBlock extends StatelessWidget {
       style: style,
       maxWidth: maxWidth,
       textScaleFactor: textScaleFactor,
+      textAlign: textAlign,
+      textDirection: textDirection,
     );
   }
 }
@@ -111,6 +138,8 @@ MarkdownPretextLayoutResult computeMarkdownPretextLayout({
   required TextStyle style,
   required double maxWidth,
   required double textScaleFactor,
+  TextAlign textAlign = TextAlign.start,
+  TextDirection textDirection = TextDirection.ltr,
 }) {
   return computeMarkdownPretextLayoutFromRuns(
     runs: <MarkdownPretextInlineRun>[
@@ -119,6 +148,8 @@ MarkdownPretextLayoutResult computeMarkdownPretextLayout({
     fallbackStyle: style,
     maxWidth: maxWidth,
     textScaleFactor: textScaleFactor,
+    textAlign: textAlign,
+    textDirection: textDirection,
   );
 }
 
@@ -127,6 +158,8 @@ MarkdownPretextLayoutResult computeMarkdownPretextLayoutFromRuns({
   required TextStyle fallbackStyle,
   required double maxWidth,
   required double textScaleFactor,
+  TextAlign textAlign = TextAlign.start,
+  TextDirection textDirection = TextDirection.ltr,
 }) {
   final plainText = runs.map((run) => run.text).join();
   final lineHeight = _measureMaxLineHeight(
@@ -143,6 +176,7 @@ MarkdownPretextLayoutResult computeMarkdownPretextLayoutFromRuns({
   }
 
   final safeMaxWidth = maxWidth.isFinite ? math.max(maxWidth, 0.0) : 100000.0;
+  final alignmentWidth = maxWidth.isFinite ? math.max(maxWidth, 0.0) : 0.0;
   final segmentBuilder = _MarkdownPretextSegmentBuilder(
     textScaleFactor: textScaleFactor,
   );
@@ -183,6 +217,12 @@ MarkdownPretextLayoutResult computeMarkdownPretextLayoutFromRuns({
           fallbackStyle: fallbackStyle,
         ),
         width: line.width,
+        leadingOffset: _resolveLineLeadingOffset(
+          lineWidth: line.width,
+          maxWidth: alignmentWidth,
+          textAlign: textAlign,
+          textDirection: textDirection,
+        ),
         startOffset: startOffset,
         endOffset: endOffset,
         visibleEndOffset: visibleEndOffset,
@@ -238,9 +278,9 @@ class MarkdownPretextLayoutResult {
       for (final box in boxes) {
         rects.add(
           Rect.fromLTRB(
-            box.left,
+            box.left + line.leadingOffset,
             box.top + lineTop,
-            box.right,
+            box.right + line.leadingOffset,
             box.bottom + lineTop,
           ).inflate(1.5),
         );
@@ -261,13 +301,16 @@ class MarkdownPretextLayoutResult {
         (localPosition.dy / lineHeight).floor().clamp(0, lines.length - 1);
     final line = lines[clampedLineIndex];
     if (line.text.isEmpty) {
-      return localPosition.dx <= 0 ? line.startOffset : line.endOffset;
+      return localPosition.dx <= line.leadingOffset
+          ? line.startOffset
+          : line.endOffset;
     }
 
     final textPainter = _buildLinePainter(line.span, textDirection);
     final lineTop = clampedLineIndex * lineHeight;
     final clampedOffset = Offset(
-      localPosition.dx.clamp(0.0, math.max(textPainter.width, 0.0)),
+      (localPosition.dx - line.leadingOffset)
+          .clamp(0.0, math.max(textPainter.width, 0.0)),
       (localPosition.dy - lineTop)
           .clamp(0.0, math.max(textPainter.height, 0.0)),
     );
@@ -297,6 +340,7 @@ class MarkdownPretextLayoutLine {
     required this.text,
     required this.span,
     required this.width,
+    required this.leadingOffset,
     required this.startOffset,
     required this.endOffset,
     required this.visibleEndOffset,
@@ -305,9 +349,53 @@ class MarkdownPretextLayoutLine {
   final String text;
   final InlineSpan span;
   final double width;
+  final double leadingOffset;
   final int startOffset;
   final int endOffset;
   final int visibleEndOffset;
+}
+
+InlineSpan _buildFullSpan({
+  required List<MarkdownPretextInlineRun> runs,
+  required TextStyle fallbackStyle,
+}) {
+  return TextSpan(
+    style: fallbackStyle,
+    children: <InlineSpan>[
+      for (final run in runs)
+        TextSpan(
+          text: run.text,
+          style: run.style,
+          mouseCursor: run.mouseCursor,
+          recognizer: run.recognizer,
+        ),
+    ],
+  );
+}
+
+double _resolveLineLeadingOffset({
+  required double lineWidth,
+  required double maxWidth,
+  required TextAlign textAlign,
+  required TextDirection textDirection,
+}) {
+  if (maxWidth <= 0 || lineWidth >= maxWidth) {
+    return 0;
+  }
+
+  switch (textAlign) {
+    case TextAlign.left:
+    case TextAlign.justify:
+      return 0;
+    case TextAlign.right:
+      return maxWidth - lineWidth;
+    case TextAlign.center:
+      return (maxWidth - lineWidth) / 2;
+    case TextAlign.start:
+      return textDirection == TextDirection.ltr ? 0 : maxWidth - lineWidth;
+    case TextAlign.end:
+      return textDirection == TextDirection.ltr ? maxWidth - lineWidth : 0;
+  }
 }
 
 InlineSpan _buildLineSpan({

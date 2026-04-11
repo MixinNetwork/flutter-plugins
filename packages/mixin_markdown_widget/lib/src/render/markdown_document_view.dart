@@ -540,7 +540,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
         theme: widget.theme,
         selectionColor: widget.theme.selectionColor,
         selectionController: selectionController,
-        textSpanBuilder: _buildTextSpan,
+        textWidgetBuilder: _buildInlineTextWidget,
         onRequestContextMenu: _showCustomContextMenu,
       );
     }
@@ -625,6 +625,9 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
         final quoteBlock = block as QuoteBlock;
         if (widget.selectionController != null) {
           final descriptor = _buildQuoteSelectableDescriptor(quoteBlock);
+          final quotePadding = widget.theme.quotePadding.resolve(
+            Directionality.of(context),
+          );
           return SelectableBlockSpec(
             child: MarkdownQuoteBlockView(
               theme: widget.theme,
@@ -633,9 +636,42 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
             plainText: descriptor.plainText,
             hitTestBehavior: SelectableBlockHitTestBehavior.text,
             textSpan: descriptor.span,
-            measurementPadding:
-                widget.theme.quotePadding.resolve(Directionality.of(context)),
+            measurementPadding: quotePadding,
             highlightBorderRadius: BorderRadius.circular(16),
+            selectionRectResolver: descriptor.pretext == null
+                ? null
+                : (context, constraints, range) {
+                    final contentSize = Size(
+                      math.max(constraints.width - quotePadding.horizontal, 0),
+                      math.max(constraints.height - quotePadding.vertical, 0),
+                    );
+                    return _resolveDescriptorSelectionRects(
+                      context,
+                      descriptor: descriptor,
+                      range: range,
+                      size: contentSize,
+                      textDirection: Directionality.of(context),
+                      origin: Offset(quotePadding.left, quotePadding.top),
+                    );
+                  },
+            textOffsetResolver: descriptor.pretext == null
+                ? null
+                : (context, size, localPosition) {
+                    final contentSize = Size(
+                      math.max(size.width - quotePadding.horizontal, 0),
+                      math.max(size.height - quotePadding.vertical, 0),
+                    );
+                    return _resolveDescriptorTextOffset(
+                      context,
+                      descriptor: descriptor,
+                      localPosition: Offset(
+                        localPosition.dx - quotePadding.left,
+                        localPosition.dy - quotePadding.top,
+                      ),
+                      size: contentSize,
+                      textDirection: Directionality.of(context),
+                    );
+                  },
           );
         }
         return SelectableBlockSpec(
@@ -783,11 +819,13 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     required String plainText,
     required List<MarkdownPretextInlineRun> runs,
     required TextStyle fallbackStyle,
+    TextAlign textAlign = TextAlign.start,
   }) {
     return SelectableBlockSpec(
       child: MarkdownPretextTextBlock.rich(
         runs: runs,
         fallbackStyle: fallbackStyle,
+        textAlign: textAlign,
       ),
       plainText: plainText,
       hitTestBehavior: SelectableBlockHitTestBehavior.text,
@@ -797,6 +835,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
           runs: runs,
           fallbackStyle: fallbackStyle,
           maxWidth: constraints.width,
+          textAlign: textAlign,
         );
         return layout.selectionRectsForRange(
           range,
@@ -809,6 +848,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
           runs: runs,
           fallbackStyle: fallbackStyle,
           maxWidth: size.width,
+          textAlign: textAlign,
         );
         return layout.textOffsetAt(
           localPosition,
@@ -823,6 +863,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     required List<MarkdownPretextInlineRun> runs,
     required TextStyle fallbackStyle,
     required double maxWidth,
+    TextAlign textAlign = TextAlign.start,
   }) {
     final textScaler =
         MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling;
@@ -831,6 +872,8 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       fallbackStyle: fallbackStyle,
       maxWidth: maxWidth,
       textScaleFactor: textScaler.scale(1.0),
+      textAlign: textAlign,
+      textDirection: Directionality.of(context),
     );
   }
 
@@ -1023,8 +1066,9 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     required List<InlineNode> inlines,
     TextAlign textAlign = TextAlign.start,
   }) {
-    return Text.rich(
-      _buildTextSpan(style, inlines),
+    return MarkdownPretextTextBlock.rich(
+      runs: _buildPretextRuns(style, inlines),
+      fallbackStyle: style,
       textAlign: textAlign,
     );
   }
@@ -1064,16 +1108,16 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     switch (block.kind) {
       case MarkdownBlockKind.heading:
         final heading = block as HeadingBlock;
-        return Text.rich(
-          _buildTextSpan(
-            widget.theme.headingStyleForLevel(heading.level),
-            heading.inlines,
-          ),
+        return _buildTextBlock(
+          style: widget.theme.headingStyleForLevel(heading.level),
+          inlines: heading.inlines,
         );
       case MarkdownBlockKind.paragraph:
         final paragraph = block as ParagraphBlock;
-        return Text.rich(
-            _buildTextSpan(widget.theme.bodyStyle, paragraph.inlines));
+        return _buildTextBlock(
+          style: widget.theme.bodyStyle,
+          inlines: paragraph.inlines,
+        );
       case MarkdownBlockKind.quote:
         return _buildQuote(block as QuoteBlock);
       case MarkdownBlockKind.orderedList:
@@ -1151,7 +1195,21 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     return MarkdownTableBlockView(
       theme: widget.theme,
       block: block,
-      textSpanBuilder: _buildTextSpan,
+      textWidgetBuilder: _buildInlineTextWidget,
+    );
+  }
+
+  Widget _buildInlineTextWidget(
+    BuildContext context,
+    TextStyle style,
+    List<InlineNode> inlines,
+    TextAlign textAlign,
+  ) {
+    return MarkdownPretextTextBlock.rich(
+      runs: _buildPretextRuns(style, inlines),
+      fallbackStyle: style,
+      textAlign: textAlign,
+      intrinsicWidthSafe: true,
     );
   }
 
@@ -1278,12 +1336,12 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
               contentRenderObject.globalToLocal(globalPosition);
           return entry.startOffset +
               entry.prefixLength +
-              _resolveTextOffsetInBox(
-                entry.contentDescriptor.span,
-                entry.contentDescriptor.plainText.length,
-                localContentPosition,
-                contentRenderObject.size,
-                textDirection,
+              _resolveDescriptorTextOffset(
+                context,
+                descriptor: entry.contentDescriptor,
+                localPosition: localContentPosition,
+                size: contentRenderObject.size,
+                textDirection: textDirection,
               );
         }
       }
@@ -1333,6 +1391,100 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       return textLength;
     }
     return offset;
+  }
+
+  int _resolveDescriptorTextOffset(
+    BuildContext context, {
+    required _SelectableTextDescriptor descriptor,
+    required Offset localPosition,
+    required Size size,
+    required TextDirection textDirection,
+  }) {
+    final pretext = descriptor.pretext;
+    if (pretext != null) {
+      final layout = _computeDescriptorPretextLayout(
+        context,
+        descriptor: descriptor,
+        maxWidth: size.width,
+        textDirection: textDirection,
+      );
+      return layout.textOffsetAt(
+        localPosition,
+        textDirection: textDirection,
+      );
+    }
+
+    return _resolveTextOffsetInBox(
+      descriptor.span,
+      descriptor.plainText.length,
+      localPosition,
+      size,
+      textDirection,
+    );
+  }
+
+  MarkdownPretextLayoutResult _computeDescriptorPretextLayout(
+    BuildContext context, {
+    required _SelectableTextDescriptor descriptor,
+    required double maxWidth,
+    required TextDirection textDirection,
+  }) {
+    final pretext = descriptor.pretext!;
+    final textScaler =
+        MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling;
+    return computeMarkdownPretextLayoutFromRuns(
+      runs: pretext.runs,
+      fallbackStyle: pretext.fallbackStyle,
+      maxWidth: maxWidth,
+      textScaleFactor: textScaler.scale(1.0),
+      textAlign: pretext.textAlign,
+      textDirection: textDirection,
+    );
+  }
+
+  List<Rect> _resolveDescriptorSelectionRects(
+    BuildContext context, {
+    required _SelectableTextDescriptor descriptor,
+    required DocumentRange range,
+    required Size size,
+    required TextDirection textDirection,
+    Offset origin = Offset.zero,
+  }) {
+    final pretext = descriptor.pretext;
+    if (pretext != null) {
+      final layout = _computeDescriptorPretextLayout(
+        context,
+        descriptor: descriptor,
+        maxWidth: size.width,
+        textDirection: textDirection,
+      );
+      return layout
+          .selectionRectsForRange(range, textDirection: textDirection)
+          .map((rect) => rect.shift(origin))
+          .toList(growable: false);
+    }
+
+    final textPainter = TextPainter(
+      text: descriptor.span,
+      textDirection: textDirection,
+      maxLines: null,
+    )..layout(maxWidth: size.width);
+    final boxes = textPainter.getBoxesForSelection(
+      TextSelection(
+        baseOffset: range.start.textOffset,
+        extentOffset: range.end.textOffset,
+      ),
+    );
+    return boxes
+        .map(
+          (box) => Rect.fromLTRB(
+            box.left + origin.dx,
+            box.top + origin.dy,
+            box.right + origin.dx,
+            box.bottom + origin.dy,
+          ).inflate(1.5),
+        )
+        .toList(growable: false);
   }
 
   List<Rect> _resolveListSelectionRects(
@@ -1404,28 +1556,28 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       final itemOrigin = blockRenderObject.globalToLocal(
         contentRenderObject.localToGlobal(Offset.zero),
       );
-      final textPainter = TextPainter(
-        text: entry.contentDescriptor.span,
-        textDirection: textDirection,
-        maxLines: null,
-      )..layout(maxWidth: contentRenderObject.size.width);
-
-      final itemBoxes = textPainter.getBoxesForSelection(
-        TextSelection(
-          baseOffset: contentSelectionStart - itemStart - entry.prefixLength,
-          extentOffset: contentSelectionEnd - itemStart - entry.prefixLength,
+      final itemRange = DocumentRange(
+        start: DocumentPosition(
+          blockIndex: 0,
+          path: const PathInBlock(<int>[0]),
+          textOffset: contentSelectionStart - itemStart - entry.prefixLength,
+        ),
+        end: DocumentPosition(
+          blockIndex: 0,
+          path: const PathInBlock(<int>[0]),
+          textOffset: contentSelectionEnd - itemStart - entry.prefixLength,
         ),
       );
-      for (final box in itemBoxes) {
-        rects.add(
-          Rect.fromLTRB(
-            box.left + itemOrigin.dx,
-            box.top + itemOrigin.dy,
-            box.right + itemOrigin.dx,
-            box.bottom + itemOrigin.dy,
-          ).inflate(1.5),
-        );
-      }
+      rects.addAll(
+        _resolveDescriptorSelectionRects(
+          context,
+          descriptor: entry.contentDescriptor,
+          range: itemRange,
+          size: contentRenderObject.size,
+          textDirection: textDirection,
+          origin: itemOrigin,
+        ),
+      );
     }
 
     return rects;
@@ -1538,18 +1690,15 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     switch (block.kind) {
       case MarkdownBlockKind.heading:
         final heading = block as HeadingBlock;
-        return _descriptorFromSpan(
-          _buildTextSpan(
-            widget.theme.headingStyleForLevel(heading.level),
-            heading.inlines,
-          ),
-          _flattenInlineText(heading.inlines),
+        return _descriptorFromInlines(
+          widget.theme.headingStyleForLevel(heading.level),
+          heading.inlines,
         );
       case MarkdownBlockKind.paragraph:
         final paragraph = block as ParagraphBlock;
-        return _descriptorFromSpan(
-          _buildTextSpan(widget.theme.bodyStyle, paragraph.inlines),
-          _flattenInlineText(paragraph.inlines),
+        return _descriptorFromInlines(
+          widget.theme.bodyStyle,
+          paragraph.inlines,
         );
       case MarkdownBlockKind.quote:
         return _buildQuoteSelectableDescriptor(block as QuoteBlock);
@@ -1580,11 +1729,31 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     }
   }
 
+  _SelectableTextDescriptor _descriptorFromInlines(
+    TextStyle style,
+    List<InlineNode> inlines, {
+    TextAlign textAlign = TextAlign.start,
+  }) {
+    return _descriptorFromSpan(
+      _buildTextSpan(style, inlines),
+      _flattenInlineText(inlines),
+      pretext: _PretextTextDescriptor(
+        runs: _buildPretextRuns(style, inlines),
+        fallbackStyle: style,
+        textAlign: textAlign,
+      ),
+    );
+  }
+
   _SelectableTextDescriptor _descriptorFromSpan(
-      TextSpan span, String plainText) {
+    TextSpan span,
+    String plainText, {
+    _PretextTextDescriptor? pretext,
+  }) {
     return _SelectableTextDescriptor(
       plainText: plainText,
       span: span,
+      pretext: pretext,
     );
   }
 
@@ -1604,6 +1773,9 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
         descriptors.where((descriptor) => !descriptor.isEmpty).toList();
     if (nonEmpty.isEmpty) {
       return _plainTextDescriptor('', separatorStyle);
+    }
+    if (nonEmpty.length == 1) {
+      return nonEmpty.single;
     }
     final buffer = StringBuffer();
     final children = <InlineSpan>[];
@@ -1817,12 +1989,27 @@ class _SelectableTextDescriptor {
   const _SelectableTextDescriptor({
     required this.plainText,
     required this.span,
+    this.pretext,
   });
 
   final String plainText;
   final TextSpan span;
+  final _PretextTextDescriptor? pretext;
 
   bool get isEmpty => plainText.isEmpty;
+}
+
+@immutable
+class _PretextTextDescriptor {
+  const _PretextTextDescriptor({
+    required this.runs,
+    required this.fallbackStyle,
+    required this.textAlign,
+  });
+
+  final List<MarkdownPretextInlineRun> runs;
+  final TextStyle fallbackStyle;
+  final TextAlign textAlign;
 }
 
 @immutable

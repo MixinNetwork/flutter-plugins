@@ -1,9 +1,14 @@
+import 'dart:collection';
+
 import 'package:markdown/markdown.dart' as md;
 
 import '../core/document.dart';
 
 class MarkdownDocumentParser {
   const MarkdownDocumentParser();
+
+  static final Expando<Map<MarkdownBlockKind, int>> _documentKindCounts =
+      Expando<Map<MarkdownBlockKind, int>>('markdownDocumentKindCounts');
 
   MarkdownDocument parse(String source, {int version = 0}) {
     final normalizedSource = _normalizeSource(source);
@@ -19,10 +24,43 @@ class MarkdownDocumentParser {
     String source, {
     required MarkdownDocument previousDocument,
     int version = 0,
+    bool assumeAppended = false,
   }) {
     final normalizedSource = _normalizeSource(source);
+    return _parseAppendingNormalizedSource(
+      normalizedSource,
+      previousDocument: previousDocument,
+      version: version,
+      assumeAppended: assumeAppended,
+    );
+  }
+
+  MarkdownDocument parseAppendingChunk(
+    String chunk, {
+    required MarkdownDocument previousDocument,
+    int version = 0,
+  }) {
+    final normalizedChunk = _normalizeSource(chunk);
+    final normalizedSource = '${previousDocument.sourceText}$normalizedChunk';
+    return _parseAppendingNormalizedSource(
+      normalizedSource,
+      previousDocument: previousDocument,
+      version: version,
+      assumeAppended: true,
+    );
+  }
+
+  MarkdownDocument _parseAppendingNormalizedSource(
+    String normalizedSource, {
+    required MarkdownDocument previousDocument,
+    required int version,
+    required bool assumeAppended,
+  }) {
     if (previousDocument.blocks.isEmpty ||
-        previousDocument.sourceText.isEmpty ||
+        previousDocument.sourceText.isEmpty) {
+      return parse(normalizedSource, version: version);
+    }
+    if (!assumeAppended &&
         !normalizedSource.startsWith(previousDocument.sourceText)) {
       return parse(normalizedSource, version: version);
     }
@@ -34,10 +72,22 @@ class MarkdownDocumentParser {
       return parse(normalizedSource, version: version);
     }
 
-    final prefixBlocks = previousDocument.blocks
-        .where((block) => (block.sourceRange?.end ?? -1) <= lastRange.start)
-        .toList(growable: false);
-    if (prefixBlocks.length != previousDocument.blocks.length - 1) {
+    final prefixLength = previousDocument.blocks.length - 1;
+    final prefixBlocks = prefixLength == 0
+        ? const <BlockNode>[]
+        : _BlockListPrefixView(previousDocument.blocks, prefixLength);
+    if (prefixBlocks.isNotEmpty) {
+      final prefixTailRange = prefixBlocks.last.sourceRange;
+      if (prefixTailRange == null || prefixTailRange.end > lastRange.start) {
+        return parse(normalizedSource, version: version);
+      }
+    }
+
+    final initialKindCounts = _subtractBlockKinds(
+      _kindCountsForDocument(previousDocument),
+      previousDocument.blocks.last,
+    );
+    if (prefixLength > 0 && initialKindCounts.isEmpty) {
       return parse(normalizedSource, version: version);
     }
 
@@ -45,17 +95,16 @@ class MarkdownDocumentParser {
       normalizedSource.substring(lastRange.start),
       version: version,
       sourceOffset: lastRange.start,
-      initialKindCounts: _countBlockKinds(prefixBlocks),
+      initialKindCounts: initialKindCounts,
     );
 
-    return MarkdownDocument(
-      blocks: List<BlockNode>.unmodifiable(<BlockNode>[
-        ...prefixBlocks,
-        ...tailDocument.blocks,
-      ]),
+    final document = MarkdownDocument(
+      blocks: _ConcatenatedBlockList(prefixBlocks, tailDocument.blocks),
       sourceText: normalizedSource,
       version: version,
     );
+    _documentKindCounts[document] = _kindCountsForDocument(tailDocument);
+    return document;
   }
 
   MarkdownDocument _parseDocument(
@@ -83,11 +132,13 @@ class MarkdownDocumentParser {
       );
     }
 
-    return MarkdownDocument(
+    final parsedDocument = MarkdownDocument(
       blocks: List<BlockNode>.unmodifiable(blocks),
       sourceText: normalizedSource,
       version: version,
     );
+    _documentKindCounts[parsedDocument] = builder.kindCounts;
+    return parsedDocument;
   }
 
   String _normalizeSource(String source) {
@@ -100,6 +151,36 @@ class MarkdownDocumentParser {
       _countBlockKindsInBlock(block, counts);
     }
     return counts;
+  }
+
+  Map<MarkdownBlockKind, int> _kindCountsForDocument(
+    MarkdownDocument document,
+  ) {
+    final cached = _documentKindCounts[document];
+    if (cached != null) {
+      return cached;
+    }
+    final counts = _countBlockKinds(document.blocks);
+    _documentKindCounts[document] = counts;
+    return counts;
+  }
+
+  Map<MarkdownBlockKind, int> _subtractBlockKinds(
+    Map<MarkdownBlockKind, int> counts,
+    BlockNode block,
+  ) {
+    final remaining = <MarkdownBlockKind, int>{...counts};
+    final removed = <MarkdownBlockKind, int>{};
+    _countBlockKindsInBlock(block, removed);
+    for (final entry in removed.entries) {
+      final nextCount = (remaining[entry.key] ?? 0) - entry.value;
+      if (nextCount > 0) {
+        remaining[entry.key] = nextCount;
+      } else {
+        remaining.remove(entry.key);
+      }
+    }
+    return remaining;
   }
 
   void _countBlockKindsInBlock(
@@ -459,6 +540,9 @@ class _MarkdownAstBuilder {
 
   final Map<MarkdownBlockKind, int> _kindCounters;
 
+  Map<MarkdownBlockKind, int> get kindCounts =>
+      Map<MarkdownBlockKind, int>.unmodifiable(_kindCounters);
+
   List<BlockNode> buildBlocks(List<md.Node> nodes) {
     final blocks = <BlockNode>[];
     for (final node in nodes) {
@@ -764,5 +848,58 @@ class _MarkdownAstBuilder {
       hash = (hash * fnvPrime) & 0x7fffffff;
     }
     return hash;
+  }
+}
+
+class _BlockListPrefixView extends ListBase<BlockNode> {
+  _BlockListPrefixView(this._source, this.length);
+
+  final List<BlockNode> _source;
+  @override
+  final int length;
+
+  @override
+  set length(int newLength) {
+    throw UnsupportedError('Cannot modify block prefix view length.');
+  }
+
+  @override
+  BlockNode operator [](int index) {
+    RangeError.checkValidIndex(index, this, null, length);
+    return _source[index];
+  }
+
+  @override
+  void operator []=(int index, BlockNode value) {
+    throw UnsupportedError('Cannot modify block prefix view contents.');
+  }
+}
+
+class _ConcatenatedBlockList extends ListBase<BlockNode> {
+  _ConcatenatedBlockList(this._prefix, this._tail);
+
+  final List<BlockNode> _prefix;
+  final List<BlockNode> _tail;
+
+  @override
+  int get length => _prefix.length + _tail.length;
+
+  @override
+  set length(int newLength) {
+    throw UnsupportedError('Cannot modify concatenated block list length.');
+  }
+
+  @override
+  BlockNode operator [](int index) {
+    RangeError.checkValidIndex(index, this, null, length);
+    if (index < _prefix.length) {
+      return _prefix[index];
+    }
+    return _tail[index - _prefix.length];
+  }
+
+  @override
+  void operator []=(int index, BlockNode value) {
+    throw UnsupportedError('Cannot modify concatenated block list contents.');
   }
 }

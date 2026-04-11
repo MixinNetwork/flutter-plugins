@@ -18,7 +18,7 @@
 - Copy button for code blocks
 - `Ctrl/Cmd+C` to copy the current custom selection, `Ctrl/Cmd+A` to select all, and `Ctrl/Cmd+Shift+C` to copy the full document as predictable plain text
 - Append-only incremental reparsing for `appendChunk`, with stable prefix block reuse
-- `pretext`-backed layout for top-level headings and paragraphs, including rich inline emphasis/link/code runs
+- `pretext`-backed inline rendering for headings, paragraphs, list item text, quote text, and table cells, including rich inline emphasis/link/code runs
 - Unified custom selection behavior even when no external `MarkdownSelectionController` is supplied
 - Custom `imageBuilder` output can participate in selection/copy flows using the image caption text
 
@@ -59,7 +59,7 @@ selectionController.selectAll();
 
 ## Current scope
 
-This implementation now includes syntax-highlighted code blocks, character-level code selection, table cell range selection with TSV copy semantics, a document-level plain-text serializer, a model-level selection controller, custom pointer hit testing, selection painting, and controller-managed draft/committed streaming state. `appendChunk` reparses only the unstable trailing block instead of the full document, unchanged cacheable blocks are reused across document updates, and top-level headings/paragraphs can use a `pretext`-backed layout path even when they contain rich inline formatting. Lists, quotes, tables, and other composite blocks still use the existing composite widget rendering path.
+This implementation now includes syntax-highlighted code blocks, character-level code selection, table cell range selection with TSV copy semantics, a document-level plain-text serializer, a model-level selection controller, custom pointer hit testing, selection painting, and controller-managed draft/committed streaming state. `appendChunk` reparses only the unstable trailing block instead of the full document, unchanged cacheable blocks are reused across document updates, and inline text in headings, paragraphs, list item bodies, quote bodies, and table cells now shares the same `pretext`-backed inline rendering path even with rich inline formatting. Code blocks, images, and the surrounding structural chrome still use the existing widget rendering path.
 
 Run `flutter test benchmark/incremental_append_benchmark.dart` from this package to compare full reparsing against append-only incremental parsing.
 

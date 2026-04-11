@@ -98,8 +98,8 @@ class MarkdownController extends ChangeNotifier {
     if (allowIncrementalAppend &&
         previousData.isNotEmpty &&
         _data.startsWith(previousData)) {
-      _document = _parser.parseAppending(
-        _data,
+      _document = _parser.parseAppendingChunk(
+        _data.substring(previousData.length),
         previousDocument: previousDocument,
         version: _version,
       );

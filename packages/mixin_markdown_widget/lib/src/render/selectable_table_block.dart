@@ -4,6 +4,7 @@ import 'package:flutter/gestures.dart';
 import '../core/document.dart';
 import '../selection/selection_controller.dart';
 import '../widgets/markdown_theme.dart';
+import 'markdown_block_widgets.dart';
 
 class SelectableMarkdownTableBlock extends StatefulWidget {
   const SelectableMarkdownTableBlock({
@@ -13,7 +14,7 @@ class SelectableMarkdownTableBlock extends StatefulWidget {
     required this.theme,
     required this.selectionColor,
     required this.selectionController,
-    required this.textSpanBuilder,
+    required this.textWidgetBuilder,
     this.onRequestContextMenu,
   });
 
@@ -22,8 +23,7 @@ class SelectableMarkdownTableBlock extends StatefulWidget {
   final MarkdownThemeData theme;
   final Color selectionColor;
   final MarkdownSelectionController selectionController;
-  final TextSpan Function(TextStyle style, List<InlineNode> inlines)
-      textSpanBuilder;
+  final MarkdownInlineTextWidgetBuilder textWidgetBuilder;
   final ValueChanged<Offset>? onRequestContextMenu;
 
   @override
@@ -162,9 +162,11 @@ class SelectableMarkdownTableBlockState
           padding: widget.theme.tableCellPadding,
           child: Align(
             alignment: _alignmentFor(alignment),
-            child: Text.rich(
-              widget.textSpanBuilder(textStyle, cell.inlines),
-              textAlign: _textAlignFor(alignment),
+            child: widget.textWidgetBuilder(
+              context,
+              textStyle,
+              cell.inlines,
+              _textAlignFor(alignment),
             ),
           ),
         ),

@@ -302,6 +302,31 @@ Paragraph body
     expect(find.byType(MarkdownPretextTextBlock), findsOneWidget);
   });
 
+  testWidgets('uses pretext for list items, quotes, and table cells', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: '''
+- First **item**
+- Second [link](https://example.com)
+
+> Quoted `text`
+
+| Name | Value |
+| --- | ---: |
+| row | **42** |
+''',
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byType(MarkdownPretextTextBlock), findsAtLeastNWidgets(7));
+  });
+
   testWidgets('renders tables and code blocks with direct data input', (
     tester,
   ) async {

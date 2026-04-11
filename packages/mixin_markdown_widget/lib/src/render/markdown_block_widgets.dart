@@ -3,6 +3,13 @@ import 'package:flutter/material.dart';
 import '../core/document.dart';
 import '../widgets/markdown_theme.dart';
 
+typedef MarkdownInlineTextWidgetBuilder = Widget Function(
+  BuildContext context,
+  TextStyle style,
+  List<InlineNode> inlines,
+  TextAlign textAlign,
+);
+
 class MarkdownQuoteBlockView extends StatelessWidget {
   const MarkdownQuoteBlockView({
     super.key,
@@ -191,13 +198,12 @@ class MarkdownTableBlockView extends StatelessWidget {
     super.key,
     required this.theme,
     required this.block,
-    required this.textSpanBuilder,
+    required this.textWidgetBuilder,
   });
 
   final MarkdownThemeData theme;
   final TableBlock block;
-  final TextSpan Function(TextStyle style, List<InlineNode> inlines)
-      textSpanBuilder;
+  final MarkdownInlineTextWidgetBuilder textWidgetBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -235,6 +241,7 @@ class MarkdownTableBlockView extends StatelessWidget {
                   children: <Widget>[
                     for (var index = 0; index < columnCount; index++)
                       _buildCell(
+                        context: context,
                         row: row,
                         cellIndex: index,
                         alignment: index < block.alignments.length
@@ -251,6 +258,7 @@ class MarkdownTableBlockView extends StatelessWidget {
   }
 
   Widget _buildCell({
+    required BuildContext context,
     required TableRowNode row,
     required int cellIndex,
     required MarkdownTableColumnAlignment alignment,
@@ -263,9 +271,11 @@ class MarkdownTableBlockView extends StatelessWidget {
       padding: theme.tableCellPadding,
       child: Align(
         alignment: _alignmentFor(alignment),
-        child: Text.rich(
-          textSpanBuilder(textStyle, cell.inlines),
-          textAlign: _textAlignFor(alignment),
+        child: textWidgetBuilder(
+          context,
+          textStyle,
+          cell.inlines,
+          _textAlignFor(alignment),
         ),
       ),
     );

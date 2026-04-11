@@ -5,33 +5,50 @@ import 'package:mixin_markdown_widget/src/parser/markdown_document_parser.dart';
 
 void main() {
   test('incremental append benchmark', () {
-    const iterations = 400;
-    final parser = const MarkdownDocumentParser();
-
-    final initialSource = _buildInitialMarkdown();
-    final chunks = List<String>.generate(
-      iterations,
-      (index) =>
-          '\n\n## Chunk $index\n\nParagraph ${index + 1} with **bold** and `code`.',
-      growable: false,
-    );
-
-    _warmUp(parser, initialSource, chunks.take(40).toList(growable: false));
-
-    final fullElapsed = _benchmarkFullParse(parser, initialSource, chunks);
-    final incrementalElapsed =
-        _benchmarkIncrementalParse(parser, initialSource, chunks);
+    const parser = MarkdownDocumentParser();
+    const scenarios = <_BenchmarkScenario>[
+      _BenchmarkScenario(
+        name: 'baseline',
+        iterations: 400,
+        initialBlockRepeats: 120,
+      ),
+      _BenchmarkScenario(
+        name: 'large-prefix',
+        iterations: 200,
+        initialBlockRepeats: 600,
+      ),
+    ];
 
     stdout.writeln('mixin_markdown_widget incremental append benchmark');
-    stdout.writeln('iterations: $iterations');
-    stdout.writeln('full parse elapsed: ${fullElapsed.inMilliseconds} ms');
-    stdout.writeln(
-      'incremental parse elapsed: ${incrementalElapsed.inMilliseconds} ms',
-    );
-    if (incrementalElapsed.inMicroseconds > 0) {
-      final speedup =
-          fullElapsed.inMicroseconds / incrementalElapsed.inMicroseconds;
-      stdout.writeln('speedup: ${speedup.toStringAsFixed(2)}x');
+    for (final scenario in scenarios) {
+      final initialSource = _buildInitialMarkdown(
+        repetitions: scenario.initialBlockRepeats,
+      );
+      final chunks = List<String>.generate(
+        scenario.iterations,
+        (index) =>
+            '\n\n## Chunk $index\n\nParagraph ${index + 1} with **bold** and `code`.',
+        growable: false,
+      );
+
+      _warmUp(parser, initialSource, chunks.take(24).toList(growable: false));
+
+      final fullElapsed = _benchmarkFullParse(parser, initialSource, chunks);
+      final incrementalElapsed =
+          _benchmarkIncrementalParse(parser, initialSource, chunks);
+
+      stdout.writeln('scenario: ${scenario.name}');
+      stdout.writeln('iterations: ${scenario.iterations}');
+      stdout.writeln('initial blocks: ${scenario.initialBlockRepeats}');
+      stdout.writeln('full parse elapsed: ${fullElapsed.inMilliseconds} ms');
+      stdout.writeln(
+        'incremental parse elapsed: ${incrementalElapsed.inMilliseconds} ms',
+      );
+      if (incrementalElapsed.inMicroseconds > 0) {
+        final speedup =
+            fullElapsed.inMicroseconds / incrementalElapsed.inMicroseconds;
+        stdout.writeln('speedup: ${speedup.toStringAsFixed(2)}x');
+      }
     }
   });
 }
@@ -65,13 +82,11 @@ Duration _benchmarkIncrementalParse(
   String initialSource,
   List<String> chunks,
 ) {
-  var source = initialSource;
-  var document = parser.parse(source);
+  var document = parser.parse(initialSource);
   final stopwatch = Stopwatch()..start();
   for (final chunk in chunks) {
-    source += chunk;
-    document = parser.parseAppending(
-      source,
+    document = parser.parseAppendingChunk(
+      chunk,
       previousDocument: document,
     );
   }
@@ -79,13 +94,25 @@ Duration _benchmarkIncrementalParse(
   return stopwatch.elapsed;
 }
 
-String _buildInitialMarkdown() {
+String _buildInitialMarkdown({required int repetitions}) {
   final buffer = StringBuffer('# Benchmark\n');
-  for (var index = 0; index < 120; index++) {
+  for (var index = 0; index < repetitions; index++) {
     buffer
       ..write('\n\nParagraph $index with a [link](https://example.com/$index).')
       ..write('\n\n- First item\n- Second item')
       ..write('\n\n```dart\nprint($index);\n```');
   }
   return buffer.toString();
+}
+
+class _BenchmarkScenario {
+  const _BenchmarkScenario({
+    required this.name,
+    required this.iterations,
+    required this.initialBlockRepeats,
+  });
+
+  final String name;
+  final int iterations;
+  final int initialBlockRepeats;
 }
