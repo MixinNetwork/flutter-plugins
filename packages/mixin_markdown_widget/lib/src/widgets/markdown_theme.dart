@@ -74,6 +74,9 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
     final theme = Theme.of(context);
     final textTheme = theme.textTheme;
     final colorScheme = theme.colorScheme;
+    final borderColor =
+        Color.lerp(colorScheme.outline, colorScheme.onSurface, 0.24) ??
+            colorScheme.outline;
     final bodyStyle = textTheme.bodyLarge ??
         const TextStyle(
           fontSize: 16,
@@ -87,7 +90,7 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
     return MarkdownThemeData(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
       blockSpacing: 18,
-      listItemSpacing: 10,
+      listItemSpacing: 6,
       maxContentWidth: 920,
       quotePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       codeBlockPadding: const EdgeInsets.all(16),
@@ -139,8 +142,8 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
       quoteBackgroundColor: colorScheme.surface.withOpacity(0.7),
       quoteBorderColor: colorScheme.primary.withOpacity(0.4),
       codeBlockBackgroundColor: colorScheme.surface.withOpacity(0.92),
-      dividerColor: colorScheme.outline,
-      tableBorderColor: colorScheme.outline,
+      dividerColor: borderColor,
+      tableBorderColor: borderColor,
       tableHeaderBackgroundColor: colorScheme.primary.withOpacity(0.08),
       tableRowBackgroundColor: colorScheme.surface,
       selectionColor: colorScheme.primary.withOpacity(0.24),

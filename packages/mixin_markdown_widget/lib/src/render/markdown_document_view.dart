@@ -12,6 +12,8 @@ import '../widgets/markdown_theme.dart';
 import '../widgets/markdown_types.dart';
 import 'markdown_block_widgets.dart';
 import 'code_syntax_highlighter.dart';
+import 'local_image_provider_stub.dart'
+    if (dart.library.io) 'local_image_provider_io.dart';
 import 'pretext_text_block.dart';
 import 'selectable_block.dart';
 import 'selectable_table_block.dart';
@@ -100,6 +102,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
   Offset? _lastPrimaryDownPosition;
   int _consecutiveTapCount = 0;
   DocumentPosition? _dragBasePosition;
+  Offset? _dragStartPointerPosition;
   bool _isDraggingSelection = false;
 
   ScrollController get _effectiveScrollController =>
@@ -368,20 +371,20 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       _selectBlockAt(position.blockIndex);
       _isDraggingSelection = false;
       _dragBasePosition = null;
+      _dragStartPointerPosition = null;
       return;
     }
     if (_consecutiveTapCount == 2) {
       _selectWordAt(position);
       _isDraggingSelection = false;
       _dragBasePosition = null;
+      _dragStartPointerPosition = null;
       return;
     }
 
     _dragBasePosition = position;
+    _dragStartPointerPosition = event.position;
     _isDraggingSelection = true;
-    widget.selectionController!.setSelection(
-      DocumentSelection(base: position, extent: position),
-    );
   }
 
   void _handlePointerMove(PointerMoveEvent event) {
@@ -392,7 +395,16 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
         _dragBasePosition == null) {
       return;
     }
-    final position = _hitTestPosition(event.position, clamp: true);
+    final dragStartPointerPosition = _dragStartPointerPosition;
+    if (dragStartPointerPosition != null &&
+        (event.position - dragStartPointerPosition).distance < kTouchSlop) {
+      return;
+    }
+    final position = _tableBoundaryPositionForDrag(
+          event.position,
+          anchor: _dragBasePosition!,
+        ) ??
+        _hitTestPosition(event.position, clamp: true);
     if (position == null) {
       return;
     }
@@ -406,16 +418,14 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       return;
     }
     _isDraggingSelection = false;
-    final selection = widget.selectionController!.selection;
-    if (selection != null && selection.base == selection.extent) {
-      widget.selectionController!.clear();
-    }
     _dragBasePosition = null;
+    _dragStartPointerPosition = null;
   }
 
   void _handlePointerCancel(PointerCancelEvent event) {
     _isDraggingSelection = false;
     _dragBasePosition = null;
+    _dragStartPointerPosition = null;
   }
 
   void _updateTapCount(PointerDownEvent event) {
@@ -521,6 +531,33 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     return null;
   }
 
+  DocumentPosition? _tableBoundaryPositionForDrag(
+    Offset globalPosition, {
+    required DocumentPosition anchor,
+  }) {
+    for (var blockIndex = 0;
+        blockIndex < widget.document.blocks.length;
+        blockIndex++) {
+      final block = widget.document.blocks[blockIndex];
+      if (block is! TableBlock) {
+        continue;
+      }
+      final state = _tableBlockKeys[block.id]?.currentState;
+      if (state == null || !state.containsGlobal(globalPosition)) {
+        continue;
+      }
+      final preferEnd = anchor.blockIndex <= blockIndex;
+      return DocumentPosition(
+        blockIndex: blockIndex,
+        path: const PathInBlock(<int>[0]),
+        textOffset: preferEnd
+            ? _plainTextSerializer.serializeBlockText(block).length
+            : 0,
+      );
+    }
+    return null;
+  }
+
   Widget _buildBlockView({
     required BlockNode block,
     required int blockIndex,
@@ -543,6 +580,10 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
         selectionController: selectionController,
         textWidgetBuilder: _buildInlineTextWidget,
         onRequestContextMenu: _showCustomContextMenu,
+        documentSelected: _isBlockCoveredByTextSelection(
+          blockIndex,
+          selectionRange,
+        ),
       );
     }
 
@@ -639,6 +680,8 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
             textSpan: descriptor.span,
             measurementPadding: quotePadding,
             highlightBorderRadius: BorderRadius.circular(16),
+            selectionPaintOrder: SelectableBlockSelectionPaintOrder.aboveChild,
+            selectionColor: _quoteSelectionColor,
             selectionRectResolver: descriptor.pretext == null
                 ? null
                 : (context, constraints, range) {
@@ -733,27 +776,36 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
         );
       case MarkdownBlockKind.footnoteList:
         final footnoteList = block as FootnoteListBlock;
+        final orderedFootnotes = _footnoteListAsOrderedList(footnoteList);
         final footnoteDescriptor =
             _buildFootnoteListSelectableDescriptor(footnoteList);
+        final itemRowKeys = _listItemKeysFor(orderedFootnotes);
+        final itemContentKeys = _listItemContentKeysFor(orderedFootnotes);
         return SelectableBlockSpec(
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              border: Border(
-                top: BorderSide(color: widget.theme.dividerColor),
-              ),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: Text.rich(
-                footnoteDescriptor.span,
-                style: _footnoteStyle,
-              ),
+          child: _buildFootnoteListContainer(
+            child: MarkdownListBlockView(
+              theme: widget.theme,
+              block: orderedFootnotes,
+              itemBuilder: _buildListItemContent,
+              itemRowKeyBuilder: (index) => itemRowKeys[index],
+              itemContentKeyBuilder: (index) => itemContentKeys[index],
             ),
           ),
           plainText: footnoteDescriptor.plainText,
           hitTestBehavior: SelectableBlockHitTestBehavior.text,
           textSpan: footnoteDescriptor.span,
-          measurementPadding: const EdgeInsets.only(top: 12),
+          selectionRectResolver: (context, _, range) =>
+              _resolveListSelectionRects(
+            context,
+            orderedFootnotes,
+            range,
+          ),
+          textOffsetResolver: (context, _, localPosition) =>
+              _resolveListTextOffset(
+            context,
+            orderedFootnotes,
+            localPosition,
+          ),
           highlightBorderRadius: BorderRadius.circular(8),
         );
       case MarkdownBlockKind.codeBlock:
@@ -768,6 +820,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
                   .resolve(Directionality.of(context)) +
               const EdgeInsets.only(top: _codeToolbarHeight),
           highlightBorderRadius: widget.theme.codeBlockBorderRadius,
+          selectionPaintOrder: SelectableBlockSelectionPaintOrder.aboveChild,
         );
       case MarkdownBlockKind.table:
         return SelectableBlockSpec(
@@ -1040,11 +1093,13 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     required TableCellSelection? tableSelection,
   }) {
     if (block is TableBlock) {
-      if (tableSelection == null || tableSelection.blockIndex != blockIndex) {
-        return 'table:none';
+      if (tableSelection != null && tableSelection.blockIndex == blockIndex) {
+        final tableRange = tableSelection.normalizedRange;
+        return 'table:${tableRange.start.rowIndex}:${tableRange.start.columnIndex}:${tableRange.end.rowIndex}:${tableRange.end.columnIndex}';
       }
-      final tableRange = tableSelection.normalizedRange;
-      return 'table:${tableRange.start.rowIndex}:${tableRange.start.columnIndex}:${tableRange.end.rowIndex}:${tableRange.end.columnIndex}';
+      return _isBlockCoveredByTextSelection(blockIndex, selectionRange)
+          ? 'table:text'
+          : 'table:none';
     }
 
     if (selectionRange == null ||
@@ -1230,19 +1285,11 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
   }
 
   Widget _buildFootnoteList(FootnoteListBlock block) {
-    final descriptor = _buildFootnoteListSelectableDescriptor(block);
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(color: widget.theme.dividerColor),
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.only(top: 12),
-        child: Text.rich(
-          descriptor.span,
-          style: _footnoteStyle,
-        ),
+    return _buildFootnoteListContainer(
+      child: MarkdownListBlockView(
+        theme: widget.theme,
+        block: _footnoteListAsOrderedList(block),
+        itemBuilder: _buildListItemContent,
       ),
     );
   }
@@ -1337,17 +1384,24 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     final uri = Uri.tryParse(block.url);
     final isNetwork =
         uri != null && (uri.scheme == 'http' || uri.scheme == 'https');
+    final localImageProvider = resolveMarkdownLocalImageProvider(block.url);
     final image = isNetwork
         ? Image.network(
             block.url,
             fit: BoxFit.cover,
             errorBuilder: _imageErrorBuilder,
           )
-        : Image.asset(
-            block.url,
-            fit: BoxFit.cover,
-            errorBuilder: _imageErrorBuilder,
-          );
+        : localImageProvider != null
+            ? Image(
+                image: localImageProvider,
+                fit: BoxFit.cover,
+                errorBuilder: _imageErrorBuilder,
+              )
+            : Image.asset(
+                block.url,
+                fit: BoxFit.cover,
+                errorBuilder: _imageErrorBuilder,
+              );
     return ClipRRect(
       borderRadius: widget.theme.imageBorderRadius,
       child: image,
@@ -1365,12 +1419,12 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     return widget.theme.bodyStyle.copyWith(fontWeight: FontWeight.w700);
   }
 
-  TextStyle get _footnoteStyle {
-    final bodyFontSize = widget.theme.bodyStyle.fontSize ?? 16;
-    return widget.theme.bodyStyle.copyWith(
-      fontSize: math.max(bodyFontSize - 2, 12),
-      height: 1.6,
+  Color get _quoteSelectionColor {
+    final opacity = math.min(
+      math.max(widget.theme.selectionColor.opacity * 0.72, 0.14),
+      0.2,
     );
+    return widget.theme.selectionColor.withOpacity(opacity);
   }
 
   TextStyle _highlightStyle(TextStyle baseStyle) {
@@ -1467,30 +1521,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
   _SelectableTextDescriptor _buildFootnoteListSelectableDescriptor(
     FootnoteListBlock block,
   ) {
-    final itemDescriptors = <_SelectableTextDescriptor>[];
-    for (var index = 0; index < block.items.length; index++) {
-      final contentDescriptor = _buildListItemSelectableDescriptor(
-        block.items[index],
-        indentLevel: 1,
-      );
-      if (contentDescriptor.isEmpty) {
-        continue;
-      }
-      final marker = '${index + 1}.';
-      itemDescriptors.add(
-        _prefixSelectableTextDescriptor(
-          contentDescriptor,
-          firstPrefix: '$marker ',
-          continuationPrefix: '${' ' * (marker.length + 1)}',
-          style: _footnoteStyle,
-        ),
-      );
-    }
-    return _joinSelectableTextDescriptors(
-      itemDescriptors,
-      separator: '\n',
-      separatorStyle: _footnoteStyle,
-    );
+    return _buildListSelectableDescriptor(_footnoteListAsOrderedList(block));
   }
 
   String _listItemPrefixText(
@@ -1587,8 +1618,14 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
         if (rect.contains(globalPosition)) {
           final localRowPosition =
               rowRenderObject.globalToLocal(globalPosition);
-          final markerWidth = math.min(28.0, rowRenderObject.size.width);
-          if (localRowPosition.dx <= markerWidth) {
+          final markerExtent = _resolveListMarkerExtent(
+            block: block,
+            itemIndex: entry.itemIndex,
+            rowRenderObject: rowRenderObject,
+            contentRenderObject:
+                contentRenderObject is RenderBox ? contentRenderObject : null,
+          );
+          if (localRowPosition.dx <= markerExtent) {
             return entry.startOffset;
           }
           return entry.startOffset + entry.prefixLength;
@@ -1758,6 +1795,8 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
         continue;
       }
 
+      final contentContext = contentKeys[entry.itemIndex].currentContext;
+      final contentRenderObject = contentContext?.findRenderObject();
       final rowContext = rowKeys[entry.itemIndex].currentContext;
       final rowRenderObject = rowContext?.findRenderObject();
       if (prefixSelectionStart < prefixSelectionEnd &&
@@ -1770,7 +1809,13 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
           Rect.fromLTWH(
             rowOrigin.dx,
             rowOrigin.dy,
-            math.min(28.0, rowRenderObject.size.width),
+            _resolveListMarkerExtent(
+              block: block,
+              itemIndex: entry.itemIndex,
+              rowRenderObject: rowRenderObject,
+              contentRenderObject:
+                  contentRenderObject is RenderBox ? contentRenderObject : null,
+            ),
             rowRenderObject.size.height,
           ).inflate(1.5),
         );
@@ -1780,8 +1825,6 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
         continue;
       }
 
-      final contentContext = contentKeys[entry.itemIndex].currentContext;
-      final contentRenderObject = contentContext?.findRenderObject();
       if (contentRenderObject is! RenderBox || !contentRenderObject.hasSize) {
         continue;
       }
@@ -1814,6 +1857,26 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     }
 
     return rects;
+  }
+
+  double _resolveListMarkerExtent({
+    required ListBlock block,
+    required int itemIndex,
+    required RenderBox rowRenderObject,
+    RenderBox? contentRenderObject,
+  }) {
+    if (contentRenderObject != null && contentRenderObject.hasSize) {
+      final contentOrigin = rowRenderObject.globalToLocal(
+        contentRenderObject.localToGlobal(Offset.zero),
+      );
+      if (contentOrigin.dx > 0) {
+        return math.min(contentOrigin.dx, rowRenderObject.size.width);
+      }
+    }
+    return math.min(
+      markdownListMarkerExtent(block, itemIndex),
+      rowRenderObject.size.width,
+    );
   }
 
   List<_IndexedListSelectionDescriptor> _buildIndexedListSelectionDescriptors(
@@ -1928,6 +1991,41 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
   _SelectableTextDescriptor _buildImageCaptionDescriptor(ImageBlock block) {
     final caption = _imageCaptionText(block);
     return _plainTextDescriptor(caption, _imageCaptionStyle);
+  }
+
+  bool _isBlockCoveredByTextSelection(
+    int blockIndex,
+    DocumentRange? selectionRange,
+  ) {
+    return selectionRange != null &&
+        blockIndex >= selectionRange.start.blockIndex &&
+        blockIndex <= selectionRange.end.blockIndex;
+  }
+
+  ListBlock _footnoteListAsOrderedList(FootnoteListBlock block) {
+    return ListBlock(
+      id: block.id,
+      ordered: true,
+      startIndex: 1,
+      items: block.items,
+      sourceRange: block.sourceRange,
+    );
+  }
+
+  Widget _buildFootnoteListContainer({
+    required Widget child,
+  }) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(color: widget.theme.dividerColor),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: child,
+      ),
+    );
   }
 
   _SelectableTextDescriptor _buildSelectableDescriptorForBlock(

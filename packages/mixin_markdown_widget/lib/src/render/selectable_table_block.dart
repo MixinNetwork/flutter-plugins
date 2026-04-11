@@ -16,6 +16,7 @@ class SelectableMarkdownTableBlock extends StatefulWidget {
     required this.selectionController,
     required this.textWidgetBuilder,
     this.onRequestContextMenu,
+    this.documentSelected = false,
   });
 
   final int blockIndex;
@@ -25,6 +26,7 @@ class SelectableMarkdownTableBlock extends StatefulWidget {
   final MarkdownSelectionController selectionController;
   final MarkdownInlineTextWidgetBuilder textWidgetBuilder;
   final ValueChanged<Offset>? onRequestContextMenu;
+  final bool documentSelected;
 
   @override
   State<SelectableMarkdownTableBlock> createState() =>
@@ -69,31 +71,29 @@ class SelectableMarkdownTableBlockState
       onPointerMove: _handlePointerMove,
       onPointerUp: _handlePointerUp,
       onPointerCancel: _handlePointerCancel,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          border: Border.all(color: widget.theme.tableBorderColor),
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(14),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Table(
-              defaultColumnWidth: const IntrinsicColumnWidth(),
-              border: TableBorder.symmetric(
-                inside: BorderSide(color: widget.theme.tableBorderColor),
-              ),
-              children: <TableRow>[
-                for (var rowIndex = 0;
-                    rowIndex < widget.block.rows.length;
-                    rowIndex++)
-                  _buildRow(
-                    row: widget.block.rows[rowIndex],
-                    rowIndex: rowIndex,
-                    columnCount: columnCount,
-                  ),
-              ],
+      child: MarkdownTableFrame(
+        theme: widget.theme,
+        selectionOverlayColor:
+            widget.documentSelected ? widget.selectionColor : null,
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Table(
+            defaultColumnWidth: const IntrinsicColumnWidth(),
+            border: TableBorder(
+              horizontalInside:
+                  BorderSide(color: widget.theme.tableBorderColor),
+              verticalInside: BorderSide(color: widget.theme.tableBorderColor),
             ),
+            children: <TableRow>[
+              for (var rowIndex = 0;
+                  rowIndex < widget.block.rows.length;
+                  rowIndex++)
+                _buildRow(
+                  row: widget.block.rows[rowIndex],
+                  rowIndex: rowIndex,
+                  columnCount: columnCount,
+                ),
+            ],
           ),
         ),
       ),

@@ -3,6 +3,28 @@ import 'package:flutter/material.dart';
 import '../core/document.dart';
 import '../widgets/markdown_theme.dart';
 
+double markdownListMarkerWidth(ListBlock block, int index) {
+  final item = block.items[index];
+  if (item.taskState != null) {
+    return 22;
+  }
+  if (!block.ordered) {
+    return 14;
+  }
+  final digits = (block.startIndex + index).toString().length;
+  return 10 + digits * 8;
+}
+
+double markdownListMarkerGap(ListBlock block, int index) {
+  final item = block.items[index];
+  return item.taskState == null ? 6 : 8;
+}
+
+double markdownListMarkerExtent(ListBlock block, int index) {
+  return markdownListMarkerWidth(block, index) +
+      markdownListMarkerGap(block, index);
+}
+
 typedef MarkdownInlineTextWidgetBuilder = Widget Function(
   BuildContext context,
   TextStyle style,
@@ -70,6 +92,34 @@ class MarkdownQuoteBlockView extends StatelessWidget {
   }
 }
 
+class MarkdownTableFrame extends StatelessWidget {
+  const MarkdownTableFrame({
+    super.key,
+    required this.theme,
+    required this.child,
+    this.selectionOverlayColor,
+  });
+
+  final MarkdownThemeData theme;
+  final Widget child;
+  final Color? selectionOverlayColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      foregroundPainter: _MarkdownTableFramePainter(
+        borderColor: theme.tableBorderColor,
+        borderRadius: BorderRadius.circular(14),
+        selectionOverlayColor: selectionOverlayColor,
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: child,
+      ),
+    );
+  }
+}
+
 class MarkdownListBlockView extends StatelessWidget {
   const MarkdownListBlockView({
     super.key,
@@ -92,29 +142,40 @@ class MarkdownListBlockView extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         for (var index = 0; index < block.items.length; index++)
-          KeyedSubtree(
-            key: itemRowKeyBuilder?.call(index),
-            child: Padding(
-              padding: EdgeInsets.only(
-                bottom:
-                    index == block.items.length - 1 ? 0 : theme.listItemSpacing,
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  SizedBox(
-                    width: 28,
-                    child: _buildMarker(index),
+          Builder(
+            builder: (context) {
+              final markerWidth = markdownListMarkerWidth(block, index);
+              final markerGap = markdownListMarkerGap(block, index);
+              return KeyedSubtree(
+                key: itemRowKeyBuilder?.call(index),
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    bottom: index == block.items.length - 1
+                        ? 0
+                        : theme.listItemSpacing,
                   ),
-                  Expanded(
-                    child: KeyedSubtree(
-                      key: itemContentKeyBuilder?.call(index),
-                      child: itemBuilder(block.items[index]),
-                    ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      SizedBox(
+                        width: markerWidth,
+                        child: Align(
+                          alignment: AlignmentDirectional.topEnd,
+                          child: _buildMarker(index),
+                        ),
+                      ),
+                      SizedBox(width: markerGap),
+                      Expanded(
+                        child: KeyedSubtree(
+                          key: itemContentKeyBuilder?.call(index),
+                          child: itemBuilder(block.items[index]),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            ),
+                ),
+              );
+            },
           ),
       ],
     );
@@ -144,7 +205,7 @@ class MarkdownListBlockView extends StatelessWidget {
       case null:
         return Text(
           block.ordered ? '${block.startIndex + index}.' : '•',
-          style: theme.bodyStyle,
+          style: theme.bodyStyle.copyWith(height: 1.45),
         );
     }
   }
@@ -242,42 +303,37 @@ class MarkdownTableBlockView extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        border: Border.all(color: theme.tableBorderColor),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(14),
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Table(
-            defaultColumnWidth: const IntrinsicColumnWidth(),
-            border: TableBorder.symmetric(
-              inside: BorderSide(color: theme.tableBorderColor),
-            ),
-            children: <TableRow>[
-              for (final row in block.rows)
-                TableRow(
-                  decoration: BoxDecoration(
-                    color: row.isHeader
-                        ? theme.tableHeaderBackgroundColor
-                        : theme.tableRowBackgroundColor,
-                  ),
-                  children: <Widget>[
-                    for (var index = 0; index < columnCount; index++)
-                      _buildCell(
-                        context: context,
-                        row: row,
-                        cellIndex: index,
-                        alignment: index < block.alignments.length
-                            ? block.alignments[index]
-                            : MarkdownTableColumnAlignment.none,
-                      ),
-                  ],
-                ),
-            ],
+    return MarkdownTableFrame(
+      theme: theme,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Table(
+          defaultColumnWidth: const IntrinsicColumnWidth(),
+          border: TableBorder(
+            horizontalInside: BorderSide(color: theme.tableBorderColor),
+            verticalInside: BorderSide(color: theme.tableBorderColor),
           ),
+          children: <TableRow>[
+            for (final row in block.rows)
+              TableRow(
+                decoration: BoxDecoration(
+                  color: row.isHeader
+                      ? theme.tableHeaderBackgroundColor
+                      : theme.tableRowBackgroundColor,
+                ),
+                children: <Widget>[
+                  for (var index = 0; index < columnCount; index++)
+                    _buildCell(
+                      context: context,
+                      row: row,
+                      cellIndex: index,
+                      alignment: index < block.alignments.length
+                          ? block.alignments[index]
+                          : MarkdownTableColumnAlignment.none,
+                    ),
+                ],
+              ),
+          ],
         ),
       ),
     );
@@ -354,5 +410,43 @@ class MarkdownImageBlockView extends StatelessWidget {
         ],
       ],
     );
+  }
+}
+
+class _MarkdownTableFramePainter extends CustomPainter {
+  const _MarkdownTableFramePainter({
+    required this.borderColor,
+    required this.borderRadius,
+    this.selectionOverlayColor,
+  });
+
+  final Color borderColor;
+  final BorderRadius borderRadius;
+  final Color? selectionOverlayColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final rrect = borderRadius.toRRect(rect);
+
+    final overlayColor = selectionOverlayColor;
+    if (overlayColor != null) {
+      canvas.drawRRect(rrect, Paint()..color = overlayColor);
+    }
+
+    canvas.drawRRect(
+      borderRadius.toRRect(rect.deflate(0.5)),
+      Paint()
+        ..color = borderColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _MarkdownTableFramePainter oldDelegate) {
+    return oldDelegate.borderColor != borderColor ||
+        oldDelegate.borderRadius != borderRadius ||
+        oldDelegate.selectionOverlayColor != selectionOverlayColor;
   }
 }

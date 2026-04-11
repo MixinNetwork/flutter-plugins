@@ -9,6 +9,11 @@ enum SelectableBlockHitTestBehavior {
   block,
 }
 
+enum SelectableBlockSelectionPaintOrder {
+  behindChild,
+  aboveChild,
+}
+
 @immutable
 class SelectableBlockSpec {
   const SelectableBlockSpec({
@@ -21,6 +26,8 @@ class SelectableBlockSpec {
     this.highlightBorderRadius,
     this.selectionRectResolver,
     this.textOffsetResolver,
+    this.selectionPaintOrder = SelectableBlockSelectionPaintOrder.behindChild,
+    this.selectionColor,
   });
 
   final Widget child;
@@ -40,6 +47,8 @@ class SelectableBlockSpec {
     Size size,
     Offset localPosition,
   )? textOffsetResolver;
+  final SelectableBlockSelectionPaintOrder selectionPaintOrder;
+  final Color? selectionColor;
 }
 
 class SelectableMarkdownBlock extends StatefulWidget {
@@ -183,14 +192,22 @@ class SelectableMarkdownBlockState extends State<SelectableMarkdownBlock> {
                 constraints.biggest,
                 range,
               );
+        final selectionPainter = _BlockSelectionPainter(
+          range: range,
+          spec: widget.spec,
+          selectionColor: widget.spec.selectionColor ?? widget.selectionColor,
+          textDirection: Directionality.of(context),
+          selectionRects: selectionRects,
+        );
         return CustomPaint(
-          painter: _BlockSelectionPainter(
-            range: range,
-            spec: widget.spec,
-            selectionColor: widget.selectionColor,
-            textDirection: Directionality.of(context),
-            selectionRects: selectionRects,
-          ),
+          painter: widget.spec.selectionPaintOrder ==
+                  SelectableBlockSelectionPaintOrder.behindChild
+              ? selectionPainter
+              : null,
+          foregroundPainter: widget.spec.selectionPaintOrder ==
+                  SelectableBlockSelectionPaintOrder.aboveChild
+              ? selectionPainter
+              : null,
           child: widget.spec.child,
         );
       },

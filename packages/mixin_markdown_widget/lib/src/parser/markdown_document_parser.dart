@@ -758,29 +758,79 @@ class _MarkdownAstBuilder {
   ListItemNode _buildListItem(md.Element itemElement) {
     final taskState = _taskStateForListItem(itemElement);
     final contentNodes = _stripLeadingCheckbox(itemElement.children);
-    final children = buildBlocks(contentNodes);
-    if (children.isEmpty) {
-      final inlineChildren = _buildInlines(contentNodes);
-      if (inlineChildren.isEmpty) {
-        return ListItemNode(
-          children: const <BlockNode>[],
-          taskState: taskState,
-        );
-      }
-      return ListItemNode(
-        taskState: taskState,
-        children: <BlockNode>[
-          ParagraphBlock(
-            id: _nextId(MarkdownBlockKind.paragraph, itemElement.textContent),
-            inlines: inlineChildren,
-          ),
-        ],
-      );
-    }
+    final children = _buildContainerBlocks(contentNodes);
     return ListItemNode(
       taskState: taskState,
       children: List<BlockNode>.unmodifiable(children),
     );
+  }
+
+  List<BlockNode> _buildContainerBlocks(List<md.Node>? nodes) {
+    final blocks = <BlockNode>[];
+    final inlineBuffer = <md.Node>[];
+
+    void flushInlineBuffer() {
+      if (inlineBuffer.isEmpty) {
+        return;
+      }
+      final bufferedNodes = List<md.Node>.unmodifiable(inlineBuffer);
+      inlineBuffer.clear();
+      final inlineChildren = _buildInlines(bufferedNodes);
+      if (inlineChildren.isEmpty) {
+        return;
+      }
+      blocks.add(
+        ParagraphBlock(
+          id: _nextId(
+            MarkdownBlockKind.paragraph,
+            bufferedNodes.map((node) => node.textContent).join(),
+          ),
+          inlines: List<InlineNode>.unmodifiable(inlineChildren),
+        ),
+      );
+    }
+
+    for (final node in nodes ?? const <md.Node>[]) {
+      if (_isContainerBlockNode(node)) {
+        flushInlineBuffer();
+        final block = _buildBlock(node);
+        if (block != null) {
+          blocks.add(block);
+        }
+        continue;
+      }
+      inlineBuffer.add(node);
+    }
+
+    flushInlineBuffer();
+    return blocks;
+  }
+
+  bool _isContainerBlockNode(md.Node node) {
+    if (node is! md.Element) {
+      return false;
+    }
+    switch (node.tag) {
+      case 'h1':
+      case 'h2':
+      case 'h3':
+      case 'h4':
+      case 'h5':
+      case 'h6':
+      case 'p':
+      case 'blockquote':
+      case 'ul':
+      case 'ol':
+      case 'dl':
+      case 'pre':
+      case 'table':
+      case 'hr':
+        return true;
+      case 'section':
+        return node.attributes['class'] == 'footnotes';
+      default:
+        return false;
+    }
   }
 
   MarkdownTaskListItemState? _taskStateForListItem(md.Element itemElement) {
@@ -870,25 +920,9 @@ class _MarkdownAstBuilder {
         if (definitionNode is! md.Element || definitionNode.tag != 'dd') {
           break;
         }
-        final blocks =
-            buildBlocks(definitionNode.children ?? const <md.Node>[]);
+        final blocks = _buildContainerBlocks(definitionNode.children);
         if (blocks.isNotEmpty) {
           definitions.add(List<BlockNode>.unmodifiable(blocks));
-        } else {
-          final inlineChildren = _buildInlines(definitionNode.children);
-          if (inlineChildren.isNotEmpty) {
-            definitions.add(
-              <BlockNode>[
-                ParagraphBlock(
-                  id: _nextId(
-                    MarkdownBlockKind.paragraph,
-                    definitionNode.textContent,
-                  ),
-                  inlines: List<InlineNode>.unmodifiable(inlineChildren),
-                ),
-              ],
-            );
-          }
         }
         index += 1;
       }

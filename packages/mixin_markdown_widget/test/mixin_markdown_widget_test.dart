@@ -1,9 +1,11 @@
+import 'dart:io';
 import 'dart:ui' show PointerDeviceKind;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
+import 'package:mixin_markdown_widget/src/render/local_image_provider_io.dart';
 import 'package:mixin_markdown_widget/src/render/pretext_text_block.dart';
 
 int _countStyledDescendantSpans(InlineSpan span, TextStyle? rootStyle) {
@@ -191,6 +193,24 @@ Term
     expect(
       controller.plainText,
       '- [x] Done\n- [ ] Todo\n\nTerm\n: Definition',
+    );
+  });
+
+  test('keeps rich inline styles inside tight list items', () {
+    const input = '- before **bold** [link](https://example.com) `code` after';
+
+    final document = const MarkdownDocumentParser().parse(input);
+    final list = document.blocks.single as ListBlock;
+    final paragraph = list.items.single.children.single as ParagraphBlock;
+
+    expect(paragraph.inlines.length, greaterThan(1));
+    expect(
+      paragraph.inlines.map((inline) => inline.kind),
+      containsAll(<MarkdownInlineKind>[
+        MarkdownInlineKind.strong,
+        MarkdownInlineKind.link,
+        MarkdownInlineKind.inlineCode,
+      ]),
     );
   });
 
@@ -403,6 +423,51 @@ Paragraph body
     expect(find.byType(MarkdownPretextTextBlock), findsOneWidget);
   });
 
+  testWidgets('tap on links still triggers onTapLink when selection is enabled',
+      (
+    tester,
+  ) async {
+    String? tappedDestination;
+    String? tappedLabel;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: 'Visit [Example](https://example.com)',
+            onTapLink: (destination, title, label) {
+              tappedDestination = destination;
+              tappedLabel = label;
+            },
+          ),
+        ),
+      ),
+    );
+
+    final richTextFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is RichText &&
+          widget.text.toPlainText().contains('Visit Example'),
+    );
+    final richText = tester.widget<RichText>(richTextFinder);
+    final renderBox = tester.renderObject<RenderBox>(richTextFinder);
+    final painter = TextPainter(
+      text: richText.text,
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: renderBox.size.width);
+    final linkBoxes = painter.getBoxesForSelection(
+      const TextSelection(baseOffset: 6, extentOffset: 13),
+    );
+
+    await tester.tapAt(
+      renderBox.localToGlobal(linkBoxes.first.toRect().center),
+    );
+    await tester.pump();
+
+    expect(tappedDestination, 'https://example.com');
+    expect(tappedLabel, 'Example');
+  });
+
   testWidgets('uses pretext for list items, quotes, and table cells', (
     tester,
   ) async {
@@ -456,6 +521,28 @@ Reference[^note]
     expect(find.textContaining('Term'), findsOneWidget);
     expect(find.textContaining('Definition with ✅'), findsOneWidget);
     expect(find.textContaining('Footnote body'), findsOneWidget);
+  });
+
+  testWidgets('renders footnotes as ordered block content', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: '''
+Reference[^note]
+
+[^note]: First paragraph
+
+    Second paragraph
+''',
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('1.'), findsOneWidget);
+    expect(find.textContaining('First paragraph'), findsOneWidget);
+    expect(find.textContaining('Second paragraph'), findsOneWidget);
   });
 
   testWidgets('renders tables and code blocks with direct data input', (
@@ -793,6 +880,15 @@ return value;
 
     expect(selectionController.hasSelection, isTrue);
     expect(selectionController.selectedPlainText, 'value');
+
+    final paintFinder = find.ancestor(
+      of: richTextFinder,
+      matching: find.byType(CustomPaint),
+    );
+    expect(
+      tester.widget<CustomPaint>(paintFinder.first).foregroundPainter,
+      isNotNull,
+    );
   });
 
   testWidgets('dragging inside a list selects list text', (tester) async {
@@ -910,6 +1006,15 @@ return value;
 
     expect(selectionController.hasSelection, isTrue);
     expect(selectionController.selectedPlainText, isNotEmpty);
+
+    final paintFinder = find.ancestor(
+      of: richTextFinder,
+      matching: find.byType(CustomPaint),
+    );
+    expect(
+      tester.widget<CustomPaint>(paintFinder.first).foregroundPainter,
+      isNotNull,
+    );
   });
 
   testWidgets('dragging inside an image caption selects caption text', (
@@ -1040,5 +1145,127 @@ return value;
     await tester.pump();
 
     expect(copiedText, 'Name\tValue\nrow\t42');
+  });
+
+  testWidgets('dragging into a table selects the table block content', (
+    tester,
+  ) async {
+    final selectionController = MarkdownSelectionController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: '''
+Intro
+
+| Name | Value |
+| --- | --- |
+| row | 42 |
+''',
+            selectionController: selectionController,
+          ),
+        ),
+      ),
+    );
+
+    final start = tester.getTopLeft(find.text('Intro')) + const Offset(1, 8);
+    final end = tester.getCenter(find.text('42'));
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: start);
+    await gesture.down(start);
+    await tester.pump();
+    await gesture.moveTo(end);
+    await tester.pump();
+    await gesture.up();
+    await tester.pump();
+
+    expect(selectionController.hasSelection, isTrue);
+    expect(
+        selectionController.selectedPlainText, 'Intro\n\nName\tValue\nrow\t42');
+  });
+
+  test('default image renderer falls back to local files', () async {
+    final file = File(
+      '${Directory.systemTemp.path}/mixin_markdown_widget_test_image.png',
+    );
+    await file.writeAsBytes(<int>[
+      137,
+      80,
+      78,
+      71,
+      13,
+      10,
+      26,
+      10,
+      0,
+      0,
+      0,
+      13,
+      73,
+      72,
+      68,
+      82,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      1,
+      8,
+      6,
+      0,
+      0,
+      0,
+      31,
+      21,
+      196,
+      137,
+      0,
+      0,
+      0,
+      13,
+      73,
+      68,
+      65,
+      84,
+      120,
+      156,
+      99,
+      248,
+      255,
+      255,
+      63,
+      0,
+      5,
+      254,
+      2,
+      254,
+      167,
+      13,
+      163,
+      96,
+      0,
+      0,
+      0,
+      0,
+      73,
+      69,
+      78,
+      68,
+      174,
+      66,
+      96,
+      130,
+    ]);
+    addTearDown(() async {
+      if (await file.exists()) {
+        await file.delete();
+      }
+    });
+
+    expect(resolveMarkdownLocalImageProvider(file.path), isA<FileImage>());
   });
 }
