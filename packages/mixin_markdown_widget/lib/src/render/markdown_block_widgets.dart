@@ -132,7 +132,7 @@ class MarkdownListBlockView extends StatelessWidget {
 
   final MarkdownThemeData theme;
   final ListBlock block;
-  final Widget Function(ListItemNode item) itemBuilder;
+  final Widget Function(int index, ListItemNode item) itemBuilder;
   final Key? Function(int index)? itemRowKeyBuilder;
   final Key? Function(int index)? itemContentKeyBuilder;
 
@@ -168,7 +168,7 @@ class MarkdownListBlockView extends StatelessWidget {
                       Expanded(
                         child: KeyedSubtree(
                           key: itemContentKeyBuilder?.call(index),
-                          child: itemBuilder(block.items[index]),
+                          child: itemBuilder(index, block.items[index]),
                         ),
                       ),
                     ],

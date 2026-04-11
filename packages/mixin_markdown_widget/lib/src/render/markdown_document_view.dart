@@ -94,6 +94,8 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       <String, List<GlobalKey>>{};
   final Map<String, List<GlobalKey>> _listItemContentKeysByBlock =
       <String, List<GlobalKey>>{};
+  final Map<String, List<List<GlobalKey>>> _listItemChildKeysByBlock =
+      <String, List<List<GlobalKey>>>{};
   final Map<String, List<GlobalKey>> _quoteChildKeysByBlock =
       <String, List<GlobalKey>>{};
   final Map<String, GlobalKey<SelectableMarkdownTableBlockState>>
@@ -120,6 +122,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     _listItemContentKeysByBlock.removeWhere(
       (key, _) => !validIds.contains(key),
     );
+    _listItemChildKeysByBlock.removeWhere((key, _) => !validIds.contains(key));
     _quoteChildKeysByBlock.removeWhere((key, _) => !validIds.contains(key));
     _tableBlockKeys.removeWhere((key, _) => !validIds.contains(key));
 
@@ -724,7 +727,8 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
             child: MarkdownListBlockView(
               theme: widget.theme,
               block: listBlock,
-              itemBuilder: _buildListItemContent,
+              itemBuilder: (index, item) =>
+                  _buildListItemContent(listBlock, index, item),
               itemRowKeyBuilder: (index) => itemRowKeys[index],
               itemContentKeyBuilder: (index) => itemContentKeys[index],
             ),
@@ -775,7 +779,8 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
             child: MarkdownListBlockView(
               theme: widget.theme,
               block: orderedFootnotes,
-              itemBuilder: _buildListItemContent,
+              itemBuilder: (index, item) =>
+                  _buildListItemContent(orderedFootnotes, index, item),
               itemRowKeyBuilder: (index) => itemRowKeys[index],
               itemContentKeyBuilder: (index) => itemContentKeys[index],
             ),
@@ -1274,10 +1279,14 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
   }
 
   Widget _buildList(ListBlock block) {
+    final itemRowKeys = _listItemKeysFor(block);
+    final itemContentKeys = _listItemContentKeysFor(block);
     return MarkdownListBlockView(
       theme: widget.theme,
       block: block,
-      itemBuilder: _buildListItemContent,
+      itemBuilder: (index, item) => _buildListItemContent(block, index, item),
+      itemRowKeyBuilder: (index) => itemRowKeys[index],
+      itemContentKeyBuilder: (index) => itemContentKeys[index],
     );
   }
 
@@ -1290,25 +1299,43 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
   }
 
   Widget _buildFootnoteList(FootnoteListBlock block) {
+    final orderedFootnotes = _footnoteListAsOrderedList(block);
+    final itemRowKeys = _listItemKeysFor(orderedFootnotes);
+    final itemContentKeys = _listItemContentKeysFor(orderedFootnotes);
     return _buildFootnoteListContainer(
       child: MarkdownListBlockView(
         theme: widget.theme,
-        block: _footnoteListAsOrderedList(block),
-        itemBuilder: _buildListItemContent,
+        block: orderedFootnotes,
+        itemBuilder: (index, item) =>
+            _buildListItemContent(orderedFootnotes, index, item),
+        itemRowKeyBuilder: (index) => itemRowKeys[index],
+        itemContentKeyBuilder: (index) => itemContentKeys[index],
       ),
     );
   }
 
-  Widget _buildListItemContent(ListItemNode item) {
-    if (item.children.length == 1 && item.children.first is ParagraphBlock) {
-      return _buildTextBlock(
-        style: widget.theme.bodyStyle,
-        inlines: (item.children.first as ParagraphBlock).inlines,
+  Widget _buildListItemContent(
+    ListBlock block,
+    int itemIndex,
+    ListItemNode item,
+  ) {
+    if (item.children.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final childKeys = _listItemChildKeysFor(block, itemIndex);
+    if (item.children.length == 1) {
+      return KeyedSubtree(
+        key: childKeys.first,
+        child: _buildNestedBlockContent(item.children.first),
       );
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: _buildNestedBlocks(item.children),
+      children: _buildNestedBlocks(
+        item.children,
+        blockKeyBuilder: (index) => childKeys[index],
+      ),
     );
   }
 
@@ -1605,25 +1632,68 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     return keys;
   }
 
+  List<GlobalKey> _listItemChildKeysFor(ListBlock block, int itemIndex) {
+    final keySets = _listItemChildKeysByBlock.putIfAbsent(
+      block.id,
+      () => <List<GlobalKey>>[],
+    );
+    while (keySets.length < block.items.length) {
+      keySets.add(<GlobalKey>[]);
+    }
+    if (keySets.length > block.items.length) {
+      keySets.removeRange(block.items.length, keySets.length);
+    }
+
+    final keys = keySets[itemIndex];
+    final childCount = block.items[itemIndex].children.length;
+    while (keys.length < childCount) {
+      keys.add(
+        GlobalKey(
+          debugLabel: 'list-child-${block.id}-$itemIndex-${keys.length}',
+        ),
+      );
+    }
+    if (keys.length > childCount) {
+      keys.removeRange(childCount, keys.length);
+    }
+    return keys;
+  }
+
   int? _resolveListTextOffset(
     BuildContext context,
     ListBlock block,
     Offset localPosition,
   ) {
-    final blockRenderObject = context.findRenderObject();
-    if (blockRenderObject is! RenderBox || !blockRenderObject.hasSize) {
+    final rootRenderObject = context.findRenderObject();
+    if (rootRenderObject is! RenderBox || !rootRenderObject.hasSize) {
       return null;
     }
 
-    final globalPosition = blockRenderObject.localToGlobal(localPosition);
-    final indexedDescriptors = _buildIndexedListSelectionDescriptors(block);
+    return _resolveListTextOffsetInRoot(
+      context,
+      rootRenderObject: rootRenderObject,
+      block: block,
+      globalPosition: rootRenderObject.localToGlobal(localPosition),
+    );
+  }
+
+  int? _resolveListTextOffsetInRoot(
+    BuildContext context, {
+    required RenderBox rootRenderObject,
+    required ListBlock block,
+    required Offset globalPosition,
+    int indentLevel = 0,
+  }) {
+    final indexedDescriptors = _buildIndexedListSelectionDescriptors(
+      block,
+      indentLevel: indentLevel,
+    );
     if (indexedDescriptors.isEmpty) {
       return null;
     }
 
     final contentKeys = _listItemContentKeysFor(block);
     final rowKeys = _listItemKeysFor(block);
-    final textDirection = Directionality.of(context);
 
     for (final entry in indexedDescriptors) {
       final contentContext = contentKeys[entry.itemIndex].currentContext;
@@ -1632,17 +1702,19 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
         final rect = contentRenderObject.localToGlobal(Offset.zero) &
             contentRenderObject.size;
         if (rect.contains(globalPosition)) {
-          final localContentPosition =
-              contentRenderObject.globalToLocal(globalPosition);
-          return entry.startOffset +
-              entry.prefixLength +
-              _resolveDescriptorTextOffset(
-                context,
-                descriptor: entry.contentDescriptor,
-                localPosition: localContentPosition,
-                size: contentRenderObject.size,
-                textDirection: textDirection,
-              );
+          final childEntries = _buildIndexedBlockDescriptors(
+            block.items[entry.itemIndex].children,
+            indentLevel: entry.contentIndentLevel,
+            separator: '\n',
+          );
+          final childOffset = _resolveIndexedBlockTextOffsetInRoot(
+            context,
+            rootRenderObject: rootRenderObject,
+            entries: childEntries,
+            childKeys: _listItemChildKeysFor(block, entry.itemIndex),
+            globalPosition: globalPosition,
+          );
+          return entry.startOffset + entry.prefixLength + (childOffset ?? 0);
         }
       }
 
@@ -1798,18 +1870,35 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     ListBlock block,
     DocumentRange range,
   ) {
-    final blockRenderObject = context.findRenderObject();
-    if (blockRenderObject is! RenderBox || !blockRenderObject.hasSize) {
+    final rootRenderObject = context.findRenderObject();
+    if (rootRenderObject is! RenderBox || !rootRenderObject.hasSize) {
       return const <Rect>[];
     }
 
-    final indexedDescriptors = _buildIndexedListSelectionDescriptors(block);
+    return _resolveListSelectionRectsInRoot(
+      context,
+      rootRenderObject: rootRenderObject,
+      block: block,
+      range: range,
+    );
+  }
+
+  List<Rect> _resolveListSelectionRectsInRoot(
+    BuildContext context, {
+    required RenderBox rootRenderObject,
+    required ListBlock block,
+    required DocumentRange range,
+    int indentLevel = 0,
+  }) {
+    final indexedDescriptors = _buildIndexedListSelectionDescriptors(
+      block,
+      indentLevel: indentLevel,
+    );
     if (indexedDescriptors.isEmpty) {
       return const <Rect>[];
     }
 
     final rects = <Rect>[];
-    final textDirection = Directionality.of(context);
     final rowKeys = _listItemKeysFor(block);
     final contentKeys = _listItemContentKeysFor(block);
 
@@ -1838,22 +1927,15 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       if (prefixSelectionStart < prefixSelectionEnd &&
           rowRenderObject is RenderBox &&
           rowRenderObject.hasSize) {
-        final rowOrigin = blockRenderObject.globalToLocal(
-          rowRenderObject.localToGlobal(Offset.zero),
-        );
         rects.add(
-          Rect.fromLTWH(
-            rowOrigin.dx,
-            rowOrigin.dy,
-            _resolveListMarkerExtent(
-              block: block,
-              itemIndex: entry.itemIndex,
-              rowRenderObject: rowRenderObject,
-              contentRenderObject:
-                  contentRenderObject is RenderBox ? contentRenderObject : null,
-            ),
-            rowRenderObject.size.height,
-          ).inflate(1.5),
+          _resolveListPrefixSelectionRectInRoot(
+            rootRenderObject: rootRenderObject,
+            block: block,
+            itemIndex: entry.itemIndex,
+            rowRenderObject: rowRenderObject,
+            contentRenderObject:
+                contentRenderObject is RenderBox ? contentRenderObject : null,
+          ),
         );
       }
 
@@ -1865,9 +1947,6 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
         continue;
       }
 
-      final itemOrigin = blockRenderObject.globalToLocal(
-        contentRenderObject.localToGlobal(Offset.zero),
-      );
       final itemRange = DocumentRange(
         start: DocumentPosition(
           blockIndex: 0,
@@ -1880,19 +1959,62 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
           textOffset: contentSelectionEnd - itemStart - entry.prefixLength,
         ),
       );
+      final childEntries = _buildIndexedBlockDescriptors(
+        block.items[entry.itemIndex].children,
+        indentLevel: entry.contentIndentLevel,
+        separator: '\n',
+      );
       rects.addAll(
-        _resolveDescriptorSelectionRects(
+        _resolveIndexedBlockSelectionRectsInRoot(
           context,
-          descriptor: entry.contentDescriptor,
+          rootRenderObject: rootRenderObject,
+          entries: childEntries,
+          childKeys: _listItemChildKeysFor(block, entry.itemIndex),
           range: itemRange,
-          size: contentRenderObject.size,
-          textDirection: textDirection,
-          origin: itemOrigin,
         ),
       );
     }
 
     return rects;
+  }
+
+  Rect _resolveListPrefixSelectionRectInRoot({
+    required RenderBox rootRenderObject,
+    required ListBlock block,
+    required int itemIndex,
+    required RenderBox rowRenderObject,
+    RenderBox? contentRenderObject,
+  }) {
+    final rowOrigin = rootRenderObject.globalToLocal(
+      rowRenderObject.localToGlobal(Offset.zero),
+    );
+    var top = rowOrigin.dy;
+    var height = rowRenderObject.size.height;
+    final childKeys = _listItemChildKeysFor(block, itemIndex);
+    if (childKeys.isNotEmpty) {
+      final firstChildContext = childKeys.first.currentContext;
+      final firstChildRenderObject = firstChildContext?.findRenderObject();
+      if (firstChildRenderObject is RenderBox &&
+          firstChildRenderObject.hasSize) {
+        final firstChildOrigin = rootRenderObject.globalToLocal(
+          firstChildRenderObject.localToGlobal(Offset.zero),
+        );
+        top = firstChildOrigin.dy;
+        height = firstChildRenderObject.size.height;
+      }
+    }
+
+    return Rect.fromLTWH(
+      rowOrigin.dx,
+      top,
+      _resolveListMarkerExtent(
+        block: block,
+        itemIndex: itemIndex,
+        rowRenderObject: rowRenderObject,
+        contentRenderObject: contentRenderObject,
+      ),
+      height,
+    ).inflate(1.5);
   }
 
   double _resolveListMarkerExtent({
@@ -1966,11 +2088,68 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     required QuoteBlock block,
     required DocumentRange range,
   }) {
-    final entries = _buildIndexedBlockDescriptors(block.children);
+    final entries = _buildIndexedBlockDescriptors(
+      block.children,
+      separator: '\n\n',
+    );
     if (entries.isEmpty) {
       return const <Rect>[];
     }
-    final childKeys = _quoteChildKeysFor(block);
+    return _resolveIndexedBlockSelectionRectsInRoot(
+      context,
+      rootRenderObject: rootRenderObject,
+      entries: entries,
+      childKeys: _quoteChildKeysFor(block),
+      range: range,
+    );
+  }
+
+  int? _resolveQuoteTextOffset(
+    BuildContext context,
+    QuoteBlock block,
+    Offset localPosition,
+  ) {
+    final rootRenderObject = context.findRenderObject();
+    if (rootRenderObject is! RenderBox || !rootRenderObject.hasSize) {
+      return null;
+    }
+    return _resolveQuoteTextOffsetInRoot(
+      context,
+      rootRenderObject: rootRenderObject,
+      block: block,
+      globalPosition: rootRenderObject.localToGlobal(localPosition),
+    );
+  }
+
+  int? _resolveQuoteTextOffsetInRoot(
+    BuildContext context, {
+    required RenderBox rootRenderObject,
+    required QuoteBlock block,
+    required Offset globalPosition,
+  }) {
+    final entries = _buildIndexedBlockDescriptors(
+      block.children,
+      separator: '\n\n',
+    );
+    if (entries.isEmpty) {
+      return null;
+    }
+    return _resolveIndexedBlockTextOffsetInRoot(
+      context,
+      rootRenderObject: rootRenderObject,
+      entries: entries,
+      childKeys: _quoteChildKeysFor(block),
+      globalPosition: globalPosition,
+    );
+  }
+
+  List<Rect> _resolveIndexedBlockSelectionRectsInRoot(
+    BuildContext context, {
+    required RenderBox rootRenderObject,
+    required List<_IndexedBlockDescriptor> entries,
+    required List<GlobalKey> childKeys,
+    required DocumentRange range,
+  }) {
     final textDirection = Directionality.of(context);
     final rects = <Rect>[];
 
@@ -2014,6 +2193,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
           renderObject: childRenderObject,
           origin: childOrigin,
           textDirection: textDirection,
+          indentLevel: entry.indentLevel,
         ),
       );
     }
@@ -2021,36 +2201,14 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     return rects;
   }
 
-  int? _resolveQuoteTextOffset(
-    BuildContext context,
-    QuoteBlock block,
-    Offset localPosition,
-  ) {
-    final rootRenderObject = context.findRenderObject();
-    if (rootRenderObject is! RenderBox || !rootRenderObject.hasSize) {
-      return null;
-    }
-    return _resolveQuoteTextOffsetInRoot(
-      context,
-      rootRenderObject: rootRenderObject,
-      block: block,
-      globalPosition: rootRenderObject.localToGlobal(localPosition),
-    );
-  }
-
-  int? _resolveQuoteTextOffsetInRoot(
+  int? _resolveIndexedBlockTextOffsetInRoot(
     BuildContext context, {
     required RenderBox rootRenderObject,
-    required QuoteBlock block,
+    required List<_IndexedBlockDescriptor> entries,
+    required List<GlobalKey> childKeys,
     required Offset globalPosition,
   }) {
-    final entries = _buildIndexedBlockDescriptors(block.children);
-    if (entries.isEmpty) {
-      return null;
-    }
-    final childKeys = _quoteChildKeysFor(block);
     final textDirection = Directionality.of(context);
-
     _IndexedBlockDescriptor? nearestEntry;
     double bestDistance = double.infinity;
 
@@ -2072,6 +2230,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
               renderObject: childRenderObject,
               globalPosition: globalPosition,
               textDirection: textDirection,
+              indentLevel: entry.indentLevel,
             );
       }
 
@@ -2118,14 +2277,12 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     required RenderBox renderObject,
     required Offset origin,
     required TextDirection textDirection,
+    int indentLevel = 0,
   }) {
     switch (block.kind) {
       case MarkdownBlockKind.heading:
       case MarkdownBlockKind.paragraph:
       case MarkdownBlockKind.definitionList:
-      case MarkdownBlockKind.orderedList:
-      case MarkdownBlockKind.unorderedList:
-      case MarkdownBlockKind.footnoteList:
         return _resolveDescriptorSelectionRects(
           context,
           descriptor: descriptor,
@@ -2133,6 +2290,23 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
           size: renderObject.size,
           textDirection: textDirection,
           origin: origin,
+        );
+      case MarkdownBlockKind.orderedList:
+      case MarkdownBlockKind.unorderedList:
+        return _resolveListSelectionRectsInRoot(
+          context,
+          rootRenderObject: rootRenderObject,
+          block: block as ListBlock,
+          range: range,
+          indentLevel: indentLevel,
+        );
+      case MarkdownBlockKind.footnoteList:
+        return _resolveListSelectionRectsInRoot(
+          context,
+          rootRenderObject: rootRenderObject,
+          block: _footnoteListAsOrderedList(block as FootnoteListBlock),
+          range: range,
+          indentLevel: indentLevel,
         );
       case MarkdownBlockKind.quote:
         return _resolveQuoteSelectionRectsInRoot(
@@ -2167,15 +2341,13 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     required RenderBox renderObject,
     required Offset globalPosition,
     required TextDirection textDirection,
+    int indentLevel = 0,
   }) {
     final localPosition = renderObject.globalToLocal(globalPosition);
     switch (block.kind) {
       case MarkdownBlockKind.heading:
       case MarkdownBlockKind.paragraph:
       case MarkdownBlockKind.definitionList:
-      case MarkdownBlockKind.orderedList:
-      case MarkdownBlockKind.unorderedList:
-      case MarkdownBlockKind.footnoteList:
         return _resolveDescriptorTextOffset(
           context,
           descriptor: descriptor,
@@ -2183,6 +2355,25 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
           size: renderObject.size,
           textDirection: textDirection,
         );
+      case MarkdownBlockKind.orderedList:
+      case MarkdownBlockKind.unorderedList:
+        return _resolveListTextOffsetInRoot(
+              context,
+              rootRenderObject: rootRenderObject,
+              block: block as ListBlock,
+              globalPosition: globalPosition,
+              indentLevel: indentLevel,
+            ) ??
+            0;
+      case MarkdownBlockKind.footnoteList:
+        return _resolveListTextOffsetInRoot(
+              context,
+              rootRenderObject: rootRenderObject,
+              block: _footnoteListAsOrderedList(block as FootnoteListBlock),
+              globalPosition: globalPosition,
+              indentLevel: indentLevel,
+            ) ??
+            0;
       case MarkdownBlockKind.quote:
         return _resolveQuoteTextOffsetInRoot(
               context,
@@ -2269,23 +2460,29 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
   }
 
   List<_IndexedBlockDescriptor> _buildIndexedBlockDescriptors(
-    List<BlockNode> blocks,
-  ) {
+    List<BlockNode> blocks, {
+    int indentLevel = 0,
+    required String separator,
+  }) {
     final entries = <_IndexedBlockDescriptor>[];
     var offset = 0;
     for (var index = 0; index < blocks.length; index++) {
-      final descriptor = _buildSelectableDescriptorForBlock(blocks[index]);
+      final descriptor = _buildSelectableDescriptorForBlock(
+        blocks[index],
+        indentLevel: indentLevel,
+      );
       if (descriptor.isEmpty) {
         continue;
       }
       if (entries.isNotEmpty) {
-        offset += 2;
+        offset += separator.length;
       }
       entries.add(
         _IndexedBlockDescriptor(
           childIndex: index,
           block: blocks[index],
           startOffset: offset,
+          indentLevel: indentLevel,
           descriptor: descriptor,
         ),
       );
@@ -2346,6 +2543,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
         itemIndex: index,
         startOffset: startOffset,
         prefixLength: prefixOnly.length,
+        contentIndentLevel: indentLevel + 1,
         descriptor: _plainTextDescriptor(prefixOnly, widget.theme.bodyStyle),
         contentDescriptor: _plainTextDescriptor('', widget.theme.bodyStyle),
       );
@@ -2361,6 +2559,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       itemIndex: index,
       startOffset: startOffset,
       prefixLength: prefix.length,
+      contentIndentLevel: indentLevel + 1,
       descriptor: descriptor,
       contentDescriptor: contentDescriptor,
     );
@@ -2882,6 +3081,7 @@ class _IndexedListSelectionDescriptor {
     required this.itemIndex,
     required this.startOffset,
     required this.prefixLength,
+    required this.contentIndentLevel,
     required this.descriptor,
     required this.contentDescriptor,
   });
@@ -2889,6 +3089,7 @@ class _IndexedListSelectionDescriptor {
   final int itemIndex;
   final int startOffset;
   final int prefixLength;
+  final int contentIndentLevel;
   final _SelectableTextDescriptor descriptor;
   final _SelectableTextDescriptor contentDescriptor;
 }
@@ -2899,12 +3100,14 @@ class _IndexedBlockDescriptor {
     required this.childIndex,
     required this.block,
     required this.startOffset,
+    required this.indentLevel,
     required this.descriptor,
   });
 
   final int childIndex;
   final BlockNode block;
   final int startOffset;
+  final int indentLevel;
   final _SelectableTextDescriptor descriptor;
 }
 

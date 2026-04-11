@@ -1148,6 +1148,91 @@ return value;
     expect(globalSelectionRects.last.bottom, closeTo(nestedRect.bottom, 0.5));
   });
 
+  testWidgets('nested lists keep selection backgrounds aligned to item text', (
+    tester,
+  ) async {
+    final selectionController = MarkdownSelectionController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: '''
+- Parent item
+  - Nested child
+''',
+            selectionController: selectionController,
+          ),
+        ),
+      ),
+    );
+
+    final parentFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is RichText &&
+          widget.text.toPlainText().contains('Parent item'),
+    );
+    final nestedFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is RichText &&
+          widget.text.toPlainText().contains('Nested child'),
+    );
+
+    final start = tester.getTopLeft(parentFinder.first) + const Offset(2, 10);
+    final end = tester.getTopRight(nestedFinder.first) + const Offset(-2, 10);
+    final listFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is SelectableMarkdownBlock &&
+          widget.spec.plainText.contains('Parent item') &&
+          widget.spec.plainText.contains('Nested child'),
+    );
+    final listWidget = tester.widget<SelectableMarkdownBlock>(listFinder);
+    final listElement = tester.element(listFinder);
+    final listRenderBox = tester.renderObject<RenderBox>(listFinder);
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: start);
+    await gesture.down(start);
+    await tester.pump();
+    await gesture.moveTo(end);
+    await tester.pump();
+    await gesture.up();
+    await tester.pump();
+
+    final selectionRange = selectionController.normalizedRange!;
+    final selectionRects = listWidget.spec.selectionRectResolver!.call(
+      listElement,
+      listRenderBox.size,
+      selectionRange,
+    );
+    final listOrigin = listRenderBox.localToGlobal(Offset.zero);
+    final globalSelectionRects = selectionRects
+        .map((rect) => rect.shift(listOrigin))
+        .toList(growable: false);
+    final parentRenderBox = tester.renderObject<RenderBox>(parentFinder.first);
+    final parentRect =
+        parentRenderBox.localToGlobal(Offset.zero) & parentRenderBox.size;
+    final nestedRenderBox = tester.renderObject<RenderBox>(nestedFinder.first);
+    final nestedRect =
+        nestedRenderBox.localToGlobal(Offset.zero) & nestedRenderBox.size;
+
+    bool hasAlignedRect(Rect textRect) {
+      return globalSelectionRects.any(
+        (rect) =>
+            (rect.top - textRect.top).abs() <= 0.5 &&
+            (rect.bottom - textRect.bottom).abs() <= 0.5 &&
+            rect.right > textRect.left &&
+            rect.left < textRect.right,
+      );
+    }
+
+    expect(selectionController.hasSelection, isTrue);
+    expect(selectionController.selectedPlainText, contains('Parent item'));
+    expect(selectionController.selectedPlainText, contains('Nested'));
+    expect(hasAlignedRect(parentRect), isTrue);
+    expect(hasAlignedRect(nestedRect), isTrue);
+  });
+
   testWidgets('dragging inside an image caption selects caption text', (
     tester,
   ) async {
