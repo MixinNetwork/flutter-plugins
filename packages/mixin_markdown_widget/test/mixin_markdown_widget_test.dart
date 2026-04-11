@@ -339,6 +339,35 @@ return value;
     expect(selectionController.selectedPlainText, 'Hello\n\nWorld');
   });
 
+  testWidgets('scrolling without an explicit controller does not throw', (
+    tester,
+  ) async {
+    final buffer = StringBuffer();
+    for (var index = 0; index < 40; index++) {
+      if (index > 0) {
+        buffer.writeln();
+        buffer.writeln();
+      }
+      buffer.write('Paragraph $index');
+    }
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            height: 240,
+            child: MarkdownWidget(data: buffer.toString()),
+          ),
+        ),
+      ),
+    );
+
+    await tester.drag(find.byType(ListView), const Offset(0, -200));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('copy and select-all shortcuts use the custom selection', (
     tester,
   ) async {

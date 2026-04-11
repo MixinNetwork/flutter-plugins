@@ -75,6 +75,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
   static const double _codeToolbarHeight = 36;
 
   final List<TapGestureRecognizer> _recognizers = <TapGestureRecognizer>[];
+  final ScrollController _fallbackScrollController = ScrollController();
   final FocusNode _selectionFocusNode =
       FocusNode(debugLabel: 'mixin_markdown_widget.selection');
   final MarkdownPlainTextSerializer _plainTextSerializer =
@@ -97,6 +98,9 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
   DocumentPosition? _dragBasePosition;
   bool _isDraggingSelection = false;
 
+  ScrollController get _effectiveScrollController =>
+      widget.scrollController ?? _fallbackScrollController;
+
   @override
   void didUpdateWidget(covariant MarkdownDocumentView oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -112,6 +116,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
   @override
   void dispose() {
     _disposeRecognizers();
+    _fallbackScrollController.dispose();
     _selectionFocusNode.dispose();
     super.dispose();
   }
@@ -120,9 +125,12 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
   Widget build(BuildContext context) {
     _disposeRecognizers();
     final selectionRange = widget.selectionController?.normalizedRange;
+    final scrollController = _effectiveScrollController;
     final scrollable = Scrollbar(
+      controller: scrollController,
       child: ListView.builder(
-        controller: widget.scrollController,
+        controller: scrollController,
+        primary: false,
         physics: widget.physics,
         shrinkWrap: widget.shrinkWrap,
         padding: widget.theme.padding,
@@ -136,7 +144,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
                   : widget.theme.blockSpacing,
             ),
             child: Align(
-              alignment: Alignment.topCenter,
+              alignment: AlignmentDirectional.topStart,
               child: ConstrainedBox(
                 constraints:
                     BoxConstraints(maxWidth: widget.theme.maxContentWidth),
