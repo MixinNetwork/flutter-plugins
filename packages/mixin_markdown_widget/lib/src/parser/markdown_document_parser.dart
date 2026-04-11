@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'package:markdown/markdown.dart' as md;
 
 import '../core/document.dart';
+import 'markdown_syntaxes.dart';
 
 class MarkdownDocumentParser {
   const MarkdownDocumentParser();
@@ -114,7 +115,9 @@ class MarkdownDocumentParser {
     required Map<MarkdownBlockKind, int> initialKindCounts,
   }) {
     final document = md.Document(
-      extensionSet: md.ExtensionSet.gitHubWeb,
+      extensionSet: md.ExtensionSet.none,
+      blockSyntaxes: buildMarkdownBlockSyntaxes(),
+      inlineSyntaxes: buildMarkdownInlineSyntaxes(),
       encodeHtml: false,
     );
     final nodes = document.parseLines(normalizedSource.split('\n'));
@@ -202,6 +205,26 @@ class MarkdownDocumentParser {
           _countBlockKindsInBlock(child, counts);
         }
       }
+      return;
+    }
+
+    if (block is FootnoteListBlock) {
+      for (final item in block.items) {
+        for (final child in item.children) {
+          _countBlockKindsInBlock(child, counts);
+        }
+      }
+      return;
+    }
+
+    if (block is DefinitionListBlock) {
+      for (final item in block.items) {
+        for (final definition in item.definitions) {
+          for (final child in definition) {
+            _countBlockKindsInBlock(child, counts);
+          }
+        }
+      }
     }
   }
 
@@ -213,6 +236,7 @@ class MarkdownDocumentParser {
           id: heading.id,
           level: heading.level,
           inlines: heading.inlines,
+          anchorId: heading.anchorId,
           sourceRange: sourceRange,
         );
       case MarkdownBlockKind.paragraph:
@@ -237,6 +261,20 @@ class MarkdownDocumentParser {
           ordered: list.ordered,
           items: list.items,
           startIndex: list.startIndex,
+          sourceRange: sourceRange,
+        );
+      case MarkdownBlockKind.definitionList:
+        final definitionList = block as DefinitionListBlock;
+        return DefinitionListBlock(
+          id: definitionList.id,
+          items: definitionList.items,
+          sourceRange: sourceRange,
+        );
+      case MarkdownBlockKind.footnoteList:
+        final footnoteList = block as FootnoteListBlock;
+        return FootnoteListBlock(
+          id: footnoteList.id,
+          items: footnoteList.items,
           sourceRange: sourceRange,
         );
       case MarkdownBlockKind.codeBlock:
@@ -322,6 +360,9 @@ class MarkdownDocumentParser {
     }
     if (_isTableStart(lines, startIndex)) {
       return _consumeTable(lines, startIndex);
+    }
+    if (_isDefinitionListStart(lines, startIndex)) {
+      return _consumeDefinitionList(lines, startIndex);
     }
     if (_isBlockquoteLine(line)) {
       return _consumeBlockquote(lines, startIndex);
@@ -435,11 +476,44 @@ class MarkdownDocumentParser {
     return endIndex;
   }
 
+  int _consumeDefinitionList(List<String> lines, int startIndex) {
+    var endIndex = startIndex + 1;
+    while (endIndex + 1 < lines.length) {
+      final nextIndex = endIndex + 1;
+      final nextLine = lines[nextIndex];
+      if (_isDefinitionMarker(nextLine) ||
+          _isDefinitionContinuationLine(nextLine)) {
+        endIndex = nextIndex;
+        continue;
+      }
+      if (_isBlankLine(nextLine)) {
+        final continuationIndex = nextIndex + 1;
+        if (continuationIndex < lines.length &&
+            _isDefinitionContinuationLine(lines[continuationIndex])) {
+          endIndex = continuationIndex;
+          continue;
+        }
+        break;
+      }
+      if (_isDefinitionListStart(lines, nextIndex)) {
+        endIndex = nextIndex + 1;
+        continue;
+      }
+      if (!_startsNewTopLevelBlock(lines, nextIndex)) {
+        endIndex = nextIndex;
+        continue;
+      }
+      break;
+    }
+    return endIndex;
+  }
+
   bool _startsNewTopLevelBlock(List<String> lines, int index) {
     final line = lines[index];
     return _isIndentedCodeBlockStart(line) ||
         _isFenceStart(line) ||
         _isTableStart(lines, index) ||
+        _isDefinitionListStart(lines, index) ||
         _isBlockquoteLine(line) ||
         _isListMarker(line) ||
         _isAtxHeading(line) ||
@@ -492,6 +566,25 @@ class MarkdownDocumentParser {
         _tableSeparatorPattern.hasMatch(lines[index + 1]);
   }
 
+  bool _isDefinitionListStart(List<String> lines, int index) {
+    if (index + 1 >= lines.length) {
+      return false;
+    }
+    final term = lines[index];
+    if (_isBlankLine(term) || _leadingIndent(term) > 3) {
+      return false;
+    }
+    return _definitionMarkerPattern.hasMatch(lines[index + 1]);
+  }
+
+  bool _isDefinitionMarker(String line) {
+    return _definitionMarkerPattern.hasMatch(line);
+  }
+
+  bool _isDefinitionContinuationLine(String line) {
+    return _definitionContinuationPattern.hasMatch(line);
+  }
+
   bool _looksLikeTableRow(String line) {
     final trimmed = line.trim();
     return trimmed.isNotEmpty && trimmed.contains('|');
@@ -524,6 +617,9 @@ class MarkdownDocumentParser {
   static final RegExp _blockquotePattern = RegExp(r'^\s{0,3}>\s?.*$');
   static final RegExp _listMarkerPattern =
       RegExp(r'^\s{0,3}(?:[-+*]|\d+[.)])\s+');
+  static final RegExp _definitionMarkerPattern = RegExp(r'^\s{0,3}:\s?.*$');
+  static final RegExp _definitionContinuationPattern =
+      RegExp(r'^(?: {2,}|\t).*$');
   static final RegExp _tableSeparatorPattern = RegExp(
     r'^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*:?-{3,}:?\s*\|?\s*$',
   );
@@ -581,6 +677,7 @@ class _MarkdownAstBuilder {
           id: _nextId(MarkdownBlockKind.heading, node.textContent),
           level: int.parse(node.tag.substring(1)),
           inlines: _buildInlines(node.children),
+          anchorId: node.generatedId,
         );
       case 'p':
         final imageBlock = _buildStandaloneImageParagraph(node);
@@ -610,6 +707,13 @@ class _MarkdownAstBuilder {
           startIndex: int.tryParse(node.attributes['start'] ?? '1') ?? 1,
           items: List<ListItemNode>.unmodifiable(_buildListItems(node)),
         );
+      case 'dl':
+        return _buildDefinitionList(node);
+      case 'section':
+        if (node.attributes['class'] == 'footnotes') {
+          return _buildFootnoteList(node);
+        }
+        break;
       case 'pre':
         return _buildCodeBlock(node);
       case 'table':
@@ -636,6 +740,8 @@ class _MarkdownAstBuilder {
           inlines: fallbackInlines,
         );
     }
+
+    return null;
   }
 
   List<ListItemNode> _buildListItems(md.Element listElement) {
@@ -644,26 +750,188 @@ class _MarkdownAstBuilder {
       if (child is! md.Element || child.tag != 'li') {
         continue;
       }
-      final children = buildBlocks(child.children ?? const <md.Node>[]);
-      if (children.isEmpty) {
-        final inlineChildren = _buildInlines(child.children);
-        if (inlineChildren.isNotEmpty) {
-          items.add(
-            ListItemNode(
-              children: <BlockNode>[
-                ParagraphBlock(
-                  id: _nextId(MarkdownBlockKind.paragraph, child.textContent),
-                  inlines: inlineChildren,
-                ),
-              ],
-            ),
-          );
-        }
-        continue;
-      }
-      items.add(ListItemNode(children: List<BlockNode>.unmodifiable(children)));
+      items.add(_buildListItem(child));
     }
     return items;
+  }
+
+  ListItemNode _buildListItem(md.Element itemElement) {
+    final taskState = _taskStateForListItem(itemElement);
+    final contentNodes = _stripLeadingCheckbox(itemElement.children);
+    final children = buildBlocks(contentNodes);
+    if (children.isEmpty) {
+      final inlineChildren = _buildInlines(contentNodes);
+      if (inlineChildren.isEmpty) {
+        return ListItemNode(
+          children: const <BlockNode>[],
+          taskState: taskState,
+        );
+      }
+      return ListItemNode(
+        taskState: taskState,
+        children: <BlockNode>[
+          ParagraphBlock(
+            id: _nextId(MarkdownBlockKind.paragraph, itemElement.textContent),
+            inlines: inlineChildren,
+          ),
+        ],
+      );
+    }
+    return ListItemNode(
+      taskState: taskState,
+      children: List<BlockNode>.unmodifiable(children),
+    );
+  }
+
+  MarkdownTaskListItemState? _taskStateForListItem(md.Element itemElement) {
+    final checkbox = _leadingCheckboxElement(itemElement.children);
+    if (checkbox == null) {
+      return null;
+    }
+    return checkbox.attributes['checked'] == 'true'
+        ? MarkdownTaskListItemState.checked
+        : MarkdownTaskListItemState.unchecked;
+  }
+
+  md.Element? _leadingCheckboxElement(List<md.Node>? nodes) {
+    if (nodes == null || nodes.isEmpty) {
+      return null;
+    }
+    final first = nodes.first;
+    if (_isCheckboxInput(first)) {
+      return first as md.Element;
+    }
+    if (first is md.Element && first.tag == 'p') {
+      final paragraphChildren = first.children;
+      if (paragraphChildren != null &&
+          paragraphChildren.isNotEmpty &&
+          _isCheckboxInput(paragraphChildren.first)) {
+        return paragraphChildren.first as md.Element;
+      }
+    }
+    return null;
+  }
+
+  bool _isCheckboxInput(md.Node node) {
+    return node is md.Element &&
+        node.tag == 'input' &&
+        node.attributes['type'] == 'checkbox';
+  }
+
+  List<md.Node> _stripLeadingCheckbox(List<md.Node>? nodes) {
+    if (nodes == null || nodes.isEmpty) {
+      return const <md.Node>[];
+    }
+
+    final first = nodes.first;
+    if (_isCheckboxInput(first)) {
+      return List<md.Node>.unmodifiable(nodes.skip(1));
+    }
+
+    if (first is md.Element && first.tag == 'p') {
+      final paragraphChildren = first.children ?? const <md.Node>[];
+      if (paragraphChildren.isNotEmpty &&
+          _isCheckboxInput(paragraphChildren.first)) {
+        final paragraph = md.Element('p', paragraphChildren.skip(1).toList())
+          ..attributes.addAll(first.attributes);
+        return List<md.Node>.unmodifiable(
+            <md.Node>[paragraph, ...nodes.skip(1)]);
+      }
+    }
+
+    return List<md.Node>.unmodifiable(nodes);
+  }
+
+  DefinitionListBlock _buildDefinitionList(md.Element node) {
+    final items = <DefinitionListItemNode>[];
+    final children = node.children ?? const <md.Node>[];
+    var index = 0;
+    while (index < children.length) {
+      final child = children[index];
+      if (child is! md.Element || child.tag != 'dt') {
+        index += 1;
+        continue;
+      }
+
+      final terms = <List<InlineNode>>[];
+      while (index < children.length) {
+        final termNode = children[index];
+        if (termNode is! md.Element || termNode.tag != 'dt') {
+          break;
+        }
+        terms.add(
+            List<InlineNode>.unmodifiable(_buildInlines(termNode.children)));
+        index += 1;
+      }
+
+      final definitions = <List<BlockNode>>[];
+      while (index < children.length) {
+        final definitionNode = children[index];
+        if (definitionNode is! md.Element || definitionNode.tag != 'dd') {
+          break;
+        }
+        final blocks =
+            buildBlocks(definitionNode.children ?? const <md.Node>[]);
+        if (blocks.isNotEmpty) {
+          definitions.add(List<BlockNode>.unmodifiable(blocks));
+        } else {
+          final inlineChildren = _buildInlines(definitionNode.children);
+          if (inlineChildren.isNotEmpty) {
+            definitions.add(
+              <BlockNode>[
+                ParagraphBlock(
+                  id: _nextId(
+                    MarkdownBlockKind.paragraph,
+                    definitionNode.textContent,
+                  ),
+                  inlines: List<InlineNode>.unmodifiable(inlineChildren),
+                ),
+              ],
+            );
+          }
+        }
+        index += 1;
+      }
+
+      if (definitions.isEmpty) {
+        continue;
+      }
+
+      for (final term in terms) {
+        items.add(
+          DefinitionListItemNode(
+            term: term,
+            definitions: List<List<BlockNode>>.unmodifiable(definitions),
+          ),
+        );
+      }
+    }
+
+    return DefinitionListBlock(
+      id: _nextId(MarkdownBlockKind.definitionList, node.textContent),
+      items: List<DefinitionListItemNode>.unmodifiable(items),
+    );
+  }
+
+  FootnoteListBlock _buildFootnoteList(md.Element node) {
+    final orderedList = node.children?.firstWhere(
+      (child) => child is md.Element && child.tag == 'ol',
+      orElse: () => md.Element('ol', const <md.Node>[]),
+    );
+
+    final items = <ListItemNode>[];
+    if (orderedList is md.Element) {
+      for (final child in orderedList.children ?? const <md.Node>[]) {
+        if (child is md.Element && child.tag == 'li') {
+          items.add(_buildListItem(child));
+        }
+      }
+    }
+
+    return FootnoteListBlock(
+      id: _nextId(MarkdownBlockKind.footnoteList, node.textContent),
+      items: List<ListItemNode>.unmodifiable(items),
+    );
   }
 
   CodeBlock _buildCodeBlock(md.Element node) {
@@ -785,6 +1053,21 @@ class _MarkdownAstBuilder {
           break;
         case 'del':
           inlines.add(StrikethroughInline(
+              children:
+                  List<InlineNode>.unmodifiable(_buildInlines(node.children))));
+          break;
+        case 'mark':
+          inlines.add(HighlightInline(
+              children:
+                  List<InlineNode>.unmodifiable(_buildInlines(node.children))));
+          break;
+        case 'sub':
+          inlines.add(SubscriptInline(
+              children:
+                  List<InlineNode>.unmodifiable(_buildInlines(node.children))));
+          break;
+        case 'sup':
+          inlines.add(SuperscriptInline(
               children:
                   List<InlineNode>.unmodifiable(_buildInlines(node.children))));
           break;

@@ -6,6 +6,8 @@ enum MarkdownBlockKind {
   quote,
   orderedList,
   unorderedList,
+  definitionList,
+  footnoteList,
   codeBlock,
   table,
   image,
@@ -17,11 +19,19 @@ enum MarkdownInlineKind {
   emphasis,
   strong,
   strikethrough,
+  highlight,
+  subscript,
+  superscript,
   link,
   inlineCode,
   softBreak,
   hardBreak,
   image,
+}
+
+enum MarkdownTaskListItemState {
+  checked,
+  unchecked,
 }
 
 enum MarkdownTableColumnAlignment {
@@ -79,11 +89,13 @@ class HeadingBlock extends BlockNode {
     required super.id,
     required this.level,
     required this.inlines,
+    this.anchorId,
     super.sourceRange,
   }) : super(kind: MarkdownBlockKind.heading);
 
   final int level;
   final List<InlineNode> inlines;
+  final String? anchorId;
 }
 
 @immutable
@@ -129,9 +141,46 @@ class ListBlock extends BlockNode {
 
 @immutable
 class ListItemNode {
-  const ListItemNode({required this.children});
+  const ListItemNode({
+    required this.children,
+    this.taskState,
+  });
 
   final List<BlockNode> children;
+  final MarkdownTaskListItemState? taskState;
+}
+
+@immutable
+class DefinitionListBlock extends BlockNode {
+  const DefinitionListBlock({
+    required super.id,
+    required this.items,
+    super.sourceRange,
+  }) : super(kind: MarkdownBlockKind.definitionList);
+
+  final List<DefinitionListItemNode> items;
+}
+
+@immutable
+class DefinitionListItemNode {
+  const DefinitionListItemNode({
+    required this.term,
+    required this.definitions,
+  });
+
+  final List<InlineNode> term;
+  final List<List<BlockNode>> definitions;
+}
+
+@immutable
+class FootnoteListBlock extends BlockNode {
+  const FootnoteListBlock({
+    required super.id,
+    required this.items,
+    super.sourceRange,
+  }) : super(kind: MarkdownBlockKind.footnoteList);
+
+  final List<ListItemNode> items;
 }
 
 @immutable
@@ -248,6 +297,36 @@ class StrikethroughInline extends InlineNode {
     required this.children,
     super.sourceRange,
   }) : super(kind: MarkdownInlineKind.strikethrough);
+
+  final List<InlineNode> children;
+}
+
+@immutable
+class HighlightInline extends InlineNode {
+  const HighlightInline({
+    required this.children,
+    super.sourceRange,
+  }) : super(kind: MarkdownInlineKind.highlight);
+
+  final List<InlineNode> children;
+}
+
+@immutable
+class SubscriptInline extends InlineNode {
+  const SubscriptInline({
+    required this.children,
+    super.sourceRange,
+  }) : super(kind: MarkdownInlineKind.subscript);
+
+  final List<InlineNode> children;
+}
+
+@immutable
+class SuperscriptInline extends InlineNode {
+  const SuperscriptInline({
+    required this.children,
+    super.sourceRange,
+  }) : super(kind: MarkdownInlineKind.superscript);
 
   final List<InlineNode> children;
 }

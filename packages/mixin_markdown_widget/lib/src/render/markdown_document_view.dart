@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' show FontFeature;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -717,6 +718,44 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
           plainText: _plainTextSerializer.serializeBlockText(listBlock),
           hitTestBehavior: SelectableBlockHitTestBehavior.block,
         );
+      case MarkdownBlockKind.definitionList:
+        final definitionList = block as DefinitionListBlock;
+        final definitionDescriptor =
+            _buildDefinitionListSelectableDescriptor(definitionList);
+        return SelectableBlockSpec(
+          child: Text.rich(
+            definitionDescriptor.span,
+            style: widget.theme.bodyStyle,
+          ),
+          plainText: definitionDescriptor.plainText,
+          hitTestBehavior: SelectableBlockHitTestBehavior.text,
+          textSpan: definitionDescriptor.span,
+        );
+      case MarkdownBlockKind.footnoteList:
+        final footnoteList = block as FootnoteListBlock;
+        final footnoteDescriptor =
+            _buildFootnoteListSelectableDescriptor(footnoteList);
+        return SelectableBlockSpec(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              border: Border(
+                top: BorderSide(color: widget.theme.dividerColor),
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Text.rich(
+                footnoteDescriptor.span,
+                style: _footnoteStyle,
+              ),
+            ),
+          ),
+          plainText: footnoteDescriptor.plainText,
+          hitTestBehavior: SelectableBlockHitTestBehavior.text,
+          textSpan: footnoteDescriptor.span,
+          measurementPadding: const EdgeInsets.only(top: 12),
+          highlightBorderRadius: BorderRadius.circular(8),
+        );
       case MarkdownBlockKind.codeBlock:
         final codeBlock = block as CodeBlock;
         final codeSpan = _buildCodeTextSpan(codeBlock);
@@ -911,6 +950,20 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
         final style =
             baseStyle.copyWith(decoration: TextDecoration.lineThrough);
         return _buildPretextRuns(style, strike.children);
+      case MarkdownInlineKind.highlight:
+        final highlight = inline as HighlightInline;
+        return _buildPretextRuns(
+            _highlightStyle(baseStyle), highlight.children);
+      case MarkdownInlineKind.subscript:
+        final subscript = inline as SubscriptInline;
+        return _buildPretextRuns(
+            _subscriptStyle(baseStyle), subscript.children);
+      case MarkdownInlineKind.superscript:
+        final superscript = inline as SuperscriptInline;
+        return _buildPretextRuns(
+          _superscriptStyle(baseStyle),
+          superscript.children,
+        );
       case MarkdownInlineKind.link:
         final link = inline as LinkInline;
         final label = _flattenInlineText(link.children);
@@ -1014,6 +1067,9 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
         return !_inlinesContainLinks((block as HeadingBlock).inlines);
       case MarkdownBlockKind.paragraph:
         return !_inlinesContainLinks((block as ParagraphBlock).inlines);
+      case MarkdownBlockKind.definitionList:
+      case MarkdownBlockKind.footnoteList:
+        return false;
       case MarkdownBlockKind.codeBlock:
       case MarkdownBlockKind.image:
       case MarkdownBlockKind.table:
@@ -1043,6 +1099,21 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
           break;
         case MarkdownInlineKind.strikethrough:
           if (_inlinesContainLinks((inline as StrikethroughInline).children)) {
+            return true;
+          }
+          break;
+        case MarkdownInlineKind.highlight:
+          if (_inlinesContainLinks((inline as HighlightInline).children)) {
+            return true;
+          }
+          break;
+        case MarkdownInlineKind.subscript:
+          if (_inlinesContainLinks((inline as SubscriptInline).children)) {
+            return true;
+          }
+          break;
+        case MarkdownInlineKind.superscript:
+          if (_inlinesContainLinks((inline as SuperscriptInline).children)) {
             return true;
           }
           break;
@@ -1123,6 +1194,10 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       case MarkdownBlockKind.orderedList:
       case MarkdownBlockKind.unorderedList:
         return _buildList(block as ListBlock);
+      case MarkdownBlockKind.definitionList:
+        return _buildDefinitionList(block as DefinitionListBlock);
+      case MarkdownBlockKind.footnoteList:
+        return _buildFootnoteList(block as FootnoteListBlock);
       case MarkdownBlockKind.codeBlock:
         return _buildCodeBlock(block as CodeBlock);
       case MarkdownBlockKind.table:
@@ -1143,6 +1218,32 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       theme: widget.theme,
       block: block,
       itemBuilder: _buildListItemContent,
+    );
+  }
+
+  Widget _buildDefinitionList(DefinitionListBlock block) {
+    final descriptor = _buildDefinitionListSelectableDescriptor(block);
+    return Text.rich(
+      descriptor.span,
+      style: widget.theme.bodyStyle,
+    );
+  }
+
+  Widget _buildFootnoteList(FootnoteListBlock block) {
+    final descriptor = _buildFootnoteListSelectableDescriptor(block);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(color: widget.theme.dividerColor),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: Text.rich(
+          descriptor.span,
+          style: _footnoteStyle,
+        ),
+      ),
     );
   }
 
@@ -1260,6 +1361,43 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     );
   }
 
+  TextStyle get _definitionTermStyle {
+    return widget.theme.bodyStyle.copyWith(fontWeight: FontWeight.w700);
+  }
+
+  TextStyle get _footnoteStyle {
+    final bodyFontSize = widget.theme.bodyStyle.fontSize ?? 16;
+    return widget.theme.bodyStyle.copyWith(
+      fontSize: math.max(bodyFontSize - 2, 12),
+      height: 1.6,
+    );
+  }
+
+  TextStyle _highlightStyle(TextStyle baseStyle) {
+    final accent = widget.theme.linkStyle.color ?? widget.theme.dividerColor;
+    return baseStyle.copyWith(
+      backgroundColor: accent.withOpacity(0.18),
+    );
+  }
+
+  TextStyle _subscriptStyle(TextStyle baseStyle) {
+    final baseFontSize =
+        baseStyle.fontSize ?? widget.theme.bodyStyle.fontSize ?? 16;
+    return baseStyle.copyWith(
+      fontSize: baseFontSize * 0.82,
+      fontFeatures: const <FontFeature>[FontFeature.subscripts()],
+    );
+  }
+
+  TextStyle _superscriptStyle(TextStyle baseStyle) {
+    final baseFontSize =
+        baseStyle.fontSize ?? widget.theme.bodyStyle.fontSize ?? 16;
+    return baseStyle.copyWith(
+      fontSize: baseFontSize * 0.82,
+      fontFeatures: const <FontFeature>[FontFeature.superscripts()],
+    );
+  }
+
   _SelectableTextDescriptor _buildListSelectableDescriptor(
     ListBlock block, {
     int indentLevel = 0,
@@ -1273,6 +1411,101 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       separator: '\n',
       separatorStyle: widget.theme.bodyStyle,
     );
+  }
+
+  _SelectableTextDescriptor _buildDefinitionListSelectableDescriptor(
+    DefinitionListBlock block,
+  ) {
+    final itemDescriptors = <_SelectableTextDescriptor>[];
+    for (final item in block.items) {
+      final termDescriptor =
+          _descriptorFromInlines(_definitionTermStyle, item.term);
+      final definitionDescriptors = <_SelectableTextDescriptor>[];
+      for (final definition in item.definitions) {
+        final childDescriptors = <_SelectableTextDescriptor>[];
+        for (final child in definition) {
+          final descriptor = _buildSelectableDescriptorForBlock(
+            child,
+            indentLevel: 1,
+          );
+          if (!descriptor.isEmpty) {
+            childDescriptors.add(descriptor);
+          }
+        }
+        final definitionDescriptor = _joinSelectableTextDescriptors(
+          childDescriptors,
+          separator: '\n\n',
+          separatorStyle: widget.theme.bodyStyle,
+        );
+        if (!definitionDescriptor.isEmpty) {
+          definitionDescriptors.add(
+            _prefixSelectableTextDescriptor(
+              definitionDescriptor,
+              firstPrefix: ': ',
+              continuationPrefix: '  ',
+              style: widget.theme.bodyStyle,
+            ),
+          );
+        }
+      }
+      final itemDescriptor = _joinSelectableTextDescriptors(
+        <_SelectableTextDescriptor>[termDescriptor, ...definitionDescriptors],
+        separator: '\n',
+        separatorStyle: widget.theme.bodyStyle,
+      );
+      if (!itemDescriptor.isEmpty) {
+        itemDescriptors.add(itemDescriptor);
+      }
+    }
+    return _joinSelectableTextDescriptors(
+      itemDescriptors,
+      separator: '\n',
+      separatorStyle: widget.theme.bodyStyle,
+    );
+  }
+
+  _SelectableTextDescriptor _buildFootnoteListSelectableDescriptor(
+    FootnoteListBlock block,
+  ) {
+    final itemDescriptors = <_SelectableTextDescriptor>[];
+    for (var index = 0; index < block.items.length; index++) {
+      final contentDescriptor = _buildListItemSelectableDescriptor(
+        block.items[index],
+        indentLevel: 1,
+      );
+      if (contentDescriptor.isEmpty) {
+        continue;
+      }
+      final marker = '${index + 1}.';
+      itemDescriptors.add(
+        _prefixSelectableTextDescriptor(
+          contentDescriptor,
+          firstPrefix: '$marker ',
+          continuationPrefix: '${' ' * (marker.length + 1)}',
+          style: _footnoteStyle,
+        ),
+      );
+    }
+    return _joinSelectableTextDescriptors(
+      itemDescriptors,
+      separator: '\n',
+      separatorStyle: _footnoteStyle,
+    );
+  }
+
+  String _listItemPrefixText(
+    ListBlock block,
+    int index, {
+    required int indentLevel,
+  }) {
+    final item = block.items[index];
+    final marker = block.ordered ? '${block.startIndex + index}.' : '-';
+    final checkbox = switch (item.taskState) {
+      MarkdownTaskListItemState.checked => ' [x]',
+      MarkdownTaskListItemState.unchecked => ' [ ]',
+      null => '',
+    };
+    return '${'  ' * indentLevel}$marker$checkbox ';
   }
 
   List<GlobalKey> _listItemKeysFor(ListBlock block) {
@@ -1617,19 +1850,33 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     required int startOffset,
     int indentLevel = 0,
   }) {
-    final marker = block.ordered ? '${block.startIndex + index}.' : '•';
-    final prefix = '${'  ' * indentLevel}$marker ';
+    final prefix = _listItemPrefixText(
+      block,
+      index,
+      indentLevel: indentLevel,
+    );
     final contentDescriptor = _buildListItemSelectableDescriptor(
       block.items[index],
       indentLevel: indentLevel + 1,
     );
-    if (contentDescriptor.isEmpty) {
+    if (contentDescriptor.isEmpty && block.items[index].taskState == null) {
       return null;
     }
+    if (contentDescriptor.isEmpty) {
+      final prefixOnly = prefix.trimRight();
+      return _IndexedListSelectionDescriptor(
+        itemIndex: index,
+        startOffset: startOffset,
+        prefixLength: prefixOnly.length,
+        descriptor: _plainTextDescriptor(prefixOnly, widget.theme.bodyStyle),
+        contentDescriptor: _plainTextDescriptor('', widget.theme.bodyStyle),
+      );
+    }
+    final continuationPrefix = ' ' * prefix.length;
     final descriptor = _prefixSelectableTextDescriptor(
       contentDescriptor,
       firstPrefix: prefix,
-      continuationPrefix: '${'  ' * indentLevel}${' ' * (marker.length + 1)}',
+      continuationPrefix: continuationPrefix,
       style: widget.theme.bodyStyle,
     );
     return _IndexedListSelectionDescriptor(
@@ -1707,6 +1954,14 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
         return _buildListSelectableDescriptor(
           block as ListBlock,
           indentLevel: indentLevel,
+        );
+      case MarkdownBlockKind.definitionList:
+        return _buildDefinitionListSelectableDescriptor(
+          block as DefinitionListBlock,
+        );
+      case MarkdownBlockKind.footnoteList:
+        return _buildFootnoteListSelectableDescriptor(
+          block as FootnoteListBlock,
         );
       case MarkdownBlockKind.codeBlock:
         final codeBlock = block as CodeBlock;
@@ -1896,6 +2151,33 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
             ),
           ),
         ];
+      case MarkdownInlineKind.highlight:
+        final highlight = inline as HighlightInline;
+        final highlightStyle = _highlightStyle(baseStyle);
+        return <InlineSpan>[
+          TextSpan(
+            style: highlightStyle,
+            children: _buildInlineSpans(highlightStyle, highlight.children),
+          ),
+        ];
+      case MarkdownInlineKind.subscript:
+        final subscript = inline as SubscriptInline;
+        final subscriptStyle = _subscriptStyle(baseStyle);
+        return <InlineSpan>[
+          TextSpan(
+            style: subscriptStyle,
+            children: _buildInlineSpans(subscriptStyle, subscript.children),
+          ),
+        ];
+      case MarkdownInlineKind.superscript:
+        final superscript = inline as SuperscriptInline;
+        final superscriptStyle = _superscriptStyle(baseStyle);
+        return <InlineSpan>[
+          TextSpan(
+            style: superscriptStyle,
+            children: _buildInlineSpans(superscriptStyle, superscript.children),
+          ),
+        ];
       case MarkdownInlineKind.link:
         final link = inline as LinkInline;
         final label = _flattenInlineText(link.children);
@@ -1962,6 +2244,19 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
         case MarkdownInlineKind.strikethrough:
           buffer.write(
             _flattenInlineText((inline as StrikethroughInline).children),
+          );
+          break;
+        case MarkdownInlineKind.highlight:
+          buffer
+              .write(_flattenInlineText((inline as HighlightInline).children));
+          break;
+        case MarkdownInlineKind.subscript:
+          buffer
+              .write(_flattenInlineText((inline as SubscriptInline).children));
+          break;
+        case MarkdownInlineKind.superscript:
+          buffer.write(
+            _flattenInlineText((inline as SuperscriptInline).children),
           );
           break;
         case MarkdownInlineKind.link:

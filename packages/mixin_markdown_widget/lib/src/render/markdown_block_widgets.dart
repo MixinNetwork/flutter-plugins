@@ -104,10 +104,7 @@ class MarkdownListBlockView extends StatelessWidget {
                 children: <Widget>[
                   SizedBox(
                     width: 28,
-                    child: Text(
-                      block.ordered ? '${block.startIndex + index}.' : '•',
-                      style: theme.bodyStyle,
-                    ),
+                    child: _buildMarker(index),
                   ),
                   Expanded(
                     child: KeyedSubtree(
@@ -121,6 +118,35 @@ class MarkdownListBlockView extends StatelessWidget {
           ),
       ],
     );
+  }
+
+  Widget _buildMarker(int index) {
+    final item = block.items[index];
+    switch (item.taskState) {
+      case MarkdownTaskListItemState.checked:
+        return Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: Icon(
+            Icons.check_box_rounded,
+            size: 18,
+            color: theme.linkStyle.color ?? theme.bodyStyle.color,
+          ),
+        );
+      case MarkdownTaskListItemState.unchecked:
+        return Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: Icon(
+            Icons.check_box_outline_blank_rounded,
+            size: 18,
+            color: theme.bodyStyle.color?.withOpacity(0.72),
+          ),
+        );
+      case null:
+        return Text(
+          block.ordered ? '${block.startIndex + index}.' : '•',
+          style: theme.bodyStyle,
+        );
+    }
   }
 }
 

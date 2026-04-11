@@ -180,6 +180,10 @@ class MarkdownPlainTextSerializer extends MarkdownCopySerializer {
       case MarkdownBlockKind.orderedList:
       case MarkdownBlockKind.unorderedList:
         return _serializeList(block as ListBlock, indentLevel: indentLevel);
+      case MarkdownBlockKind.definitionList:
+        return _serializeDefinitionList(block as DefinitionListBlock);
+      case MarkdownBlockKind.footnoteList:
+        return _serializeFootnoteList(block as FootnoteListBlock);
       case MarkdownBlockKind.codeBlock:
         return _trimTrailingNewlines((block as CodeBlock).code);
       case MarkdownBlockKind.table:
@@ -208,17 +212,24 @@ class MarkdownPlainTextSerializer extends MarkdownCopySerializer {
   String _serializeList(ListBlock block, {required int indentLevel}) {
     final items = <String>[];
     for (var index = 0; index < block.items.length; index++) {
+      final item = block.items[index];
       final marker = block.ordered ? '${block.startIndex + index}.' : '-';
       final content = _serializeListItem(
-        block.items[index],
+        item,
         indentLevel: indentLevel + 1,
       );
-      if (content.isEmpty) {
+      final checkbox = _taskListPrefix(item.taskState);
+      final prefix = '${'  ' * indentLevel}$marker$checkbox ';
+      final continuation =
+          '${'  ' * indentLevel}${' ' * prefix.trimLeft().length}';
+      if (content.isEmpty && item.taskState == null) {
         continue;
       }
-      final prefix = '${'  ' * indentLevel}$marker ';
-      final continuation = '${'  ' * indentLevel}${' ' * (marker.length + 1)}';
-      items.add(_prefixMultiline(content, prefix, continuation));
+      items.add(
+        content.isEmpty
+            ? prefix.trimRight()
+            : _prefixMultiline(content, prefix, continuation),
+      );
     }
     return items.join('\n');
   }
@@ -242,6 +253,63 @@ class MarkdownPlainTextSerializer extends MarkdownCopySerializer {
               row.cells.map((cell) => _flattenInlines(cell.inlines)).join('\t'),
         )
         .join('\n');
+  }
+
+  String _serializeDefinitionList(DefinitionListBlock block) {
+    final items = <String>[];
+    for (final item in block.items) {
+      final term = _flattenInlines(item.term).trimRight();
+      final definitions = <String>[];
+      for (final definition in item.definitions) {
+        final text = definition
+            .map((child) => _serializeBlock(child, indentLevel: 1))
+            .where((value) => value.trim().isNotEmpty)
+            .join('\n\n');
+        if (text.isNotEmpty) {
+          definitions.add(_prefixMultiline(text, ': ', '  '));
+        }
+      }
+      final sections = <String>[];
+      if (term.isNotEmpty) {
+        sections.add(term);
+      }
+      sections.addAll(definitions);
+      final serialized = sections.join('\n');
+      if (serialized.isNotEmpty) {
+        items.add(serialized);
+      }
+    }
+    return items.join('\n');
+  }
+
+  String _serializeFootnoteList(FootnoteListBlock block) {
+    final items = <String>[];
+    for (var index = 0; index < block.items.length; index++) {
+      final content = _serializeListItem(block.items[index], indentLevel: 1);
+      if (content.isEmpty) {
+        continue;
+      }
+      final marker = '${index + 1}.';
+      items.add(
+        _prefixMultiline(
+          content,
+          '$marker ',
+          '${' ' * (marker.length + 1)}',
+        ),
+      );
+    }
+    return items.join('\n');
+  }
+
+  String _taskListPrefix(MarkdownTaskListItemState? state) {
+    switch (state) {
+      case MarkdownTaskListItemState.checked:
+        return ' [x]';
+      case MarkdownTaskListItemState.unchecked:
+        return ' [ ]';
+      case null:
+        return '';
+    }
   }
 
   String _serializeImage(ImageBlock block) {
@@ -269,6 +337,17 @@ class MarkdownPlainTextSerializer extends MarkdownCopySerializer {
         case MarkdownInlineKind.strikethrough:
           buffer.write(
             _flattenInlines((inline as StrikethroughInline).children),
+          );
+          break;
+        case MarkdownInlineKind.highlight:
+          buffer.write(_flattenInlines((inline as HighlightInline).children));
+          break;
+        case MarkdownInlineKind.subscript:
+          buffer.write(_flattenInlines((inline as SubscriptInline).children));
+          break;
+        case MarkdownInlineKind.superscript:
+          buffer.write(
+            _flattenInlines((inline as SuperscriptInline).children),
           );
           break;
         case MarkdownInlineKind.link:

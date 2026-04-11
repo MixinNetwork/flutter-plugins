@@ -28,6 +28,41 @@ int _countStyledDescendantSpans(InlineSpan span, TextStyle? rootStyle) {
   return count;
 }
 
+Iterable<InlineNode> _flattenInlineNodes(List<InlineNode> inlines) sync* {
+  for (final inline in inlines) {
+    yield inline;
+    switch (inline.kind) {
+      case MarkdownInlineKind.emphasis:
+        yield* _flattenInlineNodes((inline as EmphasisInline).children);
+        break;
+      case MarkdownInlineKind.strong:
+        yield* _flattenInlineNodes((inline as StrongInline).children);
+        break;
+      case MarkdownInlineKind.strikethrough:
+        yield* _flattenInlineNodes((inline as StrikethroughInline).children);
+        break;
+      case MarkdownInlineKind.highlight:
+        yield* _flattenInlineNodes((inline as HighlightInline).children);
+        break;
+      case MarkdownInlineKind.subscript:
+        yield* _flattenInlineNodes((inline as SubscriptInline).children);
+        break;
+      case MarkdownInlineKind.superscript:
+        yield* _flattenInlineNodes((inline as SuperscriptInline).children);
+        break;
+      case MarkdownInlineKind.link:
+        yield* _flattenInlineNodes((inline as LinkInline).children);
+        break;
+      case MarkdownInlineKind.text:
+      case MarkdownInlineKind.inlineCode:
+      case MarkdownInlineKind.softBreak:
+      case MarkdownInlineKind.hardBreak:
+      case MarkdownInlineKind.image:
+        break;
+    }
+  }
+}
+
 void main() {
   test('parses common markdown blocks into a document model', () {
     const input = '''
@@ -90,6 +125,72 @@ void main() {}
       'Name\tValue\n'
       'row\t42\n\n'
       'void main() {}',
+    );
+  });
+
+  test('parses extended markdown constructs into the document model', () {
+    const input = '''
+### Heading Title
+
+- [x] Done
+- [ ] Todo
+
+Term
+: Definition with ==mark== and H~2~O and 2^10^ and <sup>html</sup> plus https://example.com and :white_check_mark:
+
+Reference[^note]
+
+[^note]: Footnote body
+''';
+
+    final document = const MarkdownDocumentParser().parse(input);
+
+    expect(document.blocks, hasLength(5));
+
+    final heading = document.blocks[0] as HeadingBlock;
+    expect(heading.anchorId, 'heading-title');
+
+    final list = document.blocks[1] as ListBlock;
+    expect(list.items[0].taskState, MarkdownTaskListItemState.checked);
+    expect(list.items[1].taskState, MarkdownTaskListItemState.unchecked);
+
+    final definitionList = document.blocks[2] as DefinitionListBlock;
+    expect(definitionList.items, hasLength(1));
+    final definitionParagraph =
+        definitionList.items.first.definitions.first.first as ParagraphBlock;
+    final definitionKinds = _flattenInlineNodes(definitionParagraph.inlines)
+        .map((inline) => inline.kind)
+        .toSet();
+    expect(definitionKinds, contains(MarkdownInlineKind.highlight));
+    expect(definitionKinds, contains(MarkdownInlineKind.subscript));
+    expect(definitionKinds, contains(MarkdownInlineKind.superscript));
+    expect(definitionKinds, contains(MarkdownInlineKind.link));
+
+    final referenceParagraph = document.blocks[3] as ParagraphBlock;
+    expect(
+      _flattenInlineNodes(referenceParagraph.inlines)
+          .map((inline) => inline.kind),
+      contains(MarkdownInlineKind.superscript),
+    );
+
+    final footnotes = document.blocks[4] as FootnoteListBlock;
+    expect(footnotes.items, hasLength(1));
+  });
+
+  test('serializes task lists and definition lists predictably', () {
+    const input = '''
+- [x] Done
+- [ ] Todo
+
+Term
+: Definition
+''';
+
+    final controller = MarkdownController(data: input);
+
+    expect(
+      controller.plainText,
+      '- [x] Done\n- [ ] Todo\n\nTerm\n: Definition',
     );
   });
 
@@ -325,6 +426,36 @@ Paragraph body
     );
 
     expect(find.byType(MarkdownPretextTextBlock), findsAtLeastNWidgets(7));
+  });
+
+  testWidgets('renders task lists, definition lists, footnotes, and emoji', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: '''
+- [x] Done
+- [ ] Todo
+
+Term
+: Definition with :white_check_mark:
+
+Reference[^note]
+
+[^note]: Footnote body
+''',
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byIcon(Icons.check_box_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.check_box_outline_blank_rounded), findsOneWidget);
+    expect(find.textContaining('Term'), findsOneWidget);
+    expect(find.textContaining('Definition with ✅'), findsOneWidget);
+    expect(find.textContaining('Footnote body'), findsOneWidget);
   });
 
   testWidgets('renders tables and code blocks with direct data input', (
