@@ -275,13 +275,23 @@ class MarkdownPretextLayoutResult {
         ),
       );
       final lineTop = lineIndex * lineHeight;
-      for (final box in boxes) {
+      final mergedBoxes = _mergeSelectionBoxes(
+        boxes.map(
+          (box) => Rect.fromLTRB(
+            box.left + line.leadingOffset,
+            lineTop,
+            box.right + line.leadingOffset,
+            lineTop + lineHeight,
+          ),
+        ),
+      );
+      for (final box in mergedBoxes) {
         rects.add(
           Rect.fromLTRB(
-            box.left + line.leadingOffset - 1.5,
-            lineTop,
-            box.right + line.leadingOffset + 1.5,
-            lineTop + lineHeight,
+            box.left - 1.0,
+            box.top,
+            box.right + 1.0,
+            box.bottom,
           ),
         );
       }
@@ -331,6 +341,36 @@ class MarkdownPretextLayoutResult {
     );
     textPainter.layout(maxWidth: double.infinity);
     return textPainter;
+  }
+
+  Iterable<Rect> _mergeSelectionBoxes(Iterable<Rect> boxes) sync* {
+    final sorted = boxes.toList(growable: false)
+      ..sort((a, b) {
+        final topCompare = a.top.compareTo(b.top);
+        if (topCompare != 0) {
+          return topCompare;
+        }
+        return a.left.compareTo(b.left);
+      });
+    if (sorted.isEmpty) {
+      return;
+    }
+
+    var current = sorted.first;
+    for (final next in sorted.skip(1)) {
+      if (next.left <= current.right + 0.5) {
+        current = Rect.fromLTRB(
+          current.left,
+          current.top,
+          math.max(current.right, next.right),
+          current.bottom,
+        );
+        continue;
+      }
+      yield current;
+      current = next;
+    }
+    yield current;
   }
 }
 

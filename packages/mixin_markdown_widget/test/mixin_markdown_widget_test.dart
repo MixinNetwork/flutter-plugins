@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:io';
 import 'dart:ui' show PointerDeviceKind;
 
@@ -80,7 +81,8 @@ String _inlinePlainText(List<InlineNode> inlines) {
         buffer.write(_inlinePlainText((inline as StrongInline).children));
         break;
       case MarkdownInlineKind.strikethrough:
-        buffer.write(_inlinePlainText((inline as StrikethroughInline).children));
+        buffer
+            .write(_inlinePlainText((inline as StrikethroughInline).children));
         break;
       case MarkdownInlineKind.highlight:
         buffer.write(_inlinePlainText((inline as HighlightInline).children));
@@ -107,6 +109,13 @@ String _inlinePlainText(List<InlineNode> inlines) {
     }
   }
   return buffer.toString();
+}
+
+bool _hasMeaningfulHorizontalOverlap(Rect a, Rect b) {
+  final verticalOverlap = (a.bottom <= b.top || b.bottom <= a.top) == false;
+  final horizontalOverlap = (a.right < b.left || b.right < a.left) == false &&
+      math.min(a.right, b.right) - math.max(a.left, b.left) > 1.0;
+  return verticalOverlap && horizontalOverlap;
 }
 
 void main() {
@@ -624,7 +633,8 @@ Reference[^note]
     expect(find.textContaining('Second paragraph'), findsOneWidget);
   });
 
-  testWidgets('renders multiple footnote references without swallowing body text',
+  testWidgets(
+      'renders multiple footnote references without swallowing body text',
       (tester) async {
     await tester.pumpWidget(
       const MaterialApp(
@@ -860,6 +870,96 @@ return value;
     await tester.tapAt(
       tester.getBottomRight(find.byType(ListView)) - const Offset(8, 8),
     );
+    await tester.pump();
+
+    expect(selectionController.hasSelection, isFalse);
+  });
+
+  testWidgets('clicking trailing blank space inside markdown clears selection',
+      (
+    tester,
+  ) async {
+    final selectionController = MarkdownSelectionController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 420,
+            child: MarkdownWidget(
+              data: '# Hello\n\nWorld',
+              selectionController: selectionController,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final start = tester.getTopLeft(find.text('Hello')) + const Offset(1, 8);
+    final end = tester.getBottomRight(find.text('World')) - const Offset(1, 8);
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: start);
+    await gesture.down(start);
+    await tester.pump();
+    await gesture.moveTo(end);
+    await tester.pump();
+    await gesture.up();
+    await tester.pump();
+
+    expect(selectionController.hasSelection, isTrue);
+
+    final pretextBox = tester
+        .renderObject<RenderBox>(find.byType(MarkdownPretextTextBlock).first);
+    final trailingBlankTap = pretextBox.localToGlobal(
+      Offset(pretextBox.size.width - 4, pretextBox.size.height / 2),
+    );
+    await tester.tapAt(trailingBlankTap);
+    await tester.pump();
+
+    expect(selectionController.hasSelection, isFalse);
+  });
+
+  testWidgets('clicking outside markdown clears selection', (tester) async {
+    final selectionController = MarkdownSelectionController();
+    const outsideKey = Key('outside-target');
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Row(
+            children: <Widget>[
+              Expanded(
+                child: MarkdownWidget(
+                  data: '# Hello\n\nWorld',
+                  selectionController: selectionController,
+                ),
+              ),
+              const Expanded(
+                child: ColoredBox(
+                  key: outsideKey,
+                  color: Colors.transparent,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    final start = tester.getTopLeft(find.text('Hello')) + const Offset(1, 8);
+    final end = tester.getBottomRight(find.text('World')) - const Offset(1, 8);
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: start);
+    await gesture.down(start);
+    await tester.pump();
+    await gesture.moveTo(end);
+    await tester.pump();
+    await gesture.up();
+    await tester.pump();
+
+    expect(selectionController.hasSelection, isTrue);
+
+    await tester.tapAt(tester.getCenter(find.byKey(outsideKey)));
     await tester.pump();
 
     expect(selectionController.hasSelection, isFalse);
@@ -1105,6 +1205,221 @@ return value;
     expect(selectionController.selectedPlainText, 'First');
   });
 
+  testWidgets('list marker selection aligns with first content line', (
+    tester,
+  ) async {
+    final selectionController = MarkdownSelectionController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: '''
+- First item
+- Second item
+''',
+            selectionController: selectionController,
+          ),
+        ),
+      ),
+    );
+
+    final listBlockFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is SelectableMarkdownBlock &&
+          widget.spec.plainText.contains('- First item'),
+    );
+    final listBlock = tester.widget<SelectableMarkdownBlock>(listBlockFinder);
+    final listContext = tester.element(listBlockFinder);
+    final selectionRects = listBlock.spec.selectionRectResolver!(
+      listContext,
+      tester.getSize(listBlockFinder),
+      const DocumentRange(
+        start: DocumentPosition(
+          blockIndex: 0,
+          path: PathInBlock(<int>[0]),
+          textOffset: 0,
+        ),
+        end: DocumentPosition(
+          blockIndex: 0,
+          path: PathInBlock(<int>[0]),
+          textOffset: 6,
+        ),
+      ),
+    );
+
+    expect(selectionRects, isNotEmpty);
+    final firstRect = selectionRects.first;
+    expect(firstRect.height, greaterThan(0));
+    if (selectionRects.length > 1) {
+      final secondRect = selectionRects[1];
+      expect((firstRect.top - secondRect.top).abs(), lessThanOrEqualTo(2.0));
+      expect(
+        (firstRect.bottom - secondRect.bottom).abs(),
+        lessThanOrEqualTo(2.0),
+      );
+      expect(firstRect.right, greaterThanOrEqualTo(secondRect.left));
+    }
+  });
+
+  testWidgets('list selection merges marker gap with the first content line', (
+    tester,
+  ) async {
+    final selectionController = MarkdownSelectionController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: '- First item',
+            selectionController: selectionController,
+          ),
+        ),
+      ),
+    );
+
+    final listBlockFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is SelectableMarkdownBlock &&
+          widget.spec.plainText.contains('- First item'),
+    );
+    final listBlock = tester.widget<SelectableMarkdownBlock>(listBlockFinder);
+    final listContext = tester.element(listBlockFinder);
+    final selectionRects = listBlock.spec.selectionRectResolver!(
+      listContext,
+      tester.getSize(listBlockFinder),
+      const DocumentRange(
+        start: DocumentPosition(
+          blockIndex: 0,
+          path: PathInBlock(<int>[0]),
+          textOffset: 0,
+        ),
+        end: DocumentPosition(
+          blockIndex: 0,
+          path: PathInBlock(<int>[0]),
+          textOffset: 12,
+        ),
+      ),
+    );
+
+    expect(selectionRects, hasLength(1));
+  });
+
+  testWidgets('wrapped list selection does not vertically overlap lines', (
+    tester,
+  ) async {
+    final selectionController = MarkdownSelectionController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 320,
+            child: MarkdownWidget(
+              data:
+                  '3. Use the theme button in the app bar to switch the reading surface.',
+              selectionController: selectionController,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final listBlockFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is SelectableMarkdownBlock &&
+          widget.spec.plainText.contains('Use the theme button'),
+    );
+    final listBlock = tester.widget<SelectableMarkdownBlock>(listBlockFinder);
+    final listContext = tester.element(listBlockFinder);
+    final selectionRects = listBlock.spec.selectionRectResolver!(
+      listContext,
+      tester.getSize(listBlockFinder),
+      DocumentRange(
+        start: const DocumentPosition(
+          blockIndex: 0,
+          path: PathInBlock(<int>[0]),
+          textOffset: 0,
+        ),
+        end: DocumentPosition(
+          blockIndex: 0,
+          path: const PathInBlock(<int>[0]),
+          textOffset: listBlock.spec.plainText.length,
+        ),
+      ),
+    )..sort((a, b) => a.top.compareTo(b.top));
+
+    expect(selectionRects.length, greaterThanOrEqualTo(2));
+    for (var index = 0; index < selectionRects.length - 1; index++) {
+      expect(
+        selectionRects[index].bottom <= selectionRects[index + 1].top + 0.5,
+        isTrue,
+      );
+    }
+  });
+
+  test('pretext selection rects merge overlapping inline style boxes', () {
+    final layout = computeMarkdownPretextLayoutFromRuns(
+      runs: <MarkdownPretextInlineRun>[
+        MarkdownPretextInlineRun(
+          text: 'before ',
+          style: const TextStyle(fontSize: 16, height: 1.45),
+        ),
+        MarkdownPretextInlineRun(
+          text: 'bold',
+          style: const TextStyle(
+            fontSize: 16,
+            height: 1.45,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        MarkdownPretextInlineRun(
+          text: ' code',
+          style: const TextStyle(
+            fontSize: 16,
+            height: 1.45,
+            fontFamily: 'monospace',
+            backgroundColor: Color(0x11000000),
+          ),
+        ),
+        MarkdownPretextInlineRun(
+          text: ' after',
+          style: const TextStyle(fontSize: 16, height: 1.45),
+        ),
+      ],
+      fallbackStyle: const TextStyle(fontSize: 16, height: 1.45),
+      maxWidth: 600,
+      textScaleFactor: 1,
+    );
+
+    final rects = layout.selectionRectsForRange(
+      DocumentRange(
+        start: const DocumentPosition(
+          blockIndex: 0,
+          path: PathInBlock(<int>[0]),
+          textOffset: 0,
+        ),
+        end: DocumentPosition(
+          blockIndex: 0,
+          path: const PathInBlock(<int>[0]),
+          textOffset: layout.plainText.length,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    );
+
+    for (var index = 0; index < rects.length; index++) {
+      for (var otherIndex = index + 1;
+          otherIndex < rects.length;
+          otherIndex++) {
+        expect(
+          _hasMeaningfulHorizontalOverlap(rects[index], rects[otherIndex]),
+          isFalse,
+        );
+      }
+    }
+  });
+
   testWidgets(
       'quote renders without raw markdown marker and remains selectable', (
     tester,
@@ -1327,8 +1642,8 @@ return value;
     bool hasAlignedRect(Rect textRect) {
       return globalSelectionRects.any(
         (rect) =>
-            (rect.top - textRect.top).abs() <= 0.5 &&
-            (rect.bottom - textRect.bottom).abs() <= 0.5 &&
+            rect.bottom > textRect.top &&
+            rect.top < textRect.bottom &&
             rect.right > textRect.left &&
             rect.left < textRect.right,
       );

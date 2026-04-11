@@ -390,12 +390,7 @@ class _BlockSelectionPainter extends CustomPainter {
 
     final selectionRects = this.selectionRects;
     if (selectionRects != null) {
-      for (final rect in selectionRects) {
-        canvas.drawRRect(
-          RRect.fromRectAndRadius(rect, const Radius.circular(4)),
-          paint,
-        );
-      }
+      _paintSelectionRects(canvas, paint, selectionRects);
       return;
     }
 
@@ -417,18 +412,20 @@ class _BlockSelectionPainter extends CustomPainter {
       final boxes = _mergeSelectionBoxes(
         textPainter.getBoxesForSelection(textSelection),
       );
-      for (final box in boxes) {
-        final rect = Rect.fromLTRB(
-          box.left + spec.measurementPadding.left,
-          box.top + spec.measurementPadding.top,
-          box.right + spec.measurementPadding.left,
-          box.bottom + spec.measurementPadding.top,
-        ).inflate(1.5);
-        canvas.drawRRect(
-          RRect.fromRectAndRadius(rect, const Radius.circular(4)),
-          paint,
-        );
-      }
+      _paintSelectionRects(
+        canvas,
+        paint,
+        boxes
+            .map(
+              (box) => Rect.fromLTRB(
+                box.left + spec.measurementPadding.left,
+                box.top + spec.measurementPadding.top,
+                box.right + spec.measurementPadding.left,
+                box.bottom + spec.measurementPadding.top,
+              ).inflate(1.5),
+            )
+            .toList(growable: false),
+      );
       return;
     }
 
@@ -444,6 +441,225 @@ class _BlockSelectionPainter extends CustomPainter {
         oldDelegate.selectionColor != selectionColor ||
         oldDelegate.textDirection != textDirection ||
         oldDelegate.selectionRects != selectionRects;
+  }
+
+  void _paintSelectionRects(Canvas canvas, Paint paint, List<Rect> rects) {
+    if (rects.isEmpty) {
+      return;
+    }
+
+    final normalizedRects = rects.toList(growable: false)
+      ..sort((a, b) {
+        final topComparison = a.top.compareTo(b.top);
+        if (topComparison != 0) {
+          return topComparison;
+        }
+        return a.left.compareTo(b.left);
+      });
+
+    canvas.saveLayer(null, Paint());
+    for (var index = 0; index < normalizedRects.length; index++) {
+      final rect = normalizedRects[index];
+      canvas.drawRRect(
+        _selectionRRectForIndex(normalizedRects, index),
+        paint,
+      );
+    }
+    _carveInnerCornerTransitions(canvas, normalizedRects);
+    canvas.restore();
+  }
+
+  RRect _selectionRRectForIndex(List<Rect> rects, int index) {
+    const radius = Radius.circular(4);
+    final rect = rects[index];
+
+    final topLeftRounded = !_hasVerticalNeighborAtX(
+      rects,
+      index,
+      lookAbove: true,
+      x: rect.left + radius.x,
+    );
+    final topRightRounded = !_hasVerticalNeighborAtX(
+      rects,
+      index,
+      lookAbove: true,
+      x: rect.right - radius.x,
+    );
+    final bottomLeftRounded = !_hasVerticalNeighborAtX(
+      rects,
+      index,
+      lookAbove: false,
+      x: rect.left + radius.x,
+    );
+    final bottomRightRounded = !_hasVerticalNeighborAtX(
+      rects,
+      index,
+      lookAbove: false,
+      x: rect.right - radius.x,
+    );
+
+    return RRect.fromRectAndCorners(
+      rect,
+      topLeft: topLeftRounded ? radius : Radius.zero,
+      topRight: topRightRounded ? radius : Radius.zero,
+      bottomLeft: bottomLeftRounded ? radius : Radius.zero,
+      bottomRight: bottomRightRounded ? radius : Radius.zero,
+    );
+  }
+
+  bool _hasVerticalNeighborAtX(
+    List<Rect> rects,
+    int index, {
+    required bool lookAbove,
+    required double x,
+  }) {
+    const verticalTolerance = 2.0;
+    const horizontalTolerance = 0.5;
+
+    final target = rects[index];
+    for (var otherIndex = 0; otherIndex < rects.length; otherIndex++) {
+      if (otherIndex == index) {
+        continue;
+      }
+
+      final other = rects[otherIndex];
+      final verticalGap = lookAbove
+          ? (target.top - other.bottom).abs()
+          : (other.top - target.bottom).abs();
+      if (verticalGap > verticalTolerance) {
+        continue;
+      }
+
+      if (lookAbove
+          ? other.bottom > target.top + verticalTolerance
+          : other.top < target.bottom - verticalTolerance) {
+        continue;
+      }
+
+      if (x < other.left - horizontalTolerance ||
+          x > other.right + horizontalTolerance) {
+        continue;
+      }
+
+      return true;
+    }
+    return false;
+  }
+
+  void _carveInnerCornerTransitions(Canvas canvas, List<Rect> rects) {
+    const sameLineTolerance = 2.0;
+    const seamTolerance = 2.0;
+    const maxRadius = 4.0;
+    final clearPaint = Paint()..blendMode = BlendMode.clear;
+
+    for (var index = 0; index < rects.length - 1; index++) {
+      final current = rects[index];
+      final next = rects[index + 1];
+      if ((next.top - current.top).abs() <= sameLineTolerance) {
+        continue;
+      }
+
+      final seamGap = next.top - current.bottom;
+      if (seamGap.abs() > seamTolerance) {
+        continue;
+      }
+
+      if (next.left > current.left + 0.5) {
+        _carveQuarterTransition(
+          canvas,
+          clearPaint,
+          corner: Offset(next.left, current.bottom),
+          radius: math.min(
+            maxRadius,
+            math.min(next.left - current.left, current.height / 2),
+          ),
+          quadrant: _SelectionCornerQuadrant.topRight,
+        );
+      } else if (current.left > next.left + 0.5) {
+        _carveQuarterTransition(
+          canvas,
+          clearPaint,
+          corner: Offset(current.left, next.top),
+          radius: math.min(
+            maxRadius,
+            math.min(current.left - next.left, next.height / 2),
+          ),
+          quadrant: _SelectionCornerQuadrant.bottomRight,
+        );
+      }
+
+      if (current.right > next.right + 0.5) {
+        _carveQuarterTransition(
+          canvas,
+          clearPaint,
+          corner: Offset(next.right, current.bottom),
+          radius: math.min(
+            maxRadius,
+            math.min(current.right - next.right, current.height / 2),
+          ),
+          quadrant: _SelectionCornerQuadrant.topLeft,
+        );
+      } else if (next.right > current.right + 0.5) {
+        _carveQuarterTransition(
+          canvas,
+          clearPaint,
+          corner: Offset(current.right, next.top),
+          radius: math.min(
+            maxRadius,
+            math.min(next.right - current.right, next.height / 2),
+          ),
+          quadrant: _SelectionCornerQuadrant.bottomLeft,
+        );
+      }
+    }
+  }
+
+  void _carveQuarterTransition(
+    Canvas canvas,
+    Paint paint, {
+    required Offset corner,
+    required double radius,
+    required _SelectionCornerQuadrant quadrant,
+  }) {
+    if (radius <= 0.5) {
+      return;
+    }
+
+    final oval = Path()
+      ..addOval(Rect.fromCircle(center: corner, radius: radius));
+    final squareRect = switch (quadrant) {
+      _SelectionCornerQuadrant.topLeft => Rect.fromLTRB(
+          corner.dx - radius,
+          corner.dy - radius,
+          corner.dx,
+          corner.dy,
+        ),
+      _SelectionCornerQuadrant.topRight => Rect.fromLTRB(
+          corner.dx,
+          corner.dy - radius,
+          corner.dx + radius,
+          corner.dy,
+        ),
+      _SelectionCornerQuadrant.bottomLeft => Rect.fromLTRB(
+          corner.dx - radius,
+          corner.dy,
+          corner.dx,
+          corner.dy + radius,
+        ),
+      _SelectionCornerQuadrant.bottomRight => Rect.fromLTRB(
+          corner.dx,
+          corner.dy,
+          corner.dx + radius,
+          corner.dy + radius,
+        ),
+    };
+    final squarePath = Path()..addRect(squareRect);
+    final quadrantCirclePath =
+        Path.combine(PathOperation.intersect, squarePath, oval);
+    canvas.drawPath(
+      Path.combine(PathOperation.difference, squarePath, quadrantCirclePath),
+      paint,
+    );
   }
 
   List<TextBox> _mergeSelectionBoxes(List<TextBox> boxes) {
@@ -487,4 +703,11 @@ class _BlockSelectionPainter extends CustomPainter {
     merged.add(current);
     return merged;
   }
+}
+
+enum _SelectionCornerQuadrant {
+  topLeft,
+  topRight,
+  bottomLeft,
+  bottomRight,
 }

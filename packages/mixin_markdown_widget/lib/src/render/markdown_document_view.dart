@@ -108,6 +108,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
   DocumentPosition? _dragBasePosition;
   Offset? _dragStartPointerPosition;
   bool _isDraggingSelection = false;
+  bool _clearSelectionOnPointerUp = false;
 
   ScrollController get _effectiveScrollController =>
       widget.scrollController ?? _fallbackScrollController;
@@ -181,16 +182,22 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
 
   Widget _buildCustomSelectionContent(Widget scrollable) {
     final selectionController = widget.selectionController!;
-    Widget content = Focus(
-      focusNode: _selectionFocusNode,
-      canRequestFocus: true,
-      child: Listener(
-        behavior: HitTestBehavior.translucent,
-        onPointerDown: _handlePointerDown,
-        onPointerMove: _handlePointerMove,
-        onPointerUp: _handlePointerUp,
-        onPointerCancel: _handlePointerCancel,
-        child: scrollable,
+    Widget content = TapRegion(
+      onTapOutside: (_) {
+        selectionController.clear();
+        _selectionFocusNode.unfocus();
+      },
+      child: Focus(
+        focusNode: _selectionFocusNode,
+        canRequestFocus: true,
+        child: Listener(
+          behavior: HitTestBehavior.translucent,
+          onPointerDown: _handlePointerDown,
+          onPointerMove: _handlePointerMove,
+          onPointerUp: _handlePointerUp,
+          onPointerCancel: _handlePointerCancel,
+          child: scrollable,
+        ),
       ),
     );
 
@@ -369,6 +376,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     final position = _hitTestPosition(event.position, clamp: false);
     if (position == null) {
       widget.selectionController!.clear();
+      _clearSelectionOnPointerUp = false;
       return;
     }
 
@@ -378,6 +386,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       _isDraggingSelection = false;
       _dragBasePosition = null;
       _dragStartPointerPosition = null;
+      _clearSelectionOnPointerUp = false;
       return;
     }
     if (_consecutiveTapCount == 2) {
@@ -385,12 +394,14 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       _isDraggingSelection = false;
       _dragBasePosition = null;
       _dragStartPointerPosition = null;
+      _clearSelectionOnPointerUp = false;
       return;
     }
 
     _dragBasePosition = position;
     _dragStartPointerPosition = event.position;
     _isDraggingSelection = true;
+    _clearSelectionOnPointerUp = widget.selectionController!.hasSelection;
   }
 
   void _handlePointerMove(PointerMoveEvent event) {
@@ -423,15 +434,23 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     if (!_isDraggingSelection || widget.selectionController == null) {
       return;
     }
+    final shouldClearSelection = _clearSelectionOnPointerUp &&
+        _dragStartPointerPosition != null &&
+        (event.position - _dragStartPointerPosition!).distance < kTouchSlop;
     _isDraggingSelection = false;
     _dragBasePosition = null;
     _dragStartPointerPosition = null;
+    _clearSelectionOnPointerUp = false;
+    if (shouldClearSelection) {
+      widget.selectionController!.clear();
+    }
   }
 
   void _handlePointerCancel(PointerCancelEvent event) {
     _isDraggingSelection = false;
     _dragBasePosition = null;
     _dragStartPointerPosition = null;
+    _clearSelectionOnPointerUp = false;
   }
 
   void _updateTapCount(PointerDownEvent event) {
@@ -1924,97 +1943,158 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       final contentRenderObject = contentContext?.findRenderObject();
       final rowContext = rowKeys[entry.itemIndex].currentContext;
       final rowRenderObject = rowContext?.findRenderObject();
-      if (prefixSelectionStart < prefixSelectionEnd &&
-          rowRenderObject is RenderBox &&
-          rowRenderObject.hasSize) {
-        rects.add(
-          _resolveListPrefixSelectionRectInRoot(
-            rootRenderObject: rootRenderObject,
-            block: block,
-            itemIndex: entry.itemIndex,
-            rowRenderObject: rowRenderObject,
-            contentRenderObject:
-                contentRenderObject is RenderBox ? contentRenderObject : null,
+      Rect? prefixRect;
+      var contentRects = const <Rect>[];
+      if (contentSelectionStart < contentSelectionEnd &&
+          contentRenderObject is RenderBox &&
+          contentRenderObject.hasSize) {
+        final itemRange = DocumentRange(
+          start: DocumentPosition(
+            blockIndex: 0,
+            path: const PathInBlock(<int>[0]),
+            textOffset: contentSelectionStart - itemStart - entry.prefixLength,
+          ),
+          end: DocumentPosition(
+            blockIndex: 0,
+            path: const PathInBlock(<int>[0]),
+            textOffset: contentSelectionEnd - itemStart - entry.prefixLength,
           ),
         );
-      }
-
-      if (contentSelectionStart >= contentSelectionEnd) {
-        continue;
-      }
-
-      if (contentRenderObject is! RenderBox || !contentRenderObject.hasSize) {
-        continue;
-      }
-
-      final itemRange = DocumentRange(
-        start: DocumentPosition(
-          blockIndex: 0,
-          path: const PathInBlock(<int>[0]),
-          textOffset: contentSelectionStart - itemStart - entry.prefixLength,
-        ),
-        end: DocumentPosition(
-          blockIndex: 0,
-          path: const PathInBlock(<int>[0]),
-          textOffset: contentSelectionEnd - itemStart - entry.prefixLength,
-        ),
-      );
-      final childEntries = _buildIndexedBlockDescriptors(
-        block.items[entry.itemIndex].children,
-        indentLevel: entry.contentIndentLevel,
-        separator: '\n',
-      );
-      rects.addAll(
-        _resolveIndexedBlockSelectionRectsInRoot(
+        final childEntries = _buildIndexedBlockDescriptors(
+          block.items[entry.itemIndex].children,
+          indentLevel: entry.contentIndentLevel,
+          separator: '\n',
+        );
+        contentRects = _resolveIndexedBlockSelectionRectsInRoot(
           context,
           rootRenderObject: rootRenderObject,
           entries: childEntries,
           childKeys: _listItemChildKeysFor(block, entry.itemIndex),
           range: itemRange,
-        ),
-      );
+        );
+      }
+
+      if (prefixSelectionStart < prefixSelectionEnd &&
+          rowRenderObject is RenderBox &&
+          rowRenderObject.hasSize) {
+        prefixRect = _resolveListPrefixSelectionRectInRoot(
+          context: context,
+          rootRenderObject: rootRenderObject,
+          block: block,
+          itemIndex: entry.itemIndex,
+          rowRenderObject: rowRenderObject,
+          contentRenderObject:
+              contentRenderObject is RenderBox ? contentRenderObject : null,
+          contentIndentLevel: entry.contentIndentLevel,
+          textDirection: Directionality.of(context),
+        );
+      }
+
+      if (contentSelectionStart >= contentSelectionEnd) {
+        if (prefixRect != null) {
+          rects.add(prefixRect);
+        }
+        continue;
+      }
+
+      if (contentRenderObject is! RenderBox || !contentRenderObject.hasSize) {
+        if (prefixRect != null) {
+          rects.add(prefixRect);
+        }
+        continue;
+      }
+
+      if (prefixRect != null && contentRects.isNotEmpty) {
+        final firstContentRect = contentRects.first;
+        if (_rectsShareLine(prefixRect, firstContentRect)) {
+          rects.add(
+            Rect.fromLTRB(
+              prefixRect.left,
+              firstContentRect.top,
+              firstContentRect.right,
+              firstContentRect.bottom,
+            ),
+          );
+          rects.addAll(contentRects.skip(1));
+          continue;
+        }
+        rects.add(prefixRect);
+      }
+
+      rects.addAll(contentRects);
     }
 
     return rects;
   }
 
   Rect _resolveListPrefixSelectionRectInRoot({
+    required BuildContext context,
     required RenderBox rootRenderObject,
     required ListBlock block,
     required int itemIndex,
     required RenderBox rowRenderObject,
     RenderBox? contentRenderObject,
+    required int contentIndentLevel,
+    required TextDirection textDirection,
   }) {
     final rowOrigin = rootRenderObject.globalToLocal(
       rowRenderObject.localToGlobal(Offset.zero),
     );
     var top = rowOrigin.dy;
     var height = rowRenderObject.size.height;
+    final childEntries = _buildIndexedBlockDescriptors(
+      block.items[itemIndex].children,
+      indentLevel: contentIndentLevel,
+      separator: '\n',
+    );
     final childKeys = _listItemChildKeysFor(block, itemIndex);
-    if (childKeys.isNotEmpty) {
-      final firstChildContext = childKeys.first.currentContext;
+    if (childEntries.isNotEmpty && childKeys.isNotEmpty) {
+      final firstEntry = childEntries.first;
+      final firstChildContext = childKeys[firstEntry.childIndex].currentContext;
       final firstChildRenderObject = firstChildContext?.findRenderObject();
       if (firstChildRenderObject is RenderBox &&
           firstChildRenderObject.hasSize) {
         final firstChildOrigin = rootRenderObject.globalToLocal(
           firstChildRenderObject.localToGlobal(Offset.zero),
         );
-        top = firstChildOrigin.dy;
-        height = firstChildRenderObject.size.height;
+        final firstLineRect = _resolveFirstLineRectForNestedBlockInRoot(
+          context,
+          rootRenderObject: rootRenderObject,
+          block: firstEntry.block,
+          descriptor: firstEntry.descriptor,
+          renderObject: firstChildRenderObject,
+          origin: firstChildOrigin,
+          textDirection: textDirection,
+          indentLevel: firstEntry.indentLevel,
+        );
+        if (firstLineRect != null) {
+          top = firstLineRect.top;
+          height = firstLineRect.height;
+        } else {
+          top = firstChildOrigin.dy;
+          height = firstChildRenderObject.size.height;
+        }
       }
     }
 
-    return Rect.fromLTWH(
+    final extent = _resolveListMarkerExtent(
+      block: block,
+      itemIndex: itemIndex,
+      rowRenderObject: rowRenderObject,
+      contentRenderObject: contentRenderObject,
+    );
+    return Rect.fromLTRB(
       rowOrigin.dx,
-      top,
-      _resolveListMarkerExtent(
-        block: block,
-        itemIndex: itemIndex,
-        rowRenderObject: rowRenderObject,
-        contentRenderObject: contentRenderObject,
-      ),
-      height,
-    ).inflate(1.5);
+      top - 1.5,
+      rowOrigin.dx + extent,
+      top + height + 1.5,
+    );
+  }
+
+  bool _rectsShareLine(Rect a, Rect b) {
+    final overlapTop = math.max(a.top, b.top);
+    final overlapBottom = math.min(a.bottom, b.bottom);
+    return overlapBottom - overlapTop > 1.0;
   }
 
   double _resolveListMarkerExtent({
@@ -2063,6 +2143,55 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       }
     }
     return preferEnd ? offset : 0;
+  }
+
+  Rect? _resolveFirstLineRectForNestedBlockInRoot(
+    BuildContext context, {
+    required RenderBox rootRenderObject,
+    required BlockNode block,
+    required _SelectableTextDescriptor descriptor,
+    required RenderBox renderObject,
+    required Offset origin,
+    required TextDirection textDirection,
+    required int indentLevel,
+  }) {
+    if (descriptor.plainText.isEmpty) {
+      return null;
+    }
+
+    final rects = _resolveNestedBlockSelectionRects(
+      context,
+      rootRenderObject: rootRenderObject,
+      block: block,
+      descriptor: descriptor,
+      range: DocumentRange(
+        start: const DocumentPosition(
+          blockIndex: 0,
+          path: PathInBlock(<int>[0]),
+          textOffset: 0,
+        ),
+        end: DocumentPosition(
+          blockIndex: 0,
+          path: const PathInBlock(<int>[0]),
+          textOffset: math.min(1, descriptor.plainText.length),
+        ),
+      ),
+      renderObject: renderObject,
+      origin: origin,
+      textDirection: textDirection,
+      indentLevel: indentLevel,
+    );
+    if (rects.isEmpty) {
+      return null;
+    }
+    rects.sort((a, b) {
+      final topCompare = a.top.compareTo(b.top);
+      if (topCompare != 0) {
+        return topCompare;
+      }
+      return a.left.compareTo(b.left);
+    });
+    return rects.first;
   }
 
   List<Rect> _resolveQuoteSelectionRects(
