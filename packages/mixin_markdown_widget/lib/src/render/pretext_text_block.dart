@@ -278,11 +278,11 @@ class MarkdownPretextLayoutResult {
       for (final box in boxes) {
         rects.add(
           Rect.fromLTRB(
-            box.left + line.leadingOffset,
-            box.top + lineTop,
-            box.right + line.leadingOffset,
-            box.bottom + lineTop,
-          ).inflate(1.5),
+            box.left + line.leadingOffset - 1.5,
+            lineTop,
+            box.right + line.leadingOffset + 1.5,
+            lineTop + lineHeight,
+          ),
         );
       }
     }

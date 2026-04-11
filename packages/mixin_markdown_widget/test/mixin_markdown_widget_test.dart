@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
 import 'package:mixin_markdown_widget/src/render/local_image_provider_io.dart';
 import 'package:mixin_markdown_widget/src/render/pretext_text_block.dart';
+import 'package:mixin_markdown_widget/src/render/selectable_block.dart';
 
 int _countStyledDescendantSpans(InlineSpan span, TextStyle? rootStyle) {
   if (span is! TextSpan) {
@@ -1101,6 +1102,15 @@ return value;
 
     final start = tester.getTopLeft(headingFinder.first) + const Offset(2, 10);
     final end = tester.getTopRight(nestedFinder.first) + const Offset(-2, 10);
+    final quoteFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is SelectableMarkdownBlock &&
+          widget.spec.plainText.contains('Heading') &&
+          widget.spec.plainText.contains('Nested line'),
+    );
+    final quoteWidget = tester.widget<SelectableMarkdownBlock>(quoteFinder);
+    final quoteElement = tester.element(quoteFinder);
+    final quoteRenderBox = tester.renderObject<RenderBox>(quoteFinder);
     final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
     await gesture.addPointer(location: start);
     await gesture.down(start);
@@ -1110,9 +1120,32 @@ return value;
     await gesture.up();
     await tester.pump();
 
+    final selectionRange = selectionController.normalizedRange!;
+    final selectionRects = quoteWidget.spec.selectionRectResolver!.call(
+      quoteElement,
+      quoteRenderBox.size,
+      selectionRange,
+    );
+    final quoteOrigin = quoteRenderBox.localToGlobal(Offset.zero);
+    final globalSelectionRects = selectionRects
+        .map((rect) => rect.shift(quoteOrigin))
+        .toList(growable: false);
+    final headingRenderBox =
+        tester.renderObject<RenderBox>(headingFinder.first);
+    final headingRect =
+        headingRenderBox.localToGlobal(Offset.zero) & headingRenderBox.size;
+    final nestedRenderBox = tester.renderObject<RenderBox>(nestedFinder.first);
+    final nestedRect =
+        nestedRenderBox.localToGlobal(Offset.zero) & nestedRenderBox.size;
+
     expect(selectionController.hasSelection, isTrue);
     expect(selectionController.selectedPlainText, contains('Heading'));
     expect(selectionController.selectedPlainText, contains('> > '));
+    expect(globalSelectionRects, hasLength(3));
+    expect(globalSelectionRects.first.top, closeTo(headingRect.top, 0.5));
+    expect(globalSelectionRects.first.bottom, closeTo(headingRect.bottom, 0.5));
+    expect(globalSelectionRects.last.top, closeTo(nestedRect.top, 0.5));
+    expect(globalSelectionRects.last.bottom, closeTo(nestedRect.bottom, 0.5));
   });
 
   testWidgets('dragging inside an image caption selects caption text', (
