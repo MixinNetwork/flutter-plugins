@@ -141,6 +141,36 @@ void main() {}
     expect(documentNotifications, 1);
   });
 
+  test('assigns source ranges for setext headings and indented code blocks',
+      () {
+    const input = 'Title\n=====\n\n    final answer = 42;\n';
+
+    final document = const MarkdownDocumentParser().parse(input);
+
+    expect(document.blocks, hasLength(2));
+    expect(document.blocks.first, isA<HeadingBlock>());
+    expect(document.blocks.last, isA<CodeBlock>());
+    expect(document.blocks.first.sourceRange, isNotNull);
+    expect(document.blocks.last.sourceRange, isNotNull);
+    expect(
+      document.blocks.last.sourceRange!.start,
+      greaterThan(document.blocks.first.sourceRange!.end),
+    );
+  });
+
+  test('append parsing keeps stable prefix before list tail reparsing', () {
+    final controller = MarkdownController(
+      data: '# Title\n\nIntro\n\n- item\n  continuation',
+    );
+    final initialHeading = controller.document.blocks[0];
+    final initialParagraph = controller.document.blocks[1];
+
+    controller.appendChunk('\n\n    code tail');
+
+    expect(identical(controller.document.blocks[0], initialHeading), isTrue);
+    expect(identical(controller.document.blocks[1], initialParagraph), isTrue);
+  });
+
   test('serializes a selected range across multiple blocks', () {
     const input = '''
 # Heading
@@ -256,18 +286,20 @@ Paragraph body
     expect(find.byType(MarkdownPretextTextBlock), findsNWidgets(2));
   });
 
-  testWidgets('keeps rich inline paragraphs on the span-based renderer', (
+  testWidgets('uses pretext for rich inline paragraphs too', (
     tester,
   ) async {
     await tester.pumpWidget(
       const MaterialApp(
         home: Scaffold(
-          body: MarkdownWidget(data: 'Paragraph with **bold** text'),
+          body: MarkdownWidget(
+            data: 'Paragraph with **bold** [link](https://example.com) `code`',
+          ),
         ),
       ),
     );
 
-    expect(find.byType(MarkdownPretextTextBlock), findsNothing);
+    expect(find.byType(MarkdownPretextTextBlock), findsOneWidget);
   });
 
   testWidgets('renders tables and code blocks with direct data input', (
@@ -325,6 +357,37 @@ return value;
     final rootSpan = richText.text as TextSpan;
     expect(
         _countStyledDescendantSpans(rootSpan, rootSpan.style), greaterThan(0));
+  });
+
+  testWidgets('reuses cached unchanged pretext block widgets on append', (
+    tester,
+  ) async {
+    final controller = MarkdownController(data: '# Hello\n\nBody');
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(controller: controller),
+        ),
+      ),
+    );
+
+    final beforeWidgets = tester
+        .widgetList<MarkdownPretextTextBlock>(
+          find.byType(MarkdownPretextTextBlock),
+        )
+        .toList(growable: false);
+
+    controller.appendChunk('\n\nTail');
+    await tester.pumpAndSettle();
+
+    final afterWidgets = tester
+        .widgetList<MarkdownPretextTextBlock>(
+          find.byType(MarkdownPretextTextBlock),
+        )
+        .toList(growable: false);
+
+    expect(identical(afterWidgets.first, beforeWidgets.first), isTrue);
   });
 
   testWidgets('copies the full document with the desktop shortcut', (
@@ -396,6 +459,54 @@ return value;
 
     expect(selectionController.hasSelection, isTrue);
     expect(selectionController.selectedPlainText, 'Hello\n\nWorld');
+  });
+
+  testWidgets('custom selection works without an external controller', (
+    tester,
+  ) async {
+    String? copiedText;
+
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (methodCall) async {
+      if (methodCall.method == 'Clipboard.setData') {
+        final arguments = methodCall.arguments as Map<Object?, Object?>;
+        copiedText = arguments['text'] as String?;
+      }
+      return null;
+    });
+
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null);
+    });
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(data: '# Hello\n\nWorld'),
+        ),
+      ),
+    );
+
+    expect(find.byType(SelectionArea), findsNothing);
+
+    final start = tester.getTopLeft(find.text('Hello')) + const Offset(1, 8);
+    final end = tester.getBottomRight(find.text('World')) - const Offset(1, 8);
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: start);
+    await gesture.down(start);
+    await tester.pump();
+    await gesture.moveTo(end);
+    await tester.pump();
+    await gesture.up();
+    await tester.pump();
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+
+    expect(copiedText, 'Hello\n\nWorld');
   });
 
   testWidgets('scrolling without an explicit controller does not throw', (
@@ -677,6 +788,47 @@ return value;
 
     expect(selectionController.hasSelection, isTrue);
     expect(selectionController.selectedPlainText, 'Caption text');
+  });
+
+  testWidgets('custom imageBuilder blocks participate in selection', (
+    tester,
+  ) async {
+    final selectionController = MarkdownSelectionController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: '![Custom caption](missing-image.png)',
+            selectionController: selectionController,
+            imageBuilder: (context, block, theme) {
+              return Container(
+                key: const ValueKey('custom-image'),
+                width: 120,
+                height: 48,
+                color: Colors.blue,
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final imageFinder = find.byKey(const ValueKey('custom-image'));
+    final start = tester.getTopLeft(imageFinder) + const Offset(2, 12);
+    final end = tester.getTopRight(imageFinder) + const Offset(-2, 12);
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: start);
+    await gesture.down(start);
+    await tester.pump();
+    await gesture.moveTo(end);
+    await tester.pump();
+    await gesture.up();
+    await tester.pump();
+
+    expect(selectionController.hasSelection, isTrue);
+    expect(selectionController.selectedPlainText, 'Custom caption');
   });
 
   testWidgets('dragging across table cells copies TSV selection',

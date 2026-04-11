@@ -49,13 +49,20 @@ typedef MarkownWidget = MarkdownWidget;
 
 class _MarkdownWidgetState extends State<MarkdownWidget> {
   MarkdownController? _ownedController;
+  late final MarkdownSelectionController _fallbackSelectionController;
 
   MarkdownController get _effectiveController =>
       widget.controller ?? _ownedController!;
 
+  MarkdownSelectionController? get _effectiveSelectionController =>
+      widget.selectable
+          ? (widget.selectionController ?? _fallbackSelectionController)
+          : null;
+
   @override
   void initState() {
     super.initState();
+    _fallbackSelectionController = MarkdownSelectionController();
     if (widget.controller == null) {
       _ownedController = MarkdownController(data: widget.data ?? '');
     }
@@ -80,6 +87,7 @@ class _MarkdownWidgetState extends State<MarkdownWidget> {
   @override
   void dispose() {
     _ownedController?.dispose();
+    _fallbackSelectionController.dispose();
     super.dispose();
   }
 
@@ -94,12 +102,13 @@ class _MarkdownWidgetState extends State<MarkdownWidget> {
       child: Builder(
         builder: (context) {
           final theme = MarkdownTheme.of(context);
-          final animation = widget.selectionController == null
+          final selectionController = _effectiveSelectionController;
+          final animation = selectionController == null
               ? _effectiveController.documentListenable
               : Listenable.merge(
                   <Listenable>[
                     _effectiveController.documentListenable,
-                    widget.selectionController!,
+                    selectionController,
                   ],
                 );
           return TextSelectionTheme(
@@ -107,7 +116,7 @@ class _MarkdownWidgetState extends State<MarkdownWidget> {
             child: AnimatedBuilder(
               animation: animation,
               builder: (context, _) {
-                widget.selectionController
+                selectionController
                     ?.attachDocument(_effectiveController.document);
                 return MarkdownDocumentView(
                   document: _effectiveController.document,
@@ -116,7 +125,7 @@ class _MarkdownWidgetState extends State<MarkdownWidget> {
                   physics: widget.physics,
                   shrinkWrap: widget.shrinkWrap,
                   selectable: widget.selectable,
-                  selectionController: widget.selectionController,
+                  selectionController: selectionController,
                   onCopyPlainText: () {
                     _effectiveController.copyPlainTextToClipboard();
                   },

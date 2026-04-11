@@ -1,50 +1,77 @@
+// ignore_for_file: implementation_imports
+
 import 'dart:math' as math;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:pretext/pretext.dart';
+import 'package:pretext/src/segment.dart' as pretext_segment;
 
 import '../core/document.dart';
+
+@immutable
+class MarkdownPretextInlineRun {
+  const MarkdownPretextInlineRun({
+    required this.text,
+    required this.style,
+    this.mouseCursor,
+    this.recognizer,
+  });
+
+  final String text;
+  final TextStyle style;
+  final MouseCursor? mouseCursor;
+  final GestureRecognizer? recognizer;
+}
 
 class MarkdownPretextTextBlock extends StatelessWidget {
   const MarkdownPretextTextBlock({
     super.key,
     required this.text,
     required this.style,
-  });
+  })  : runs = null,
+        fallbackStyle = style;
+
+  const MarkdownPretextTextBlock.rich({
+    super.key,
+    required this.runs,
+    required this.fallbackStyle,
+  })  : text = '',
+        style = fallbackStyle;
 
   final String text;
   final TextStyle style;
+  final List<MarkdownPretextInlineRun>? runs;
+  final TextStyle fallbackStyle;
 
   @override
   Widget build(BuildContext context) {
-    if (text.isEmpty) {
+    final textScaler =
+        MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling;
+    final layout = _computeLayout(
+      maxWidth: MediaQuery.sizeOf(context).width,
+      textScaleFactor: textScaler.scale(1.0),
+    );
+    if (layout.lines.isEmpty) {
       return const SizedBox.shrink();
     }
 
-    final textScaler =
-        MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling;
-    final textScaleFactor = textScaler.scale(1.0);
-
     return LayoutBuilder(
       builder: (context, constraints) {
-        final layout = computeMarkdownPretextLayout(
-          text: text,
-          style: style,
+        final constrainedLayout = _computeLayout(
           maxWidth: constraints.maxWidth,
-          textScaleFactor: textScaleFactor,
+          textScaleFactor: textScaler.scale(1.0),
         );
-
         return Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            for (final line in layout.lines)
+            for (final line in constrainedLayout.lines)
               SizedBox(
                 width: double.infinity,
-                height: layout.lineHeight,
-                child: Text(
-                  line.text.isEmpty ? ' ' : line.text,
-                  style: style,
+                height: constrainedLayout.lineHeight,
+                child: Text.rich(
+                  line.span,
                   maxLines: 1,
                   overflow: TextOverflow.clip,
                   textScaler: textScaler,
@@ -55,6 +82,28 @@ class MarkdownPretextTextBlock extends StatelessWidget {
       },
     );
   }
+
+  MarkdownPretextLayoutResult _computeLayout({
+    required double maxWidth,
+    required double textScaleFactor,
+  }) {
+    final runs = this.runs;
+    if (runs != null) {
+      return computeMarkdownPretextLayoutFromRuns(
+        runs: runs,
+        fallbackStyle: fallbackStyle,
+        maxWidth: maxWidth,
+        textScaleFactor: textScaleFactor,
+      );
+    }
+
+    return computeMarkdownPretextLayout(
+      text: text,
+      style: style,
+      maxWidth: maxWidth,
+      textScaleFactor: textScaleFactor,
+    );
+  }
 }
 
 MarkdownPretextLayoutResult computeMarkdownPretextLayout({
@@ -63,45 +112,76 @@ MarkdownPretextLayoutResult computeMarkdownPretextLayout({
   required double maxWidth,
   required double textScaleFactor,
 }) {
-  final lineHeight = _measureLineHeight(style, textScaleFactor);
-  if (text.isEmpty) {
+  return computeMarkdownPretextLayoutFromRuns(
+    runs: <MarkdownPretextInlineRun>[
+      MarkdownPretextInlineRun(text: text, style: style),
+    ],
+    fallbackStyle: style,
+    maxWidth: maxWidth,
+    textScaleFactor: textScaleFactor,
+  );
+}
+
+MarkdownPretextLayoutResult computeMarkdownPretextLayoutFromRuns({
+  required List<MarkdownPretextInlineRun> runs,
+  required TextStyle fallbackStyle,
+  required double maxWidth,
+  required double textScaleFactor,
+}) {
+  final plainText = runs.map((run) => run.text).join();
+  final lineHeight = _measureMaxLineHeight(
+    runs.isEmpty ? <TextStyle>[fallbackStyle] : runs.map((run) => run.style),
+    textScaleFactor,
+  );
+  if (runs.isEmpty || plainText.isEmpty) {
     return MarkdownPretextLayoutResult(
+      plainText: plainText,
       lines: const <MarkdownPretextLayoutLine>[],
       lineHeight: lineHeight,
+      textScaleFactor: textScaleFactor,
     );
   }
 
   final safeMaxWidth = maxWidth.isFinite ? math.max(maxWidth, 0.0) : 100000.0;
-  final measurer = _TextPainterSegmentMeasurer(
-    style,
+  final segmentBuilder = _MarkdownPretextSegmentBuilder(
     textScaleFactor: textScaleFactor,
   );
-  final prepared = prepareWithSegments(
-    text,
-    measurer.measure,
-    whiteSpace: WhiteSpace.preWrap,
+  final segments = segmentBuilder.build(runs);
+  final prepared = PreparedTextWithSegments.fromSegments(
+    segments
+        .map(
+          (segment) => pretext_segment.Segment(
+            text: segment.displayText,
+            kind: segment.kind,
+            width: segment.width,
+          ),
+        )
+        .toList(growable: false),
   );
-  final result = layoutWithLines(
-    prepared,
-    safeMaxWidth,
-    lineHeight,
-  );
+  final result = layoutWithLines(prepared, safeMaxWidth, lineHeight);
 
   final lines = <MarkdownPretextLayoutLine>[];
   var cursor = 0;
   for (final line in result.lines) {
     final startOffset = cursor;
-    final visibleEndOffset = _consumeVisibleText(text, cursor, line.text);
+    final visibleEndOffset = _consumeVisibleText(plainText, cursor, line.text);
     var endOffset = visibleEndOffset;
-    while (endOffset < text.length && text[endOffset] == ' ') {
+    while (endOffset < plainText.length && plainText[endOffset] == ' ') {
       endOffset += 1;
     }
-    if (endOffset < text.length && text[endOffset] == '\n') {
+    if (endOffset < plainText.length && plainText[endOffset] == '\n') {
       endOffset += 1;
     }
     lines.add(
       MarkdownPretextLayoutLine(
         text: line.text,
+        span: _buildLineSpan(
+          segments: segments,
+          startSegmentIndex: line.start.segmentIndex,
+          endSegmentIndex: line.end.segmentIndex,
+          visibleTextLength: line.text.length,
+          fallbackStyle: fallbackStyle,
+        ),
         width: line.width,
         startOffset: startOffset,
         endOffset: endOffset,
@@ -112,24 +192,29 @@ MarkdownPretextLayoutResult computeMarkdownPretextLayout({
   }
 
   return MarkdownPretextLayoutResult(
+    plainText: plainText,
     lines: List<MarkdownPretextLayoutLine>.unmodifiable(lines),
     lineHeight: lineHeight,
+    textScaleFactor: textScaleFactor,
   );
 }
 
 @immutable
 class MarkdownPretextLayoutResult {
   const MarkdownPretextLayoutResult({
+    required this.plainText,
     required this.lines,
     required this.lineHeight,
+    required this.textScaleFactor,
   });
 
+  final String plainText;
   final List<MarkdownPretextLayoutLine> lines;
   final double lineHeight;
+  final double textScaleFactor;
 
   List<Rect> selectionRectsForRange(
     DocumentRange range, {
-    required TextStyle style,
     required TextDirection textDirection,
   }) {
     final rects = <Rect>[];
@@ -142,11 +227,7 @@ class MarkdownPretextLayoutResult {
         continue;
       }
 
-      final textPainter = _buildLinePainter(
-        line.text,
-        style,
-        textDirection,
-      );
+      final textPainter = _buildLinePainter(line.span, textDirection);
       final boxes = textPainter.getBoxesForSelection(
         TextSelection(
           baseOffset: selectionStart - line.startOffset,
@@ -170,7 +251,6 @@ class MarkdownPretextLayoutResult {
 
   int textOffsetAt(
     Offset localPosition, {
-    required TextStyle style,
     required TextDirection textDirection,
   }) {
     if (lines.isEmpty) {
@@ -184,7 +264,7 @@ class MarkdownPretextLayoutResult {
       return localPosition.dx <= 0 ? line.startOffset : line.endOffset;
     }
 
-    final textPainter = _buildLinePainter(line.text, style, textDirection);
+    final textPainter = _buildLinePainter(line.span, textDirection);
     final lineTop = clampedLineIndex * lineHeight;
     final clampedOffset = Offset(
       localPosition.dx.clamp(0.0, math.max(textPainter.width, 0.0)),
@@ -197,13 +277,13 @@ class MarkdownPretextLayoutResult {
   }
 
   TextPainter _buildLinePainter(
-    String text,
-    TextStyle style,
+    InlineSpan span,
     TextDirection textDirection,
   ) {
     final textPainter = TextPainter(
-      text: TextSpan(text: text, style: style),
+      text: span,
       textDirection: textDirection,
+      textScaler: TextScaler.linear(textScaleFactor),
       maxLines: 1,
     );
     textPainter.layout(maxWidth: double.infinity);
@@ -215,6 +295,7 @@ class MarkdownPretextLayoutResult {
 class MarkdownPretextLayoutLine {
   const MarkdownPretextLayoutLine({
     required this.text,
+    required this.span,
     required this.width,
     required this.startOffset,
     required this.endOffset,
@@ -222,10 +303,62 @@ class MarkdownPretextLayoutLine {
   });
 
   final String text;
+  final InlineSpan span;
   final double width;
   final int startOffset;
   final int endOffset;
   final int visibleEndOffset;
+}
+
+InlineSpan _buildLineSpan({
+  required List<_MarkdownPretextMeasuredSegment> segments,
+  required int startSegmentIndex,
+  required int endSegmentIndex,
+  required int visibleTextLength,
+  required TextStyle fallbackStyle,
+}) {
+  if (visibleTextLength <= 0) {
+    return TextSpan(style: fallbackStyle, text: ' ');
+  }
+
+  final children = <InlineSpan>[];
+  var remaining = visibleTextLength;
+  for (var index = startSegmentIndex;
+      index < endSegmentIndex && remaining > 0;
+      index++) {
+    final segment = segments[index];
+    if (segment.kind == pretext_segment.SegmentKind.hardBreak) {
+      continue;
+    }
+    if (segment.displayText.isEmpty) {
+      continue;
+    }
+    final takeLength = math.min(segment.displayText.length, remaining);
+    if (takeLength <= 0) {
+      continue;
+    }
+    children.add(segment.toInlineSpan(takeLength: takeLength));
+    remaining -= takeLength;
+  }
+
+  if (children.isEmpty) {
+    return TextSpan(style: fallbackStyle, text: ' ');
+  }
+  return TextSpan(style: fallbackStyle, children: children);
+}
+
+double _measureMaxLineHeight(
+  Iterable<TextStyle> styles,
+  double textScaleFactor,
+) {
+  var lineHeight = 0.0;
+  for (final style in styles) {
+    final measured = _measureLineHeight(style, textScaleFactor);
+    if (measured > lineHeight) {
+      lineHeight = measured;
+    }
+  }
+  return lineHeight;
 }
 
 double _measureLineHeight(TextStyle style, double textScaleFactor) {
@@ -249,22 +382,135 @@ int _consumeVisibleText(String source, int startOffset, String visibleText) {
   return cursor;
 }
 
-class _TextPainterSegmentMeasurer {
-  _TextPainterSegmentMeasurer(
-    this.style, {
-    required this.textScaleFactor,
+class _MarkdownPretextSegmentBuilder {
+  _MarkdownPretextSegmentBuilder({required this.textScaleFactor});
+
+  final double textScaleFactor;
+  final _TextPainterSegmentMeasurer _measurer = _TextPainterSegmentMeasurer();
+
+  List<_MarkdownPretextMeasuredSegment> build(
+    List<MarkdownPretextInlineRun> runs,
+  ) {
+    final segments = <_MarkdownPretextMeasuredSegment>[];
+    var plainTextOffset = 0;
+
+    for (final run in runs) {
+      final text = run.text;
+      var index = 0;
+      while (index < text.length) {
+        final character = text[index];
+        if (character == '\n') {
+          segments.add(
+            _MarkdownPretextMeasuredSegment(
+              displayText: '\n',
+              kind: pretext_segment.SegmentKind.hardBreak,
+              width: 0,
+              style: run.style,
+              mouseCursor: run.mouseCursor,
+              recognizer: run.recognizer,
+              startOffset: plainTextOffset,
+              endOffset: plainTextOffset + 1,
+            ),
+          );
+          index += 1;
+          plainTextOffset += 1;
+          continue;
+        }
+
+        final isWhitespace = character.trim().isEmpty;
+        final buffer = StringBuffer();
+        final startOffset = plainTextOffset;
+        while (index < text.length) {
+          final nextCharacter = text[index];
+          if (nextCharacter == '\n') {
+            break;
+          }
+          final nextIsWhitespace = nextCharacter.trim().isEmpty;
+          if (nextIsWhitespace != isWhitespace) {
+            break;
+          }
+          buffer.write(nextCharacter == '\t' ? ' ' : nextCharacter);
+          index += 1;
+          plainTextOffset += 1;
+        }
+        final displayText = buffer.toString();
+        if (displayText.isEmpty) {
+          continue;
+        }
+        segments.add(
+          _MarkdownPretextMeasuredSegment(
+            displayText: displayText,
+            kind: isWhitespace
+                ? pretext_segment.SegmentKind.space
+                : pretext_segment.SegmentKind.word,
+            width: _measurer.measure(
+              displayText,
+              run.style,
+              textScaleFactor,
+            ),
+            style: run.style,
+            mouseCursor: run.mouseCursor,
+            recognizer: run.recognizer,
+            startOffset: startOffset,
+            endOffset: plainTextOffset,
+          ),
+        );
+      }
+    }
+
+    return segments;
+  }
+}
+
+@immutable
+class _MarkdownPretextMeasuredSegment {
+  const _MarkdownPretextMeasuredSegment({
+    required this.displayText,
+    required this.kind,
+    required this.width,
+    required this.style,
+    required this.startOffset,
+    required this.endOffset,
+    this.mouseCursor,
+    this.recognizer,
   });
 
+  final String displayText;
+  final pretext_segment.SegmentKind kind;
+  final double width;
   final TextStyle style;
-  final double textScaleFactor;
-  final Map<String, double> _cache = <String, double>{};
+  final MouseCursor? mouseCursor;
+  final GestureRecognizer? recognizer;
+  final int startOffset;
+  final int endOffset;
+
+  InlineSpan toInlineSpan({int? takeLength}) {
+    final text = takeLength == null || takeLength >= displayText.length
+        ? displayText
+        : displayText.substring(0, takeLength);
+    return TextSpan(
+      text: text,
+      style: style,
+      mouseCursor: mouseCursor,
+      recognizer: recognizer,
+    );
+  }
+}
+
+class _TextPainterSegmentMeasurer {
+  final Map<Object, double> _cache = <Object, double>{};
   final TextPainter _textPainter = TextPainter(
     textDirection: TextDirection.ltr,
     maxLines: 1,
   );
 
-  double measure(String segment) {
-    return _cache.putIfAbsent(segment, () {
+  double measure(
+    String segment,
+    TextStyle style,
+    double textScaleFactor,
+  ) {
+    final key = Object.hash(segment, style, textScaleFactor);
+    return _cache.putIfAbsent(key, () {
       _textPainter.text = TextSpan(text: segment, style: style);
       _textPainter.textScaler = TextScaler.linear(textScaleFactor);
       _textPainter.layout(maxWidth: double.infinity);

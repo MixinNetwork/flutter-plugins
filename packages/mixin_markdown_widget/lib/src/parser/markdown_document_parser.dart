@@ -233,6 +233,9 @@ class MarkdownDocumentParser {
   int _consumeBlock(List<String> lines, int startIndex) {
     final line = lines[startIndex];
 
+    if (_isIndentedCodeBlockStart(line)) {
+      return _consumeIndentedCodeBlock(lines, startIndex);
+    }
     if (_isFenceStart(line)) {
       return _consumeFencedCodeBlock(lines, startIndex);
     }
@@ -250,6 +253,19 @@ class MarkdownDocumentParser {
     }
 
     return _consumeParagraph(lines, startIndex);
+  }
+
+  int _consumeIndentedCodeBlock(List<String> lines, int startIndex) {
+    var endIndex = startIndex;
+    while (endIndex + 1 < lines.length) {
+      final nextLine = lines[endIndex + 1];
+      if (_isBlankLine(nextLine) || _isIndentedCodeBlockStart(nextLine)) {
+        endIndex += 1;
+        continue;
+      }
+      break;
+    }
+    return endIndex;
   }
 
   int _consumeFencedCodeBlock(List<String> lines, int startIndex) {
@@ -278,9 +294,20 @@ class MarkdownDocumentParser {
 
   int _consumeBlockquote(List<String> lines, int startIndex) {
     var endIndex = startIndex;
-    while (
-        endIndex + 1 < lines.length && _isBlockquoteLine(lines[endIndex + 1])) {
-      endIndex += 1;
+    while (endIndex + 1 < lines.length) {
+      final nextIndex = endIndex + 1;
+      final nextLine = lines[nextIndex];
+      if (_isBlockquoteLine(nextLine)) {
+        endIndex = nextIndex;
+        continue;
+      }
+      if (_isBlankLine(nextLine) &&
+          nextIndex + 1 < lines.length &&
+          _isBlockquoteLine(lines[nextIndex + 1])) {
+        endIndex = nextIndex + 1;
+        continue;
+      }
+      break;
     }
     return endIndex;
   }
@@ -329,7 +356,8 @@ class MarkdownDocumentParser {
 
   bool _startsNewTopLevelBlock(List<String> lines, int index) {
     final line = lines[index];
-    return _isFenceStart(line) ||
+    return _isIndentedCodeBlockStart(line) ||
+        _isFenceStart(line) ||
         _isTableStart(lines, index) ||
         _isBlockquoteLine(line) ||
         _isListMarker(line) ||
@@ -340,6 +368,10 @@ class MarkdownDocumentParser {
   bool _isBlankLine(String line) => line.trim().isEmpty;
 
   bool _isFenceStart(String line) => _fenceStartPattern.hasMatch(line);
+
+  bool _isIndentedCodeBlockStart(String line) {
+    return !_isBlankLine(line) && _leadingIndent(line) >= 4;
+  }
 
   bool _isFenceEnd(String line, String fence) {
     final marker = fence[0];
@@ -365,7 +397,10 @@ class MarkdownDocumentParser {
     if (_isListMarker(line)) {
       return true;
     }
-    return _leadingIndent(line) >= 2;
+    return _leadingIndent(line) >= 2 ||
+        _isBlockquoteLine(line) ||
+        _isFenceStart(line) ||
+        _isIndentedCodeBlockStart(line);
   }
 
   bool _isTableStart(List<String> lines, int index) {
@@ -464,6 +499,10 @@ class _MarkdownAstBuilder {
           inlines: _buildInlines(node.children),
         );
       case 'p':
+        final imageBlock = _buildStandaloneImageParagraph(node);
+        if (imageBlock != null) {
+          return imageBlock;
+        }
         return ParagraphBlock(
           id: _nextId(MarkdownBlockKind.paragraph, node.textContent),
           inlines: _buildInlines(node.children),
@@ -562,6 +601,26 @@ class _MarkdownAstBuilder {
           ? codeElement.textContent
           : node.textContent,
       language: language,
+    );
+  }
+
+  ImageBlock? _buildStandaloneImageParagraph(md.Element node) {
+    final children = node.children;
+    if (children == null || children.length != 1) {
+      return null;
+    }
+    final child = children.single;
+    if (child is! md.Element || child.tag != 'img') {
+      return null;
+    }
+    return ImageBlock(
+      id: _nextId(
+        MarkdownBlockKind.image,
+        child.attributes['src'] ?? child.attributes['alt'] ?? '',
+      ),
+      url: child.attributes['src'] ?? '',
+      alt: child.attributes['alt'],
+      title: child.attributes['title'],
     );
   }
 

@@ -76,6 +76,8 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
   static const double _codeToolbarHeight = 36;
 
   final List<TapGestureRecognizer> _recognizers = <TapGestureRecognizer>[];
+  final Map<String, _CachedBlockRow> _cachedBlockRows =
+      <String, _CachedBlockRow>{};
   final ScrollController _fallbackScrollController = ScrollController();
   final FocusNode _selectionFocusNode =
       FocusNode(debugLabel: 'mixin_markdown_widget.selection');
@@ -106,12 +108,20 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
   void didUpdateWidget(covariant MarkdownDocumentView oldWidget) {
     super.didUpdateWidget(oldWidget);
     final validIds = widget.document.blocks.map((block) => block.id).toSet();
+    _cachedBlockRows.removeWhere((key, _) => !validIds.contains(key));
     _blockKeys.removeWhere((key, _) => !validIds.contains(key));
     _listItemKeysByBlock.removeWhere((key, _) => !validIds.contains(key));
     _listItemContentKeysByBlock.removeWhere(
       (key, _) => !validIds.contains(key),
     );
     _tableBlockKeys.removeWhere((key, _) => !validIds.contains(key));
+
+    if (oldWidget.theme != widget.theme ||
+        oldWidget.onTapLink != widget.onTapLink ||
+        oldWidget.imageBuilder != widget.imageBuilder ||
+        oldWidget.selectable != widget.selectable) {
+      _cachedBlockRows.clear();
+    }
   }
 
   @override
@@ -126,6 +136,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
   Widget build(BuildContext context) {
     _disposeRecognizers();
     final selectionRange = widget.selectionController?.normalizedRange;
+    final tableSelection = widget.selectionController?.tableCellSelection;
     final scrollController = _effectiveScrollController;
     final scrollable = Scrollbar(
       controller: scrollController,
@@ -138,24 +149,11 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
         itemCount: widget.document.blocks.length,
         itemBuilder: (context, index) {
           final block = widget.document.blocks[index];
-          return Padding(
-            padding: EdgeInsets.only(
-              bottom: index == widget.document.blocks.length - 1
-                  ? 0
-                  : widget.theme.blockSpacing,
-            ),
-            child: Align(
-              alignment: AlignmentDirectional.topStart,
-              child: ConstrainedBox(
-                constraints:
-                    BoxConstraints(maxWidth: widget.theme.maxContentWidth),
-                child: _buildBlockView(
-                  block: block,
-                  blockIndex: index,
-                  selectionRange: selectionRange,
-                ),
-              ),
-            ),
+          return _buildBlockListItem(
+            block: block,
+            blockIndex: index,
+            selectionRange: selectionRange,
+            tableSelection: tableSelection,
           );
         },
       ),
@@ -165,61 +163,10 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     }
 
     if (widget.selectionController == null) {
-      return _buildNativeSelectionContent(scrollable);
+      return scrollable;
     }
 
     return _buildCustomSelectionContent(scrollable);
-  }
-
-  Widget _buildNativeSelectionContent(Widget scrollable) {
-    Widget selectionContent = SelectionArea(
-      focusNode: _selectionFocusNode,
-      contextMenuBuilder:
-          widget.showCopyAllInContextMenu && widget.onCopyPlainText != null
-              ? _buildNativeContextMenu
-              : null,
-      child: scrollable,
-    );
-
-    if (widget.enableCopyFullDocumentShortcut &&
-        widget.onCopyPlainText != null) {
-      selectionContent = Actions(
-        actions: <Type, Action<Intent>>{
-          _CopyFullDocumentPlainTextIntent:
-              CallbackAction<_CopyFullDocumentPlainTextIntent>(
-            onInvoke: (intent) {
-              widget.onCopyPlainText!.call();
-              return null;
-            },
-          ),
-        },
-        child: Shortcuts(
-          shortcuts: const <ShortcutActivator, Intent>{
-            SingleActivator(
-              LogicalKeyboardKey.keyC,
-              control: true,
-              shift: true,
-            ): _CopyFullDocumentPlainTextIntent(),
-            SingleActivator(
-              LogicalKeyboardKey.keyC,
-              meta: true,
-              shift: true,
-            ): _CopyFullDocumentPlainTextIntent(),
-          },
-          child: selectionContent,
-        ),
-      );
-    }
-
-    return Listener(
-      behavior: HitTestBehavior.translucent,
-      onPointerDown: (_) {
-        if (!_selectionFocusNode.hasFocus) {
-          _selectionFocusNode.requestFocus();
-        }
-      },
-      child: selectionContent,
-    );
   }
 
   Widget _buildCustomSelectionContent(Widget scrollable) {
@@ -313,28 +260,6 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
         }
       },
       child: content,
-    );
-  }
-
-  Widget _buildNativeContextMenu(
-    BuildContext context,
-    SelectableRegionState selectableRegionState,
-  ) {
-    final buttonItems = List<ContextMenuButtonItem>.of(
-      selectableRegionState.contextMenuButtonItems,
-    )..add(
-        ContextMenuButtonItem(
-          label: 'Copy all',
-          onPressed: () {
-            widget.onCopyPlainText?.call();
-            selectableRegionState.hideToolbar();
-          },
-        ),
-      );
-
-    return AdaptiveTextSelectionToolbar.buttonItems(
-      anchors: selectableRegionState.contextMenuAnchors,
-      buttonItems: buttonItems,
     );
   }
 
@@ -648,6 +573,22 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       }
     }
 
+    if (selectionController != null &&
+        widget.imageBuilder != null &&
+        block is ImageBlock) {
+      final key = _blockKeys.putIfAbsent(
+        block.id,
+        () => GlobalKey<SelectableMarkdownBlockState>(debugLabel: block.id),
+      );
+      return SelectableMarkdownBlock(
+        key: key,
+        blockIndex: blockIndex,
+        spec: _buildCustomImageBuilderSpec(block),
+        selectionColor: widget.theme.selectionColor,
+        selectionRange: selectionRange,
+      );
+    }
+
     final key = _blockKeys.putIfAbsent(
       block.id,
       () => GlobalKey<SelectableMarkdownBlockState>(debugLabel: block.id),
@@ -667,34 +608,18 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
         final heading = block as HeadingBlock;
         final style = widget.theme.headingStyleForLevel(heading.level);
         final plainText = _flattenInlineText(heading.inlines);
-        if (_canUsePretextForInlines(heading.inlines)) {
-          return _buildPretextTextSpec(
-            text: plainText,
-            style: style,
-          );
-        }
-        final span = _buildTextSpan(style, heading.inlines);
-        return SelectableBlockSpec(
-          child: Text.rich(span),
+        return _buildPretextTextSpec(
           plainText: plainText,
-          hitTestBehavior: SelectableBlockHitTestBehavior.text,
-          textSpan: span,
+          runs: _buildPretextRuns(style, heading.inlines),
+          fallbackStyle: style,
         );
       case MarkdownBlockKind.paragraph:
         final paragraph = block as ParagraphBlock;
         final plainText = _flattenInlineText(paragraph.inlines);
-        if (_canUsePretextForInlines(paragraph.inlines)) {
-          return _buildPretextTextSpec(
-            text: plainText,
-            style: widget.theme.bodyStyle,
-          );
-        }
-        final span = _buildTextSpan(widget.theme.bodyStyle, paragraph.inlines);
-        return SelectableBlockSpec(
-          child: Text.rich(span),
+        return _buildPretextTextSpec(
           plainText: plainText,
-          hitTestBehavior: SelectableBlockHitTestBehavior.text,
-          textSpan: span,
+          runs: _buildPretextRuns(widget.theme.bodyStyle, paragraph.inlines),
+          fallbackStyle: widget.theme.bodyStyle,
         );
       case MarkdownBlockKind.quote:
         final quoteBlock = block as QuoteBlock;
@@ -796,40 +721,97 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     }
   }
 
+  Widget _buildBlockListItem({
+    required BlockNode block,
+    required int blockIndex,
+    required DocumentRange? selectionRange,
+    required TableCellSelection? tableSelection,
+  }) {
+    final cacheable = _canCacheBlockRow(block);
+    final selectionSignature = _selectionSignatureForBlock(
+      block: block,
+      blockIndex: blockIndex,
+      selectionRange: selectionRange,
+      tableSelection: tableSelection,
+    );
+
+    if (cacheable) {
+      final cached = _cachedBlockRows[block.id];
+      if (cached != null &&
+          identical(cached.block, block) &&
+          cached.blockIndex == blockIndex &&
+          cached.selectionSignature == selectionSignature) {
+        return cached.widget;
+      }
+    }
+
+    final widget = Padding(
+      padding: EdgeInsets.only(
+        bottom: blockIndex == this.widget.document.blocks.length - 1
+            ? 0
+            : this.widget.theme.blockSpacing,
+      ),
+      child: Align(
+        alignment: AlignmentDirectional.topStart,
+        child: ConstrainedBox(
+          constraints:
+              BoxConstraints(maxWidth: this.widget.theme.maxContentWidth),
+          child: _buildBlockView(
+            block: block,
+            blockIndex: blockIndex,
+            selectionRange: selectionRange,
+          ),
+        ),
+      ),
+    );
+
+    if (!cacheable) {
+      _cachedBlockRows.remove(block.id);
+      return widget;
+    }
+
+    _cachedBlockRows[block.id] = _CachedBlockRow(
+      block: block,
+      blockIndex: blockIndex,
+      selectionSignature: selectionSignature,
+      widget: widget,
+    );
+    return widget;
+  }
+
   SelectableBlockSpec _buildPretextTextSpec({
-    required String text,
-    required TextStyle style,
+    required String plainText,
+    required List<MarkdownPretextInlineRun> runs,
+    required TextStyle fallbackStyle,
   }) {
     return SelectableBlockSpec(
-      child: MarkdownPretextTextBlock(
-        text: text,
-        style: style,
+      child: MarkdownPretextTextBlock.rich(
+        runs: runs,
+        fallbackStyle: fallbackStyle,
       ),
-      plainText: text,
+      plainText: plainText,
       hitTestBehavior: SelectableBlockHitTestBehavior.text,
       selectionRectResolver: (context, constraints, range) {
         final layout = _computePretextLayoutForContext(
           context,
-          text: text,
-          style: style,
+          runs: runs,
+          fallbackStyle: fallbackStyle,
           maxWidth: constraints.width,
         );
         return layout.selectionRectsForRange(
           range,
-          style: style,
           textDirection: Directionality.of(context),
         );
       },
       textOffsetResolver: (context, size, localPosition) {
         final layout = _computePretextLayoutForContext(
           context,
-          text: text,
-          style: style,
+          runs: runs,
+          fallbackStyle: fallbackStyle,
           maxWidth: size.width,
         );
         return layout.textOffsetAt(
           localPosition,
-          style: style,
           textDirection: Directionality.of(context),
         );
       },
@@ -838,37 +820,198 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
 
   MarkdownPretextLayoutResult _computePretextLayoutForContext(
     BuildContext context, {
-    required String text,
-    required TextStyle style,
+    required List<MarkdownPretextInlineRun> runs,
+    required TextStyle fallbackStyle,
     required double maxWidth,
   }) {
     final textScaler =
         MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling;
-    return computeMarkdownPretextLayout(
-      text: text,
-      style: style,
+    return computeMarkdownPretextLayoutFromRuns(
+      runs: runs,
+      fallbackStyle: fallbackStyle,
       maxWidth: maxWidth,
       textScaleFactor: textScaler.scale(1.0),
     );
   }
 
-  bool _canUsePretextForInlines(List<InlineNode> inlines) {
+  List<MarkdownPretextInlineRun> _buildPretextRuns(
+    TextStyle baseStyle,
+    List<InlineNode> inlines,
+  ) {
+    return <MarkdownPretextInlineRun>[
+      for (final inline in inlines) ..._buildPretextRun(baseStyle, inline),
+    ];
+  }
+
+  List<MarkdownPretextInlineRun> _buildPretextRun(
+    TextStyle baseStyle,
+    InlineNode inline,
+  ) {
+    switch (inline.kind) {
+      case MarkdownInlineKind.text:
+        return <MarkdownPretextInlineRun>[
+          MarkdownPretextInlineRun(
+            text: (inline as TextInline).text,
+            style: baseStyle,
+          ),
+        ];
+      case MarkdownInlineKind.emphasis:
+        final emphasis = inline as EmphasisInline;
+        final style = baseStyle.copyWith(fontStyle: FontStyle.italic);
+        return _buildPretextRuns(style, emphasis.children);
+      case MarkdownInlineKind.strong:
+        final strong = inline as StrongInline;
+        final style = baseStyle.copyWith(fontWeight: FontWeight.w700);
+        return _buildPretextRuns(style, strong.children);
+      case MarkdownInlineKind.strikethrough:
+        final strike = inline as StrikethroughInline;
+        final style =
+            baseStyle.copyWith(decoration: TextDecoration.lineThrough);
+        return _buildPretextRuns(style, strike.children);
+      case MarkdownInlineKind.link:
+        final link = inline as LinkInline;
+        final label = _flattenInlineText(link.children);
+        final recognizer = widget.onTapLink == null
+            ? null
+            : _registerLink(() {
+                widget.onTapLink!(link.destination, link.title, label);
+              });
+        final linkStyle = baseStyle.merge(widget.theme.linkStyle);
+        return _buildPretextRuns(linkStyle, link.children)
+            .map(
+              (run) => MarkdownPretextInlineRun(
+                text: run.text,
+                style: run.style,
+                mouseCursor: widget.onTapLink != null
+                    ? SystemMouseCursors.click
+                    : MouseCursor.defer,
+                recognizer: recognizer,
+              ),
+            )
+            .toList(growable: false);
+      case MarkdownInlineKind.inlineCode:
+        final code = inline as InlineCode;
+        return <MarkdownPretextInlineRun>[
+          MarkdownPretextInlineRun(
+            text: code.text,
+            style: baseStyle.merge(widget.theme.inlineCodeStyle),
+          ),
+        ];
+      case MarkdownInlineKind.softBreak:
+      case MarkdownInlineKind.hardBreak:
+        return <MarkdownPretextInlineRun>[
+          MarkdownPretextInlineRun(
+            text: '\n',
+            style: baseStyle,
+          ),
+        ];
+      case MarkdownInlineKind.image:
+        final image = inline as InlineImage;
+        final label = image.alt?.trim().isNotEmpty == true
+            ? image.alt!.trim()
+            : image.url;
+        return <MarkdownPretextInlineRun>[
+          MarkdownPretextInlineRun(
+            text: label,
+            style: baseStyle.merge(widget.theme.linkStyle),
+          ),
+        ];
+    }
+  }
+
+  SelectableBlockSpec _buildCustomImageBuilderSpec(ImageBlock block) {
+    final caption = _imageCaptionText(block);
+    return SelectableBlockSpec(
+      child: MarkdownImageBlockView(
+        image: _buildImageVisual(block),
+        caption: caption.isEmpty
+            ? null
+            : Text(
+                caption,
+                style: _imageCaptionStyle,
+              ),
+      ),
+      plainText: _plainTextSerializer.serializeBlockText(block),
+      hitTestBehavior: SelectableBlockHitTestBehavior.block,
+      highlightBorderRadius: widget.theme.imageBorderRadius,
+    );
+  }
+
+  String _selectionSignatureForBlock({
+    required BlockNode block,
+    required int blockIndex,
+    required DocumentRange? selectionRange,
+    required TableCellSelection? tableSelection,
+  }) {
+    if (block is TableBlock) {
+      if (tableSelection == null || tableSelection.blockIndex != blockIndex) {
+        return 'table:none';
+      }
+      final tableRange = tableSelection.normalizedRange;
+      return 'table:${tableRange.start.rowIndex}:${tableRange.start.columnIndex}:${tableRange.end.rowIndex}:${tableRange.end.columnIndex}';
+    }
+
+    if (selectionRange == null ||
+        blockIndex < selectionRange.start.blockIndex ||
+        blockIndex > selectionRange.end.blockIndex) {
+      return 'text:none';
+    }
+    final start = blockIndex == selectionRange.start.blockIndex
+        ? selectionRange.start.textOffset
+        : 0;
+    final end = blockIndex == selectionRange.end.blockIndex
+        ? selectionRange.end.textOffset
+        : _plainTextSerializer.serializeBlockText(block).length;
+    return 'text:$start:$end';
+  }
+
+  bool _canCacheBlockRow(BlockNode block) {
+    switch (block.kind) {
+      case MarkdownBlockKind.heading:
+        return !_inlinesContainLinks((block as HeadingBlock).inlines);
+      case MarkdownBlockKind.paragraph:
+        return !_inlinesContainLinks((block as ParagraphBlock).inlines);
+      case MarkdownBlockKind.codeBlock:
+      case MarkdownBlockKind.image:
+      case MarkdownBlockKind.table:
+      case MarkdownBlockKind.thematicBreak:
+        return true;
+      case MarkdownBlockKind.quote:
+      case MarkdownBlockKind.orderedList:
+      case MarkdownBlockKind.unorderedList:
+        return false;
+    }
+  }
+
+  bool _inlinesContainLinks(List<InlineNode> inlines) {
     for (final inline in inlines) {
       switch (inline.kind) {
+        case MarkdownInlineKind.link:
+          return true;
+        case MarkdownInlineKind.emphasis:
+          if (_inlinesContainLinks((inline as EmphasisInline).children)) {
+            return true;
+          }
+          break;
+        case MarkdownInlineKind.strong:
+          if (_inlinesContainLinks((inline as StrongInline).children)) {
+            return true;
+          }
+          break;
+        case MarkdownInlineKind.strikethrough:
+          if (_inlinesContainLinks((inline as StrikethroughInline).children)) {
+            return true;
+          }
+          break;
         case MarkdownInlineKind.text:
+        case MarkdownInlineKind.inlineCode:
         case MarkdownInlineKind.softBreak:
         case MarkdownInlineKind.hardBreak:
-          continue;
-        case MarkdownInlineKind.emphasis:
-        case MarkdownInlineKind.strong:
-        case MarkdownInlineKind.strikethrough:
-        case MarkdownInlineKind.link:
-        case MarkdownInlineKind.inlineCode:
         case MarkdownInlineKind.image:
-          return false;
+          break;
       }
     }
-    return true;
+    return false;
   }
 
   TextSpan _buildTextSpan(TextStyle style, List<InlineNode> inlines) {
@@ -1029,6 +1172,9 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
   }
 
   Widget _buildImageVisual(ImageBlock block) {
+    if (widget.imageBuilder != null) {
+      return widget.imageBuilder!(context, block, widget.theme);
+    }
     final uri = Uri.tryParse(block.url);
     final isNetwork =
         uri != null && (uri.scheme == 'http' || uri.scheme == 'https');
@@ -1694,4 +1840,19 @@ class _IndexedListSelectionDescriptor {
   final int prefixLength;
   final _SelectableTextDescriptor descriptor;
   final _SelectableTextDescriptor contentDescriptor;
+}
+
+@immutable
+class _CachedBlockRow {
+  const _CachedBlockRow({
+    required this.block,
+    required this.blockIndex,
+    required this.selectionSignature,
+    required this.widget,
+  });
+
+  final BlockNode block;
+  final int blockIndex;
+  final String selectionSignature;
+  final Widget widget;
 }
