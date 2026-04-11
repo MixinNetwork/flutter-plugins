@@ -465,7 +465,7 @@ class _BlockSelectionPainter extends CustomPainter {
         paint,
       );
     }
-    _carveInnerCornerTransitions(canvas, normalizedRects);
+    _fillInnerCornerTransitions(canvas, normalizedRects, paint);
     canvas.restore();
   }
 
@@ -546,11 +546,14 @@ class _BlockSelectionPainter extends CustomPainter {
     return false;
   }
 
-  void _carveInnerCornerTransitions(Canvas canvas, List<Rect> rects) {
+  void _fillInnerCornerTransitions(
+    Canvas canvas,
+    List<Rect> rects,
+    Paint paint,
+  ) {
     const sameLineTolerance = 2.0;
     const seamTolerance = 2.0;
     const maxRadius = 4.0;
-    final clearPaint = Paint()..blendMode = BlendMode.clear;
 
     for (var index = 0; index < rects.length - 1; index++) {
       final current = rects[index];
@@ -565,56 +568,56 @@ class _BlockSelectionPainter extends CustomPainter {
       }
 
       if (next.left > current.left + 0.5) {
-        _carveQuarterTransition(
+        _fillQuarterTransition(
           canvas,
-          clearPaint,
+          paint,
           corner: Offset(next.left, current.bottom),
           radius: math.min(
             maxRadius,
             math.min(next.left - current.left, current.height / 2),
           ),
-          quadrant: _SelectionCornerQuadrant.topRight,
+          quadrant: _SelectionCornerQuadrant.bottomLeft,
         );
       } else if (current.left > next.left + 0.5) {
-        _carveQuarterTransition(
+        _fillQuarterTransition(
           canvas,
-          clearPaint,
+          paint,
           corner: Offset(current.left, next.top),
           radius: math.min(
             maxRadius,
             math.min(current.left - next.left, next.height / 2),
           ),
-          quadrant: _SelectionCornerQuadrant.bottomRight,
+          quadrant: _SelectionCornerQuadrant.topLeft,
         );
       }
 
       if (current.right > next.right + 0.5) {
-        _carveQuarterTransition(
+        _fillQuarterTransition(
           canvas,
-          clearPaint,
+          paint,
           corner: Offset(next.right, current.bottom),
           radius: math.min(
             maxRadius,
             math.min(current.right - next.right, current.height / 2),
           ),
-          quadrant: _SelectionCornerQuadrant.topLeft,
+          quadrant: _SelectionCornerQuadrant.bottomRight,
         );
       } else if (next.right > current.right + 0.5) {
-        _carveQuarterTransition(
+        _fillQuarterTransition(
           canvas,
-          clearPaint,
+          paint,
           corner: Offset(current.right, next.top),
           radius: math.min(
             maxRadius,
             math.min(next.right - current.right, next.height / 2),
           ),
-          quadrant: _SelectionCornerQuadrant.bottomLeft,
+          quadrant: _SelectionCornerQuadrant.topRight,
         );
       }
     }
   }
 
-  void _carveQuarterTransition(
+  void _fillQuarterTransition(
     Canvas canvas,
     Paint paint, {
     required Offset corner,
@@ -625,8 +628,6 @@ class _BlockSelectionPainter extends CustomPainter {
       return;
     }
 
-    final oval = Path()
-      ..addOval(Rect.fromCircle(center: corner, radius: radius));
     final squareRect = switch (quadrant) {
       _SelectionCornerQuadrant.topLeft => Rect.fromLTRB(
           corner.dx - radius,
@@ -653,11 +654,22 @@ class _BlockSelectionPainter extends CustomPainter {
           corner.dy + radius,
         ),
     };
-    final squarePath = Path()..addRect(squareRect);
-    final quadrantCirclePath =
-        Path.combine(PathOperation.intersect, squarePath, oval);
+    // Circle centered at the far corner of squareRect (opposite to corner)
+    final center = switch (quadrant) {
+      _SelectionCornerQuadrant.topLeft =>
+        Offset(corner.dx - radius, corner.dy - radius),
+      _SelectionCornerQuadrant.topRight =>
+        Offset(corner.dx + radius, corner.dy - radius),
+      _SelectionCornerQuadrant.bottomLeft =>
+        Offset(corner.dx - radius, corner.dy + radius),
+      _SelectionCornerQuadrant.bottomRight =>
+        Offset(corner.dx + radius, corner.dy + radius),
+    };
+    final oval = Path()
+      ..addOval(Rect.fromCircle(center: center, radius: radius));
+    final clip = Path()..addRect(squareRect);
     canvas.drawPath(
-      Path.combine(PathOperation.difference, squarePath, quadrantCirclePath),
+      Path.combine(PathOperation.difference, clip, oval),
       paint,
     );
   }
