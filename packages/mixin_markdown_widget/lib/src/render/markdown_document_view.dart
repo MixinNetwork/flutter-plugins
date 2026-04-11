@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
-import 'dart:ui' show FontFeature;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -35,6 +35,7 @@ class MarkdownDocumentView extends StatefulWidget {
     this.enableCopyFullDocumentShortcut = true,
     this.showCopyAllInContextMenu = true,
     this.imageBuilder,
+    this.contextMenuBuilder,
   });
 
   final MarkdownDocument document;
@@ -49,6 +50,7 @@ class MarkdownDocumentView extends StatefulWidget {
   final bool enableCopyFullDocumentShortcut;
   final bool showCopyAllInContextMenu;
   final MarkdownImageBuilder? imageBuilder;
+  final MarkdownContextMenuBuilder? contextMenuBuilder;
 
   @override
   State<MarkdownDocumentView> createState() => _MarkdownDocumentViewState();
@@ -68,13 +70,6 @@ class _SelectAllMarkdownIntent extends Intent {
 
 class _ClearMarkdownSelectionIntent extends Intent {
   const _ClearMarkdownSelectionIntent();
-}
-
-enum _SelectionMenuAction {
-  copySelection,
-  selectAll,
-  copyAll,
-  clearSelection,
 }
 
 class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
@@ -107,6 +102,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       _tableBlockKeys =
       <String, GlobalKey<SelectableMarkdownTableBlockState>>{};
   final GlobalKey _scrollableKey = GlobalKey(debugLabel: 'markdown-scrollable');
+  final ContextMenuController _contextMenuController = ContextMenuController();
 
   Duration? _lastPrimaryDownTimestamp;
   Offset? _lastPrimaryDownPosition;
@@ -149,6 +145,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     _stopAutoScroll();
     _fallbackScrollController.dispose();
     _selectionFocusNode.dispose();
+    _contextMenuController.remove();
     super.dispose();
   }
 
@@ -196,6 +193,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       onTapOutside: (_) {
         selectionController.clear();
         _selectionFocusNode.unfocus();
+        _contextMenuController.remove();
       },
       child: Focus(
         focusNode: _selectionFocusNode,
@@ -290,62 +288,66 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     );
   }
 
-  Future<void> _showCustomContextMenu(Offset globalPosition) async {
-    final overlay = Overlay.maybeOf(context)?.context.findRenderObject();
-    if (overlay is! RenderBox) {
-      return;
-    }
+  void _showToolbar(Offset globalPosition) {
     final selectionController = widget.selectionController;
     if (selectionController == null) {
       return;
     }
-    final action = await showMenu<_SelectionMenuAction>(
-      context: context,
-      position: RelativeRect.fromLTRB(
-        globalPosition.dx,
-        globalPosition.dy,
-        overlay.size.width - globalPosition.dx,
-        overlay.size.height - globalPosition.dy,
+
+    final buttonItems = <ContextMenuButtonItem>[
+      ContextMenuButtonItem(
+        onPressed: () {
+          _contextMenuController.remove();
+          selectionController.copySelectionToClipboard();
+        },
+        type: ContextMenuButtonType.copy,
       ),
-      items: <PopupMenuEntry<_SelectionMenuAction>>[
-        PopupMenuItem<_SelectionMenuAction>(
-          value: _SelectionMenuAction.copySelection,
-          enabled: selectionController.hasSelection,
-          child: const Text('Copy'),
+      ContextMenuButtonItem(
+        onPressed: () {
+          _contextMenuController.remove();
+          selectionController.selectAll(widget.document);
+        },
+        type: ContextMenuButtonType.selectAll,
+      ),
+      if (widget.onCopyPlainText != null && widget.showCopyAllInContextMenu)
+        ContextMenuButtonItem(
+          onPressed: () {
+            _contextMenuController.remove();
+            widget.onCopyPlainText?.call();
+          },
+          label: 'Copy all',
         ),
-        const PopupMenuItem<_SelectionMenuAction>(
-          value: _SelectionMenuAction.selectAll,
-          child: Text('Select all'),
+      if (selectionController.hasSelection)
+        ContextMenuButtonItem(
+          onPressed: () {
+            _contextMenuController.remove();
+            selectionController.clear();
+          },
+          label: 'Clear selection',
         ),
-        PopupMenuItem<_SelectionMenuAction>(
-          value: _SelectionMenuAction.copyAll,
-          enabled: widget.onCopyPlainText != null,
-          child: const Text('Copy all'),
-        ),
-        PopupMenuItem<_SelectionMenuAction>(
-          value: _SelectionMenuAction.clearSelection,
-          enabled: selectionController.hasSelection,
-          child: const Text('Clear selection'),
-        ),
-      ],
+    ];
+
+    final anchors = TextSelectionToolbarAnchors(
+      primaryAnchor: globalPosition,
     );
 
-    switch (action) {
-      case _SelectionMenuAction.copySelection:
-        await selectionController.copySelectionToClipboard();
-        break;
-      case _SelectionMenuAction.selectAll:
-        selectionController.selectAll(widget.document);
-        break;
-      case _SelectionMenuAction.copyAll:
-        widget.onCopyPlainText?.call();
-        break;
-      case _SelectionMenuAction.clearSelection:
-        selectionController.clear();
-        break;
-      case null:
-        break;
-    }
+    _contextMenuController.show(
+      context: context,
+      contextMenuBuilder: (context) {
+        if (widget.contextMenuBuilder != null) {
+          return widget.contextMenuBuilder!(
+            context,
+            selectionController,
+            buttonItems,
+            anchors,
+          );
+        }
+        return AdaptiveTextSelectionToolbar.buttonItems(
+          anchors: anchors,
+          buttonItems: buttonItems,
+        );
+      },
+    );
   }
 
   void _disposeRecognizers() {
@@ -375,7 +377,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
           _selectBlockAt(position.blockIndex);
         }
       }
-      _showCustomContextMenu(event.position);
+      _showToolbar(event.position);
       return;
     }
 
@@ -735,7 +737,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
         selectionColor: widget.theme.selectionColor,
         selectionController: selectionController,
         textWidgetBuilder: _buildInlineTextWidget,
-        onRequestContextMenu: _showCustomContextMenu,
+        onRequestContextMenu: _showToolbar,
         documentSelected: _isBlockCoveredByTextSelection(
           blockIndex,
           selectionRange,
@@ -1980,8 +1982,8 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     }
 
     if (nearestEntry != null && nearestRowRect != null) {
-      final preferEnd = globalPosition.dy > nearestRowRect!.center.dy ||
-          globalPosition.dx > nearestRowRect!.center.dx;
+      final preferEnd = globalPosition.dy > nearestRowRect.center.dy ||
+          globalPosition.dx > nearestRowRect.center.dx;
       return nearestEntry.startOffset +
           (preferEnd ? nearestEntry.descriptor.plainText.length : 0);
     }

@@ -22,6 +22,7 @@ class MarkdownWidget extends StatefulWidget {
     this.padding,
     this.onTapLink,
     this.imageBuilder,
+    this.contextMenuBuilder,
   }) : assert(
           (data == null) != (controller == null),
           'Provide exactly one of data or controller.',
@@ -40,6 +41,7 @@ class MarkdownWidget extends StatefulWidget {
   final EdgeInsetsGeometry? padding;
   final MarkdownTapLinkCallback? onTapLink;
   final MarkdownImageBuilder? imageBuilder;
+  final MarkdownContextMenuBuilder? contextMenuBuilder;
 
   @override
   State<MarkdownWidget> createState() => _MarkdownWidgetState();
@@ -134,6 +136,7 @@ class _MarkdownWidgetState extends State<MarkdownWidget> {
                   showCopyAllInContextMenu: widget.showCopyAllInContextMenu,
                   onTapLink: widget.onTapLink,
                   imageBuilder: widget.imageBuilder,
+                  contextMenuBuilder: widget.contextMenuBuilder,
                 );
               },
             ),

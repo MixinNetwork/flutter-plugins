@@ -264,6 +264,22 @@ This content was appended through `MarkdownController.appendChunk`.
                   SnackBar(content: Text('Link tapped: $destination')),
                 );
               },
+              contextMenuBuilder: (context, controller, buttonItems, anchors) {
+                return AdaptiveTextSelectionToolbar.buttonItems(
+                  anchors: anchors,
+                  buttonItems: [
+                    ...buttonItems,
+                    ContextMenuButtonItem(
+                      onPressed: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Custom menu action!')),
+                        );
+                      },
+                      label: '🎉 Custom',
+                    ),
+                  ],
+                );
+              },
             ),
           );
 
