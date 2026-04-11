@@ -11,6 +11,7 @@ import '../widgets/markdown_theme.dart';
 import '../widgets/markdown_types.dart';
 import 'markdown_block_widgets.dart';
 import 'code_syntax_highlighter.dart';
+import 'pretext_text_block.dart';
 import 'selectable_block.dart';
 import 'selectable_table_block.dart';
 
@@ -665,19 +666,33 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       case MarkdownBlockKind.heading:
         final heading = block as HeadingBlock;
         final style = widget.theme.headingStyleForLevel(heading.level);
+        final plainText = _flattenInlineText(heading.inlines);
+        if (_canUsePretextForInlines(heading.inlines)) {
+          return _buildPretextTextSpec(
+            text: plainText,
+            style: style,
+          );
+        }
         final span = _buildTextSpan(style, heading.inlines);
         return SelectableBlockSpec(
           child: Text.rich(span),
-          plainText: _flattenInlineText(heading.inlines),
+          plainText: plainText,
           hitTestBehavior: SelectableBlockHitTestBehavior.text,
           textSpan: span,
         );
       case MarkdownBlockKind.paragraph:
         final paragraph = block as ParagraphBlock;
+        final plainText = _flattenInlineText(paragraph.inlines);
+        if (_canUsePretextForInlines(paragraph.inlines)) {
+          return _buildPretextTextSpec(
+            text: plainText,
+            style: widget.theme.bodyStyle,
+          );
+        }
         final span = _buildTextSpan(widget.theme.bodyStyle, paragraph.inlines);
         return SelectableBlockSpec(
           child: Text.rich(span),
-          plainText: _flattenInlineText(paragraph.inlines),
+          plainText: plainText,
           hitTestBehavior: SelectableBlockHitTestBehavior.text,
           textSpan: span,
         );
@@ -722,13 +737,13 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
             plainText: descriptor.plainText,
             hitTestBehavior: SelectableBlockHitTestBehavior.text,
             textSpan: descriptor.span,
-            selectionRectResolver: (context, range) =>
+            selectionRectResolver: (context, _, range) =>
                 _resolveListSelectionRects(
               context,
               listBlock,
               range,
             ),
-            textOffsetResolver: (context, localPosition) =>
+            textOffsetResolver: (context, _, localPosition) =>
                 _resolveListTextOffset(
               context,
               listBlock,
@@ -779,6 +794,81 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
           hitTestBehavior: SelectableBlockHitTestBehavior.block,
         );
     }
+  }
+
+  SelectableBlockSpec _buildPretextTextSpec({
+    required String text,
+    required TextStyle style,
+  }) {
+    return SelectableBlockSpec(
+      child: MarkdownPretextTextBlock(
+        text: text,
+        style: style,
+      ),
+      plainText: text,
+      hitTestBehavior: SelectableBlockHitTestBehavior.text,
+      selectionRectResolver: (context, constraints, range) {
+        final layout = _computePretextLayoutForContext(
+          context,
+          text: text,
+          style: style,
+          maxWidth: constraints.width,
+        );
+        return layout.selectionRectsForRange(
+          range,
+          style: style,
+          textDirection: Directionality.of(context),
+        );
+      },
+      textOffsetResolver: (context, size, localPosition) {
+        final layout = _computePretextLayoutForContext(
+          context,
+          text: text,
+          style: style,
+          maxWidth: size.width,
+        );
+        return layout.textOffsetAt(
+          localPosition,
+          style: style,
+          textDirection: Directionality.of(context),
+        );
+      },
+    );
+  }
+
+  MarkdownPretextLayoutResult _computePretextLayoutForContext(
+    BuildContext context, {
+    required String text,
+    required TextStyle style,
+    required double maxWidth,
+  }) {
+    final textScaler =
+        MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling;
+    return computeMarkdownPretextLayout(
+      text: text,
+      style: style,
+      maxWidth: maxWidth,
+      textScaleFactor: textScaler.scale(1.0),
+    );
+  }
+
+  bool _canUsePretextForInlines(List<InlineNode> inlines) {
+    for (final inline in inlines) {
+      switch (inline.kind) {
+        case MarkdownInlineKind.text:
+        case MarkdownInlineKind.softBreak:
+        case MarkdownInlineKind.hardBreak:
+          continue;
+        case MarkdownInlineKind.emphasis:
+        case MarkdownInlineKind.strong:
+        case MarkdownInlineKind.strikethrough:
+        case MarkdownInlineKind.link:
+        case MarkdownInlineKind.inlineCode:
+        case MarkdownInlineKind.image:
+          return false;
+      }
+    }
+    return true;
   }
 
   TextSpan _buildTextSpan(TextStyle style, List<InlineNode> inlines) {

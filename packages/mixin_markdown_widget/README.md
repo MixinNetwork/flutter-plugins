@@ -17,6 +17,8 @@
 - Right-click menu support for `Copy`, `Select all`, `Copy all`, and `Clear selection`
 - Copy button for code blocks
 - `Ctrl/Cmd+C` to copy the current custom selection, `Ctrl/Cmd+A` to select all, and `Ctrl/Cmd+Shift+C` to copy the full document as predictable plain text
+- Append-only incremental reparsing for `appendChunk`, with stable prefix block reuse
+- `pretext`-backed layout for plain-text top-level headings and paragraphs
 
 ## Usage
 
@@ -55,6 +57,6 @@ selectionController.selectAll();
 
 ## Current scope
 
-This implementation now includes syntax-highlighted code blocks, character-level code selection, table cell range selection with TSV copy semantics, a document-level plain-text serializer, a model-level selection controller, custom pointer hit testing, selection painting, and controller-managed draft/committed streaming state. It still reparses the full document on each update, and `pretext` paragraph layout integration remains a follow-up layer.
+This implementation now includes syntax-highlighted code blocks, character-level code selection, table cell range selection with TSV copy semantics, a document-level plain-text serializer, a model-level selection controller, custom pointer hit testing, selection painting, and controller-managed draft/committed streaming state. `appendChunk` now reparses only the unstable trailing block instead of the full document, and simple top-level plain-text headings and paragraphs can use a `pretext`-backed layout path. Rich inline text, lists, quotes, and other composite blocks still use the existing `TextSpan`/widget composition path.
 
 See `/example` for a runnable desktop demo.

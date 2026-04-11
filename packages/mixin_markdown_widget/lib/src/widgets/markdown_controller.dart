@@ -15,11 +15,12 @@ class MarkdownController extends ChangeNotifier {
   })  : _parser = parser ?? const MarkdownDocumentParser(),
         _plainTextSerializer =
             plainTextSerializer ?? const MarkdownPlainTextSerializer() {
-    _replaceData(data);
+    _replaceData(data, allowIncrementalAppend: false);
   }
 
   final MarkdownDocumentParser _parser;
   final MarkdownCopySerializer _plainTextSerializer;
+  final ValueNotifier<int> _documentVersionNotifier = ValueNotifier<int>(0);
 
   MarkdownDocument _document = const MarkdownDocument.empty();
   StreamingMarkdownState _streamingState = const StreamingMarkdownState.empty();
@@ -28,6 +29,7 @@ class MarkdownController extends ChangeNotifier {
   bool _streamingDraftMode = false;
 
   MarkdownDocument get document => _document;
+  Listenable get documentListenable => _documentVersionNotifier;
   StreamingMarkdownState get streamingState => _streamingState;
   String get data => _data;
   String get plainText => _plainTextSerializer.serialize(_document);
@@ -38,7 +40,7 @@ class MarkdownController extends ChangeNotifier {
       return;
     }
     _streamingDraftMode = false;
-    _replaceData(data);
+    _replaceData(data, allowIncrementalAppend: false);
     notifyListeners();
   }
 
@@ -49,7 +51,7 @@ class MarkdownController extends ChangeNotifier {
       return;
     }
     _streamingDraftMode = true;
-    _replaceData('$_data$chunk');
+    _replaceData('$_data$chunk', allowIncrementalAppend: true);
     notifyListeners();
   }
 
@@ -67,8 +69,14 @@ class MarkdownController extends ChangeNotifier {
       return;
     }
     _streamingDraftMode = false;
-    _replaceData('');
+    _replaceData('', allowIncrementalAppend: false);
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _documentVersionNotifier.dispose();
+    super.dispose();
   }
 
   String serialize(MarkdownCopySerializer serializer) {
@@ -79,11 +87,27 @@ class MarkdownController extends ChangeNotifier {
     return Clipboard.setData(ClipboardData(text: plainText));
   }
 
-  void _replaceData(String data) {
+  void _replaceData(
+    String data, {
+    required bool allowIncrementalAppend,
+  }) {
+    final previousDocument = _document;
+    final previousData = _data;
     _data = data;
     _version += 1;
-    _document = _parser.parse(_data, version: _version);
+    if (allowIncrementalAppend &&
+        previousData.isNotEmpty &&
+        _data.startsWith(previousData)) {
+      _document = _parser.parseAppending(
+        _data,
+        previousDocument: previousDocument,
+        version: _version,
+      );
+    } else {
+      _document = _parser.parse(_data, version: _version);
+    }
     _syncStreamingState();
+    _documentVersionNotifier.value = _version;
   }
 
   void _syncStreamingState() {

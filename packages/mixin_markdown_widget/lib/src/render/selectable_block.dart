@@ -30,10 +30,16 @@ class SelectableBlockSpec {
   final TextAlign textAlign;
   final EdgeInsets measurementPadding;
   final BorderRadius? highlightBorderRadius;
-  final List<Rect> Function(BuildContext context, DocumentRange range)?
-      selectionRectResolver;
-  final int? Function(BuildContext context, Offset localPosition)?
-      textOffsetResolver;
+  final List<Rect> Function(
+    BuildContext context,
+    Size constraints,
+    DocumentRange range,
+  )? selectionRectResolver;
+  final int? Function(
+    BuildContext context,
+    Size size,
+    Offset localPosition,
+  )? textOffsetResolver;
 }
 
 class SelectableMarkdownBlock extends StatefulWidget {
@@ -172,7 +178,11 @@ class SelectableMarkdownBlockState extends State<SelectableMarkdownBlock> {
         final range = _selectionForBlock();
         final selectionRects = range == null
             ? null
-            : widget.spec.selectionRectResolver?.call(context, range);
+            : widget.spec.selectionRectResolver?.call(
+                context,
+                constraints.biggest,
+                range,
+              );
         return CustomPaint(
           painter: _BlockSelectionPainter(
             range: range,
@@ -198,6 +208,7 @@ class SelectableMarkdownBlockState extends State<SelectableMarkdownBlock> {
 
     final resolvedOffset = widget.spec.textOffsetResolver?.call(
       context,
+      size,
       localPosition,
     );
     if (resolvedOffset != null) {

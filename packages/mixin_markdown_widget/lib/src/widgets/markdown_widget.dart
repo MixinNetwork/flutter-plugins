@@ -95,10 +95,10 @@ class _MarkdownWidgetState extends State<MarkdownWidget> {
         builder: (context) {
           final theme = MarkdownTheme.of(context);
           final animation = widget.selectionController == null
-              ? _effectiveController
+              ? _effectiveController.documentListenable
               : Listenable.merge(
                   <Listenable>[
-                    _effectiveController,
+                    _effectiveController.documentListenable,
                     widget.selectionController!,
                   ],
                 );

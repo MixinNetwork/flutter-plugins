@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
+import 'package:mixin_markdown_widget/src/render/pretext_text_block.dart';
 
 int _countStyledDescendantSpans(InlineSpan span, TextStyle? rootStyle) {
   if (span is! TextSpan) {
@@ -110,6 +111,36 @@ void main() {}
     expect(controller.streamingState.committedBlocks, hasLength(2));
   });
 
+  test('assigns source ranges and reuses committed prefix blocks on append',
+      () {
+    final controller = MarkdownController(data: '# Title\n\nIntro');
+    final initialHeading = controller.document.blocks.first as HeadingBlock;
+
+    expect(initialHeading.sourceRange, isNotNull);
+    expect(initialHeading.sourceRange!.start, 0);
+
+    controller.appendChunk('\n\nParagraph');
+
+    expect(controller.document.blocks, hasLength(3));
+    expect(identical(controller.document.blocks.first, initialHeading), isTrue);
+    expect(controller.document.blocks.last.sourceRange, isNotNull);
+    expect(controller.document.blocks.last.sourceRange!.start, greaterThan(0));
+  });
+
+  test('documentListenable only fires on document changes', () {
+    final controller = MarkdownController(data: '# Title');
+    var documentNotifications = 0;
+    controller.documentListenable.addListener(() {
+      documentNotifications += 1;
+    });
+
+    controller.appendChunk('\n\nParagraph');
+    expect(documentNotifications, 1);
+
+    controller.commitStream();
+    expect(documentNotifications, 1);
+  });
+
   test('serializes a selected range across multiple blocks', () {
     const input = '''
 # Heading
@@ -209,6 +240,34 @@ Paragraph body
     await tester.pumpAndSettle();
 
     expect(find.text('Additional paragraph'), findsOneWidget);
+  });
+
+  testWidgets('uses pretext for plain-text headings and paragraphs', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(data: '# Heading\n\nPlain paragraph'),
+        ),
+      ),
+    );
+
+    expect(find.byType(MarkdownPretextTextBlock), findsNWidgets(2));
+  });
+
+  testWidgets('keeps rich inline paragraphs on the span-based renderer', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(data: 'Paragraph with **bold** text'),
+        ),
+      ),
+    );
+
+    expect(find.byType(MarkdownPretextTextBlock), findsNothing);
   });
 
   testWidgets('renders tables and code blocks with direct data input', (

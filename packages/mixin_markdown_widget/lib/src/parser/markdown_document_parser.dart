@@ -6,24 +6,423 @@ class MarkdownDocumentParser {
   const MarkdownDocumentParser();
 
   MarkdownDocument parse(String source, {int version = 0}) {
-    final normalizedSource = source.replaceAll('\r\n', '\n');
+    final normalizedSource = _normalizeSource(source);
+    return _parseDocument(
+      normalizedSource,
+      version: version,
+      sourceOffset: 0,
+      initialKindCounts: const <MarkdownBlockKind, int>{},
+    );
+  }
+
+  MarkdownDocument parseAppending(
+    String source, {
+    required MarkdownDocument previousDocument,
+    int version = 0,
+  }) {
+    final normalizedSource = _normalizeSource(source);
+    if (previousDocument.blocks.isEmpty ||
+        previousDocument.sourceText.isEmpty ||
+        !normalizedSource.startsWith(previousDocument.sourceText)) {
+      return parse(normalizedSource, version: version);
+    }
+
+    final lastRange = previousDocument.blocks.last.sourceRange;
+    if (lastRange == null ||
+        lastRange.start < 0 ||
+        lastRange.start > previousDocument.sourceText.length) {
+      return parse(normalizedSource, version: version);
+    }
+
+    final prefixBlocks = previousDocument.blocks
+        .where((block) => (block.sourceRange?.end ?? -1) <= lastRange.start)
+        .toList(growable: false);
+    if (prefixBlocks.length != previousDocument.blocks.length - 1) {
+      return parse(normalizedSource, version: version);
+    }
+
+    final tailDocument = _parseDocument(
+      normalizedSource.substring(lastRange.start),
+      version: version,
+      sourceOffset: lastRange.start,
+      initialKindCounts: _countBlockKinds(prefixBlocks),
+    );
+
+    return MarkdownDocument(
+      blocks: List<BlockNode>.unmodifiable(<BlockNode>[
+        ...prefixBlocks,
+        ...tailDocument.blocks,
+      ]),
+      sourceText: normalizedSource,
+      version: version,
+    );
+  }
+
+  MarkdownDocument _parseDocument(
+    String normalizedSource, {
+    required int version,
+    required int sourceOffset,
+    required Map<MarkdownBlockKind, int> initialKindCounts,
+  }) {
     final document = md.Document(
       extensionSet: md.ExtensionSet.gitHubWeb,
       encodeHtml: false,
     );
     final nodes = document.parseLines(normalizedSource.split('\n'));
-    final builder = _MarkdownAstBuilder();
-    final blocks = builder.buildBlocks(nodes);
+    final builder = _MarkdownAstBuilder(initialKindCounts: initialKindCounts);
+    var blocks = builder.buildBlocks(nodes);
+    final ranges = _scanTopLevelBlockRanges(
+      normalizedSource,
+      sourceOffset: sourceOffset,
+    );
+    if (ranges.length == blocks.length) {
+      blocks = List<BlockNode>.generate(
+        blocks.length,
+        (index) => _withSourceRange(blocks[index], ranges[index]),
+        growable: false,
+      );
+    }
+
     return MarkdownDocument(
       blocks: List<BlockNode>.unmodifiable(blocks),
       sourceText: normalizedSource,
       version: version,
     );
   }
+
+  String _normalizeSource(String source) {
+    return source.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+  }
+
+  Map<MarkdownBlockKind, int> _countBlockKinds(List<BlockNode> blocks) {
+    final counts = <MarkdownBlockKind, int>{};
+    for (final block in blocks) {
+      _countBlockKindsInBlock(block, counts);
+    }
+    return counts;
+  }
+
+  void _countBlockKindsInBlock(
+    BlockNode block,
+    Map<MarkdownBlockKind, int> counts,
+  ) {
+    counts[block.kind] = (counts[block.kind] ?? 0) + 1;
+
+    if (block is QuoteBlock) {
+      for (final child in block.children) {
+        _countBlockKindsInBlock(child, counts);
+      }
+      return;
+    }
+
+    if (block is ListBlock) {
+      for (final item in block.items) {
+        for (final child in item.children) {
+          _countBlockKindsInBlock(child, counts);
+        }
+      }
+    }
+  }
+
+  BlockNode _withSourceRange(BlockNode block, SourceRange sourceRange) {
+    switch (block.kind) {
+      case MarkdownBlockKind.heading:
+        final heading = block as HeadingBlock;
+        return HeadingBlock(
+          id: heading.id,
+          level: heading.level,
+          inlines: heading.inlines,
+          sourceRange: sourceRange,
+        );
+      case MarkdownBlockKind.paragraph:
+        final paragraph = block as ParagraphBlock;
+        return ParagraphBlock(
+          id: paragraph.id,
+          inlines: paragraph.inlines,
+          sourceRange: sourceRange,
+        );
+      case MarkdownBlockKind.quote:
+        final quote = block as QuoteBlock;
+        return QuoteBlock(
+          id: quote.id,
+          children: quote.children,
+          sourceRange: sourceRange,
+        );
+      case MarkdownBlockKind.orderedList:
+      case MarkdownBlockKind.unorderedList:
+        final list = block as ListBlock;
+        return ListBlock(
+          id: list.id,
+          ordered: list.ordered,
+          items: list.items,
+          startIndex: list.startIndex,
+          sourceRange: sourceRange,
+        );
+      case MarkdownBlockKind.codeBlock:
+        final codeBlock = block as CodeBlock;
+        return CodeBlock(
+          id: codeBlock.id,
+          code: codeBlock.code,
+          language: codeBlock.language,
+          sourceRange: sourceRange,
+        );
+      case MarkdownBlockKind.table:
+        final table = block as TableBlock;
+        return TableBlock(
+          id: table.id,
+          alignments: table.alignments,
+          rows: table.rows,
+          sourceRange: sourceRange,
+        );
+      case MarkdownBlockKind.image:
+        final image = block as ImageBlock;
+        return ImageBlock(
+          id: image.id,
+          url: image.url,
+          alt: image.alt,
+          title: image.title,
+          sourceRange: sourceRange,
+        );
+      case MarkdownBlockKind.thematicBreak:
+        final thematicBreak = block as ThematicBreakBlock;
+        return ThematicBreakBlock(
+          id: thematicBreak.id,
+          sourceRange: sourceRange,
+        );
+    }
+  }
+
+  List<SourceRange> _scanTopLevelBlockRanges(
+    String source, {
+    required int sourceOffset,
+  }) {
+    if (source.isEmpty) {
+      return const <SourceRange>[];
+    }
+
+    final lines = source.split('\n');
+    final lineStarts = <int>[];
+    var offset = 0;
+    for (final line in lines) {
+      lineStarts.add(offset);
+      offset += line.length + 1;
+    }
+
+    final ranges = <SourceRange>[];
+    var index = 0;
+    while (index < lines.length) {
+      if (_isBlankLine(lines[index])) {
+        index += 1;
+        continue;
+      }
+
+      final startIndex = index;
+      final endIndex = _consumeBlock(lines, index);
+      ranges.add(
+        SourceRange(
+          start: sourceOffset + lineStarts[startIndex],
+          end: sourceOffset + _lineEndOffset(lines, lineStarts, endIndex),
+        ),
+      );
+      index = endIndex + 1;
+    }
+
+    return ranges;
+  }
+
+  int _consumeBlock(List<String> lines, int startIndex) {
+    final line = lines[startIndex];
+
+    if (_isFenceStart(line)) {
+      return _consumeFencedCodeBlock(lines, startIndex);
+    }
+    if (_isTableStart(lines, startIndex)) {
+      return _consumeTable(lines, startIndex);
+    }
+    if (_isBlockquoteLine(line)) {
+      return _consumeBlockquote(lines, startIndex);
+    }
+    if (_isListMarker(line)) {
+      return _consumeList(lines, startIndex);
+    }
+    if (_isAtxHeading(line) || _isThematicBreak(line)) {
+      return startIndex;
+    }
+
+    return _consumeParagraph(lines, startIndex);
+  }
+
+  int _consumeFencedCodeBlock(List<String> lines, int startIndex) {
+    final match = _fenceStartPattern.firstMatch(lines[startIndex]);
+    if (match == null) {
+      return startIndex;
+    }
+    final fence = match.group(1)!;
+    for (var index = startIndex + 1; index < lines.length; index++) {
+      if (_isFenceEnd(lines[index], fence)) {
+        return index;
+      }
+    }
+    return lines.length - 1;
+  }
+
+  int _consumeTable(List<String> lines, int startIndex) {
+    var endIndex = startIndex + 1;
+    while (endIndex + 1 < lines.length &&
+        !_isBlankLine(lines[endIndex + 1]) &&
+        _looksLikeTableRow(lines[endIndex + 1])) {
+      endIndex += 1;
+    }
+    return endIndex;
+  }
+
+  int _consumeBlockquote(List<String> lines, int startIndex) {
+    var endIndex = startIndex;
+    while (
+        endIndex + 1 < lines.length && _isBlockquoteLine(lines[endIndex + 1])) {
+      endIndex += 1;
+    }
+    return endIndex;
+  }
+
+  int _consumeList(List<String> lines, int startIndex) {
+    var endIndex = startIndex;
+    while (endIndex + 1 < lines.length) {
+      final nextIndex = endIndex + 1;
+      final nextLine = lines[nextIndex];
+      if (_isBlankLine(nextLine)) {
+        final continuationIndex = nextIndex + 1;
+        if (continuationIndex < lines.length &&
+            _isListContinuationLine(lines[continuationIndex])) {
+          endIndex = continuationIndex;
+          continue;
+        }
+        break;
+      }
+      if (_isListContinuationLine(nextLine)) {
+        endIndex = nextIndex;
+        continue;
+      }
+      break;
+    }
+    return endIndex;
+  }
+
+  int _consumeParagraph(List<String> lines, int startIndex) {
+    var endIndex = startIndex;
+    while (endIndex + 1 < lines.length) {
+      final nextIndex = endIndex + 1;
+      if (_isBlankLine(lines[nextIndex])) {
+        break;
+      }
+      if (endIndex == startIndex && _isSetextUnderline(lines[nextIndex])) {
+        endIndex = nextIndex;
+        break;
+      }
+      if (_startsNewTopLevelBlock(lines, nextIndex)) {
+        break;
+      }
+      endIndex = nextIndex;
+    }
+    return endIndex;
+  }
+
+  bool _startsNewTopLevelBlock(List<String> lines, int index) {
+    final line = lines[index];
+    return _isFenceStart(line) ||
+        _isTableStart(lines, index) ||
+        _isBlockquoteLine(line) ||
+        _isListMarker(line) ||
+        _isAtxHeading(line) ||
+        _isThematicBreak(line);
+  }
+
+  bool _isBlankLine(String line) => line.trim().isEmpty;
+
+  bool _isFenceStart(String line) => _fenceStartPattern.hasMatch(line);
+
+  bool _isFenceEnd(String line, String fence) {
+    final marker = fence[0];
+    final minimumLength = fence.length;
+    final pattern = RegExp(
+      '^\\s{0,3}${RegExp.escape(marker)}{$minimumLength,}\\s*' r'$',
+    );
+    return pattern.hasMatch(line);
+  }
+
+  bool _isAtxHeading(String line) => _atxHeadingPattern.hasMatch(line);
+
+  bool _isSetextUnderline(String line) =>
+      _setextUnderlinePattern.hasMatch(line);
+
+  bool _isThematicBreak(String line) => _thematicBreakPattern.hasMatch(line);
+
+  bool _isBlockquoteLine(String line) => _blockquotePattern.hasMatch(line);
+
+  bool _isListMarker(String line) => _listMarkerPattern.hasMatch(line);
+
+  bool _isListContinuationLine(String line) {
+    if (_isListMarker(line)) {
+      return true;
+    }
+    return _leadingIndent(line) >= 2;
+  }
+
+  bool _isTableStart(List<String> lines, int index) {
+    if (index + 1 >= lines.length) {
+      return false;
+    }
+    return _looksLikeTableRow(lines[index]) &&
+        _tableSeparatorPattern.hasMatch(lines[index + 1]);
+  }
+
+  bool _looksLikeTableRow(String line) {
+    final trimmed = line.trim();
+    return trimmed.isNotEmpty && trimmed.contains('|');
+  }
+
+  int _leadingIndent(String line) {
+    var indent = 0;
+    while (indent < line.length && line.codeUnitAt(indent) == 0x20) {
+      indent += 1;
+    }
+    return indent;
+  }
+
+  int _lineEndOffset(
+    List<String> lines,
+    List<int> lineStarts,
+    int lineIndex,
+  ) {
+    final contentEnd = lineStarts[lineIndex] + lines[lineIndex].length;
+    if (lineIndex < lines.length - 1) {
+      return contentEnd + 1;
+    }
+    return contentEnd;
+  }
+
+  static final RegExp _fenceStartPattern = RegExp(r'^\s{0,3}([`~]{3,}).*$');
+  static final RegExp _atxHeadingPattern = RegExp(r'^\s{0,3}#{1,6}(?:\s+|$)');
+  static final RegExp _setextUnderlinePattern =
+      RegExp(r'^\s{0,3}(?:=+|-+)\s*$');
+  static final RegExp _blockquotePattern = RegExp(r'^\s{0,3}>\s?.*$');
+  static final RegExp _listMarkerPattern =
+      RegExp(r'^\s{0,3}(?:[-+*]|\d+[.)])\s+');
+  static final RegExp _tableSeparatorPattern = RegExp(
+    r'^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*:?-{3,}:?\s*\|?\s*$',
+  );
+  static final RegExp _thematicBreakPattern = RegExp(
+    r'^\s{0,3}(?:(?:\*\s*){3,}|(?:-\s*){3,}|(?:_\s*){3,})\s*$',
+  );
 }
 
 class _MarkdownAstBuilder {
-  final Map<MarkdownBlockKind, int> _kindCounters = <MarkdownBlockKind, int>{};
+  _MarkdownAstBuilder({Map<MarkdownBlockKind, int>? initialKindCounts})
+      : _kindCounters = <MarkdownBlockKind, int>{
+          ...?initialKindCounts,
+        };
+
+  final Map<MarkdownBlockKind, int> _kindCounters;
 
   List<BlockNode> buildBlocks(List<md.Node> nodes) {
     final blocks = <BlockNode>[];
