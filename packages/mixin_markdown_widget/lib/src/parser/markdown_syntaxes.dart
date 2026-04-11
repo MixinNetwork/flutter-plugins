@@ -236,6 +236,15 @@ class MarkdownSuperscriptSyntax extends _DelimitedInlineSyntax {
   bool isValidContent(String content) {
     return super.isValidContent(content) && !_hasBoundaryWhitespace(content);
   }
+
+  @override
+  bool canStartMatch(String source, int index) {
+    if (!super.canStartMatch(source, index)) {
+      return false;
+    }
+    final previousIndex = index - 1;
+    return previousIndex < 0 || source.codeUnitAt(previousIndex) != 0x5B;
+  }
 }
 
 bool _hasBoundaryWhitespace(String content) {
@@ -256,10 +265,13 @@ abstract class _DelimitedInlineSyntax extends md.InlineSyntax {
     return content.isNotEmpty && !content.contains('\n');
   }
 
+  bool canStartMatch(String source, int index) => true;
+
   @override
   bool tryMatch(md.InlineParser parser, [int? startMatchPos]) {
     startMatchPos ??= parser.pos;
-    if (!_isDelimiterAt(parser.source, startMatchPos)) {
+    if (!_isDelimiterAt(parser.source, startMatchPos) ||
+        !canStartMatch(parser.source, startMatchPos)) {
       return false;
     }
 

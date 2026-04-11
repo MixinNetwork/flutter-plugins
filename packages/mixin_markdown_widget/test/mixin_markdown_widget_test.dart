@@ -66,6 +66,49 @@ Iterable<InlineNode> _flattenInlineNodes(List<InlineNode> inlines) sync* {
   }
 }
 
+String _inlinePlainText(List<InlineNode> inlines) {
+  final buffer = StringBuffer();
+  for (final inline in inlines) {
+    switch (inline.kind) {
+      case MarkdownInlineKind.text:
+        buffer.write((inline as TextInline).text);
+        break;
+      case MarkdownInlineKind.emphasis:
+        buffer.write(_inlinePlainText((inline as EmphasisInline).children));
+        break;
+      case MarkdownInlineKind.strong:
+        buffer.write(_inlinePlainText((inline as StrongInline).children));
+        break;
+      case MarkdownInlineKind.strikethrough:
+        buffer.write(_inlinePlainText((inline as StrikethroughInline).children));
+        break;
+      case MarkdownInlineKind.highlight:
+        buffer.write(_inlinePlainText((inline as HighlightInline).children));
+        break;
+      case MarkdownInlineKind.subscript:
+        buffer.write(_inlinePlainText((inline as SubscriptInline).children));
+        break;
+      case MarkdownInlineKind.superscript:
+        buffer.write(_inlinePlainText((inline as SuperscriptInline).children));
+        break;
+      case MarkdownInlineKind.link:
+        buffer.write(_inlinePlainText((inline as LinkInline).children));
+        break;
+      case MarkdownInlineKind.inlineCode:
+        buffer.write((inline as InlineCode).text);
+        break;
+      case MarkdownInlineKind.softBreak:
+      case MarkdownInlineKind.hardBreak:
+        buffer.write('\n');
+        break;
+      case MarkdownInlineKind.image:
+        buffer.write((inline as InlineImage).alt ?? '');
+        break;
+    }
+  }
+  return buffer.toString();
+}
+
 void main() {
   test('parses common markdown blocks into a document model', () {
     const input = '''
@@ -178,6 +221,29 @@ Reference[^note]
 
     final footnotes = document.blocks[4] as FootnoteListBlock;
     expect(footnotes.items, hasLength(1));
+  });
+
+  test('does not treat footnote references as custom superscript spans', () {
+    const input = '''
+Here is a statement with a footnote.[^1] Another reference can be added here.[^long]
+
+[^1]: This is a simple footnote.
+[^long]: This footnote contains a longer explanation to showcase how multiple lines can be formatted in a footnote.
+''';
+
+    final document = const MarkdownDocumentParser().parse(input);
+    final paragraph = document.blocks[0] as ParagraphBlock;
+
+    expect(
+      _inlinePlainText(paragraph.inlines),
+      'Here is a statement with a footnote.1 Another reference can be added here.2',
+    );
+
+    final superscripts = paragraph.inlines
+        .whereType<SuperscriptInline>()
+        .map((inline) => _inlinePlainText(inline.children))
+        .toList(growable: false);
+    expect(superscripts, const <String>['1', '2']);
   });
 
   test('serializes task lists and definition lists predictably', () {
@@ -556,6 +622,48 @@ Reference[^note]
     expect(find.text('1.'), findsOneWidget);
     expect(find.textContaining('First paragraph'), findsOneWidget);
     expect(find.textContaining('Second paragraph'), findsOneWidget);
+  });
+
+  testWidgets('renders multiple footnote references without swallowing body text',
+      (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: '''
+Here is a statement with a footnote.[^1] Another reference can be added here.[^long]
+
+[^1]: This is a simple footnote.
+[^long]: This footnote contains a longer explanation to showcase how multiple lines can be formatted in a footnote. It supports Markdown formatting such as **bold** and *italic* text.
+''',
+          ),
+        ),
+      ),
+    );
+
+    final renderedText = tester
+        .widgetList<RichText>(find.byType(RichText))
+        .map((widget) => widget.text.toPlainText())
+        .join('\n');
+    expect(
+      renderedText,
+      contains('Here is a statement with a footnote.1 Another'),
+    );
+    expect(
+      renderedText,
+      contains('reference can be added here.2'),
+    );
+    expect(
+      find.textContaining('This is a simple footnote.', findRichText: true),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining(
+        'This footnote contains a longer explanation',
+        findRichText: true,
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('renders tables and code blocks with direct data input', (
