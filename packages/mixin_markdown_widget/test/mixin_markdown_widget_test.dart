@@ -460,7 +460,7 @@ return value;
     final richTextFinder = find.byWidgetPredicate(
       (widget) =>
           widget is RichText &&
-          widget.text.toPlainText().contains('• First item'),
+          widget.text.toPlainText().contains('First item'),
     );
     final richText = tester.widget<RichText>(richTextFinder);
     final renderBox = tester.renderObject<RenderBox>(richTextFinder);
@@ -470,11 +470,11 @@ return value;
     )..layout(maxWidth: renderBox.size.width);
 
     final startOffset = painter.getOffsetForCaret(
-      const TextPosition(offset: 2),
+      const TextPosition(offset: 0),
       Rect.zero,
     );
     final endOffset = painter.getOffsetForCaret(
-      const TextPosition(offset: 7),
+      const TextPosition(offset: 5),
       Rect.zero,
     );
     final start = renderBox.localToGlobal(startOffset + const Offset(1, 8));

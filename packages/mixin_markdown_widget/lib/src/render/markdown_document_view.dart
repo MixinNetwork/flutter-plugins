@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -81,6 +83,10 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       const MarkdownCodeSyntaxHighlighter();
   final Map<String, GlobalKey<SelectableMarkdownBlockState>> _blockKeys =
       <String, GlobalKey<SelectableMarkdownBlockState>>{};
+  final Map<String, List<GlobalKey>> _listItemKeysByBlock =
+      <String, List<GlobalKey>>{};
+  final Map<String, List<GlobalKey>> _listItemContentKeysByBlock =
+      <String, List<GlobalKey>>{};
   final Map<String, GlobalKey<SelectableMarkdownTableBlockState>>
       _tableBlockKeys =
       <String, GlobalKey<SelectableMarkdownTableBlockState>>{};
@@ -96,6 +102,10 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     super.didUpdateWidget(oldWidget);
     final validIds = widget.document.blocks.map((block) => block.id).toSet();
     _blockKeys.removeWhere((key, _) => !validIds.contains(key));
+    _listItemKeysByBlock.removeWhere((key, _) => !validIds.contains(key));
+    _listItemContentKeysByBlock.removeWhere(
+      (key, _) => !validIds.contains(key),
+    );
     _tableBlockKeys.removeWhere((key, _) => !validIds.contains(key));
   }
 
@@ -691,16 +701,31 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
         final listBlock = block as ListBlock;
         if (widget.selectionController != null) {
           final descriptor = _buildListSelectableDescriptor(listBlock);
+          final itemRowKeys = _listItemKeysFor(listBlock);
+          final itemContentKeys = _listItemContentKeysFor(listBlock);
           return SelectableBlockSpec(
             child: MarkdownListBlockView(
               theme: widget.theme,
               block: listBlock,
               itemBuilder: _buildListItemContent,
-              selectableContent: Text.rich(descriptor.span),
+              itemRowKeyBuilder: (index) => itemRowKeys[index],
+              itemContentKeyBuilder: (index) => itemContentKeys[index],
             ),
             plainText: descriptor.plainText,
             hitTestBehavior: SelectableBlockHitTestBehavior.text,
             textSpan: descriptor.span,
+            selectionRectResolver: (context, range) =>
+                _resolveListSelectionRects(
+              context,
+              listBlock,
+              range,
+            ),
+            textOffsetResolver: (context, localPosition) =>
+                _resolveListTextOffset(
+              context,
+              listBlock,
+              localPosition,
+            ),
           );
         }
         return SelectableBlockSpec(
@@ -937,30 +962,286 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     ListBlock block, {
     int indentLevel = 0,
   }) {
-    final itemDescriptors = <_SelectableTextDescriptor>[];
-    for (var index = 0; index < block.items.length; index++) {
-      final marker = block.ordered ? '${block.startIndex + index}.' : '•';
-      final itemDescriptor = _buildListItemSelectableDescriptor(
-        block.items[index],
-        indentLevel: indentLevel + 1,
-      );
-      if (itemDescriptor.isEmpty) {
-        continue;
-      }
-      itemDescriptors.add(
-        _prefixSelectableTextDescriptor(
-          itemDescriptor,
-          firstPrefix: '${'  ' * indentLevel}$marker ',
-          continuationPrefix:
-              '${'  ' * indentLevel}${' ' * (marker.length + 1)}',
-          style: widget.theme.bodyStyle,
-        ),
-      );
-    }
+    final itemDescriptors = _buildIndexedListSelectionDescriptors(
+      block,
+      indentLevel: indentLevel,
+    ).map((entry) => entry.descriptor).toList(growable: false);
     return _joinSelectableTextDescriptors(
       itemDescriptors,
       separator: '\n',
       separatorStyle: widget.theme.bodyStyle,
+    );
+  }
+
+  List<GlobalKey> _listItemKeysFor(ListBlock block) {
+    final keys =
+        _listItemKeysByBlock.putIfAbsent(block.id, () => <GlobalKey>[]);
+    while (keys.length < block.items.length) {
+      keys.add(
+        GlobalKey(debugLabel: 'list-${block.id}-${keys.length}'),
+      );
+    }
+    if (keys.length > block.items.length) {
+      keys.removeRange(block.items.length, keys.length);
+    }
+    return keys;
+  }
+
+  List<GlobalKey> _listItemContentKeysFor(ListBlock block) {
+    final keys = _listItemContentKeysByBlock.putIfAbsent(
+      block.id,
+      () => <GlobalKey>[],
+    );
+    while (keys.length < block.items.length) {
+      keys.add(
+        GlobalKey(debugLabel: 'list-content-${block.id}-${keys.length}'),
+      );
+    }
+    if (keys.length > block.items.length) {
+      keys.removeRange(block.items.length, keys.length);
+    }
+    return keys;
+  }
+
+  int? _resolveListTextOffset(
+    BuildContext context,
+    ListBlock block,
+    Offset localPosition,
+  ) {
+    final blockRenderObject = context.findRenderObject();
+    if (blockRenderObject is! RenderBox || !blockRenderObject.hasSize) {
+      return null;
+    }
+
+    final globalPosition = blockRenderObject.localToGlobal(localPosition);
+    final indexedDescriptors = _buildIndexedListSelectionDescriptors(block);
+    if (indexedDescriptors.isEmpty) {
+      return null;
+    }
+
+    final contentKeys = _listItemContentKeysFor(block);
+    final rowKeys = _listItemKeysFor(block);
+    final textDirection = Directionality.of(context);
+
+    for (final entry in indexedDescriptors) {
+      final contentContext = contentKeys[entry.itemIndex].currentContext;
+      final contentRenderObject = contentContext?.findRenderObject();
+      if (contentRenderObject is RenderBox && contentRenderObject.hasSize) {
+        final rect = contentRenderObject.localToGlobal(Offset.zero) &
+            contentRenderObject.size;
+        if (rect.contains(globalPosition)) {
+          final localContentPosition =
+              contentRenderObject.globalToLocal(globalPosition);
+          return entry.startOffset +
+              entry.prefixLength +
+              _resolveTextOffsetInBox(
+                entry.contentDescriptor.span,
+                entry.contentDescriptor.plainText.length,
+                localContentPosition,
+                contentRenderObject.size,
+                textDirection,
+              );
+        }
+      }
+
+      final rowContext = rowKeys[entry.itemIndex].currentContext;
+      final rowRenderObject = rowContext?.findRenderObject();
+      if (rowRenderObject is RenderBox && rowRenderObject.hasSize) {
+        final rect =
+            rowRenderObject.localToGlobal(Offset.zero) & rowRenderObject.size;
+        if (rect.contains(globalPosition)) {
+          final localRowPosition =
+              rowRenderObject.globalToLocal(globalPosition);
+          final markerWidth = math.min(28.0, rowRenderObject.size.width);
+          if (localRowPosition.dx <= markerWidth) {
+            return entry.startOffset;
+          }
+          return entry.startOffset + entry.prefixLength;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  int _resolveTextOffsetInBox(
+    InlineSpan span,
+    int textLength,
+    Offset localPosition,
+    Size size,
+    TextDirection textDirection,
+  ) {
+    final textPainter = TextPainter(
+      text: span,
+      textDirection: textDirection,
+      maxLines: null,
+    )..layout(maxWidth: size.width);
+    final clampedOffset = Offset(
+      localPosition.dx.clamp(0.0, math.max(textPainter.width, 0.0)),
+      localPosition.dy.clamp(0.0, math.max(textPainter.height, 0.0)),
+    );
+    final textPosition = textPainter.getPositionForOffset(clampedOffset);
+    final offset = textPosition.offset;
+    if (offset < 0) {
+      return 0;
+    }
+    if (offset > textLength) {
+      return textLength;
+    }
+    return offset;
+  }
+
+  List<Rect> _resolveListSelectionRects(
+    BuildContext context,
+    ListBlock block,
+    DocumentRange range,
+  ) {
+    final blockRenderObject = context.findRenderObject();
+    if (blockRenderObject is! RenderBox || !blockRenderObject.hasSize) {
+      return const <Rect>[];
+    }
+
+    final indexedDescriptors = _buildIndexedListSelectionDescriptors(block);
+    if (indexedDescriptors.isEmpty) {
+      return const <Rect>[];
+    }
+
+    final rects = <Rect>[];
+    final textDirection = Directionality.of(context);
+    final rowKeys = _listItemKeysFor(block);
+    final contentKeys = _listItemContentKeysFor(block);
+
+    for (final entry in indexedDescriptors) {
+      final itemStart = entry.startOffset;
+      final itemEnd = itemStart + entry.descriptor.plainText.length;
+      final contentSelectionStart = math.max(
+        range.start.textOffset,
+        itemStart + entry.prefixLength,
+      );
+      final contentSelectionEnd = math.min(range.end.textOffset, itemEnd);
+      final prefixSelectionStart = math.max(range.start.textOffset, itemStart);
+      final prefixSelectionEnd = math.min(
+        range.end.textOffset,
+        itemStart + entry.prefixLength,
+      );
+      if (contentSelectionStart >= contentSelectionEnd &&
+          prefixSelectionStart >= prefixSelectionEnd) {
+        continue;
+      }
+
+      final rowContext = rowKeys[entry.itemIndex].currentContext;
+      final rowRenderObject = rowContext?.findRenderObject();
+      if (prefixSelectionStart < prefixSelectionEnd &&
+          rowRenderObject is RenderBox &&
+          rowRenderObject.hasSize) {
+        final rowOrigin = blockRenderObject.globalToLocal(
+          rowRenderObject.localToGlobal(Offset.zero),
+        );
+        rects.add(
+          Rect.fromLTWH(
+            rowOrigin.dx,
+            rowOrigin.dy,
+            math.min(28.0, rowRenderObject.size.width),
+            rowRenderObject.size.height,
+          ).inflate(1.5),
+        );
+      }
+
+      if (contentSelectionStart >= contentSelectionEnd) {
+        continue;
+      }
+
+      final contentContext = contentKeys[entry.itemIndex].currentContext;
+      final contentRenderObject = contentContext?.findRenderObject();
+      if (contentRenderObject is! RenderBox || !contentRenderObject.hasSize) {
+        continue;
+      }
+
+      final itemOrigin = blockRenderObject.globalToLocal(
+        contentRenderObject.localToGlobal(Offset.zero),
+      );
+      final textPainter = TextPainter(
+        text: entry.contentDescriptor.span,
+        textDirection: textDirection,
+        maxLines: null,
+      )..layout(maxWidth: contentRenderObject.size.width);
+
+      final itemBoxes = textPainter.getBoxesForSelection(
+        TextSelection(
+          baseOffset: contentSelectionStart - itemStart - entry.prefixLength,
+          extentOffset: contentSelectionEnd - itemStart - entry.prefixLength,
+        ),
+      );
+      for (final box in itemBoxes) {
+        rects.add(
+          Rect.fromLTRB(
+            box.left + itemOrigin.dx,
+            box.top + itemOrigin.dy,
+            box.right + itemOrigin.dx,
+            box.bottom + itemOrigin.dy,
+          ).inflate(1.5),
+        );
+      }
+    }
+
+    return rects;
+  }
+
+  List<_IndexedListSelectionDescriptor> _buildIndexedListSelectionDescriptors(
+    ListBlock block, {
+    int indentLevel = 0,
+  }) {
+    final entries = <_IndexedListSelectionDescriptor>[];
+    var offset = 0;
+    for (var index = 0; index < block.items.length; index++) {
+      if (entries.isNotEmpty) {
+        offset += 1;
+      }
+      final entry = _buildIndexedListSelectionDescriptor(
+        block,
+        index,
+        startOffset: offset,
+        indentLevel: indentLevel,
+      );
+      if (entry == null) {
+        if (entries.isNotEmpty) {
+          offset -= 1;
+        }
+        continue;
+      }
+      entries.add(entry);
+      offset += entry.descriptor.plainText.length;
+    }
+    return entries;
+  }
+
+  _IndexedListSelectionDescriptor? _buildIndexedListSelectionDescriptor(
+    ListBlock block,
+    int index, {
+    required int startOffset,
+    int indentLevel = 0,
+  }) {
+    final marker = block.ordered ? '${block.startIndex + index}.' : '•';
+    final prefix = '${'  ' * indentLevel}$marker ';
+    final contentDescriptor = _buildListItemSelectableDescriptor(
+      block.items[index],
+      indentLevel: indentLevel + 1,
+    );
+    if (contentDescriptor.isEmpty) {
+      return null;
+    }
+    final descriptor = _prefixSelectableTextDescriptor(
+      contentDescriptor,
+      firstPrefix: prefix,
+      continuationPrefix: '${'  ' * indentLevel}${' ' * (marker.length + 1)}',
+      style: widget.theme.bodyStyle,
+    );
+    return _IndexedListSelectionDescriptor(
+      itemIndex: index,
+      startOffset: startOffset,
+      prefixLength: prefix.length,
+      descriptor: descriptor,
+      contentDescriptor: contentDescriptor,
     );
   }
 
@@ -1298,4 +1579,21 @@ class _SelectableTextDescriptor {
   final TextSpan span;
 
   bool get isEmpty => plainText.isEmpty;
+}
+
+@immutable
+class _IndexedListSelectionDescriptor {
+  const _IndexedListSelectionDescriptor({
+    required this.itemIndex,
+    required this.startOffset,
+    required this.prefixLength,
+    required this.descriptor,
+    required this.contentDescriptor,
+  });
+
+  final int itemIndex;
+  final int startOffset;
+  final int prefixLength;
+  final _SelectableTextDescriptor descriptor;
+  final _SelectableTextDescriptor contentDescriptor;
 }

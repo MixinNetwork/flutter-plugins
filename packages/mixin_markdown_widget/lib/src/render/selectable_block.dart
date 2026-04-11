@@ -19,6 +19,8 @@ class SelectableBlockSpec {
     this.textAlign = TextAlign.start,
     this.measurementPadding = EdgeInsets.zero,
     this.highlightBorderRadius,
+    this.selectionRectResolver,
+    this.textOffsetResolver,
   });
 
   final Widget child;
@@ -28,6 +30,10 @@ class SelectableBlockSpec {
   final TextAlign textAlign;
   final EdgeInsets measurementPadding;
   final BorderRadius? highlightBorderRadius;
+  final List<Rect> Function(BuildContext context, DocumentRange range)?
+      selectionRectResolver;
+  final int? Function(BuildContext context, Offset localPosition)?
+      textOffsetResolver;
 }
 
 class SelectableMarkdownBlock extends StatefulWidget {
@@ -164,12 +170,16 @@ class SelectableMarkdownBlockState extends State<SelectableMarkdownBlock> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final range = _selectionForBlock();
+        final selectionRects = range == null
+            ? null
+            : widget.spec.selectionRectResolver?.call(context, range);
         return CustomPaint(
           painter: _BlockSelectionPainter(
             range: range,
             spec: widget.spec,
             selectionColor: widget.selectionColor,
             textDirection: Directionality.of(context),
+            selectionRects: selectionRects,
           ),
           child: widget.spec.child,
         );
@@ -185,6 +195,24 @@ class SelectableMarkdownBlockState extends State<SelectableMarkdownBlock> {
         textOffset: 0,
       );
     }
+
+    final resolvedOffset = widget.spec.textOffsetResolver?.call(
+      context,
+      localPosition,
+    );
+    if (resolvedOffset != null) {
+      final textOffset = resolvedOffset < 0
+          ? 0
+          : resolvedOffset > widget.spec.plainText.length
+              ? widget.spec.plainText.length
+              : resolvedOffset;
+      return DocumentPosition(
+        blockIndex: widget.blockIndex,
+        path: const PathInBlock(<int>[0]),
+        textOffset: textOffset,
+      );
+    }
+
     if (widget.spec.hitTestBehavior == SelectableBlockHitTestBehavior.block ||
         widget.spec.textSpan == null) {
       return _edgePosition(
@@ -315,12 +343,14 @@ class _BlockSelectionPainter extends CustomPainter {
     required this.spec,
     required this.selectionColor,
     required this.textDirection,
+    this.selectionRects,
   });
 
   final DocumentRange? range;
   final SelectableBlockSpec spec;
   final Color selectionColor;
   final TextDirection textDirection;
+  final List<Rect>? selectionRects;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -329,6 +359,17 @@ class _BlockSelectionPainter extends CustomPainter {
       return;
     }
     final paint = Paint()..color = selectionColor;
+
+    final selectionRects = this.selectionRects;
+    if (selectionRects != null) {
+      for (final rect in selectionRects) {
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(rect, const Radius.circular(4)),
+          paint,
+        );
+      }
+      return;
+    }
 
     if (spec.hitTestBehavior == SelectableBlockHitTestBehavior.text &&
         spec.textSpan != null) {
@@ -345,7 +386,9 @@ class _BlockSelectionPainter extends CustomPainter {
         baseOffset: range.start.textOffset,
         extentOffset: range.end.textOffset,
       );
-      final boxes = textPainter.getBoxesForSelection(textSelection);
+      final boxes = _mergeSelectionBoxes(
+        textPainter.getBoxesForSelection(textSelection),
+      );
       for (final box in boxes) {
         final rect = Rect.fromLTRB(
           box.left + spec.measurementPadding.left,
@@ -371,6 +414,49 @@ class _BlockSelectionPainter extends CustomPainter {
     return oldDelegate.range != range ||
         oldDelegate.spec != spec ||
         oldDelegate.selectionColor != selectionColor ||
-        oldDelegate.textDirection != textDirection;
+        oldDelegate.textDirection != textDirection ||
+        oldDelegate.selectionRects != selectionRects;
+  }
+
+  List<TextBox> _mergeSelectionBoxes(List<TextBox> boxes) {
+    if (boxes.length < 2) {
+      return boxes;
+    }
+
+    const lineTolerance = 2.0;
+    const gapTolerance = 6.0;
+
+    final sorted = boxes.toList()
+      ..sort((a, b) {
+        final topComparison = a.top.compareTo(b.top);
+        if (topComparison != 0) {
+          return topComparison;
+        }
+        return a.left.compareTo(b.left);
+      });
+
+    final merged = <TextBox>[];
+    var current = sorted.first;
+
+    for (final next in sorted.skip(1)) {
+      final sameLine = (next.top - current.top).abs() <= lineTolerance &&
+          (next.bottom - current.bottom).abs() <= lineTolerance;
+      final horizontalGap = next.left - current.right;
+      if (sameLine && horizontalGap <= gapTolerance) {
+        current = TextBox.fromLTRBD(
+          math.min(current.left, next.left),
+          math.min(current.top, next.top),
+          math.max(current.right, next.right),
+          math.max(current.bottom, next.bottom),
+          current.direction,
+        );
+        continue;
+      }
+      merged.add(current);
+      current = next;
+    }
+
+    merged.add(current);
+    return merged;
   }
 }

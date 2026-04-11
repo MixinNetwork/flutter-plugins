@@ -69,66 +69,49 @@ class MarkdownListBlockView extends StatelessWidget {
     required this.theme,
     required this.block,
     required this.itemBuilder,
-    this.selectableContent,
+    this.itemRowKeyBuilder,
+    this.itemContentKeyBuilder,
   });
 
   final MarkdownThemeData theme;
   final ListBlock block;
   final Widget Function(ListItemNode item) itemBuilder;
-  final Widget? selectableContent;
+  final Key? Function(int index)? itemRowKeyBuilder;
+  final Key? Function(int index)? itemContentKeyBuilder;
 
   @override
   Widget build(BuildContext context) {
-    final content = Column(
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         for (var index = 0; index < block.items.length; index++)
-          Padding(
-            padding: EdgeInsets.only(
-              bottom:
-                  index == block.items.length - 1 ? 0 : theme.listItemSpacing,
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                SizedBox(
-                  width: 28,
-                  child: Text(
-                    block.ordered ? '${block.startIndex + index}.' : '•',
-                    style: theme.bodyStyle,
+          KeyedSubtree(
+            key: itemRowKeyBuilder?.call(index),
+            child: Padding(
+              padding: EdgeInsets.only(
+                bottom:
+                    index == block.items.length - 1 ? 0 : theme.listItemSpacing,
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  SizedBox(
+                    width: 28,
+                    child: Text(
+                      block.ordered ? '${block.startIndex + index}.' : '•',
+                      style: theme.bodyStyle,
+                    ),
                   ),
-                ),
-                Expanded(
-                  child: itemBuilder(block.items[index]),
-                ),
-              ],
-            ),
-          ),
-      ],
-    );
-
-    final selectableContent = this.selectableContent;
-    if (selectableContent == null) {
-      return content;
-    }
-
-    return Stack(
-      alignment: Alignment.topLeft,
-      children: <Widget>[
-        content,
-        Positioned.fill(
-          child: IgnorePointer(
-            child: ExcludeSemantics(
-              child: Opacity(
-                opacity: 0,
-                child: Align(
-                  alignment: Alignment.topLeft,
-                  child: selectableContent,
-                ),
+                  Expanded(
+                    child: KeyedSubtree(
+                      key: itemContentKeyBuilder?.call(index),
+                      child: itemBuilder(block.items[index]),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
-        ),
       ],
     );
   }
