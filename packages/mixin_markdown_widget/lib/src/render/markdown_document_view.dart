@@ -1834,6 +1834,9 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
 
     final contentKeys = _listItemContentKeysFor(block);
     final rowKeys = _listItemKeysFor(block);
+    _IndexedListSelectionDescriptor? nearestEntry;
+    Rect? nearestRowRect;
+    double bestDistance = double.infinity;
 
     for (final entry in indexedDescriptors) {
       final contentContext = contentKeys[entry.itemIndex].currentContext;
@@ -1866,6 +1869,22 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       if (rowRenderObject is RenderBox && rowRenderObject.hasSize) {
         final rect =
             rowRenderObject.localToGlobal(Offset.zero) & rowRenderObject.size;
+        final dx = globalPosition.dx < rect.left
+            ? rect.left - globalPosition.dx
+            : globalPosition.dx > rect.right
+                ? globalPosition.dx - rect.right
+                : 0.0;
+        final dy = globalPosition.dy < rect.top
+            ? rect.top - globalPosition.dy
+            : globalPosition.dy > rect.bottom
+                ? globalPosition.dy - rect.bottom
+                : 0.0;
+        final distance = dx * dx + dy * dy;
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          nearestEntry = entry;
+          nearestRowRect = rect;
+        }
         if (rect.contains(globalPosition)) {
           final localRowPosition =
               rowRenderObject.globalToLocal(globalPosition);
@@ -1912,6 +1931,13 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
           return entry.startOffset + entry.prefixLength + (childOffset ?? 0);
         }
       }
+    }
+
+    if (nearestEntry != null && nearestRowRect != null) {
+      final preferEnd = globalPosition.dy > nearestRowRect!.center.dy ||
+          globalPosition.dx > nearestRowRect!.center.dx;
+      return nearestEntry.startOffset +
+          (preferEnd ? nearestEntry.descriptor.plainText.length : 0);
     }
 
     return null;
@@ -2492,6 +2518,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     required Offset globalPosition,
   }) {
     final textDirection = Directionality.of(context);
+    final resolvedEntries = <_ResolvedIndexedBlockEntry>[];
     _IndexedBlockDescriptor? nearestEntry;
     double bestDistance = double.infinity;
 
@@ -2503,6 +2530,13 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       }
       final rect =
           childRenderObject.localToGlobal(Offset.zero) & childRenderObject.size;
+      resolvedEntries.add(
+        _ResolvedIndexedBlockEntry(
+          entry: entry,
+          renderObject: childRenderObject,
+          rect: rect,
+        ),
+      );
       if (rect.contains(globalPosition)) {
         return entry.startOffset +
             _resolveNestedBlockTextOffset(
@@ -2516,7 +2550,6 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
               indentLevel: entry.indentLevel,
             );
       }
-
       final dx = globalPosition.dx < rect.left
           ? rect.left - globalPosition.dx
           : globalPosition.dx > rect.right
@@ -2532,6 +2565,30 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
         bestDistance = distance;
         nearestEntry = entry;
       }
+    }
+
+    resolvedEntries.sort((a, b) => a.rect.top.compareTo(b.rect.top));
+    for (var index = 0; index < resolvedEntries.length - 1; index++) {
+      final current = resolvedEntries[index];
+      final next = resolvedEntries[index + 1];
+      if (globalPosition.dy < current.rect.bottom ||
+          globalPosition.dy > next.rect.top) {
+        continue;
+      }
+
+      final overlapLeft = math.min(current.rect.right, next.rect.right);
+      final overlapRight = math.max(current.rect.left, next.rect.left);
+      if (globalPosition.dx < overlapRight - 24 ||
+          globalPosition.dx > overlapLeft + 24) {
+        continue;
+      }
+
+      final midpointY = (current.rect.bottom + next.rect.top) / 2;
+      if (globalPosition.dy <= midpointY) {
+        return current.entry.startOffset +
+            current.entry.descriptor.plainText.length;
+      }
+      return next.entry.startOffset;
     }
 
     if (nearestEntry == null) {
@@ -2701,13 +2758,15 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     )..layout(
         maxWidth: math.max(size.width - measurementPadding.horizontal, 0),
       );
-    return textPainter
-        .getBoxesForSelection(
-          TextSelection(
-            baseOffset: range.start.textOffset,
-            extentOffset: range.end.textOffset,
-          ),
-        )
+    final boxes = _mergeAdjacentTextSelectionBoxes(
+      textPainter.getBoxesForSelection(
+        TextSelection(
+          baseOffset: range.start.textOffset,
+          extentOffset: range.end.textOffset,
+        ),
+      ),
+    );
+    return boxes
         .map(
           (box) => Rect.fromLTRB(
             box.left + measurementPadding.left + origin.dx,
@@ -2717,6 +2776,46 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
           ).inflate(1.5),
         )
         .toList(growable: false);
+  }
+
+  List<TextBox> _mergeAdjacentTextSelectionBoxes(List<TextBox> boxes) {
+    if (boxes.length < 2) {
+      return boxes;
+    }
+
+    const lineTolerance = 2.0;
+    const gapTolerance = 0.5;
+
+    final sorted = boxes.toList(growable: false)
+      ..sort((a, b) {
+        final topCompare = a.top.compareTo(b.top);
+        if (topCompare != 0) {
+          return topCompare;
+        }
+        return a.left.compareTo(b.left);
+      });
+
+    final merged = <TextBox>[];
+    var current = sorted.first;
+    for (final next in sorted.skip(1)) {
+      final sameLine = (next.top - current.top).abs() <= lineTolerance &&
+          (next.bottom - current.bottom).abs() <= lineTolerance;
+      final overlappingOrAdjacent = next.left <= current.right + gapTolerance;
+      if (sameLine && overlappingOrAdjacent) {
+        current = TextBox.fromLTRBD(
+          math.min(current.left, next.left),
+          math.min(current.top, next.top),
+          math.max(current.right, next.right),
+          math.max(current.bottom, next.bottom),
+          current.direction,
+        );
+        continue;
+      }
+      merged.add(current);
+      current = next;
+    }
+    merged.add(current);
+    return merged;
   }
 
   int _resolveTextSpanTextOffset(
@@ -3392,6 +3491,19 @@ class _IndexedBlockDescriptor {
   final int startOffset;
   final int indentLevel;
   final _SelectableTextDescriptor descriptor;
+}
+
+@immutable
+class _ResolvedIndexedBlockEntry {
+  const _ResolvedIndexedBlockEntry({
+    required this.entry,
+    required this.renderObject,
+    required this.rect,
+  });
+
+  final _IndexedBlockDescriptor entry;
+  final RenderBox renderObject;
+  final Rect rect;
 }
 
 @immutable

@@ -1650,7 +1650,7 @@ return value;
     await tester.pump();
 
     expect(selectionController.hasSelection, isTrue);
-    expect(selectionController.selectedPlainText, isNotEmpty);
+    expect(selectionController.selectedPlainText, 'Quoted');
 
     final paintFinder = find.ancestor(
       of: richTextFinder,
@@ -1732,12 +1732,168 @@ return value;
 
     expect(selectionController.hasSelection, isTrue);
     expect(selectionController.selectedPlainText, contains('Heading'));
-    expect(selectionController.selectedPlainText, contains('> > '));
+    expect(selectionController.selectedPlainText, contains('Nested line'));
+    expect(selectionController.selectedPlainText, isNot(contains('>')));
     expect(globalSelectionRects, hasLength(3));
     expect(globalSelectionRects.first.top, closeTo(headingRect.top, 0.5));
     expect(globalSelectionRects.first.bottom, closeTo(headingRect.bottom, 0.5));
     expect(globalSelectionRects.last.top, closeTo(nestedRect.top, 0.5));
     expect(globalSelectionRects.last.bottom, closeTo(nestedRect.bottom, 0.5));
+  });
+
+  testWidgets(
+      'quoted code blocks merge adjacent syntax-highlight selection boxes', (
+    tester,
+  ) async {
+    final selectionController = MarkdownSelectionController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: '''
+> ```python
+> for i in range(3):
+>     print(i)
+> ```
+''',
+            selectionController: selectionController,
+          ),
+        ),
+      ),
+    );
+
+    final quoteFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is SelectableMarkdownBlock &&
+          widget.spec.plainText.contains('for i in range(3):'),
+    );
+    final quoteWidget = tester.widget<SelectableMarkdownBlock>(quoteFinder);
+    final quoteElement = tester.element(quoteFinder);
+    final quoteRenderBox = tester.renderObject<RenderBox>(quoteFinder);
+    final lineTextFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is RichText &&
+          widget.text.toPlainText().contains('for i in range(3):'),
+    );
+    final lineRenderBox = tester.renderObject<RenderBox>(lineTextFinder.first);
+    final lineRect =
+        lineRenderBox.localToGlobal(Offset.zero) & lineRenderBox.size;
+
+    final selectionRects = quoteWidget.spec.selectionRectResolver!.call(
+      quoteElement,
+      quoteRenderBox.size,
+      DocumentRange(
+        start: const DocumentPosition(
+          blockIndex: 0,
+          path: PathInBlock(<int>[0]),
+          textOffset: 0,
+        ),
+        end: DocumentPosition(
+          blockIndex: 0,
+          path: const PathInBlock(<int>[0]),
+          textOffset: quoteWidget.spec.plainText.length,
+        ),
+      ),
+    );
+    final quoteOrigin = quoteRenderBox.localToGlobal(Offset.zero);
+    final globalRects = selectionRects
+        .map((rect) => rect.shift(quoteOrigin))
+        .where(
+          (rect) =>
+              rect.bottom > lineRect.top + 1 && rect.top < lineRect.bottom - 1,
+        )
+        .toList(growable: false);
+
+    for (var index = 0; index < globalRects.length; index++) {
+      for (var otherIndex = index + 1;
+          otherIndex < globalRects.length;
+          otherIndex++) {
+        expect(
+          _hasMeaningfulHorizontalOverlap(
+            globalRects[index],
+            globalRects[otherIndex],
+          ),
+          isFalse,
+        );
+      }
+    }
+  });
+
+  testWidgets(
+      'quote gap below a list keeps downward selection anchored at the list end',
+      (tester) async {
+    final selectionController = MarkdownSelectionController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: '''
+> - First item
+> - Second item
+>
+> After block
+''',
+            selectionController: selectionController,
+          ),
+        ),
+      ),
+    );
+
+    final secondFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is RichText &&
+          widget.text.toPlainText().contains('Second item'),
+    );
+    final afterFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is RichText &&
+          widget.text.toPlainText().contains('After block'),
+    );
+    final quoteFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is SelectableMarkdownBlock &&
+          widget.spec.plainText.contains('Second item') &&
+          widget.spec.plainText.contains('After block'),
+    );
+    final quoteWidget = tester.widget<SelectableMarkdownBlock>(quoteFinder);
+    final quoteElement = tester.element(quoteFinder);
+    final quoteRenderBox = tester.renderObject<RenderBox>(quoteFinder);
+    final secondRenderBox = tester.renderObject<RenderBox>(secondFinder.first);
+    final secondRect =
+        secondRenderBox.localToGlobal(Offset.zero) & secondRenderBox.size;
+    final afterRenderBox = tester.renderObject<RenderBox>(afterFinder.first);
+    final afterRect =
+        afterRenderBox.localToGlobal(Offset.zero) & afterRenderBox.size;
+    final secondItemPoint = Offset(
+      secondRect.right - 2,
+      secondRect.center.dy,
+    );
+    final gapPoint = Offset(
+      secondRect.center.dx,
+      (secondRect.bottom + afterRect.top) / 2,
+    );
+    final secondItemOffset = quoteWidget.spec.textOffsetResolver!(
+      quoteElement,
+      quoteRenderBox.size,
+      quoteRenderBox.globalToLocal(secondItemPoint),
+    );
+    final gapOffset = quoteWidget.spec.textOffsetResolver!(
+      quoteElement,
+      quoteRenderBox.size,
+      quoteRenderBox.globalToLocal(gapPoint),
+    );
+    final afterOffset = quoteWidget.spec.plainText.indexOf('After block');
+
+    expect(secondItemOffset, isNotNull);
+    expect(gapOffset, isNotNull);
+
+    final resolvedSecondItemOffset = secondItemOffset!;
+    final resolvedGapOffset = gapOffset!;
+    expect(resolvedSecondItemOffset, greaterThan(0));
+    expect(resolvedGapOffset, greaterThanOrEqualTo(resolvedSecondItemOffset));
+    expect(resolvedGapOffset, lessThanOrEqualTo(afterOffset));
   });
 
   testWidgets('nested lists keep selection backgrounds aligned to item text', (

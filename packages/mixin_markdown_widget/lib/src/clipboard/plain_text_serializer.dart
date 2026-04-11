@@ -196,17 +196,10 @@ class MarkdownPlainTextSerializer extends MarkdownCopySerializer {
   }
 
   String _serializeQuote(QuoteBlock block, {required int indentLevel}) {
-    final inner = block.children
+    return block.children
         .map((child) => _serializeBlock(child, indentLevel: indentLevel))
         .where((value) => value.trim().isNotEmpty)
         .join('\n\n');
-    if (inner.isEmpty) {
-      return '';
-    }
-    return inner
-        .split('\n')
-        .map((line) => line.isEmpty ? '>' : '> $line')
-        .join('\n');
   }
 
   String _serializeList(ListBlock block, {required int indentLevel}) {
