@@ -55,6 +55,10 @@ class SelectableMarkdownTableBlockState
     return rect != null && rect.contains(globalPosition);
   }
 
+  TableCellPosition? cellPositionAtGlobal(Offset globalPosition) {
+    return _cellAtGlobal(globalPosition);
+  }
+
   @override
   Widget build(BuildContext context) {
     final columnCount = widget.block.rows.fold<int>(

@@ -234,12 +234,16 @@ class ImageBlock extends BlockNode {
     required this.url,
     this.alt,
     this.title,
+    this.linkDestination,
+    this.linkTitle,
     super.sourceRange,
   }) : super(kind: MarkdownBlockKind.image);
 
   final String url;
   final String? alt;
   final String? title;
+  final String? linkDestination;
+  final String? linkTitle;
 }
 
 @immutable

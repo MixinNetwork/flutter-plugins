@@ -300,6 +300,8 @@ class MarkdownDocumentParser {
           url: image.url,
           alt: image.alt,
           title: image.title,
+          linkDestination: image.linkDestination,
+          linkTitle: image.linkTitle,
           sourceRange: sourceRange,
         );
       case MarkdownBlockKind.thematicBreak:
@@ -957,7 +959,7 @@ class _MarkdownAstBuilder {
     if (orderedList is md.Element) {
       for (final child in orderedList.children ?? const <md.Node>[]) {
         if (child is md.Element && child.tag == 'li') {
-          items.add(_buildListItem(child));
+          items.add(_buildListItem(_stripFootnoteBackreferences(child)));
         }
       }
     }
@@ -996,18 +998,62 @@ class _MarkdownAstBuilder {
       return null;
     }
     final child = children.single;
-    if (child is! md.Element || child.tag != 'img') {
+    md.Element? imageElement;
+    md.Element? linkElement;
+
+    if (child is md.Element && child.tag == 'img') {
+      imageElement = child;
+    } else if (child is md.Element && child.tag == 'a') {
+      final linkChildren = child.children ?? const <md.Node>[];
+      if (linkChildren.length == 1 &&
+          linkChildren.single is md.Element &&
+          (linkChildren.single as md.Element).tag == 'img') {
+        linkElement = child;
+        imageElement = linkChildren.single as md.Element;
+      }
+    }
+
+    if (imageElement == null) {
       return null;
     }
     return ImageBlock(
       id: _nextId(
         MarkdownBlockKind.image,
-        child.attributes['src'] ?? child.attributes['alt'] ?? '',
+        imageElement.attributes['src'] ?? imageElement.attributes['alt'] ?? '',
       ),
-      url: child.attributes['src'] ?? '',
-      alt: child.attributes['alt'],
-      title: child.attributes['title'],
+      url: imageElement.attributes['src'] ?? '',
+      alt: imageElement.attributes['alt'],
+      title: imageElement.attributes['title'],
+      linkDestination: linkElement?.attributes['href'],
+      linkTitle: linkElement?.attributes['title'],
     );
+  }
+
+  md.Element _stripFootnoteBackreferences(md.Element node) {
+    final cleanedChildren = <md.Node>[];
+    for (final child in node.children ?? const <md.Node>[]) {
+      if (_isFootnoteBackreferenceNode(child)) {
+        continue;
+      }
+      if (child is md.Element) {
+        cleanedChildren.add(_stripFootnoteBackreferences(child));
+      } else {
+        cleanedChildren.add(child);
+      }
+    }
+    final cleaned = md.Element(node.tag, cleanedChildren)
+      ..attributes.addAll(node.attributes);
+    return cleaned;
+  }
+
+  bool _isFootnoteBackreferenceNode(md.Node node) {
+    if (node is! md.Element || node.tag != 'a') {
+      return false;
+    }
+    final className = node.attributes['class'] ?? '';
+    final href = node.attributes['href'] ?? '';
+    return className.split(' ').contains('footnote-backref') ||
+        href.startsWith('#fnref');
   }
 
   TableBlock _buildTable(md.Element node) {

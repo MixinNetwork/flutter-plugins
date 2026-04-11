@@ -214,6 +214,18 @@ Term
     );
   });
 
+  test('parses standalone linked images into image blocks', () {
+    const input =
+        '[![alt text](https://example.com/image.png)](https://example.com/page)';
+
+    final document = const MarkdownDocumentParser().parse(input);
+    final image = document.blocks.single as ImageBlock;
+
+    expect(image.url, 'https://example.com/image.png');
+    expect(image.alt, 'alt text');
+    expect(image.linkDestination, 'https://example.com/page');
+  });
+
   test('tracks draft and committed blocks during streaming', () {
     final controller = MarkdownController(data: '# Title');
 
@@ -704,6 +716,46 @@ return value;
     expect(selectionController.selectedPlainText, 'Hello\n\nWorld');
   });
 
+  testWidgets('clicking blank space clears the current selection', (
+    tester,
+  ) async {
+    final selectionController = MarkdownSelectionController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            height: 300,
+            child: MarkdownWidget(
+              data: '# Hello\n\nWorld',
+              selectionController: selectionController,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final start = tester.getTopLeft(find.text('Hello')) + const Offset(1, 8);
+    final end = tester.getBottomRight(find.text('World')) - const Offset(1, 8);
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: start);
+    await gesture.down(start);
+    await tester.pump();
+    await gesture.moveTo(end);
+    await tester.pump();
+    await gesture.up();
+    await tester.pump();
+
+    expect(selectionController.hasSelection, isTrue);
+
+    await tester.tapAt(
+      tester.getBottomRight(find.byType(ListView)) - const Offset(8, 8),
+    );
+    await tester.pump();
+
+    expect(selectionController.hasSelection, isFalse);
+  });
+
   testWidgets('custom selection works without an external controller', (
     tester,
   ) async {
@@ -1017,6 +1069,52 @@ return value;
     );
   });
 
+  testWidgets('nested quotes with headings remain selectable', (tester) async {
+    final selectionController = MarkdownSelectionController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: '''
+> # Heading
+>
+> Intro line
+>
+> > Nested line
+''',
+            selectionController: selectionController,
+          ),
+        ),
+      ),
+    );
+
+    final headingFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is RichText && widget.text.toPlainText().contains('Heading'),
+    );
+    final nestedFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is RichText &&
+          widget.text.toPlainText().contains('Nested line'),
+    );
+
+    final start = tester.getTopLeft(headingFinder.first) + const Offset(2, 10);
+    final end = tester.getTopRight(nestedFinder.first) + const Offset(-2, 10);
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: start);
+    await gesture.down(start);
+    await tester.pump();
+    await gesture.moveTo(end);
+    await tester.pump();
+    await gesture.up();
+    await tester.pump();
+
+    expect(selectionController.hasSelection, isTrue);
+    expect(selectionController.selectedPlainText, contains('Heading'));
+    expect(selectionController.selectedPlainText, contains('> > '));
+  });
+
   testWidgets('dragging inside an image caption selects caption text', (
     tester,
   ) async {
@@ -1183,6 +1281,63 @@ Intro
     expect(selectionController.hasSelection, isTrue);
     expect(
         selectionController.selectedPlainText, 'Intro\n\nName\tValue\nrow\t42');
+  });
+
+  testWidgets('dragging into a table only selects through the hovered cell', (
+    tester,
+  ) async {
+    final selectionController = MarkdownSelectionController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: '''
+Intro
+
+| Name | Value |
+| --- | --- |
+| row | 42 |
+''',
+            selectionController: selectionController,
+          ),
+        ),
+      ),
+    );
+
+    final start = tester.getTopLeft(find.text('Intro')) + const Offset(1, 8);
+    final end = tester.getCenter(find.text('Name'));
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: start);
+    await gesture.down(start);
+    await tester.pump();
+    await gesture.moveTo(end);
+    await tester.pump();
+    await gesture.up();
+    await tester.pump();
+
+    expect(selectionController.hasSelection, isTrue);
+    expect(selectionController.selectedPlainText, 'Intro\n\nName');
+  });
+
+  testWidgets('footnote backreference markers are not rendered',
+      (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: '''
+Reference[^note]
+
+[^note]: Footnote body
+''',
+          ),
+        ),
+      ),
+    );
+
+    expect(find.textContaining('Footnote body'), findsOneWidget);
+    expect(find.text('↩'), findsNothing);
   });
 
   test('default image renderer falls back to local files', () async {

@@ -94,6 +94,8 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       <String, List<GlobalKey>>{};
   final Map<String, List<GlobalKey>> _listItemContentKeysByBlock =
       <String, List<GlobalKey>>{};
+  final Map<String, List<GlobalKey>> _quoteChildKeysByBlock =
+      <String, List<GlobalKey>>{};
   final Map<String, GlobalKey<SelectableMarkdownTableBlockState>>
       _tableBlockKeys =
       <String, GlobalKey<SelectableMarkdownTableBlockState>>{};
@@ -111,13 +113,14 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
   @override
   void didUpdateWidget(covariant MarkdownDocumentView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final validIds = widget.document.blocks.map((block) => block.id).toSet();
+    final validIds = _collectBlockIds(widget.document.blocks);
     _cachedBlockRows.removeWhere((key, _) => !validIds.contains(key));
     _blockKeys.removeWhere((key, _) => !validIds.contains(key));
     _listItemKeysByBlock.removeWhere((key, _) => !validIds.contains(key));
     _listItemContentKeysByBlock.removeWhere(
       (key, _) => !validIds.contains(key),
     );
+    _quoteChildKeysByBlock.removeWhere((key, _) => !validIds.contains(key));
     _tableBlockKeys.removeWhere((key, _) => !validIds.contains(key));
 
     if (oldWidget.theme != widget.theme ||
@@ -360,7 +363,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       return;
     }
 
-    final position = _hitTestPosition(event.position, clamp: true);
+    final position = _hitTestPosition(event.position, clamp: false);
     if (position == null) {
       widget.selectionController!.clear();
       return;
@@ -546,13 +549,22 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       if (state == null || !state.containsGlobal(globalPosition)) {
         continue;
       }
+      final cell = state.cellPositionAtGlobal(globalPosition);
       final preferEnd = anchor.blockIndex <= blockIndex;
       return DocumentPosition(
         blockIndex: blockIndex,
-        path: const PathInBlock(<int>[0]),
-        textOffset: preferEnd
-            ? _plainTextSerializer.serializeBlockText(block).length
-            : 0,
+        path: cell == null
+            ? const PathInBlock(<int>[0])
+            : PathInBlock(<int>[cell.rowIndex, cell.columnIndex]),
+        textOffset: cell == null
+            ? preferEnd
+                ? _plainTextSerializer.serializeBlockText(block).length
+                : 0
+            : _tableTextOffsetForCell(
+                block,
+                cell,
+                preferEnd: preferEnd,
+              ),
       );
     }
     return null;
@@ -667,55 +679,32 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
         final quoteBlock = block as QuoteBlock;
         if (widget.selectionController != null) {
           final descriptor = _buildQuoteSelectableDescriptor(quoteBlock);
-          final quotePadding = widget.theme.quotePadding.resolve(
-            Directionality.of(context),
-          );
           return SelectableBlockSpec(
             child: MarkdownQuoteBlockView(
               theme: widget.theme,
-              child: _buildQuoteContent(quoteBlock),
+              child: _buildQuoteContent(
+                quoteBlock,
+                childKeys: _quoteChildKeysFor(quoteBlock),
+              ),
             ),
             plainText: descriptor.plainText,
             hitTestBehavior: SelectableBlockHitTestBehavior.text,
             textSpan: descriptor.span,
-            measurementPadding: quotePadding,
             highlightBorderRadius: BorderRadius.circular(16),
             selectionPaintOrder: SelectableBlockSelectionPaintOrder.aboveChild,
             selectionColor: _quoteSelectionColor,
-            selectionRectResolver: descriptor.pretext == null
-                ? null
-                : (context, constraints, range) {
-                    final contentSize = Size(
-                      math.max(constraints.width - quotePadding.horizontal, 0),
-                      math.max(constraints.height - quotePadding.vertical, 0),
-                    );
-                    return _resolveDescriptorSelectionRects(
-                      context,
-                      descriptor: descriptor,
-                      range: range,
-                      size: contentSize,
-                      textDirection: Directionality.of(context),
-                      origin: Offset(quotePadding.left, quotePadding.top),
-                    );
-                  },
-            textOffsetResolver: descriptor.pretext == null
-                ? null
-                : (context, size, localPosition) {
-                    final contentSize = Size(
-                      math.max(size.width - quotePadding.horizontal, 0),
-                      math.max(size.height - quotePadding.vertical, 0),
-                    );
-                    return _resolveDescriptorTextOffset(
-                      context,
-                      descriptor: descriptor,
-                      localPosition: Offset(
-                        localPosition.dx - quotePadding.left,
-                        localPosition.dy - quotePadding.top,
-                      ),
-                      size: contentSize,
-                      textDirection: Directionality.of(context),
-                    );
-                  },
+            selectionRectResolver: (context, _, range) =>
+                _resolveQuoteSelectionRects(
+              context,
+              quoteBlock,
+              range,
+            ),
+            textOffsetResolver: (context, _, localPosition) =>
+                _resolveQuoteTextOffset(
+              context,
+              quoteBlock,
+              localPosition,
+            ),
           );
         }
         return SelectableBlockSpec(
@@ -1202,30 +1191,46 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
   Widget _buildQuote(QuoteBlock block) {
     return MarkdownQuoteBlockView(
       theme: widget.theme,
-      child: _buildQuoteContent(block),
-    );
-  }
-
-  Widget _buildQuoteContent(QuoteBlock block) {
-    return DefaultTextStyle.merge(
-      style: widget.theme.quoteStyle,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: _buildNestedBlocks(block.children),
+      child: _buildQuoteContent(
+        block,
+        childKeys: _quoteChildKeysFor(block),
       ),
     );
   }
 
-  List<Widget> _buildNestedBlocks(List<BlockNode> blocks) {
+  Widget _buildQuoteContent(
+    QuoteBlock block, {
+    List<GlobalKey>? childKeys,
+  }) {
+    return DefaultTextStyle.merge(
+      style: widget.theme.quoteStyle,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: _buildNestedBlocks(
+          block.children,
+          blockKeyBuilder:
+              childKeys == null ? null : (index) => childKeys[index],
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _buildNestedBlocks(
+    List<BlockNode> blocks, {
+    Key? Function(int index)? blockKeyBuilder,
+  }) {
     return <Widget>[
       for (var index = 0; index < blocks.length; index++)
-        Padding(
-          padding: EdgeInsets.only(
-            bottom: index == blocks.length - 1
-                ? 0
-                : widget.theme.blockSpacing * 0.65,
+        KeyedSubtree(
+          key: blockKeyBuilder?.call(index),
+          child: Padding(
+            padding: EdgeInsets.only(
+              bottom: index == blocks.length - 1
+                  ? 0
+                  : widget.theme.blockSpacing * 0.65,
+            ),
+            child: _buildNestedBlockContent(blocks[index]),
           ),
-          child: _buildNestedBlockContent(blocks[index]),
         ),
     ];
   }
@@ -1363,7 +1368,10 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
 
   Widget _buildImage(ImageBlock block) {
     if (widget.imageBuilder != null) {
-      return widget.imageBuilder!(context, block, widget.theme);
+      return _wrapLinkedImage(
+        block,
+        widget.imageBuilder!(context, block, widget.theme),
+      );
     }
     final caption = _imageCaptionText(block);
     return MarkdownImageBlockView(
@@ -1379,7 +1387,10 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
 
   Widget _buildImageVisual(ImageBlock block) {
     if (widget.imageBuilder != null) {
-      return widget.imageBuilder!(context, block, widget.theme);
+      return _wrapLinkedImage(
+        block,
+        widget.imageBuilder!(context, block, widget.theme),
+      );
     }
     final uri = Uri.tryParse(block.url);
     final isNetwork =
@@ -1402,9 +1413,34 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
                 fit: BoxFit.cover,
                 errorBuilder: _imageErrorBuilder,
               );
-    return ClipRRect(
-      borderRadius: widget.theme.imageBorderRadius,
-      child: image,
+    return _wrapLinkedImage(
+      block,
+      ClipRRect(
+        borderRadius: widget.theme.imageBorderRadius,
+        child: image,
+      ),
+    );
+  }
+
+  Widget _wrapLinkedImage(ImageBlock block, Widget child) {
+    final destination = block.linkDestination;
+    if (destination == null ||
+        destination.isEmpty ||
+        widget.onTapLink == null) {
+      return child;
+    }
+    final label = _imageCaptionText(block).isNotEmpty
+        ? _imageCaptionText(block)
+        : block.url;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          widget.onTapLink!(destination, block.linkTitle, label);
+        },
+        child: child,
+      ),
     );
   }
 
@@ -1879,6 +1915,385 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     );
   }
 
+  int _tableTextOffsetForCell(
+    TableBlock block,
+    TableCellPosition position, {
+    required bool preferEnd,
+  }) {
+    var offset = 0;
+    for (var rowIndex = 0; rowIndex < block.rows.length; rowIndex++) {
+      final row = block.rows[rowIndex];
+      if (rowIndex > 0) {
+        offset += 1;
+      }
+      for (var columnIndex = 0; columnIndex < row.cells.length; columnIndex++) {
+        if (columnIndex > 0) {
+          offset += 1;
+        }
+        final cellText = _flattenInlineText(row.cells[columnIndex].inlines);
+        final cellStart = offset;
+        final cellEnd = cellStart + cellText.length;
+        if (rowIndex == position.rowIndex &&
+            columnIndex == position.columnIndex) {
+          return preferEnd ? cellEnd : cellStart;
+        }
+        offset = cellEnd;
+      }
+    }
+    return preferEnd ? offset : 0;
+  }
+
+  List<Rect> _resolveQuoteSelectionRects(
+    BuildContext context,
+    QuoteBlock block,
+    DocumentRange range,
+  ) {
+    final rootRenderObject = context.findRenderObject();
+    if (rootRenderObject is! RenderBox || !rootRenderObject.hasSize) {
+      return const <Rect>[];
+    }
+    return _resolveQuoteSelectionRectsInRoot(
+      context,
+      rootRenderObject: rootRenderObject,
+      block: block,
+      range: range,
+    );
+  }
+
+  List<Rect> _resolveQuoteSelectionRectsInRoot(
+    BuildContext context, {
+    required RenderBox rootRenderObject,
+    required QuoteBlock block,
+    required DocumentRange range,
+  }) {
+    final entries = _buildIndexedBlockDescriptors(block.children);
+    if (entries.isEmpty) {
+      return const <Rect>[];
+    }
+    final childKeys = _quoteChildKeysFor(block);
+    final textDirection = Directionality.of(context);
+    final rects = <Rect>[];
+
+    for (final entry in entries) {
+      final childStart = entry.startOffset;
+      final childEnd = childStart + entry.descriptor.plainText.length;
+      final selectionStart = math.max(range.start.textOffset, childStart);
+      final selectionEnd = math.min(range.end.textOffset, childEnd);
+      if (selectionStart >= selectionEnd) {
+        continue;
+      }
+
+      final childContext = childKeys[entry.childIndex].currentContext;
+      final childRenderObject = childContext?.findRenderObject();
+      if (childRenderObject is! RenderBox || !childRenderObject.hasSize) {
+        continue;
+      }
+      final childOrigin = rootRenderObject.globalToLocal(
+        childRenderObject.localToGlobal(Offset.zero),
+      );
+      final childRange = DocumentRange(
+        start: DocumentPosition(
+          blockIndex: 0,
+          path: const PathInBlock(<int>[0]),
+          textOffset: selectionStart - childStart,
+        ),
+        end: DocumentPosition(
+          blockIndex: 0,
+          path: const PathInBlock(<int>[0]),
+          textOffset: selectionEnd - childStart,
+        ),
+      );
+
+      rects.addAll(
+        _resolveNestedBlockSelectionRects(
+          context,
+          rootRenderObject: rootRenderObject,
+          block: entry.block,
+          descriptor: entry.descriptor,
+          range: childRange,
+          renderObject: childRenderObject,
+          origin: childOrigin,
+          textDirection: textDirection,
+        ),
+      );
+    }
+
+    return rects;
+  }
+
+  int? _resolveQuoteTextOffset(
+    BuildContext context,
+    QuoteBlock block,
+    Offset localPosition,
+  ) {
+    final rootRenderObject = context.findRenderObject();
+    if (rootRenderObject is! RenderBox || !rootRenderObject.hasSize) {
+      return null;
+    }
+    return _resolveQuoteTextOffsetInRoot(
+      context,
+      rootRenderObject: rootRenderObject,
+      block: block,
+      globalPosition: rootRenderObject.localToGlobal(localPosition),
+    );
+  }
+
+  int? _resolveQuoteTextOffsetInRoot(
+    BuildContext context, {
+    required RenderBox rootRenderObject,
+    required QuoteBlock block,
+    required Offset globalPosition,
+  }) {
+    final entries = _buildIndexedBlockDescriptors(block.children);
+    if (entries.isEmpty) {
+      return null;
+    }
+    final childKeys = _quoteChildKeysFor(block);
+    final textDirection = Directionality.of(context);
+
+    _IndexedBlockDescriptor? nearestEntry;
+    double bestDistance = double.infinity;
+
+    for (final entry in entries) {
+      final childContext = childKeys[entry.childIndex].currentContext;
+      final childRenderObject = childContext?.findRenderObject();
+      if (childRenderObject is! RenderBox || !childRenderObject.hasSize) {
+        continue;
+      }
+      final rect =
+          childRenderObject.localToGlobal(Offset.zero) & childRenderObject.size;
+      if (rect.contains(globalPosition)) {
+        return entry.startOffset +
+            _resolveNestedBlockTextOffset(
+              context,
+              rootRenderObject: rootRenderObject,
+              block: entry.block,
+              descriptor: entry.descriptor,
+              renderObject: childRenderObject,
+              globalPosition: globalPosition,
+              textDirection: textDirection,
+            );
+      }
+
+      final dx = globalPosition.dx < rect.left
+          ? rect.left - globalPosition.dx
+          : globalPosition.dx > rect.right
+              ? globalPosition.dx - rect.right
+              : 0.0;
+      final dy = globalPosition.dy < rect.top
+          ? rect.top - globalPosition.dy
+          : globalPosition.dy > rect.bottom
+              ? globalPosition.dy - rect.bottom
+              : 0.0;
+      final distance = dx * dx + dy * dy;
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        nearestEntry = entry;
+      }
+    }
+
+    if (nearestEntry == null) {
+      return null;
+    }
+
+    final childContext = childKeys[nearestEntry.childIndex].currentContext;
+    final childRenderObject = childContext?.findRenderObject();
+    if (childRenderObject is! RenderBox || !childRenderObject.hasSize) {
+      return null;
+    }
+    final childRect =
+        childRenderObject.localToGlobal(Offset.zero) & childRenderObject.size;
+    final preferEnd = globalPosition.dy > childRect.center.dy ||
+        globalPosition.dx > childRect.center.dx;
+    return nearestEntry.startOffset +
+        (preferEnd ? nearestEntry.descriptor.plainText.length : 0);
+  }
+
+  List<Rect> _resolveNestedBlockSelectionRects(
+    BuildContext context, {
+    required RenderBox rootRenderObject,
+    required BlockNode block,
+    required _SelectableTextDescriptor descriptor,
+    required DocumentRange range,
+    required RenderBox renderObject,
+    required Offset origin,
+    required TextDirection textDirection,
+  }) {
+    switch (block.kind) {
+      case MarkdownBlockKind.heading:
+      case MarkdownBlockKind.paragraph:
+      case MarkdownBlockKind.definitionList:
+      case MarkdownBlockKind.orderedList:
+      case MarkdownBlockKind.unorderedList:
+      case MarkdownBlockKind.footnoteList:
+        return _resolveDescriptorSelectionRects(
+          context,
+          descriptor: descriptor,
+          range: range,
+          size: renderObject.size,
+          textDirection: textDirection,
+          origin: origin,
+        );
+      case MarkdownBlockKind.quote:
+        return _resolveQuoteSelectionRectsInRoot(
+          context,
+          rootRenderObject: rootRenderObject,
+          block: block as QuoteBlock,
+          range: range,
+        );
+      case MarkdownBlockKind.codeBlock:
+        return _resolveTextSpanSelectionRects(
+          _buildCodeTextSpan(block as CodeBlock),
+          range,
+          size: renderObject.size,
+          textDirection: textDirection,
+          measurementPadding: widget.theme.codeBlockPadding
+                  .resolve(Directionality.of(context)) +
+              const EdgeInsets.only(top: _codeToolbarHeight),
+          origin: origin,
+        );
+      case MarkdownBlockKind.table:
+      case MarkdownBlockKind.image:
+      case MarkdownBlockKind.thematicBreak:
+        return <Rect>[(origin & renderObject.size).inflate(1.5)];
+    }
+  }
+
+  int _resolveNestedBlockTextOffset(
+    BuildContext context, {
+    required RenderBox rootRenderObject,
+    required BlockNode block,
+    required _SelectableTextDescriptor descriptor,
+    required RenderBox renderObject,
+    required Offset globalPosition,
+    required TextDirection textDirection,
+  }) {
+    final localPosition = renderObject.globalToLocal(globalPosition);
+    switch (block.kind) {
+      case MarkdownBlockKind.heading:
+      case MarkdownBlockKind.paragraph:
+      case MarkdownBlockKind.definitionList:
+      case MarkdownBlockKind.orderedList:
+      case MarkdownBlockKind.unorderedList:
+      case MarkdownBlockKind.footnoteList:
+        return _resolveDescriptorTextOffset(
+          context,
+          descriptor: descriptor,
+          localPosition: localPosition,
+          size: renderObject.size,
+          textDirection: textDirection,
+        );
+      case MarkdownBlockKind.quote:
+        return _resolveQuoteTextOffsetInRoot(
+              context,
+              rootRenderObject: rootRenderObject,
+              block: block as QuoteBlock,
+              globalPosition: globalPosition,
+            ) ??
+            0;
+      case MarkdownBlockKind.codeBlock:
+        return _resolveTextSpanTextOffset(
+          _buildCodeTextSpan(block as CodeBlock),
+          descriptor.plainText.length,
+          localPosition: localPosition,
+          size: renderObject.size,
+          textDirection: textDirection,
+          measurementPadding: widget.theme.codeBlockPadding
+                  .resolve(Directionality.of(context)) +
+              const EdgeInsets.only(top: _codeToolbarHeight),
+        );
+      case MarkdownBlockKind.table:
+      case MarkdownBlockKind.image:
+      case MarkdownBlockKind.thematicBreak:
+        return localPosition.dy > renderObject.size.height / 2 ||
+                localPosition.dx > renderObject.size.width / 2
+            ? descriptor.plainText.length
+            : 0;
+    }
+  }
+
+  List<Rect> _resolveTextSpanSelectionRects(
+    InlineSpan span,
+    DocumentRange range, {
+    required Size size,
+    required TextDirection textDirection,
+    required EdgeInsets measurementPadding,
+    Offset origin = Offset.zero,
+  }) {
+    final textPainter = TextPainter(
+      text: span,
+      textDirection: textDirection,
+      maxLines: null,
+    )..layout(
+        maxWidth: math.max(size.width - measurementPadding.horizontal, 0),
+      );
+    return textPainter
+        .getBoxesForSelection(
+          TextSelection(
+            baseOffset: range.start.textOffset,
+            extentOffset: range.end.textOffset,
+          ),
+        )
+        .map(
+          (box) => Rect.fromLTRB(
+            box.left + measurementPadding.left + origin.dx,
+            box.top + measurementPadding.top + origin.dy,
+            box.right + measurementPadding.left + origin.dx,
+            box.bottom + measurementPadding.top + origin.dy,
+          ).inflate(1.5),
+        )
+        .toList(growable: false);
+  }
+
+  int _resolveTextSpanTextOffset(
+    InlineSpan span,
+    int textLength, {
+    required Offset localPosition,
+    required Size size,
+    required TextDirection textDirection,
+    required EdgeInsets measurementPadding,
+  }) {
+    return _resolveTextOffsetInBox(
+      span,
+      textLength,
+      Offset(
+        localPosition.dx - measurementPadding.left,
+        localPosition.dy - measurementPadding.top,
+      ),
+      Size(
+        math.max(size.width - measurementPadding.horizontal, 0),
+        math.max(size.height - measurementPadding.vertical, 0),
+      ),
+      textDirection,
+    );
+  }
+
+  List<_IndexedBlockDescriptor> _buildIndexedBlockDescriptors(
+    List<BlockNode> blocks,
+  ) {
+    final entries = <_IndexedBlockDescriptor>[];
+    var offset = 0;
+    for (var index = 0; index < blocks.length; index++) {
+      final descriptor = _buildSelectableDescriptorForBlock(blocks[index]);
+      if (descriptor.isEmpty) {
+        continue;
+      }
+      if (entries.isNotEmpty) {
+        offset += 2;
+      }
+      entries.add(
+        _IndexedBlockDescriptor(
+          childIndex: index,
+          block: blocks[index],
+          startOffset: offset,
+          descriptor: descriptor,
+        ),
+      );
+      offset += descriptor.plainText.length;
+    }
+    return entries;
+  }
+
   List<_IndexedListSelectionDescriptor> _buildIndexedListSelectionDescriptors(
     ListBlock block, {
     int indentLevel = 0,
@@ -1991,6 +2406,62 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
   _SelectableTextDescriptor _buildImageCaptionDescriptor(ImageBlock block) {
     final caption = _imageCaptionText(block);
     return _plainTextDescriptor(caption, _imageCaptionStyle);
+  }
+
+  Set<String> _collectBlockIds(List<BlockNode> blocks) {
+    final ids = <String>{};
+
+    void visit(BlockNode block) {
+      ids.add(block.id);
+      if (block is QuoteBlock) {
+        for (final child in block.children) {
+          visit(child);
+        }
+        return;
+      }
+      if (block is ListBlock) {
+        for (final item in block.items) {
+          for (final child in item.children) {
+            visit(child);
+          }
+        }
+        return;
+      }
+      if (block is FootnoteListBlock) {
+        for (final item in block.items) {
+          for (final child in item.children) {
+            visit(child);
+          }
+        }
+        return;
+      }
+      if (block is DefinitionListBlock) {
+        for (final item in block.items) {
+          for (final definition in item.definitions) {
+            for (final child in definition) {
+              visit(child);
+            }
+          }
+        }
+      }
+    }
+
+    for (final block in blocks) {
+      visit(block);
+    }
+    return ids;
+  }
+
+  List<GlobalKey> _quoteChildKeysFor(QuoteBlock block) {
+    final keys =
+        _quoteChildKeysByBlock.putIfAbsent(block.id, () => <GlobalKey>[]);
+    while (keys.length < block.children.length) {
+      keys.add(GlobalKey(debugLabel: 'quote-${block.id}-${keys.length}'));
+    }
+    if (keys.length > block.children.length) {
+      keys.removeRange(block.children.length, keys.length);
+    }
+    return keys;
   }
 
   bool _isBlockCoveredByTextSelection(
@@ -2420,6 +2891,21 @@ class _IndexedListSelectionDescriptor {
   final int prefixLength;
   final _SelectableTextDescriptor descriptor;
   final _SelectableTextDescriptor contentDescriptor;
+}
+
+@immutable
+class _IndexedBlockDescriptor {
+  const _IndexedBlockDescriptor({
+    required this.childIndex,
+    required this.block,
+    required this.startOffset,
+    required this.descriptor,
+  });
+
+  final int childIndex;
+  final BlockNode block;
+  final int startOffset;
+  final _SelectableTextDescriptor descriptor;
 }
 
 @immutable
