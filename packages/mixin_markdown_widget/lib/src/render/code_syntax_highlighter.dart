@@ -1,27 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:highlight/highlight.dart' as highlight;
+import 'package:re_highlight/languages/all.dart';
+import 'package:re_highlight/re_highlight.dart';
 
 import '../widgets/markdown_theme.dart';
 
 class MarkdownCodeSyntaxHighlighter {
   const MarkdownCodeSyntaxHighlighter();
 
-  static const Map<String, String> _languageAliases = <String, String>{
-    'c++': 'cpp',
-    'c#': 'cs',
-    'js': 'javascript',
-    'jsx': 'javascript',
-    'kt': 'kotlin',
-    'objc': 'objectivec',
-    'py': 'python',
-    'rb': 'ruby',
-    'rs': 'rust',
-    'sh': 'bash',
-    'shell': 'bash',
-    'ts': 'typescript',
-    'tsx': 'typescript',
-    'yml': 'yaml',
-  };
+  static final Highlight _highlight = Highlight()
+    ..registerLanguages(builtinAllLanguages);
 
   TextSpan buildTextSpan({
     required String source,
@@ -33,78 +20,31 @@ class MarkdownCodeSyntaxHighlighter {
       return TextSpan(style: baseStyle, text: '');
     }
 
-    final result = _parse(source, language: language);
-    final nodes = result?.nodes;
-    if (nodes == null || nodes.isEmpty) {
-      return TextSpan(style: baseStyle, text: source);
+    String? targetLanguage = language?.trim().toLowerCase();
+    if (targetLanguage != null && targetLanguage.isEmpty) {
+      targetLanguage = null;
     }
 
-    return TextSpan(
-      style: baseStyle,
-      children: <InlineSpan>[
-        for (final node in nodes)
-          ..._buildNodeSpans(
-            node,
-            baseStyle: baseStyle,
-            theme: theme,
-          ),
-      ],
-    );
-  }
-
-  highlight.Result? _parse(String source, {String? language}) {
-    final normalizedLanguage = _normalizeLanguage(language);
+    HighlightResult result;
     try {
-      if (normalizedLanguage != null && normalizedLanguage.isNotEmpty) {
-        return highlight.highlight.parse(
-          source,
-          language: normalizedLanguage,
-        );
-      }
-      if (source.length <= 4000) {
-        return highlight.highlight.parse(source, autoDetection: true);
+      if (targetLanguage != null &&
+          _highlight.getLanguage(targetLanguage) != null) {
+        result = _highlight.highlight(code: source, language: targetLanguage);
+      } else {
+        if (source.length <= 4000) {
+          result = _highlight.highlightAuto(source);
+        } else {
+          result = _highlight.justTextHighlightResult(source);
+        }
       }
     } catch (_) {
-      try {
-        if (source.length <= 4000) {
-          return highlight.highlight.parse(source, autoDetection: true);
-        }
-      } catch (_) {
-        return null;
-      }
+      result = _highlight.justTextHighlightResult(source);
     }
-    return null;
-  }
 
-  String? _normalizeLanguage(String? language) {
-    final trimmed = language?.trim().toLowerCase();
-    if (trimmed == null || trimmed.isEmpty) {
-      return null;
-    }
-    return _languageAliases[trimmed] ?? trimmed;
-  }
-
-  List<InlineSpan> _buildNodeSpans(
-    highlight.Node node, {
-    required TextStyle baseStyle,
-    required MarkdownThemeData theme,
-  }) {
-    final style = _styleFor(node.className, baseStyle: baseStyle, theme: theme);
-    if (node.value != null) {
-      return <InlineSpan>[TextSpan(text: node.value, style: style)];
-    }
-    final children = node.children;
-    if (children == null || children.isEmpty) {
-      return const <InlineSpan>[];
-    }
-    return <InlineSpan>[
-      for (final child in children)
-        ..._buildNodeSpans(
-          child,
-          baseStyle: style,
-          theme: theme,
-        ),
-    ];
+    final renderer = _MarkdownHighlightRenderer(
+        baseStyle: baseStyle, theme: theme, highlighter: this);
+    result.render(renderer);
+    return renderer.span ?? TextSpan(style: baseStyle, text: source);
   }
 
   TextStyle _styleFor(
@@ -186,5 +126,63 @@ class MarkdownCodeSyntaxHighlighter {
       default:
         return const TextStyle();
     }
+  }
+}
+
+class _RendererNode {
+  final String? scope;
+  final TextStyle style;
+  final List<InlineSpan> children = [];
+
+  _RendererNode({this.scope, required this.style});
+}
+
+class _MarkdownHighlightRenderer implements HighlightRenderer {
+  final TextStyle baseStyle;
+  final MarkdownThemeData theme;
+  final MarkdownCodeSyntaxHighlighter highlighter;
+
+  final List<_RendererNode> _stack = [];
+  final List<InlineSpan> _results = [];
+
+  _MarkdownHighlightRenderer({
+    required this.baseStyle,
+    required this.theme,
+    required this.highlighter,
+  });
+
+  @override
+  void addText(String text) {
+    if (_stack.isEmpty) {
+      _results.add(TextSpan(text: text, style: baseStyle));
+    } else {
+      final top = _stack.last;
+      top.children.add(TextSpan(text: text, style: top.style));
+    }
+  }
+
+  @override
+  void openNode(DataNode node) {
+    final parentStyle = _stack.isEmpty ? baseStyle : _stack.last.style;
+    final style =
+        highlighter._styleFor(node.scope, baseStyle: parentStyle, theme: theme);
+    _stack.add(_RendererNode(scope: node.scope, style: style));
+  }
+
+  @override
+  void closeNode(DataNode node) {
+    final top = _stack.removeLast();
+    final span = TextSpan(
+        style: top.style, children: top.children.isEmpty ? null : top.children);
+    if (_stack.isEmpty) {
+      _results.add(span);
+    } else {
+      _stack.last.children.add(span);
+    }
+  }
+
+  TextSpan? get span {
+    if (_results.isEmpty) return null;
+    return TextSpan(style: baseStyle, children: _results);
   }
 }

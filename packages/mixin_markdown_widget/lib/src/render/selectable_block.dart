@@ -459,7 +459,6 @@ class _BlockSelectionPainter extends CustomPainter {
 
     canvas.saveLayer(null, Paint());
     for (var index = 0; index < normalizedRects.length; index++) {
-      final rect = normalizedRects[index];
       canvas.drawRRect(
         _selectionRRectForIndex(normalizedRects, index),
         paint,
