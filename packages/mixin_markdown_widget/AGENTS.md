@@ -22,7 +22,10 @@ The public entrypoint is [packages/mixin_markdown_widget/lib/mixin_markdown_widg
 - `src/widgets/markdown_controller.dart`: document ownership, `setData`, `replaceAll`, `appendChunk`, `commitStream`, and plain-text copy helpers.
 - `src/core/document.dart`: internal document model (`BlockNode`, `InlineNode`, selections, table cell ranges, image block metadata).
 - `src/parser/markdown_document_parser.dart`: Markdown AST to internal model conversion, including append-only incremental reparsing.
-- `src/render/markdown_document_view.dart`: main render pipeline, block dispatch, hit testing, drag selection, keyboard/context-menu behavior, and geometry resolvers.
+- `src/render/markdown_document_view.dart`: main state orchestrator and coordinator. Connects blocks, selections, gestures, and UI builders together without doing heavy layout math.
+- `src/render/builder/`: contains `markdown_block_builder.dart` and `markdown_inline_builder.dart` which convert `BlockNode` and `InlineNode` respectively into actual visual `Widget`s or `TextSpan`s.
+- `src/render/selection/`: contains `markdown_selection_resolver.dart` (heavy geometric rules for offsets/rects), `markdown_descriptor_extractor.dart` (converts visual blocks to selectable descriptors), and `markdown_selection_gesture_detector.dart` (drags, auto-scroll).
+- `src/render/shortcuts/`: contains ContextMenu bindings and keyboard action Intents (like `SelectAllMarkdownIntent`).
 - `src/render/markdown_block_widgets.dart`: shared block UI widgets for lists, quotes, tables, code blocks, and other visual shells.
 - `src/render/pretext_text_block.dart`: pretext-backed inline layout and selection geometry for headings, paragraphs, list text, quote text, and table cells.
 - `src/selection/selection_controller.dart`: authoritative selection state for text and table-cell selections.
@@ -82,7 +85,7 @@ The public entrypoint is [packages/mixin_markdown_widget/lib/mixin_markdown_widg
 
 ## High-Risk Change Areas
 
-- `markdown_document_view.dart`: small geometry changes can break hit testing, copy semantics, nested selection, or link tapping.
+- `src/render/selection/markdown_selection_resolver.dart`: small geometry changes can break hit testing, copy semantics, nested selection, or link tapping.
 - `markdown_document_parser.dart`: parser shape changes often require matching updates in rendering, serializer logic, and regression tests.
 - `plain_text_serializer.dart`: changing output shape affects copy/paste, select-all, and many selection assertions.
 - `pretext_text_block.dart`: selection height/offset bugs often originate here even when the visible issue appears in quotes or lists.
