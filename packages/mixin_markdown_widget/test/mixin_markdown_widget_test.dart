@@ -623,6 +623,20 @@ Paragraph body
     expect(find.byType(MarkdownPretextTextBlock), findsNWidgets(2));
   });
 
+  testWidgets('renders dividers under h1 and h2 only', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: '# Heading 1\n\n## Heading 2\n\n### Heading 3',
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byType(Divider), findsNWidgets(2));
+  });
+
   testWidgets('uses pretext for rich inline paragraphs too', (
     tester,
   ) async {
@@ -639,7 +653,7 @@ Paragraph body
     expect(find.byType(MarkdownPretextTextBlock), findsOneWidget);
   });
 
-  testWidgets('renders math with flutter_math_fork and skips pretext', (
+  testWidgets('renders math with flutter_math_fork through pretext blocks', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -653,7 +667,7 @@ Paragraph body
     );
 
     expect(find.byType(Math), findsNWidgets(2));
-    expect(find.byType(MarkdownPretextTextBlock), findsNothing);
+    expect(find.byType(MarkdownPretextTextBlock), findsOneWidget);
   });
 
   testWidgets('aligns inline math to the text baseline', (tester) async {
@@ -680,6 +694,138 @@ Paragraph body
     expect(widgetSpans, hasLength(1));
     expect(widgetSpans.single.alignment, PlaceholderAlignment.baseline);
     expect(widgetSpans.single.baseline, TextBaseline.alphabetic);
+  });
+
+  testWidgets('math selection geometry tracks live widget bounds in paragraphs',
+      (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: r'Before $x^2$ after',
+          ),
+        ),
+      ),
+    );
+
+    final blockFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is SelectableMarkdownBlock &&
+          widget.spec.plainText.contains('Before x^2 after'),
+    );
+    final block = tester.widget<SelectableMarkdownBlock>(blockFinder);
+    final blockContext = tester.element(blockFinder);
+    final blockRenderBox = tester.renderObject<RenderBox>(blockFinder);
+    final blockOrigin = blockRenderBox.localToGlobal(Offset.zero);
+    final mathRect = tester.getRect(find.byType(Math).first);
+    final mathStart = block.spec.plainText.indexOf('x^2');
+    final mathEnd = mathStart + 'x^2'.length;
+
+    final selectionRects = block.spec.selectionRectResolver!(
+      blockContext,
+      blockRenderBox.size,
+      DocumentRange(
+        start: DocumentPosition(
+          blockIndex: 0,
+          path: const PathInBlock(<int>[0]),
+          textOffset: mathStart,
+        ),
+        end: DocumentPosition(
+          blockIndex: 0,
+          path: const PathInBlock(<int>[0]),
+          textOffset: mathEnd,
+        ),
+      ),
+    );
+    final globalSelectionRects = selectionRects
+        .map((rect) => rect.shift(blockOrigin))
+        .toList(growable: false);
+
+    expect(globalSelectionRects, isNotEmpty);
+    expect(
+      globalSelectionRects.any((rect) => rect.overlaps(mathRect.inflate(1))),
+      isTrue,
+    );
+
+    final leftOffset = block.spec.textOffsetResolver!(
+      blockContext,
+      blockRenderBox.size,
+      blockRenderBox.globalToLocal(mathRect.centerLeft + const Offset(1, 0)),
+    );
+    final rightOffset = block.spec.textOffsetResolver!(
+      blockContext,
+      blockRenderBox.size,
+      blockRenderBox.globalToLocal(mathRect.centerRight + const Offset(2, 0)),
+    );
+
+    expect(leftOffset, mathStart);
+    expect(rightOffset, mathEnd);
+  });
+
+  testWidgets('math selection geometry tracks live widget bounds inside lists',
+      (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: r'- Before $x^2$ after',
+          ),
+        ),
+      ),
+    );
+
+    final listBlockFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is SelectableMarkdownBlock &&
+          widget.spec.plainText.contains('- Before x^2 after'),
+    );
+    final listBlock = tester.widget<SelectableMarkdownBlock>(listBlockFinder);
+    final listContext = tester.element(listBlockFinder);
+    final listRenderBox = tester.renderObject<RenderBox>(listBlockFinder);
+    final listOrigin = listRenderBox.localToGlobal(Offset.zero);
+    final mathRect = tester.getRect(find.byType(Math).first);
+    final mathStart = listBlock.spec.plainText.indexOf('x^2');
+    final mathEnd = mathStart + 'x^2'.length;
+
+    final selectionRects = listBlock.spec.selectionRectResolver!(
+      listContext,
+      listRenderBox.size,
+      DocumentRange(
+        start: DocumentPosition(
+          blockIndex: 0,
+          path: const PathInBlock(<int>[0]),
+          textOffset: mathStart,
+        ),
+        end: DocumentPosition(
+          blockIndex: 0,
+          path: const PathInBlock(<int>[0]),
+          textOffset: mathEnd,
+        ),
+      ),
+    );
+    final globalSelectionRects = selectionRects
+        .map((rect) => rect.shift(listOrigin))
+        .toList(growable: false);
+
+    expect(globalSelectionRects, isNotEmpty);
+    expect(
+      globalSelectionRects.any((rect) => rect.overlaps(mathRect.inflate(1))),
+      isTrue,
+    );
+
+    final leftOffset = listBlock.spec.textOffsetResolver!(
+      listContext,
+      listRenderBox.size,
+      listRenderBox.globalToLocal(mathRect.centerLeft + const Offset(1, 0)),
+    );
+    final rightOffset = listBlock.spec.textOffsetResolver!(
+      listContext,
+      listRenderBox.size,
+      listRenderBox.globalToLocal(mathRect.centerRight + const Offset(2, 0)),
+    );
+
+    expect(leftOffset, mathStart);
+    expect(rightOffset, mathEnd);
   });
 
   testWidgets('renders backslash inline math with surrounding whitespace', (
@@ -1092,10 +1238,6 @@ return value;
               theme.inlineCodePadding.vertical,
     );
     expect(paddingFinder, findsWidgets);
-    expect(find.text('c'), findsOneWidget);
-    expect(find.text('o'), findsOneWidget);
-    expect(find.text('d'), findsOneWidget);
-    expect(find.text('e'), findsOneWidget);
   });
 
   testWidgets('inline code prefers the default Mono font family', (
@@ -1369,6 +1511,34 @@ const value = 42;
     );
   });
 
+  test('non-breakable decorated inline preserves horizontal padding', () {
+    const padding = EdgeInsets.symmetric(horizontal: 6, vertical: 2);
+    final layout = computeMarkdownPretextLayoutFromRuns(
+      runs: const <MarkdownPretextInlineRun>[
+        MarkdownPretextInlineRun(
+          text: 'code',
+          style: TextStyle(fontSize: 14, height: 1.2),
+          decoration: MarkdownPretextInlineDecoration(
+            backgroundColor: Color(0xFFE9EDF2),
+            borderRadius: BorderRadius.all(Radius.circular(6)),
+            padding: padding,
+          ),
+        ),
+      ],
+      fallbackStyle: const TextStyle(fontSize: 14, height: 1.2),
+      maxWidth: 300,
+      textScaleFactor: 1,
+    );
+
+    final decoratedSegments = layout.lines.single.segments
+        .where((segment) => segment.decoration != null)
+        .toList(growable: false);
+
+    expect(decoratedSegments, hasLength(1));
+    expect(decoratedSegments.single.padding.left, padding.left);
+    expect(decoratedSegments.single.padding.right, padding.right);
+  });
+
   test('breakable decorated inline preserves explicit newlines', () {
     final layout = computeMarkdownPretextLayoutFromRuns(
       runs: const <MarkdownPretextInlineRun>[
@@ -1481,6 +1651,13 @@ const value = 42;
         decoratedSegments.map((segment) => segment.text).join(),
         'settle_result',
       );
+      for (final line in layout.lines) {
+        final actualWidth = line.segments.fold<double>(
+          0,
+          (sum, segment) => sum + (segment.right - segment.left),
+        );
+        expect(actualWidth, lessThanOrEqualTo(width + 0.01));
+      }
 
       for (final line in layout.lines) {
         final lineDecoratedSegments = line.segments

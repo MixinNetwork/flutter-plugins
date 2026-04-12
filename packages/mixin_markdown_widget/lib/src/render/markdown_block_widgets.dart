@@ -331,14 +331,14 @@ class MarkdownCodeBlockView extends StatelessWidget {
   const MarkdownCodeBlockView({
     super.key,
     required this.theme,
-    required this.codeSpan,
+    required this.code,
     required this.onCopyCode,
     required this.toolbarHeight,
     this.language,
   });
 
   final MarkdownThemeData theme;
-  final InlineSpan codeSpan;
+  final Widget code;
   final VoidCallback onCopyCode;
   final double toolbarHeight;
   final String? language;
@@ -385,10 +385,7 @@ class MarkdownCodeBlockView extends StatelessWidget {
           ),
           Padding(
             padding: theme.codeBlockPadding,
-            child: Text.rich(
-              codeSpan,
-              style: theme.codeBlockStyle,
-            ),
+            child: code,
           ),
         ],
       ),

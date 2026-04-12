@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderObject, RenderParagraph;
 
 import '../../core/document.dart';
 import '../../widgets/markdown_theme.dart';
@@ -29,8 +30,8 @@ class MarkdownBlockKeysRegistry {
   }
 
   List<GlobalKey> listItemContentKeysFor(ListBlock block) {
-    final keys = listItemContentKeysByBlock.putIfAbsent(
-        block.id, () => <GlobalKey>[]);
+    final keys =
+        listItemContentKeysByBlock.putIfAbsent(block.id, () => <GlobalKey>[]);
     while (keys.length < block.items.length) {
       keys.add(
           GlobalKey(debugLabel: 'list-content-${block.id}-${keys.length}'));
@@ -74,7 +75,7 @@ class MarkdownBlockKeysRegistry {
     }
     return keys;
   }
-  
+
   void cleanupKeys(Set<String> validIds) {
     blockKeys.removeWhere((key, _) => !validIds.contains(key));
     listItemKeysByBlock.removeWhere((key, _) => !validIds.contains(key));
@@ -113,8 +114,8 @@ class MarkdownSelectionResolver {
         if (columnIndex > 0) {
           offset += 1;
         }
-        final cellText =
-            MarkdownInlineBuilder.flattenInlineText(row.cells[columnIndex].inlines);
+        final cellText = MarkdownInlineBuilder.flattenInlineText(
+            row.cells[columnIndex].inlines);
         final cellStart = offset;
         final cellEnd = cellStart + cellText.length;
         if (rowIndex == position.rowIndex &&
@@ -238,7 +239,8 @@ class MarkdownSelectionResolver {
               context,
               rootRenderObject: rootRenderObject,
               entries: childEntries,
-              childKeys: keysRegistry.listItemChildKeysFor(block, entry.itemIndex),
+              childKeys:
+                  keysRegistry.listItemChildKeysFor(block, entry.itemIndex),
               globalPosition: Offset(
                 contentRect.left + 1,
                 globalPosition.dy.clamp(
@@ -345,6 +347,100 @@ class MarkdownSelectionResolver {
       textAlign: pretext.textAlign,
       textDirection: textDirection,
     );
+  }
+
+  bool _descriptorUsesDirectRichTextMetrics(
+    SelectableTextDescriptor descriptor,
+  ) {
+    final pretext = descriptor.pretext;
+    return pretext != null && pretext.runs.any((run) => run.renderSpan != null);
+  }
+
+  RenderParagraph? _findDirectRenderParagraphForRuns(
+    RenderObject renderObject,
+    List<MarkdownPretextInlineRun> runs,
+  ) {
+    final expectedRenderText = markdownPretextRenderText(runs);
+    RenderParagraph? paragraph;
+
+    void visit(RenderObject node) {
+      if (node is RenderParagraph &&
+          node.text.toPlainText(includePlaceholders: true) ==
+              expectedRenderText) {
+        paragraph = node;
+        return;
+      }
+      if (paragraph != null) {
+        return;
+      }
+      node.visitChildren(visit);
+    }
+
+    visit(renderObject);
+    return paragraph;
+  }
+
+  List<Rect> _resolveDirectRenderParagraphSelectionRects(
+    RenderBox rootRenderObject, {
+    required List<MarkdownPretextInlineRun> runs,
+    required RenderObject renderObject,
+    required DocumentRange range,
+  }) {
+    final paragraph = _findDirectRenderParagraphForRuns(renderObject, runs);
+    if (paragraph == null || !paragraph.hasSize) {
+      return const <Rect>[];
+    }
+
+    final plainStart = math.min(range.start.textOffset, range.end.textOffset);
+    final plainEnd = math.max(range.start.textOffset, range.end.textOffset);
+    if (plainStart >= plainEnd) {
+      return const <Rect>[];
+    }
+    final renderStart = markdownPretextRenderOffsetForPlainOffset(
+      runs,
+      plainStart,
+      preferEnd: false,
+    );
+    final renderEnd = markdownPretextRenderOffsetForPlainOffset(
+      runs,
+      plainEnd,
+      preferEnd: true,
+    );
+    if (renderStart >= renderEnd) {
+      return const <Rect>[];
+    }
+
+    final origin = rootRenderObject.globalToLocal(
+      paragraph.localToGlobal(Offset.zero),
+    );
+    return paragraph
+        .getBoxesForSelection(
+          TextSelection(baseOffset: renderStart, extentOffset: renderEnd),
+        )
+        .map(
+          (box) => Rect.fromLTRB(
+            box.left + origin.dx,
+            box.top + origin.dy,
+            box.right + origin.dx,
+            box.bottom + origin.dy,
+          ).inflate(1.5),
+        )
+        .toList(growable: false);
+  }
+
+  int? _resolveDirectRenderParagraphTextOffset(
+    RenderObject renderObject, {
+    required Offset globalPosition,
+    required List<MarkdownPretextInlineRun> runs,
+  }) {
+    final paragraph = _findDirectRenderParagraphForRuns(renderObject, runs);
+    if (paragraph == null || !paragraph.hasSize) {
+      return null;
+    }
+
+    final localPosition = paragraph.globalToLocal(globalPosition);
+    final textPosition = paragraph.getPositionForOffset(localPosition);
+    return markdownPretextPlainOffsetForRenderOffset(runs, textPosition.offset);
   }
 
   List<Rect> resolveDescriptorSelectionRects(
@@ -923,6 +1019,17 @@ class MarkdownSelectionResolver {
       case MarkdownBlockKind.heading:
       case MarkdownBlockKind.paragraph:
       case MarkdownBlockKind.definitionList:
+        if (_descriptorUsesDirectRichTextMetrics(descriptor)) {
+          final directRects = _resolveDirectRenderParagraphSelectionRects(
+            rootRenderObject,
+            runs: descriptor.pretext!.runs,
+            renderObject: renderObject,
+            range: range,
+          );
+          if (directRects.isNotEmpty) {
+            return directRects;
+          }
+        }
         return resolveDescriptorSelectionRects(
           context,
           descriptor: descriptor,
@@ -944,7 +1051,8 @@ class MarkdownSelectionResolver {
         return _resolveListSelectionRectsInRoot(
           context,
           rootRenderObject: rootRenderObject,
-          block: MarkdownDescriptorExtractor.footnoteListAsOrderedList(block as FootnoteListBlock),
+          block: MarkdownDescriptorExtractor.footnoteListAsOrderedList(
+              block as FootnoteListBlock),
           range: range,
           indentLevel: indentLevel,
         );
@@ -966,9 +1074,9 @@ class MarkdownSelectionResolver {
           range,
           size: renderObject.size,
           textDirection: textDirection,
-          measurementPadding: theme.codeBlockPadding
-                  .resolve(Directionality.of(context)) +
-              const EdgeInsets.only(top: 36), // _codeToolbarHeight
+          measurementPadding:
+              theme.codeBlockPadding.resolve(Directionality.of(context)) +
+                  const EdgeInsets.only(top: 36), // _codeToolbarHeight
           origin: origin,
         );
       case MarkdownBlockKind.table:
@@ -993,6 +1101,16 @@ class MarkdownSelectionResolver {
       case MarkdownBlockKind.heading:
       case MarkdownBlockKind.paragraph:
       case MarkdownBlockKind.definitionList:
+        if (_descriptorUsesDirectRichTextMetrics(descriptor)) {
+          final directOffset = _resolveDirectRenderParagraphTextOffset(
+            renderObject,
+            globalPosition: globalPosition,
+            runs: descriptor.pretext!.runs,
+          );
+          if (directOffset != null) {
+            return directOffset;
+          }
+        }
         return resolveDescriptorTextOffset(
           context,
           descriptor: descriptor,
@@ -1014,7 +1132,8 @@ class MarkdownSelectionResolver {
         return _resolveListTextOffsetInRoot(
               context,
               rootRenderObject: rootRenderObject,
-              block: MarkdownDescriptorExtractor.footnoteListAsOrderedList(block as FootnoteListBlock),
+              block: MarkdownDescriptorExtractor.footnoteListAsOrderedList(
+                  block as FootnoteListBlock),
               globalPosition: globalPosition,
               indentLevel: indentLevel,
             ) ??
@@ -1039,9 +1158,9 @@ class MarkdownSelectionResolver {
           localPosition: localPosition,
           size: renderObject.size,
           textDirection: textDirection,
-          measurementPadding: theme.codeBlockPadding
-                  .resolve(Directionality.of(context)) +
-              const EdgeInsets.only(top: 36), // _codeToolbarHeight
+          measurementPadding:
+              theme.codeBlockPadding.resolve(Directionality.of(context)) +
+                  const EdgeInsets.only(top: 36), // _codeToolbarHeight
         );
       case MarkdownBlockKind.table:
       case MarkdownBlockKind.image:

@@ -262,6 +262,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
                     theme: widget.theme,
                     recognizers: [],
                   ),
+                  codeSyntaxHighlighter: _codeSyntaxHighlighter,
                 ),
                 keysRegistry: _keysRegistry,
                 codeSyntaxHighlighter: _codeSyntaxHighlighter,
@@ -324,6 +325,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       theme: widget.theme,
       plainTextSerializer: _plainTextSerializer,
       inlineBuilder: inlineBuilder,
+      codeSyntaxHighlighter: _codeSyntaxHighlighter,
     );
 
     final selectionResolver = MarkdownSelectionResolver(

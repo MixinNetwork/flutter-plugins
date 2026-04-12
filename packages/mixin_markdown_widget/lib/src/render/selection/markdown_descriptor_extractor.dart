@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../clipboard/plain_text_serializer.dart';
 import '../../core/document.dart';
 import '../../widgets/markdown_theme.dart';
+import '../code_syntax_highlighter.dart';
 import '../pretext_text_block.dart';
 import '../builder/markdown_inline_builder.dart';
 
@@ -32,6 +33,17 @@ class PretextTextDescriptor {
   final List<MarkdownPretextInlineRun> runs;
   final TextStyle fallbackStyle;
   final TextAlign textAlign;
+}
+
+@immutable
+class _PrefixedPretextRuns {
+  const _PrefixedPretextRuns({
+    required this.plainText,
+    required this.runs,
+  });
+
+  final String plainText;
+  final List<MarkdownPretextInlineRun> runs;
 }
 
 @immutable
@@ -88,11 +100,13 @@ class MarkdownDescriptorExtractor {
     required this.theme,
     required this.plainTextSerializer,
     required this.inlineBuilder,
+    required this.codeSyntaxHighlighter,
   });
 
   final MarkdownThemeData theme;
   final MarkdownPlainTextSerializer plainTextSerializer;
   final MarkdownInlineBuilder inlineBuilder;
+  final MarkdownCodeSyntaxHighlighter codeSyntaxHighlighter;
 
   SelectableTextDescriptor buildSelectableDescriptorForBlock(
     BlockNode block, {
@@ -101,31 +115,19 @@ class MarkdownDescriptorExtractor {
     switch (block.kind) {
       case MarkdownBlockKind.heading:
         final heading = block as HeadingBlock;
-        if (MarkdownInlineBuilder.inlinesContainMath(heading.inlines)) {
-          return plainTextDescriptor(
-            MarkdownInlineBuilder.flattenInlineText(heading.inlines),
-            theme.headingStyleForLevel(heading.level),
-          );
-        }
         return descriptorFromInlines(
           theme.headingStyleForLevel(heading.level),
           heading.inlines,
-          textAlign: MarkdownInlineBuilder.resolvedInlineTextAlign(
-              heading.inlines),
+          textAlign:
+              MarkdownInlineBuilder.resolvedInlineTextAlign(heading.inlines),
         );
       case MarkdownBlockKind.paragraph:
         final paragraph = block as ParagraphBlock;
-        if (MarkdownInlineBuilder.inlinesContainMath(paragraph.inlines)) {
-          return plainTextDescriptor(
-            MarkdownInlineBuilder.flattenInlineText(paragraph.inlines),
-            theme.bodyStyle,
-          );
-        }
         return descriptorFromInlines(
           theme.bodyStyle,
           paragraph.inlines,
-          textAlign: MarkdownInlineBuilder.resolvedInlineTextAlign(
-              paragraph.inlines),
+          textAlign:
+              MarkdownInlineBuilder.resolvedInlineTextAlign(paragraph.inlines),
         );
       case MarkdownBlockKind.quote:
         return buildQuoteSelectableDescriptor(block as QuoteBlock);
@@ -145,7 +147,16 @@ class MarkdownDescriptorExtractor {
         );
       case MarkdownBlockKind.codeBlock:
         final codeBlock = block as CodeBlock;
-        return plainTextDescriptor(codeBlock.code, theme.codeBlockStyle);
+        return descriptorFromRuns(
+          codeSyntaxHighlighter.buildPretextRuns(
+            source: codeBlock.code,
+            baseStyle: theme.codeBlockStyle,
+            theme: theme,
+            language: codeBlock.language,
+          ),
+          plainText: codeBlock.code,
+          fallbackStyle: theme.codeBlockStyle,
+        );
       case MarkdownBlockKind.table:
         return plainTextDescriptor(
           plainTextSerializer.serializeBlockText(block),
@@ -383,20 +394,37 @@ class MarkdownDescriptorExtractor {
     return plainTextDescriptor(caption, imageCaptionStyle);
   }
 
+  SelectableTextDescriptor descriptorFromRuns(
+    List<MarkdownPretextInlineRun> runs, {
+    required String plainText,
+    required TextStyle fallbackStyle,
+    TextAlign textAlign = TextAlign.start,
+  }) {
+    return _descriptorFromSpan(
+      buildMarkdownPretextSpan(
+        runs: runs,
+        fallbackStyle: fallbackStyle,
+      ) as TextSpan,
+      plainText,
+      pretext: PretextTextDescriptor(
+        runs: runs,
+        fallbackStyle: fallbackStyle,
+        textAlign: textAlign,
+      ),
+    );
+  }
+
   SelectableTextDescriptor descriptorFromInlines(
     TextStyle style,
     List<InlineNode> inlines, {
     TextAlign textAlign = TextAlign.start,
   }) {
-    return _descriptorFromSpan(
-      TextSpan(
-          style: style, children: inlineBuilder.buildInlineSpans(style, inlines)),
-      MarkdownInlineBuilder.flattenInlineText(inlines),
-      pretext: PretextTextDescriptor(
-        runs: inlineBuilder.buildPretextRuns(style, inlines),
-        fallbackStyle: style,
-        textAlign: textAlign,
-      ),
+    final runs = inlineBuilder.buildPretextRuns(style, inlines);
+    return descriptorFromRuns(
+      runs,
+      plainText: MarkdownInlineBuilder.flattenInlineText(inlines),
+      fallbackStyle: style,
+      textAlign: textAlign,
     );
   }
 
@@ -413,9 +441,12 @@ class MarkdownDescriptorExtractor {
   }
 
   SelectableTextDescriptor plainTextDescriptor(String text, TextStyle style) {
-    return SelectableTextDescriptor(
+    return descriptorFromRuns(
+      <MarkdownPretextInlineRun>[
+        MarkdownPretextInlineRun(text: text, style: style),
+      ],
       plainText: text,
-      span: TextSpan(style: style, text: text),
+      fallbackStyle: style,
     );
   }
 
@@ -442,6 +473,21 @@ class MarkdownDescriptorExtractor {
       buffer.write(nonEmpty[index].plainText);
       children.add(nonEmpty[index].span);
     }
+    if (nonEmpty.every((descriptor) => descriptor.pretext != null)) {
+      final runs = <MarkdownPretextInlineRun>[];
+      for (var index = 0; index < nonEmpty.length; index++) {
+        if (index > 0 && separator.isNotEmpty) {
+          runs.add(
+              MarkdownPretextInlineRun(text: separator, style: separatorStyle));
+        }
+        runs.addAll(nonEmpty[index].pretext!.runs);
+      }
+      return descriptorFromRuns(
+        runs,
+        plainText: buffer.toString(),
+        fallbackStyle: nonEmpty.first.pretext!.fallbackStyle,
+      );
+    }
     return SelectableTextDescriptor(
       plainText: buffer.toString(),
       span: TextSpan(children: children),
@@ -456,6 +502,21 @@ class MarkdownDescriptorExtractor {
   }) {
     if (descriptor.isEmpty) {
       return plainTextDescriptor('', style);
+    }
+    final pretext = descriptor.pretext;
+    if (pretext != null) {
+      final prefixed = _prefixPretextRuns(
+        pretext.runs,
+        firstPrefix: firstPrefix,
+        continuationPrefix: continuationPrefix,
+        prefixStyle: style,
+      );
+      return descriptorFromRuns(
+        prefixed.runs,
+        plainText: prefixed.plainText,
+        fallbackStyle: pretext.fallbackStyle,
+        textAlign: pretext.textAlign,
+      );
     }
     if (descriptor.plainText.contains('\n')) {
       final lines = descriptor.plainText.split('\n');
@@ -487,6 +548,67 @@ class MarkdownDescriptorExtractor {
 
   static String imageCaptionText(ImageBlock block) {
     return (block.alt ?? block.title ?? '').trim();
+  }
+
+  _PrefixedPretextRuns _prefixPretextRuns(
+    List<MarkdownPretextInlineRun> runs, {
+    required String firstPrefix,
+    required String continuationPrefix,
+    required TextStyle prefixStyle,
+  }) {
+    final buffer = StringBuffer();
+    final prefixedRuns = <MarkdownPretextInlineRun>[];
+    var pendingPrefix = firstPrefix;
+    var atLineStart = true;
+
+    void writePrefix({required bool trimTrailing}) {
+      final prefixText =
+          trimTrailing ? pendingPrefix.trimRight() : pendingPrefix;
+      if (prefixText.isNotEmpty) {
+        prefixedRuns.add(
+          MarkdownPretextInlineRun(text: prefixText, style: prefixStyle),
+        );
+        buffer.write(prefixText);
+      }
+      atLineStart = false;
+      pendingPrefix = continuationPrefix;
+    }
+
+    for (final run in runs) {
+      final segments = run.text.split('\n');
+      for (var index = 0; index < segments.length; index++) {
+        final segmentText = segments[index];
+        if (segmentText.isNotEmpty) {
+          if (atLineStart) {
+            writePrefix(trimTrailing: false);
+          }
+          prefixedRuns.add(run.copyWithText(segmentText));
+          buffer.write(segmentText);
+        }
+
+        if (index == segments.length - 1) {
+          continue;
+        }
+
+        if (atLineStart) {
+          writePrefix(trimTrailing: true);
+        }
+        prefixedRuns
+            .add(MarkdownPretextInlineRun(text: '\n', style: run.style));
+        buffer.write('\n');
+        atLineStart = true;
+        pendingPrefix = continuationPrefix;
+      }
+    }
+
+    if (atLineStart) {
+      writePrefix(trimTrailing: true);
+    }
+
+    return _PrefixedPretextRuns(
+      plainText: buffer.toString(),
+      runs: List<MarkdownPretextInlineRun>.unmodifiable(prefixedRuns),
+    );
   }
 
   TextStyle get imageCaptionStyle {

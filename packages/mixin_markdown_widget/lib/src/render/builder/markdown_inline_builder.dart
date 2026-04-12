@@ -83,14 +83,23 @@ class MarkdownInlineBuilder {
                     ? SystemMouseCursors.click
                     : MouseCursor.defer,
                 recognizer: recognizer,
+                decoration: run.decoration,
+                allowCharacterWrap: run.allowCharacterWrap,
+                renderSpan: run.renderSpan,
+                estimatedWidth: run.estimatedWidth,
+                estimatedLineHeight: run.estimatedLineHeight,
               ),
             )
             .toList(growable: false);
       case MarkdownInlineKind.math:
+        final math = inline as MathInline;
         return <MarkdownPretextInlineRun>[
           MarkdownPretextInlineRun(
-            text: (inline as MathInline).tex,
+            text: math.tex,
             style: baseStyle.merge(theme.inlineCodeStyle),
+            renderSpan: _buildMathSpan(baseStyle, math),
+            estimatedWidth: _estimateMathWidth(baseStyle, math),
+            estimatedLineHeight: _estimateMathLineHeight(baseStyle, math),
           ),
         ];
       case MarkdownInlineKind.inlineCode:
@@ -223,29 +232,8 @@ class MarkdownInlineBuilder {
         ];
       case MarkdownInlineKind.math:
         final math = inline as MathInline;
-        final child = Padding(
-          padding: EdgeInsets.symmetric(
-            horizontal: math.displayStyle ? 0 : 2,
-            vertical: math.displayStyle ? 6 : 0,
-          ),
-          child: Math.tex(
-            math.tex,
-            mathStyle: math.displayStyle ? MathStyle.display : MathStyle.text,
-            textStyle: baseStyle,
-            onErrorFallback: (error) => Text(
-              math.tex,
-              style: baseStyle.merge(theme.inlineCodeStyle),
-            ),
-          ),
-        );
         return <InlineSpan>[
-          WidgetSpan(
-            alignment: math.displayStyle
-                ? PlaceholderAlignment.middle
-                : PlaceholderAlignment.baseline,
-            baseline: math.displayStyle ? null : TextBaseline.alphabetic,
-            child: child,
-          ),
+          _buildMathSpan(baseStyle, math),
         ];
       case MarkdownInlineKind.inlineCode:
         final code = inline as InlineCode;
@@ -312,6 +300,54 @@ class MarkdownInlineBuilder {
       fontSize: baseFontSize * 0.82,
       fontFeatures: const <FontFeature>[FontFeature.superscripts()],
     );
+  }
+
+  WidgetSpan _buildMathSpan(TextStyle baseStyle, MathInline math) {
+    final child = Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: math.displayStyle ? 0 : 2,
+        vertical: math.displayStyle ? 6 : 0,
+      ),
+      child: Math.tex(
+        math.tex,
+        mathStyle: math.displayStyle ? MathStyle.display : MathStyle.text,
+        textStyle: baseStyle,
+        onErrorFallback: (error) => Text(
+          math.tex,
+          style: baseStyle.merge(theme.inlineCodeStyle),
+        ),
+      ),
+    );
+    return WidgetSpan(
+      alignment: math.displayStyle
+          ? PlaceholderAlignment.middle
+          : PlaceholderAlignment.baseline,
+      baseline: math.displayStyle ? null : TextBaseline.alphabetic,
+      child: child,
+    );
+  }
+
+  double _estimateMathWidth(TextStyle baseStyle, MathInline math) {
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: math.tex,
+        style: baseStyle.merge(theme.inlineCodeStyle),
+      ),
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+    )..layout(maxWidth: double.infinity);
+    return textPainter.width + (math.displayStyle ? 0 : 4);
+  }
+
+  double _estimateMathLineHeight(TextStyle baseStyle, MathInline math) {
+    final textPainter = TextPainter(
+      text: TextSpan(text: ' ', style: baseStyle),
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+    )..layout(maxWidth: double.infinity);
+    final verticalPadding = math.displayStyle ? 12.0 : 4.0;
+    final multiplier = math.displayStyle ? 1.9 : 1.35;
+    return textPainter.preferredLineHeight * multiplier + verticalPadding;
   }
 
   static String flattenInlineText(List<InlineNode> inlines) {

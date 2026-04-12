@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/services.dart';
 import 'dart:math' as math;
 
@@ -155,11 +156,8 @@ class MarkdownBlockBuilder {
           caption: SelectableMarkdownBlock(
             key: key,
             blockIndex: blockIndex,
-            spec: SelectableBlockSpec(
-              child: Text.rich(captionDescriptor.span),
-              plainText: captionDescriptor.plainText,
-              hitTestBehavior: SelectableBlockHitTestBehavior.text,
-              textSpan: captionDescriptor.span,
+            spec: _buildSelectableDescriptorTextSpec(
+              descriptor: captionDescriptor,
             ),
             selectionColor: theme.selectionColor,
             selectionRange: selectionRange,
@@ -210,49 +208,43 @@ class MarkdownBlockBuilder {
       case MarkdownBlockKind.heading:
         final heading = block as HeadingBlock;
         final style = theme.headingStyleForLevel(heading.level);
-        if (MarkdownInlineBuilder.inlinesContainMath(heading.inlines)) {
-          return SelectableBlockSpec(
-            child: _buildTextBlock(
-              style: style,
-              inlines: heading.inlines,
-              textAlign: MarkdownInlineBuilder.resolvedInlineTextAlign(
-                  heading.inlines),
-            ),
-            plainText: MarkdownInlineBuilder.flattenInlineText(heading.inlines),
-            hitTestBehavior: SelectableBlockHitTestBehavior.block,
-          );
-        }
         final plainText =
             MarkdownInlineBuilder.flattenInlineText(heading.inlines);
+        final runs = inlineBuilder.buildPretextRuns(style, heading.inlines);
+        final directTextKey = _createDirectTextKeyIfNeeded(runs);
         return _buildPretextTextSpec(
+          child: _wrapHeadingBlock(
+            level: heading.level,
+            child: MarkdownPretextTextBlock.rich(
+              runs: runs,
+              fallbackStyle: style,
+              directTextKey: directTextKey,
+              textAlign: MarkdownInlineBuilder.resolvedInlineTextAlign(
+                heading.inlines,
+              ),
+            ),
+          ),
           plainText: plainText,
-          runs: inlineBuilder.buildPretextRuns(style, heading.inlines),
+          runs: runs,
           fallbackStyle: style,
+          directTextKey: directTextKey,
           textAlign:
               MarkdownInlineBuilder.resolvedInlineTextAlign(heading.inlines),
         );
       case MarkdownBlockKind.paragraph:
         final paragraph = block as ParagraphBlock;
-        if (MarkdownInlineBuilder.inlinesContainMath(paragraph.inlines)) {
-          return SelectableBlockSpec(
-            child: _buildTextBlock(
-              style: theme.bodyStyle,
-              inlines: paragraph.inlines,
-              textAlign: MarkdownInlineBuilder.resolvedInlineTextAlign(
-                  paragraph.inlines),
-            ),
-            plainText:
-                MarkdownInlineBuilder.flattenInlineText(paragraph.inlines),
-            hitTestBehavior: SelectableBlockHitTestBehavior.block,
-          );
-        }
         final plainText =
             MarkdownInlineBuilder.flattenInlineText(paragraph.inlines);
+        final runs = inlineBuilder.buildPretextRuns(
+          theme.bodyStyle,
+          paragraph.inlines,
+        );
+        final directTextKey = _createDirectTextKeyIfNeeded(runs);
         return _buildPretextTextSpec(
           plainText: plainText,
-          runs: inlineBuilder.buildPretextRuns(
-              theme.bodyStyle, paragraph.inlines),
+          runs: runs,
           fallbackStyle: theme.bodyStyle,
+          directTextKey: directTextKey,
           textAlign:
               MarkdownInlineBuilder.resolvedInlineTextAlign(paragraph.inlines),
         );
@@ -325,14 +317,8 @@ class MarkdownBlockBuilder {
         final definitionList = block as DefinitionListBlock;
         final definitionDescriptor = descriptorExtractor
             .buildDefinitionListSelectableDescriptor(definitionList);
-        return SelectableBlockSpec(
-          child: Text.rich(
-            definitionDescriptor.span,
-            style: theme.bodyStyle,
-          ),
-          plainText: definitionDescriptor.plainText,
-          hitTestBehavior: SelectableBlockHitTestBehavior.text,
-          textSpan: definitionDescriptor.span,
+        return _buildSelectableDescriptorTextSpec(
+          descriptor: definitionDescriptor,
         );
       case MarkdownBlockKind.footnoteList:
         final footnoteList = block as FootnoteListBlock;
@@ -373,12 +359,23 @@ class MarkdownBlockBuilder {
         );
       case MarkdownBlockKind.codeBlock:
         final codeBlock = block as CodeBlock;
-        final codeSpan = _buildCodeTextSpan(codeBlock);
-        return SelectableBlockSpec(
-          child: _buildDecoratedCodeBlock(codeBlock, codeSpan: codeSpan),
+        final codeRuns = codeSyntaxHighlighter.buildPretextRuns(
+          source: codeBlock.code,
+          baseStyle: theme.codeBlockStyle,
+          theme: theme,
+          language: codeBlock.language,
+        );
+        return _buildPretextTextSpec(
+          child: _buildDecoratedCodeBlock(
+            codeBlock,
+            code: MarkdownPretextTextBlock.rich(
+              runs: codeRuns,
+              fallbackStyle: theme.codeBlockStyle,
+            ),
+          ),
           plainText: codeBlock.code,
-          hitTestBehavior: SelectableBlockHitTestBehavior.text,
-          textSpan: codeSpan,
+          runs: codeRuns,
+          fallbackStyle: theme.codeBlockStyle,
           measurementPadding:
               theme.codeBlockPadding.resolve(Directionality.of(context)) +
                   const EdgeInsets.only(top: 36.0), // _codeToolbarHeight
@@ -413,24 +410,42 @@ class MarkdownBlockBuilder {
   }
 
   SelectableBlockSpec _buildPretextTextSpec({
+    Widget? child,
     required String plainText,
     required List<MarkdownPretextInlineRun> runs,
     required TextStyle fallbackStyle,
     TextAlign textAlign = TextAlign.start,
+    GlobalKey? directTextKey,
+    EdgeInsets measurementPadding = EdgeInsets.zero,
+    BorderRadius? highlightBorderRadius,
+    SelectableBlockSelectionPaintOrder? selectionPaintOrder,
   }) {
     final hasDecoratedInline = runs.any((run) => run.decoration != null);
     return SelectableBlockSpec(
-      child: MarkdownPretextTextBlock.rich(
-        runs: runs,
-        fallbackStyle: fallbackStyle,
-        textAlign: textAlign,
-      ),
+      child: child ??
+          MarkdownPretextTextBlock.rich(
+            runs: runs,
+            fallbackStyle: fallbackStyle,
+            directTextKey: directTextKey,
+            textAlign: textAlign,
+          ),
       plainText: plainText,
       hitTestBehavior: SelectableBlockHitTestBehavior.text,
-      selectionPaintOrder: hasDecoratedInline
-          ? SelectableBlockSelectionPaintOrder.aboveChild
-          : SelectableBlockSelectionPaintOrder.behindChild,
+      measurementPadding: measurementPadding,
+      highlightBorderRadius: highlightBorderRadius,
+      selectionPaintOrder: selectionPaintOrder ??
+          (hasDecoratedInline
+              ? SelectableBlockSelectionPaintOrder.aboveChild
+              : SelectableBlockSelectionPaintOrder.behindChild),
       selectionRectResolver: (context, constraints, range) {
+        if (directTextKey != null) {
+          return _resolveDirectRichTextSelectionRects(
+            context,
+            directTextKey,
+            runs,
+            range,
+          );
+        }
         final textScaler =
             MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling;
         final layout = computeMarkdownPretextLayoutFromRuns(
@@ -447,6 +462,14 @@ class MarkdownBlockBuilder {
         );
       },
       textOffsetResolver: (context, size, localPosition) {
+        if (directTextKey != null) {
+          return _resolveDirectRichTextTextOffset(
+            context,
+            directTextKey,
+            localPosition,
+            runs,
+          );
+        }
         final textScaler =
             MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling;
         final layout = computeMarkdownPretextLayoutFromRuns(
@@ -465,13 +488,107 @@ class MarkdownBlockBuilder {
     );
   }
 
+  GlobalKey? _createDirectTextKeyIfNeeded(
+    List<MarkdownPretextInlineRun> runs,
+  ) {
+    if (runs.any((run) => run.renderSpan != null)) {
+      return GlobalKey();
+    }
+    return null;
+  }
+
+  List<Rect> _resolveDirectRichTextSelectionRects(
+    BuildContext context,
+    GlobalKey directTextKey,
+    List<MarkdownPretextInlineRun> runs,
+    DocumentRange range,
+  ) {
+    final renderParagraph = _resolveDirectRenderParagraph(directTextKey);
+    final blockRenderObject = context.findRenderObject();
+    if (renderParagraph == null ||
+        blockRenderObject is! RenderBox ||
+        !blockRenderObject.hasSize) {
+      return const <Rect>[];
+    }
+
+    final plainStart = math.min(range.start.textOffset, range.end.textOffset);
+    final plainEnd = math.max(range.start.textOffset, range.end.textOffset);
+    if (plainStart >= plainEnd) {
+      return const <Rect>[];
+    }
+    final renderStart = markdownPretextRenderOffsetForPlainOffset(
+      runs,
+      plainStart,
+      preferEnd: false,
+    );
+    final renderEnd = markdownPretextRenderOffsetForPlainOffset(
+      runs,
+      plainEnd,
+      preferEnd: true,
+    );
+    if (renderStart >= renderEnd) {
+      return const <Rect>[];
+    }
+
+    final paragraphOrigin = blockRenderObject.globalToLocal(
+      renderParagraph.localToGlobal(Offset.zero),
+    );
+    final boxes = renderParagraph.getBoxesForSelection(
+      TextSelection(baseOffset: renderStart, extentOffset: renderEnd),
+    );
+    return boxes
+        .map(
+          (box) => Rect.fromLTRB(
+            box.left + paragraphOrigin.dx,
+            box.top + paragraphOrigin.dy,
+            box.right + paragraphOrigin.dx,
+            box.bottom + paragraphOrigin.dy,
+          ).inflate(1.5),
+        )
+        .toList(growable: false);
+  }
+
+  int? _resolveDirectRichTextTextOffset(
+    BuildContext context,
+    GlobalKey directTextKey,
+    Offset localPosition,
+    List<MarkdownPretextInlineRun> runs,
+  ) {
+    final renderParagraph = _resolveDirectRenderParagraph(directTextKey);
+    final blockRenderObject = context.findRenderObject();
+    if (renderParagraph == null ||
+        blockRenderObject is! RenderBox ||
+        !blockRenderObject.hasSize) {
+      return null;
+    }
+
+    final paragraphPosition = renderParagraph.globalToLocal(
+      blockRenderObject.localToGlobal(localPosition),
+    );
+    final textPosition = renderParagraph.getPositionForOffset(
+      paragraphPosition,
+    );
+    return markdownPretextPlainOffsetForRenderOffset(runs, textPosition.offset);
+  }
+
+  RenderParagraph? _resolveDirectRenderParagraph(GlobalKey directTextKey) {
+    final renderObject = directTextKey.currentContext?.findRenderObject();
+    if (renderObject is RenderParagraph && renderObject.hasSize) {
+      return renderObject;
+    }
+    return null;
+  }
+
   Widget _buildNestedBlockContent(BuildContext context, BlockNode block) {
     switch (block.kind) {
       case MarkdownBlockKind.heading:
         final heading = block as HeadingBlock;
-        return _buildTextBlock(
-          style: theme.headingStyleForLevel(heading.level),
-          inlines: heading.inlines,
+        return _wrapHeadingBlock(
+          level: heading.level,
+          child: _buildTextBlock(
+            style: theme.headingStyleForLevel(heading.level),
+            inlines: heading.inlines,
+          ),
         );
       case MarkdownBlockKind.paragraph:
         final paragraph = block as ParagraphBlock;
@@ -569,10 +686,7 @@ class MarkdownBlockBuilder {
   Widget _buildDefinitionList(BuildContext context, DefinitionListBlock block) {
     final descriptor =
         descriptorExtractor.buildDefinitionListSelectableDescriptor(block);
-    return Text.rich(
-      descriptor.span,
-      style: theme.bodyStyle,
-    );
+    return _buildDescriptorTextWidget(descriptor);
   }
 
   Widget _buildFootnoteList(BuildContext context, FootnoteListBlock block) {
@@ -625,14 +739,6 @@ class MarkdownBlockBuilder {
     required List<InlineNode> inlines,
     TextAlign textAlign = TextAlign.start,
   }) {
-    if (MarkdownInlineBuilder.inlinesContainMath(inlines)) {
-      return Text.rich(
-        TextSpan(
-            style: style,
-            children: inlineBuilder.buildInlineSpans(style, inlines)),
-        textAlign: textAlign,
-      );
-    }
     return MarkdownPretextTextBlock.rich(
       runs: inlineBuilder.buildPretextRuns(style, inlines),
       fallbackStyle: style,
@@ -640,35 +746,59 @@ class MarkdownBlockBuilder {
     );
   }
 
+  Widget _wrapHeadingBlock({
+    required int level,
+    required Widget child,
+  }) {
+    if (level > 2) {
+      return child;
+    }
+
+    final dividerSpacing = level == 1 ? 12.0 : 8.0;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        child,
+        SizedBox(height: dividerSpacing),
+        Divider(
+          color: theme.dividerColor,
+          height: 1,
+          thickness: 1,
+        ),
+      ],
+    );
+  }
+
   Widget _buildCodeBlock(CodeBlock block) {
+    final runs = codeSyntaxHighlighter.buildPretextRuns(
+      source: block.code,
+      baseStyle: theme.codeBlockStyle,
+      theme: theme,
+      language: block.language,
+    );
     return _buildDecoratedCodeBlock(
       block,
-      codeSpan: _buildCodeTextSpan(block),
+      code: MarkdownPretextTextBlock.rich(
+        runs: runs,
+        fallbackStyle: theme.codeBlockStyle,
+      ),
     );
   }
 
   Widget _buildDecoratedCodeBlock(
     CodeBlock block, {
-    required InlineSpan codeSpan,
+    required Widget code,
   }) {
     final language = block.language?.trim();
     return MarkdownCodeBlockView(
       theme: theme,
-      codeSpan: codeSpan,
+      code: code,
       toolbarHeight: 36, // _codeToolbarHeight
       language: language,
       onCopyCode: () {
         Clipboard.setData(ClipboardData(text: block.code));
       },
-    );
-  }
-
-  InlineSpan _buildCodeTextSpan(CodeBlock block) {
-    return codeSyntaxHighlighter.buildTextSpan(
-      source: block.code,
-      baseStyle: theme.codeBlockStyle,
-      theme: theme,
-      language: block.language,
     );
   }
 
@@ -686,14 +816,6 @@ class MarkdownBlockBuilder {
     List<InlineNode> inlines,
     TextAlign textAlign,
   ) {
-    if (MarkdownInlineBuilder.inlinesContainMath(inlines)) {
-      return Text.rich(
-        TextSpan(
-            style: style,
-            children: inlineBuilder.buildInlineSpans(style, inlines)),
-        textAlign: textAlign,
-      );
-    }
     return MarkdownPretextTextBlock.rich(
       runs: inlineBuilder.buildPretextRuns(style, inlines),
       fallbackStyle: style,
@@ -710,14 +832,13 @@ class MarkdownBlockBuilder {
       );
     }
     final caption = MarkdownDescriptorExtractor.imageCaptionText(block);
+    final captionDescriptor =
+        descriptorExtractor.buildImageCaptionDescriptor(block);
     return MarkdownImageBlockView(
       theme: theme,
       image: _buildImageVisual(context, block),
       caption: caption.isNotEmpty
-          ? Text(
-              caption,
-              style: descriptorExtractor.imageCaptionStyle,
-            )
+          ? _buildDescriptorTextWidget(captionDescriptor)
           : null,
     );
   }
@@ -798,20 +919,71 @@ class MarkdownBlockBuilder {
   SelectableBlockSpec _buildCustomImageBuilderSpec(
       BuildContext context, ImageBlock block) {
     final caption = MarkdownDescriptorExtractor.imageCaptionText(block);
+    final blockPlainText = caption.isEmpty ? block.url : caption;
     return SelectableBlockSpec(
       child: MarkdownImageBlockView(
         theme: theme,
         image: _buildImageVisual(context, block),
         caption: caption.isEmpty
             ? null
-            : Text(
-                caption,
-                style: descriptorExtractor.imageCaptionStyle,
+            : _buildDescriptorTextWidget(
+                descriptorExtractor.buildImageCaptionDescriptor(block),
               ),
       ),
-      plainText: plainTextSerializer.serializeBlockText(block),
+      plainText: blockPlainText,
       hitTestBehavior: SelectableBlockHitTestBehavior.block,
+      textOffsetResolver: (_, size, localPosition) {
+        final leadingThreshold = math.min(size.width * 0.25, 24.0);
+        return localPosition.dx <= leadingThreshold ? 0 : blockPlainText.length;
+      },
       highlightBorderRadius: theme.imageBorderRadius,
+    );
+  }
+
+  Widget _buildDescriptorTextWidget(
+    SelectableTextDescriptor descriptor, {
+    bool intrinsicWidthSafe = false,
+    GlobalKey? directTextKey,
+  }) {
+    final pretext = descriptor.pretext;
+    if (pretext == null) {
+      return Text.rich(
+        descriptor.span,
+        style: pretext?.fallbackStyle,
+      );
+    }
+    return MarkdownPretextTextBlock.rich(
+      runs: pretext.runs,
+      fallbackStyle: pretext.fallbackStyle,
+      directTextKey: directTextKey,
+      textAlign: pretext.textAlign,
+      intrinsicWidthSafe: intrinsicWidthSafe,
+    );
+  }
+
+  SelectableBlockSpec _buildSelectableDescriptorTextSpec({
+    required SelectableTextDescriptor descriptor,
+  }) {
+    final pretext = descriptor.pretext;
+    if (pretext == null) {
+      return SelectableBlockSpec(
+        child: _buildDescriptorTextWidget(descriptor),
+        plainText: descriptor.plainText,
+        hitTestBehavior: SelectableBlockHitTestBehavior.text,
+        textSpan: descriptor.span,
+      );
+    }
+    final directTextKey = _createDirectTextKeyIfNeeded(pretext.runs);
+    return _buildPretextTextSpec(
+      child: _buildDescriptorTextWidget(
+        descriptor,
+        directTextKey: directTextKey,
+      ),
+      plainText: descriptor.plainText,
+      runs: pretext.runs,
+      fallbackStyle: pretext.fallbackStyle,
+      directTextKey: directTextKey,
+      textAlign: pretext.textAlign,
     );
   }
 

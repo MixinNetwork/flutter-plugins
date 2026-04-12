@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:re_highlight/languages/all.dart';
 import 'package:re_highlight/re_highlight.dart';
 
+import 'pretext_text_block.dart';
 import '../widgets/markdown_theme.dart';
 
 class MarkdownCodeSyntaxHighlighter {
@@ -45,6 +46,69 @@ class MarkdownCodeSyntaxHighlighter {
         baseStyle: baseStyle, theme: theme, highlighter: this);
     result.render(renderer);
     return renderer.span ?? TextSpan(style: baseStyle, text: source);
+  }
+
+  List<MarkdownPretextInlineRun> buildPretextRuns({
+    required String source,
+    required TextStyle baseStyle,
+    required MarkdownThemeData theme,
+    String? language,
+  }) {
+    final span = buildTextSpan(
+      source: source,
+      baseStyle: baseStyle,
+      theme: theme,
+      language: language,
+    );
+    final runs = <MarkdownPretextInlineRun>[];
+    _collectPretextRuns(
+      span,
+      inheritedStyle: baseStyle,
+      runs: runs,
+    );
+    return runs.isEmpty
+        ? <MarkdownPretextInlineRun>[
+            MarkdownPretextInlineRun(text: source, style: baseStyle),
+          ]
+        : runs;
+  }
+
+  void _collectPretextRuns(
+    InlineSpan span, {
+    required TextStyle inheritedStyle,
+    required List<MarkdownPretextInlineRun> runs,
+  }) {
+    if (span is! TextSpan) {
+      return;
+    }
+
+    final effectiveStyle = inheritedStyle.merge(span.style);
+    final text = span.text;
+    if (text != null && text.isNotEmpty) {
+      if (runs.isNotEmpty &&
+          runs.last.renderSpan == null &&
+          runs.last.decoration == null &&
+          runs.last.mouseCursor == null &&
+          runs.last.recognizer == null &&
+          runs.last.style == effectiveStyle) {
+        final last = runs.removeLast();
+        runs.add(last.copyWithText(last.text + text));
+      } else {
+        runs.add(MarkdownPretextInlineRun(text: text, style: effectiveStyle));
+      }
+    }
+
+    final children = span.children;
+    if (children == null) {
+      return;
+    }
+    for (final child in children) {
+      _collectPretextRuns(
+        child,
+        inheritedStyle: effectiveStyle,
+        runs: runs,
+      );
+    }
   }
 
   TextStyle _styleFor(
