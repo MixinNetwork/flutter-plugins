@@ -33,8 +33,9 @@ typedef MarkdownInlineTextWidgetBuilder = Widget Function(
   BuildContext context,
   TextStyle style,
   List<InlineNode> inlines,
-  TextAlign textAlign,
-);
+  TextAlign textAlign, {
+  GlobalKey? directTextKey,
+});
 
 typedef MarkdownTableWidgetBuilder = Widget Function(
   Map<int, TableColumnWidth>? columnWidths,
@@ -413,11 +414,15 @@ class MarkdownTableBlockView extends StatelessWidget {
     required this.theme,
     required this.block,
     required this.textWidgetBuilder,
+    this.cellKeyBuilder,
+    this.cellTextKeyBuilder,
   });
 
   final MarkdownThemeData theme;
   final TableBlock block;
   final MarkdownInlineTextWidgetBuilder textWidgetBuilder;
+  final Key? Function(int rowIndex, int columnIndex)? cellKeyBuilder;
+  final GlobalKey? Function(int rowIndex, int columnIndex)? cellTextKeyBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -442,10 +447,10 @@ class MarkdownTableBlockView extends StatelessWidget {
             verticalInside: BorderSide(color: theme.tableBorderColor),
           ),
           children: <TableRow>[
-            for (final row in block.rows)
+            for (var rowIndex = 0; rowIndex < block.rows.length; rowIndex++)
               TableRow(
                 decoration: BoxDecoration(
-                  color: row.isHeader
+                  color: block.rows[rowIndex].isHeader
                       ? theme.tableHeaderBackgroundColor
                       : theme.tableRowBackgroundColor,
                 ),
@@ -453,11 +458,13 @@ class MarkdownTableBlockView extends StatelessWidget {
                   for (var index = 0; index < columnCount; index++)
                     _buildCell(
                       context: context,
-                      row: row,
+                      row: block.rows[rowIndex],
+                      rowIndex: rowIndex,
                       cellIndex: index,
                       alignment: index < block.alignments.length
                           ? block.alignments[index]
                           : MarkdownTableColumnAlignment.none,
+                      directTextKey: cellTextKeyBuilder?.call(rowIndex, index),
                     ),
                 ],
               ),
@@ -470,14 +477,16 @@ class MarkdownTableBlockView extends StatelessWidget {
   Widget _buildCell({
     required BuildContext context,
     required TableRowNode row,
+    required int rowIndex,
     required int cellIndex,
     required MarkdownTableColumnAlignment alignment,
+    GlobalKey? directTextKey,
   }) {
     final cell = cellIndex < row.cells.length
         ? row.cells[cellIndex]
         : const TableCellNode(inlines: <InlineNode>[]);
     final textStyle = row.isHeader ? theme.tableHeaderStyle : theme.bodyStyle;
-    return Padding(
+    Widget child = Padding(
       padding: theme.tableCellPadding.resolve(Directionality.of(context)),
       child: Align(
         alignment: _alignmentFor(alignment),
@@ -486,9 +495,17 @@ class MarkdownTableBlockView extends StatelessWidget {
           textStyle,
           cell.inlines,
           _textAlignFor(alignment),
+          directTextKey: directTextKey,
         ),
       ),
     );
+    if (cellKeyBuilder != null) {
+      child = KeyedSubtree(
+        key: cellKeyBuilder!(rowIndex, cellIndex),
+        child: child,
+      );
+    }
+    return child;
   }
 
   Alignment _alignmentFor(MarkdownTableColumnAlignment alignment) {
@@ -622,7 +639,7 @@ class _MarkdownTableFramePainter extends CustomPainter {
       Paint()
         ..color = borderColor
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1,
+        ..strokeWidth = 1.0,
     );
   }
 

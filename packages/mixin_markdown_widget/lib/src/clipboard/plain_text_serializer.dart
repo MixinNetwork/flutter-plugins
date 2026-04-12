@@ -62,80 +62,6 @@ class MarkdownPlainTextSerializer extends MarkdownCopySerializer {
     return serializeRange(document, selection.normalizedRange);
   }
 
-  TableCellSelection? clampTableCellSelection(
-    MarkdownDocument document,
-    TableCellSelection selection,
-  ) {
-    if (selection.blockIndex < 0 ||
-        selection.blockIndex >= document.blocks.length) {
-      return null;
-    }
-    final block = document.blocks[selection.blockIndex];
-    if (block is! TableBlock || block.rows.isEmpty) {
-      return null;
-    }
-    final maxRow = block.rows.length - 1;
-    final maxColumn = block.rows.fold<int>(
-          0,
-          (current, row) =>
-              row.cells.length > current ? row.cells.length : current,
-        ) -
-        1;
-    if (maxColumn < 0) {
-      return null;
-    }
-
-    TableCellPosition clamp(TableCellPosition position) {
-      final row = position.rowIndex < 0
-          ? 0
-          : position.rowIndex > maxRow
-              ? maxRow
-              : position.rowIndex;
-      final column = position.columnIndex < 0
-          ? 0
-          : position.columnIndex > maxColumn
-              ? maxColumn
-              : position.columnIndex;
-      return TableCellPosition(rowIndex: row, columnIndex: column);
-    }
-
-    return TableCellSelection(
-      blockIndex: selection.blockIndex,
-      base: clamp(selection.base),
-      extent: clamp(selection.extent),
-    );
-  }
-
-  String serializeTableCellSelection(
-    MarkdownDocument document,
-    TableCellSelection selection,
-  ) {
-    final clamped = clampTableCellSelection(document, selection);
-    if (clamped == null) {
-      return '';
-    }
-    final block = document.blocks[clamped.blockIndex] as TableBlock;
-    final range = clamped.normalizedRange;
-    final rows = <String>[];
-    for (var rowIndex = range.start.rowIndex;
-        rowIndex <= range.end.rowIndex;
-        rowIndex++) {
-      final row = block.rows[rowIndex];
-      final cells = <String>[];
-      for (var columnIndex = range.start.columnIndex;
-          columnIndex <= range.end.columnIndex;
-          columnIndex++) {
-        if (columnIndex < row.cells.length) {
-          cells.add(_flattenInlines(row.cells[columnIndex].inlines));
-        } else {
-          cells.add('');
-        }
-      }
-      rows.add(cells.join('\t'));
-    }
-    return rows.join('\n');
-  }
-
   String serializeRange(MarkdownDocument document, DocumentRange range) {
     final indexedBlocks = _indexBlocks(document);
     if (indexedBlocks.isEmpty) {
@@ -241,10 +167,8 @@ class MarkdownPlainTextSerializer extends MarkdownCopySerializer {
 
   String _serializeTable(TableBlock block) {
     return block.rows
-        .map(
-          (row) =>
-              row.cells.map((cell) => _flattenInlines(cell.inlines)).join('\t'),
-        )
+        .map((row) =>
+            row.cells.map((cell) => _flattenInlines(cell.inlines)).join('\t'))
         .join('\n');
   }
 

@@ -6,9 +6,9 @@ import '../../core/document.dart';
 import '../../widgets/markdown_theme.dart';
 import '../code_syntax_highlighter.dart';
 import '../markdown_block_widgets.dart';
+import '../builder/markdown_inline_builder.dart';
 import '../pretext_text_block.dart';
 import 'markdown_descriptor_extractor.dart';
-import '../builder/markdown_inline_builder.dart';
 
 class MarkdownBlockKeysRegistry {
   final Map<String, GlobalKey<State<StatefulWidget>>> blockKeys = {};
@@ -16,9 +16,45 @@ class MarkdownBlockKeysRegistry {
   final Map<String, List<GlobalKey>> listItemContentKeysByBlock = {};
   final Map<String, List<List<GlobalKey>>> listItemChildKeysByBlock = {};
   final Map<String, List<GlobalKey>> quoteChildKeysByBlock = {};
+  final Map<String, List<List<GlobalKey>>> tableCellKeysByBlock = {};
+  final Map<String, List<List<GlobalKey>>> tableCellTextKeysByBlock = {};
   final Map<String, GlobalKey<State<StatefulWidget>>> tableBlockKeys = {};
   final Map<String, ScrollController> codeBlockScrollControllers = {};
   final Map<String, ValueNotifier<bool>> imageErrorNotifiers = {};
+
+  List<List<GlobalKey>> tableCellKeysFor(TableBlock block) {
+    return _ensureTableKeys(block, tableCellKeysByBlock, 'table');
+  }
+
+  List<List<GlobalKey>> tableCellTextKeysFor(TableBlock block) {
+    return _ensureTableKeys(block, tableCellTextKeysByBlock, 'table-text');
+  }
+
+  List<List<GlobalKey>> _ensureTableKeys(
+    TableBlock block,
+    Map<String, List<List<GlobalKey>>> registry,
+    String prefix,
+  ) {
+    final keys = registry.putIfAbsent(block.id, () => <List<GlobalKey>>[]);
+    while (keys.length < block.rows.length) {
+      keys.add(<GlobalKey>[]);
+    }
+    if (keys.length > block.rows.length) {
+      keys.removeRange(block.rows.length, keys.length);
+    }
+    for (var rowIndex = 0; rowIndex < block.rows.length; rowIndex++) {
+      final rowKeys = keys[rowIndex];
+      final row = block.rows[rowIndex];
+      while (rowKeys.length < row.cells.length) {
+        rowKeys.add(GlobalKey(
+            debugLabel: '$prefix-${block.id}-$rowIndex-${rowKeys.length}'));
+      }
+      if (rowKeys.length > row.cells.length) {
+        rowKeys.removeRange(row.cells.length, rowKeys.length);
+      }
+    }
+    return keys;
+  }
 
   List<GlobalKey> listItemKeysFor(ListBlock block) {
     final keys = listItemKeysByBlock.putIfAbsent(block.id, () => <GlobalKey>[]);
@@ -84,6 +120,8 @@ class MarkdownBlockKeysRegistry {
     listItemContentKeysByBlock.removeWhere((key, _) => !validIds.contains(key));
     listItemChildKeysByBlock.removeWhere((key, _) => !validIds.contains(key));
     quoteChildKeysByBlock.removeWhere((key, _) => !validIds.contains(key));
+    tableCellKeysByBlock.removeWhere((key, _) => !validIds.contains(key));
+    tableCellTextKeysByBlock.removeWhere((key, _) => !validIds.contains(key));
     tableBlockKeys.removeWhere((key, _) => !validIds.contains(key));
     final staleCodeBlockIds = codeBlockScrollControllers.keys
         .where((key) => !validIds.contains(key))
@@ -112,35 +150,6 @@ class MarkdownSelectionResolver {
   final MarkdownDescriptorExtractor extractor;
   final MarkdownBlockKeysRegistry keysRegistry;
   final MarkdownCodeSyntaxHighlighter codeSyntaxHighlighter;
-
-  int tableTextOffsetForCell(
-    TableBlock block,
-    TableCellPosition position, {
-    required bool preferEnd,
-  }) {
-    var offset = 0;
-    for (var rowIndex = 0; rowIndex < block.rows.length; rowIndex++) {
-      final row = block.rows[rowIndex];
-      if (rowIndex > 0) {
-        offset += 1;
-      }
-      for (var columnIndex = 0; columnIndex < row.cells.length; columnIndex++) {
-        if (columnIndex > 0) {
-          offset += 1;
-        }
-        final cellText = MarkdownInlineBuilder.flattenInlineText(
-            row.cells[columnIndex].inlines);
-        final cellStart = offset;
-        final cellEnd = cellStart + cellText.length;
-        if (rowIndex == position.rowIndex &&
-            columnIndex == position.columnIndex) {
-          return preferEnd ? cellEnd : cellStart;
-        }
-        offset = cellEnd;
-      }
-    }
-    return preferEnd ? offset : 0;
-  }
 
   int? resolveListTextOffset(
     BuildContext context,
@@ -212,17 +221,7 @@ class MarkdownSelectionResolver {
       if (rowRenderObject is RenderBox && rowRenderObject.hasSize) {
         final rect =
             rowRenderObject.localToGlobal(Offset.zero) & rowRenderObject.size;
-        final dx = globalPosition.dx < rect.left
-            ? rect.left - globalPosition.dx
-            : globalPosition.dx > rect.right
-                ? globalPosition.dx - rect.right
-                : 0.0;
-        final dy = globalPosition.dy < rect.top
-            ? rect.top - globalPosition.dy
-            : globalPosition.dy > rect.bottom
-                ? globalPosition.dy - rect.bottom
-                : 0.0;
-        final distance = dx * dx + dy * dy;
+        final distance = _distanceToRect(globalPosition, rect);
         if (distance < bestDistance) {
           bestDistance = distance;
           nearestEntry = entry;
@@ -408,6 +407,289 @@ class MarkdownSelectionResolver {
     final localPosition = paragraph.globalToLocal(globalPosition);
     final textPosition = paragraph.getPositionForOffset(localPosition);
     return markdownPretextPlainOffsetForRenderOffset(runs, textPosition.offset);
+  }
+
+  List<Rect> _resolveTableSelectionRectsInRoot(
+    BuildContext context, {
+    required RenderBox rootRenderObject,
+    required TableBlock block,
+    required DocumentRange range,
+  }) {
+    final cellKeys = keysRegistry.tableCellKeysFor(block);
+    final cellTextKeys = keysRegistry.tableCellTextKeysFor(block);
+    final rects = <Rect>[];
+    var currentOffset = 0;
+    final textDirection = Directionality.of(context);
+    final padding = theme.tableCellPadding.resolve(textDirection);
+
+    for (var rowIndex = 0; rowIndex < block.rows.length; rowIndex++) {
+      final row = block.rows[rowIndex];
+      for (var columnIndex = 0; columnIndex < row.cells.length; columnIndex++) {
+        final cell = row.cells[columnIndex];
+        final cellText = MarkdownInlineBuilder.flattenInlineText(cell.inlines);
+        final cellLength = cellText.length;
+        final cellStart = currentOffset;
+        final cellEnd = cellStart + cellLength;
+
+        if (range.start.textOffset <= cellEnd &&
+            range.end.textOffset >= cellStart) {
+          final textKey = cellTextKeys[rowIndex][columnIndex];
+          final paragraph =
+              _findDirectRenderParagraphForKey(rootRenderObject, textKey);
+
+          if (paragraph != null && paragraph.hasSize) {
+            final localStart = math.max(0, range.start.textOffset - cellStart);
+            final localEnd =
+                math.min(cellLength, range.end.textOffset - cellStart);
+
+            final alignment = columnIndex < block.alignments.length
+                ? block.alignments[columnIndex]
+                : MarkdownTableColumnAlignment.none;
+            final cellDescriptor = extractor.descriptorFromInlines(
+              theme.bodyStyle,
+              cell.inlines,
+              textAlign: _textAlignForTableColumn(alignment),
+            );
+
+            final pretext = cellDescriptor.pretext;
+            if (pretext != null) {
+              final renderSelection = TextSelection(
+                baseOffset: markdownPretextRenderOffsetForPlainOffset(
+                  pretext.runs,
+                  localStart,
+                  preferEnd: false,
+                ),
+                extentOffset: markdownPretextRenderOffsetForPlainOffset(
+                  pretext.runs,
+                  localEnd,
+                  preferEnd: true,
+                ),
+              );
+              final lineExtents = _computeParagraphLineExtents(paragraph);
+              final boxes = _mergeAdjacentTextSelectionBoxes(
+                _normalizeBoxesToLineExtents(
+                  paragraph.getBoxesForSelection(renderSelection),
+                  lineExtents,
+                ),
+              );
+              rects.addAll(boxes.map((box) => Rect.fromLTRB(
+                    box.left + paragraph.localToGlobal(Offset.zero, ancestor: rootRenderObject).dx - 1.5,
+                    box.top + paragraph.localToGlobal(Offset.zero, ancestor: rootRenderObject).dy,
+                    box.right + paragraph.localToGlobal(Offset.zero, ancestor: rootRenderObject).dx + 1.5,
+                    box.bottom + paragraph.localToGlobal(Offset.zero, ancestor: rootRenderObject).dy,
+                  )));
+            } else {
+              final boxes = paragraph.getBoxesForSelection(TextSelection(
+                baseOffset: localStart,
+                extentOffset: localEnd,
+              ));
+              rects.addAll(boxes.map((box) => Rect.fromLTRB(
+                    box.left + paragraph.localToGlobal(Offset.zero, ancestor: rootRenderObject).dx - 1.5,
+                    box.top + paragraph.localToGlobal(Offset.zero, ancestor: rootRenderObject).dy,
+                    box.right + paragraph.localToGlobal(Offset.zero, ancestor: rootRenderObject).dx + 1.5,
+                    box.bottom + paragraph.localToGlobal(Offset.zero, ancestor: rootRenderObject).dy,
+                  )));
+            }
+          } else {
+            // Fallback
+            final cellContext = cellKeys[rowIndex][columnIndex].currentContext;
+            final cellRenderObject = cellContext?.findRenderObject();
+            if (cellRenderObject is RenderBox && cellRenderObject.hasSize) {
+              final cellOrigin = cellRenderObject.localToGlobal(Offset.zero,
+                  ancestor: rootRenderObject);
+              final localStart = math.max(0, range.start.textOffset - cellStart);
+              final localEnd =
+                  math.min(cellLength, range.end.textOffset - cellStart);
+
+              final alignment = columnIndex < block.alignments.length
+                  ? block.alignments[columnIndex]
+                  : MarkdownTableColumnAlignment.none;
+              final textAlign = _textAlignForTableColumn(alignment);
+
+              final cellDescriptor = extractor.descriptorFromInlines(
+                theme.bodyStyle,
+                cell.inlines,
+                textAlign: textAlign,
+              );
+
+              final cellRects = resolveDescriptorSelectionRects(
+                context,
+                descriptor: cellDescriptor,
+                range: DocumentRange(
+                  start: DocumentPosition(
+                      blockIndex: 0,
+                      path: const PathInBlock(<int>[0]),
+                      textOffset: localStart),
+                  end: DocumentPosition(
+                      blockIndex: 0,
+                      path: const PathInBlock(<int>[0]),
+                      textOffset: localEnd),
+                ),
+                size: Size(
+                  math.max(0, cellRenderObject.size.width - padding.horizontal),
+                  math.max(0, cellRenderObject.size.height - padding.vertical),
+                ),
+                textDirection: textDirection,
+                origin: cellOrigin + padding.topLeft,
+              );
+              rects.addAll(cellRects);
+            }
+          }
+        }
+        currentOffset = cellEnd + 1;
+      }
+    }
+    return rects;
+  }
+
+  int? _resolveTableTextOffsetInRoot(
+    BuildContext context, {
+    required RenderBox rootRenderObject,
+    required TableBlock block,
+    required Offset globalPosition,
+  }) {
+    final cellKeys = keysRegistry.tableCellKeysFor(block);
+    final cellTextKeys = keysRegistry.tableCellTextKeysFor(block);
+    var currentOffset = 0;
+    final textDirection = Directionality.of(context);
+    final padding = theme.tableCellPadding.resolve(textDirection);
+
+    int? bestOffset;
+    double bestDistance = double.infinity;
+
+    for (var rowIndex = 0; rowIndex < block.rows.length; rowIndex++) {
+      final row = block.rows[rowIndex];
+      for (var columnIndex = 0; columnIndex < row.cells.length; columnIndex++) {
+        final cell = row.cells[columnIndex];
+        final cellText = MarkdownInlineBuilder.flattenInlineText(cell.inlines);
+        final cellLength = cellText.length;
+
+        final textKey = cellTextKeys[rowIndex][columnIndex];
+        final paragraph =
+            _findDirectRenderParagraphForKey(rootRenderObject, textKey);
+
+        if (paragraph != null && paragraph.hasSize) {
+          final rect = paragraph.localToGlobal(Offset.zero) & paragraph.size;
+          final distance = _distanceToRect(globalPosition, rect);
+
+          if (distance < bestDistance) {
+            bestDistance = distance;
+            final localPos = paragraph.globalToLocal(globalPosition);
+            final textPosition = paragraph.getPositionForOffset(localPos);
+
+            final alignment = columnIndex < block.alignments.length
+                ? block.alignments[columnIndex]
+                : MarkdownTableColumnAlignment.none;
+            final cellDescriptor = extractor.descriptorFromInlines(
+              theme.bodyStyle,
+              cell.inlines,
+              textAlign: _textAlignForTableColumn(alignment),
+            );
+
+            final pretext = cellDescriptor.pretext;
+            if (pretext != null) {
+              bestOffset = currentOffset +
+                  markdownPretextPlainOffsetForRenderOffset(
+                      pretext.runs, textPosition.offset);
+            } else {
+              bestOffset = currentOffset + textPosition.offset;
+            }
+          }
+        } else {
+          final cellContext = cellKeys[rowIndex][columnIndex].currentContext;
+          final cellRenderObject = cellContext?.findRenderObject();
+          if (cellRenderObject is RenderBox && cellRenderObject.hasSize) {
+            final bounds =
+                cellRenderObject.localToGlobal(Offset.zero) & cellRenderObject.size;
+            final distance = _distanceToRect(globalPosition, bounds);
+
+            if (distance < bestDistance) {
+              bestDistance = distance;
+              final localPosition = cellRenderObject.globalToLocal(globalPosition);
+
+              final alignment = columnIndex < block.alignments.length
+                  ? block.alignments[columnIndex]
+                  : MarkdownTableColumnAlignment.none;
+              final textAlign = _textAlignForTableColumn(alignment);
+
+              final cellDescriptor = extractor.descriptorFromInlines(
+                theme.bodyStyle,
+                cell.inlines,
+                textAlign: textAlign,
+              );
+              final offsetInCell = resolveDescriptorTextOffset(
+                context,
+                descriptor: cellDescriptor,
+                localPosition: localPosition - padding.topLeft,
+                size: Size(
+                  math.max(0, cellRenderObject.size.width - padding.horizontal),
+                  math.max(0, cellRenderObject.size.height - padding.vertical),
+                ),
+                textDirection: textDirection,
+              );
+              bestOffset = currentOffset + offsetInCell;
+            }
+          }
+        }
+        currentOffset += cellLength + 1;
+      }
+    }
+    return bestOffset;
+  }
+
+  double _distanceToRect(Offset p, Rect rect) {
+    final dx = p.dx < rect.left
+        ? rect.left - p.dx
+        : p.dx > rect.right
+            ? p.dx - rect.right
+            : 0.0;
+    final dy = p.dy < rect.top
+        ? rect.top - p.dy
+        : p.dy > rect.bottom
+            ? p.dy - rect.bottom
+            : 0.0;
+    return dx * dx + dy * dy;
+  }
+
+  RenderParagraph? _findDirectRenderParagraphForKey(
+      RenderObject root, GlobalKey key) {
+    final context = key.currentContext;
+    if (context == null) {
+      return null;
+    }
+    final ro = context.findRenderObject();
+    if (ro is RenderParagraph) {
+      return ro;
+    }
+
+    RenderParagraph? result;
+    void visit(RenderObject node) {
+      if (node is RenderParagraph) {
+        result = node;
+        return;
+      }
+      if (result != null) {
+        return;
+      }
+      node.visitChildren(visit);
+    }
+
+    if (ro != null) {
+      visit(ro);
+    }
+    return result;
+  }
+
+  TextAlign _textAlignForTableColumn(MarkdownTableColumnAlignment alignment) {
+    switch (alignment) {
+      case MarkdownTableColumnAlignment.center:
+        return TextAlign.center;
+      case MarkdownTableColumnAlignment.right:
+        return TextAlign.right;
+      case MarkdownTableColumnAlignment.left:
+      case MarkdownTableColumnAlignment.none:
+        return TextAlign.left;
+    }
   }
 
   List<Rect>? _resolveDirectRenderParagraphSelectionRects(
@@ -976,17 +1258,7 @@ class MarkdownSelectionResolver {
               indentLevel: entry.indentLevel,
             );
       }
-      final dx = globalPosition.dx < rect.left
-          ? rect.left - globalPosition.dx
-          : globalPosition.dx > rect.right
-              ? globalPosition.dx - rect.right
-              : 0.0;
-      final dy = globalPosition.dy < rect.top
-          ? rect.top - globalPosition.dy
-          : globalPosition.dy > rect.bottom
-              ? globalPosition.dy - rect.bottom
-              : 0.0;
-      final distance = dx * dx + dy * dy;
+      final distance = _distanceToRect(globalPosition, rect);
       if (distance < bestDistance) {
         bestDistance = distance;
         nearestEntry = entry;
@@ -1046,6 +1318,13 @@ class MarkdownSelectionResolver {
     int indentLevel = 0,
   }) {
     switch (block.kind) {
+      case MarkdownBlockKind.table:
+        return _resolveTableSelectionRectsInRoot(
+          context,
+          rootRenderObject: rootRenderObject,
+          block: block as TableBlock,
+          range: range,
+        );
       case MarkdownBlockKind.heading:
       case MarkdownBlockKind.paragraph:
       case MarkdownBlockKind.definitionList:
@@ -1129,7 +1408,6 @@ class MarkdownSelectionResolver {
                   const EdgeInsets.only(top: 36), // _codeToolbarHeight
           origin: origin,
         );
-      case MarkdownBlockKind.table:
       case MarkdownBlockKind.image:
       case MarkdownBlockKind.thematicBreak:
         final rect = origin & renderObject.size;
@@ -1152,6 +1430,14 @@ class MarkdownSelectionResolver {
   }) {
     final localPosition = renderObject.globalToLocal(globalPosition);
     switch (block.kind) {
+      case MarkdownBlockKind.table:
+        return _resolveTableTextOffsetInRoot(
+              context,
+              rootRenderObject: rootRenderObject,
+              block: block as TableBlock,
+              globalPosition: globalPosition,
+            ) ??
+            0;
       case MarkdownBlockKind.heading:
       case MarkdownBlockKind.paragraph:
       case MarkdownBlockKind.definitionList:
@@ -1235,7 +1521,6 @@ class MarkdownSelectionResolver {
               theme.codeBlockPadding.resolve(Directionality.of(context)) +
                   const EdgeInsets.only(top: 36), // _codeToolbarHeight
         );
-      case MarkdownBlockKind.table:
       case MarkdownBlockKind.image:
       case MarkdownBlockKind.thematicBreak:
         return localPosition.dy > renderObject.size.height / 2 ||
@@ -1442,4 +1727,16 @@ class MarkdownSelectionResolver {
       textDirection,
     );
   }
+}
+
+class ResolvedIndexedBlockEntry {
+  const ResolvedIndexedBlockEntry({
+    required this.entry,
+    required this.renderObject,
+    required this.rect,
+  });
+
+  final IndexedBlockDescriptor entry;
+  final RenderBox renderObject;
+  final Rect rect;
 }

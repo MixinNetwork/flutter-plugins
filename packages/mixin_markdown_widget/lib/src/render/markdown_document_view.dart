@@ -14,7 +14,6 @@ import 'selection/markdown_descriptor_extractor.dart';
 import 'selection/markdown_selection_gesture_detector.dart';
 import 'selection/markdown_selection_resolver.dart';
 import 'shortcuts/markdown_shortcuts_scope.dart';
-import 'selectable_table_block.dart';
 
 class MarkdownDocumentView extends StatefulWidget {
   const MarkdownDocumentView({
@@ -214,68 +213,6 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
         as DocumentPosition?;
   }
 
-  SelectableMarkdownTableBlockState? _tableBlockStateContaining(
-      Offset globalPosition) {
-    for (final block in widget.document.blocks) {
-      final state =
-          _keysRegistry.tableBlockKeys[block.id]?.currentState as dynamic;
-      if (state != null && state.containsGlobal(globalPosition) == true) {
-        return state as SelectableMarkdownTableBlockState?;
-      }
-    }
-    return null;
-  }
-
-  DocumentPosition? _tableBoundaryPositionForDrag(
-    Offset globalPosition, {
-    required DocumentPosition anchor,
-  }) {
-    for (var blockIndex = 0;
-        blockIndex < widget.document.blocks.length;
-        blockIndex++) {
-      final block = widget.document.blocks[blockIndex];
-      if (block is! TableBlock) {
-        continue;
-      }
-      final state =
-          _keysRegistry.tableBlockKeys[block.id]?.currentState as dynamic;
-      if (state == null || state.containsGlobal(globalPosition) != true) {
-        continue;
-      }
-      final cell = state.cellPositionAtGlobal(globalPosition);
-      final preferEnd = anchor.blockIndex <= blockIndex;
-      return DocumentPosition(
-        blockIndex: blockIndex,
-        path: cell == null
-            ? const PathInBlock(<int>[0])
-            : PathInBlock(<int>[cell.rowIndex, cell.columnIndex]),
-        textOffset: cell == null
-            ? preferEnd
-                ? _plainTextSerializer.serializeBlockText(block).length
-                : 0
-            : MarkdownSelectionResolver(
-                theme: widget.theme,
-                extractor: MarkdownDescriptorExtractor(
-                  theme: widget.theme,
-                  plainTextSerializer: _plainTextSerializer,
-                  inlineBuilder: MarkdownInlineBuilder(
-                    theme: widget.theme,
-                    recognizers: [],
-                  ),
-                  codeSyntaxHighlighter: _codeSyntaxHighlighter,
-                ),
-                keysRegistry: _keysRegistry,
-                codeSyntaxHighlighter: _codeSyntaxHighlighter,
-              ).tableTextOffsetForCell(
-                block,
-                cell,
-                preferEnd: preferEnd,
-              ),
-      );
-    }
-    return null;
-  }
-
   void _selectWordAt(DocumentPosition position) {
     final selectionController = widget.selectionController;
     if (selectionController == null) {
@@ -301,6 +238,62 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       return;
     }
     selectionController.setSelection(blockState.selectWholeBlock());
+  }
+
+  void _selectTableCellAt(DocumentPosition position) {
+    final selectionController = widget.selectionController;
+    if (selectionController == null) {
+      return;
+    }
+    if (position.blockIndex < 0 ||
+        position.blockIndex >= widget.document.blocks.length) {
+      return;
+    }
+    final block = widget.document.blocks[position.blockIndex];
+    if (block is! TableBlock) {
+      _selectBlockAt(position.blockIndex);
+      return;
+    }
+
+    final cellRange = _tableCellTextRange(block, position.textOffset);
+    if (cellRange == null) {
+      _selectBlockAt(position.blockIndex);
+      return;
+    }
+    selectionController.setSelection(
+      DocumentSelection(
+        base: DocumentPosition(
+          blockIndex: position.blockIndex,
+          path: const PathInBlock(<int>[0]),
+          textOffset: cellRange.start,
+        ),
+        extent: DocumentPosition(
+          blockIndex: position.blockIndex,
+          path: const PathInBlock(<int>[0]),
+          textOffset: cellRange.end,
+        ),
+      ),
+    );
+  }
+
+  ({int start, int end})? _tableCellTextRange(
+      TableBlock block, int textOffset) {
+    var currentOffset = 0;
+    for (var rowIndex = 0; rowIndex < block.rows.length; rowIndex++) {
+      final row = block.rows[rowIndex];
+      for (var columnIndex = 0; columnIndex < row.cells.length; columnIndex++) {
+        final cellLength = MarkdownInlineBuilder.flattenInlineText(
+                row.cells[columnIndex].inlines)
+            .length;
+        final cellStart = currentOffset;
+        final cellEnd = cellStart + cellLength;
+        if (textOffset <= cellEnd) {
+          return (start: cellStart, end: cellEnd);
+        }
+        currentOffset = cellEnd + 1;
+      }
+    }
+    return null;
   }
 
   dynamic _blockStateForIndex(int blockIndex) {
@@ -353,7 +346,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     );
 
     final selectionRange = widget.selectionController?.normalizedRange;
-    final tableSelection = widget.selectionController?.tableCellSelection;
+
     final scrollController = _effectiveScrollController;
 
     final scrollable = Scrollbar(
@@ -373,7 +366,6 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
             block: block,
             blockIndex: index,
             selectionRange: selectionRange,
-            tableSelection: tableSelection,
           );
         },
       ),
@@ -391,10 +383,9 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       scrollController: scrollController,
       onRequestToolbar: _showToolbar,
       hitTestPosition: _hitTestPosition,
-      tableBlockStateContaining: _tableBlockStateContaining,
-      tableBoundaryPositionForDrag: _tableBoundaryPositionForDrag,
       selectWordAt: _selectWordAt,
       selectBlockAt: _selectBlockAt,
+      selectTableCellAt: _selectTableCellAt,
       child: scrollable,
     );
 

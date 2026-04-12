@@ -5,20 +5,15 @@ import 'package:flutter/material.dart';
 
 import '../../core/document.dart';
 import '../../selection/selection_controller.dart';
-import '../selectable_table_block.dart';
 
 typedef MarkdownHitTestPositionCallback = DocumentPosition? Function(
   Offset globalPosition, {
   required bool clamp,
 });
-typedef MarkdownTableBoundaryDragCallback = DocumentPosition? Function(
-  Offset globalPosition, {
-  required DocumentPosition anchor,
-});
-typedef MarkdownTableBlockStateCallback = SelectableMarkdownTableBlockState?
-    Function(Offset globalPosition);
 typedef MarkdownSelectWordCallback = void Function(DocumentPosition position);
 typedef MarkdownSelectBlockCallback = void Function(int blockIndex);
+typedef MarkdownSelectTableCellCallback = void Function(
+    DocumentPosition position);
 
 class MarkdownSelectionGestureDetector extends StatefulWidget {
   const MarkdownSelectionGestureDetector({
@@ -31,10 +26,9 @@ class MarkdownSelectionGestureDetector extends StatefulWidget {
     required this.scrollController,
     required this.onRequestToolbar,
     required this.hitTestPosition,
-    required this.tableBlockStateContaining,
-    required this.tableBoundaryPositionForDrag,
     required this.selectWordAt,
     required this.selectBlockAt,
+    required this.selectTableCellAt,
   });
 
   final Widget child;
@@ -45,10 +39,9 @@ class MarkdownSelectionGestureDetector extends StatefulWidget {
   final ScrollController scrollController;
   final void Function(Offset) onRequestToolbar;
   final MarkdownHitTestPositionCallback hitTestPosition;
-  final MarkdownTableBlockStateCallback tableBlockStateContaining;
-  final MarkdownTableBoundaryDragCallback tableBoundaryPositionForDrag;
   final MarkdownSelectWordCallback selectWordAt;
   final MarkdownSelectBlockCallback selectBlockAt;
+  final MarkdownSelectTableCellCallback selectTableCellAt;
 
   @override
   State<MarkdownSelectionGestureDetector> createState() =>
@@ -85,10 +78,6 @@ class _MarkdownSelectionGestureDetectorState
       widget.selectionFocusNode.requestFocus();
     }
 
-    if (widget.tableBlockStateContaining(event.position) != null) {
-      return;
-    }
-
     if ((event.buttons & kSecondaryMouseButton) != 0) {
       final selectionController = widget.selectionController;
       if (!selectionController.hasSelection) {
@@ -116,7 +105,7 @@ class _MarkdownSelectionGestureDetectorState
 
     _updateTapCount(event);
     if (exactPosition != null && _consecutiveTapCount >= 3) {
-      widget.selectBlockAt(position.blockIndex);
+      widget.selectTableCellAt(position);
       _isDraggingSelection = false;
       _dragBasePosition = null;
       _dragStartPointerPosition = null;
@@ -189,11 +178,7 @@ class _MarkdownSelectionGestureDetectorState
     if (_dragBasePosition == null) {
       return;
     }
-    final position = widget.tableBoundaryPositionForDrag(
-          globalPosition,
-          anchor: _dragBasePosition!,
-        ) ??
-        widget.hitTestPosition(globalPosition, clamp: true);
+    final position = widget.hitTestPosition(globalPosition, clamp: true);
     if (position == null) {
       return;
     }

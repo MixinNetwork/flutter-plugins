@@ -8,6 +8,7 @@ import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
 import 'package:mixin_markdown_widget/src/render/local_image_provider_io.dart';
+import 'package:mixin_markdown_widget/src/render/markdown_block_widgets.dart';
 import 'package:mixin_markdown_widget/src/render/pretext_text_block.dart';
 import 'package:mixin_markdown_widget/src/render/selectable_block.dart';
 
@@ -580,29 +581,6 @@ Paragraph body
     );
 
     expect(selectionController.selectedPlainText, 'Para');
-  });
-
-  test('selection controller serializes table-cell selections as TSV', () {
-    final controller = MarkdownController(
-      data: '''
-| Name | Value |
-| --- | --- |
-| row | 42 |
-| next | 7 |
-''',
-    );
-    final selectionController = MarkdownSelectionController()
-      ..attachDocument(controller.document)
-      ..setTableCellSelection(
-        const TableCellSelection(
-          blockIndex: 0,
-          base: TableCellPosition(rowIndex: 1, columnIndex: 0),
-          extent: TableCellPosition(rowIndex: 2, columnIndex: 1),
-        ),
-      );
-
-    expect(selectionController.hasTableSelection, isTrue);
-    expect(selectionController.selectedPlainText, 'row\t42\nnext\t7');
   });
 
   testWidgets('renders markdown from controller updates', (tester) async {
@@ -1355,6 +1333,72 @@ copy me
       ),
       findsWidgets,
     );
+  });
+
+  testWidgets('table selectable clip radius matches the table frame radius', (
+    tester,
+  ) async {
+    const input = '''
+| A | B |
+| --- | --- |
+| 1 | 2 |
+''';
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(data: input),
+        ),
+      ),
+    );
+
+    final context = tester.element(find.byType(MarkdownWidget));
+    final theme = MarkdownTheme.of(context);
+    final tableBlockFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is SelectableMarkdownBlock &&
+          widget.spec.child is MarkdownTableBlockView,
+    );
+    expect(tableBlockFinder, findsOneWidget);
+
+    final tableBlock = tester.widget<SelectableMarkdownBlock>(tableBlockFinder);
+    expect(tableBlock.spec.highlightBorderRadius, theme.tableBorderRadius);
+  });
+
+  testWidgets('table frame paints border above the clipped table content', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: MarkdownTableFrame(
+              theme: MarkdownThemeData.fallback(context),
+              child: const ColoredBox(color: Colors.white),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final frameFinder = find.byType(MarkdownTableFrame);
+    expect(frameFinder, findsOneWidget);
+
+    final customPaintFinder = find.descendant(
+      of: frameFinder,
+      matching: find.byType(CustomPaint),
+    );
+    expect(customPaintFinder, findsOneWidget);
+    expect(
+      tester.widget<CustomPaint>(customPaintFinder).foregroundPainter,
+      isNotNull,
+    );
+
+    final clipFinder = find.descendant(
+      of: frameFinder,
+      matching: find.byType(ClipRRect),
+    );
+    expect(clipFinder, findsOneWidget);
   });
 
   testWidgets(
@@ -3897,8 +3941,10 @@ const veryLongValueName = 42;
       ),
     );
 
-    final start = tester.getCenter(find.text('Name'));
-    final end = tester.getCenter(find.text('42'));
+    final start =
+        tester.getRect(find.text('Name')).centerLeft + const Offset(-1, 0);
+    final end =
+        tester.getRect(find.text('42')).centerRight + const Offset(1, 0);
     final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
     await gesture.addPointer(location: start);
     await gesture.down(start);
@@ -3908,13 +3954,46 @@ const veryLongValueName = 42;
     await gesture.up();
     await tester.pump();
 
-    expect(selectionController.hasTableSelection, isTrue);
+    expect(selectionController.hasSelection, isTrue);
     expect(selectionController.selectedPlainText, 'Name\tValue\nrow\t42');
 
     await selectionController.copySelectionToClipboard();
     await tester.pump();
 
     expect(copiedText, 'Name\tValue\nrow\t42');
+  });
+
+  testWidgets('triple click inside a table selects only the active cell', (
+    tester,
+  ) async {
+    final selectionController = MarkdownSelectionController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: '''
+| Name | Value |
+| --- | --- |
+| row | 42 |
+''',
+            selectionController: selectionController,
+          ),
+        ),
+      ),
+    );
+
+    final target = tester.getCenter(find.text('42'));
+
+    await tester.tapAt(target);
+    await tester.pump();
+    await tester.tapAt(target);
+    await tester.pump();
+    await tester.tapAt(target);
+    await tester.pump();
+
+    expect(selectionController.hasSelection, isTrue);
+    expect(selectionController.selectedPlainText, '42');
   });
 
   testWidgets('dragging into a table selects the table block content', (
@@ -3940,7 +4019,7 @@ Intro
     );
 
     final start = tester.getTopLeft(find.text('Intro')) + const Offset(1, 8);
-    final end = tester.getCenter(find.text('42'));
+    final end = tester.getBottomRight(find.text('42'));
     final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
     await gesture.addPointer(location: start);
     await gesture.down(start);
@@ -3952,7 +4031,9 @@ Intro
 
     expect(selectionController.hasSelection, isTrue);
     expect(
-        selectionController.selectedPlainText, 'Intro\n\nName\tValue\nrow\t42');
+      selectionController.selectedPlainText,
+      'Intro\n\nName\tValue\nrow\t42',
+    );
   });
 
   testWidgets('dragging into a table only selects through the hovered cell', (
@@ -3978,7 +4059,7 @@ Intro
     );
 
     final start = tester.getTopLeft(find.text('Intro')) + const Offset(1, 8);
-    final end = tester.getCenter(find.text('Name'));
+    final end = tester.getBottomRight(find.text('Name'));
     final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
     await gesture.addPointer(location: start);
     await gesture.down(start);

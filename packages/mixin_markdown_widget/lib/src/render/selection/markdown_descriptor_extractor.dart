@@ -158,10 +158,7 @@ class MarkdownDescriptorExtractor {
           fallbackStyle: theme.codeBlockStyle,
         );
       case MarkdownBlockKind.table:
-        return plainTextDescriptor(
-          plainTextSerializer.serializeBlockText(block),
-          theme.bodyStyle,
-        );
+        return buildTableSelectableDescriptor(block as TableBlock);
       case MarkdownBlockKind.image:
         final imageBlock = block as ImageBlock;
         final caption = imageCaptionText(imageBlock);
@@ -392,6 +389,35 @@ class MarkdownDescriptorExtractor {
   SelectableTextDescriptor buildImageCaptionDescriptor(ImageBlock block) {
     final caption = imageCaptionText(block);
     return plainTextDescriptor(caption, imageCaptionStyle);
+  }
+
+  SelectableTextDescriptor buildTableSelectableDescriptor(TableBlock block) {
+    final rowDescriptors = <SelectableTextDescriptor>[];
+    for (final row in block.rows) {
+      final cellDescriptors = <SelectableTextDescriptor>[];
+      for (final cell in row.cells) {
+        cellDescriptors.add(descriptorFromInlines(
+          row.isHeader ? theme.tableHeaderStyle : theme.bodyStyle,
+          cell.inlines,
+          textAlign: MarkdownInlineBuilder.resolvedInlineTextAlign(
+            cell.inlines,
+          ),
+        ));
+      }
+      rowDescriptors.add(
+        joinSelectableTextDescriptors(
+          cellDescriptors,
+          separator: '\t',
+          separatorStyle:
+              row.isHeader ? theme.tableHeaderStyle : theme.bodyStyle,
+        ),
+      );
+    }
+    return joinSelectableTextDescriptors(
+      rowDescriptors,
+      separator: '\n',
+      separatorStyle: theme.bodyStyle,
+    );
   }
 
   SelectableTextDescriptor descriptorFromRuns(

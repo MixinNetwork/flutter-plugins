@@ -12,7 +12,6 @@ import '../code_syntax_highlighter.dart';
 import '../markdown_block_widgets.dart';
 import '../pretext_text_block.dart';
 import '../selectable_block.dart';
-import '../selectable_table_block.dart';
 import 'markdown_inline_builder.dart';
 import '../selection/markdown_descriptor_extractor.dart';
 import '../selection/markdown_selection_resolver.dart';
@@ -58,14 +57,12 @@ class MarkdownBlockBuilder {
     required BlockNode block,
     required int blockIndex,
     required DocumentRange? selectionRange,
-    required TableCellSelection? tableSelection,
   }) {
     final cacheable = _canCacheBlockRow(block);
     final selectionSignature = _selectionSignatureForBlock(
       block: block,
       blockIndex: blockIndex,
       selectionRange: selectionRange,
-      tableSelection: tableSelection,
     );
 
     if (cacheable) {
@@ -117,28 +114,6 @@ class MarkdownBlockBuilder {
     required int blockIndex,
     required DocumentRange? selectionRange,
   }) {
-    if (selectionController != null && block is TableBlock) {
-      final key = keysRegistry.tableBlockKeys.putIfAbsent(
-        block.id,
-        () => GlobalKey<SelectableMarkdownTableBlockState>(
-            debugLabel: 'table-${block.id}'),
-      );
-      return SelectableMarkdownTableBlock(
-        key: key,
-        blockIndex: blockIndex,
-        block: block,
-        theme: theme,
-        selectionColor: theme.selectionColor,
-        selectionController: selectionController!,
-        textWidgetBuilder: _buildInlineTextWidget,
-        onRequestContextMenu: onRequestContextMenu,
-        documentSelected: _isBlockCoveredByTextSelection(
-          blockIndex,
-          selectionRange,
-        ),
-      );
-    }
-
     if (selectionController != null &&
         imageBuilder == null &&
         block is ImageBlock) {
@@ -415,11 +390,48 @@ class MarkdownBlockBuilder {
           repaintListenable: scrollController,
         );
       case MarkdownBlockKind.table:
+        final tableBlock = block as TableBlock;
+        final cellKeys = keysRegistry.tableCellKeysFor(tableBlock);
+        final cellTextKeys = keysRegistry.tableCellTextKeysFor(tableBlock);
+        final descriptor =
+            descriptorExtractor.buildSelectableDescriptorForBlock(tableBlock);
         return SelectableBlockSpec(
-          child: _buildTable(context, block as TableBlock),
-          plainText: plainTextSerializer.serializeBlockText(block),
-          hitTestBehavior: SelectableBlockHitTestBehavior.block,
-          highlightBorderRadius: BorderRadius.circular(14),
+          child: _buildTable(
+            context,
+            tableBlock,
+            cellKeyBuilder: (rowIndex, columnIndex) =>
+                cellKeys[rowIndex][columnIndex],
+            cellTextKeyBuilder: (rowIndex, columnIndex) =>
+                cellTextKeys[rowIndex][columnIndex],
+          ),
+          plainText: descriptor.plainText,
+          hitTestBehavior: SelectableBlockHitTestBehavior.text,
+          textSpan: descriptor.span,
+          highlightBorderRadius: theme.tableBorderRadius,
+          selectionPaintOrder: SelectableBlockSelectionPaintOrder.aboveChild,
+          selectionColor: theme.selectionColor,
+          selectionRectResolver: (context, _, range) =>
+              selectionResolver.resolveNestedBlockSelectionRects(
+            context,
+            rootRenderObject: context.findRenderObject() as RenderBox,
+            block: tableBlock,
+            descriptor: descriptor,
+            range: range,
+            renderObject: context.findRenderObject() as RenderBox, // Ignored
+            origin: Offset.zero, // Ignored
+            textDirection: Directionality.of(context),
+          ),
+          textOffsetResolver: (context, _, localPosition) =>
+              selectionResolver.resolveNestedBlockTextOffset(
+            context,
+            rootRenderObject: context.findRenderObject() as RenderBox,
+            block: tableBlock,
+            descriptor: descriptor,
+            renderObject: context.findRenderObject() as RenderBox, // Ignored
+            globalPosition: (context.findRenderObject() as RenderBox)
+                .localToGlobal(localPosition), // Ignored
+            textDirection: Directionality.of(context),
+          ),
         );
       case MarkdownBlockKind.image:
         return SelectableBlockSpec(
@@ -901,11 +913,18 @@ class MarkdownBlockBuilder {
     );
   }
 
-  Widget _buildTable(BuildContext context, TableBlock block) {
+  Widget _buildTable(
+    BuildContext context,
+    TableBlock block, {
+    Key? Function(int rowIndex, int columnIndex)? cellKeyBuilder,
+    GlobalKey? Function(int rowIndex, int columnIndex)? cellTextKeyBuilder,
+  }) {
     return MarkdownTableBlockView(
       theme: theme,
       block: block,
       textWidgetBuilder: _buildInlineTextWidget,
+      cellKeyBuilder: cellKeyBuilder,
+      cellTextKeyBuilder: cellTextKeyBuilder,
     );
   }
 
@@ -913,13 +932,15 @@ class MarkdownBlockBuilder {
     BuildContext context,
     TextStyle style,
     List<InlineNode> inlines,
-    TextAlign textAlign,
-  ) {
+    TextAlign textAlign, {
+    GlobalKey? directTextKey,
+  }) {
     return MarkdownPretextTextBlock.rich(
       runs: inlineBuilder.buildPretextRuns(style, inlines),
       fallbackStyle: style,
       textAlign: textAlign,
       intrinsicWidthSafe: true,
+      directTextKey: directTextKey,
     );
   }
 
@@ -1305,13 +1326,8 @@ class MarkdownBlockBuilder {
     required BlockNode block,
     required int blockIndex,
     required DocumentRange? selectionRange,
-    required TableCellSelection? tableSelection,
   }) {
     if (block is TableBlock) {
-      if (tableSelection != null && tableSelection.blockIndex == blockIndex) {
-        final tableRange = tableSelection.normalizedRange;
-        return 'table:${tableRange.start.rowIndex}:${tableRange.start.columnIndex}:${tableRange.end.rowIndex}:${tableRange.end.columnIndex}';
-      }
       return _isBlockCoveredByTextSelection(blockIndex, selectionRange)
           ? 'table:text'
           : 'table:none';
