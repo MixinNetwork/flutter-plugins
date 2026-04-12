@@ -58,15 +58,24 @@ Welcome to the comprehensive demo of **mixin_markdown_widget**. This document is
 
 ## 1. Typography & Inline Styles
 
-This widget supports all standard inline syntax, including *italicized text*, **bold emphasis**, ~~strikethrough~~, and `inline code snippets`. 
-You can mix them up: ***bold italics*** or **bold with `code`**.
+This widget supports all standard inline syntax:
+* *Italicized text* 
+* **Bold emphasis** 
+* ***Bold and italic***
+* ~~Strikethrough~~
+* `inline code snippets`
+* Link to [Flutter](https://flutter.dev), and an auto-link: <https://github.com>
 
 Here is a block with mixed inline math: Einstein's famous equation is \( E = mc^2 \), while the quadratic formula is \( x = \frac{-b \pm \sqrt{b^2 -4ac}}{2a} \). 
 Notice how selection seamlessly wraps around inline blocks without layout jumps.
 
-## 2. Lists & Nesting
+And don't forget about footnotes! Here is a reference to a footnote.[^1] And here is another.[^2]
+
+## 2. Lists, Tasks, & Nesting
 
 Markdown isn't complete without lists. And lists inside lists. And quotes inside lists!
+
+### Standard Lists
 
 *   **Fruit**
     *   Apple
@@ -76,6 +85,15 @@ Markdown isn't complete without lists. And lists inside lists. And quotes inside
 *   **Vegetables**
     1.  Carrot
     2.  Broccoli
+
+### Task Lists (Checkboxes)
+
+- [x] Write the core widget logic
+- [x] Implement selection handles & gestures
+- [ ] Implement robust horizontal scroll boundaries
+- [ ] Add real-time streaming parser support
+  - [x] Design token chunking
+  - [ ] Connect socket layer
 
 ### Lists containing advanced blocks
 
@@ -129,13 +147,17 @@ Tables support varying alignments, complex cell contents, and inline styles.
 
 ## 5. Media & Links
 
-Links are fully clickable and interactive: [Visit the Flutter website](https://flutter.dev).
+Images are responsive and support border radiuses based on your specific `MarkdownThemeData`. They can also act as image links!
 
-Images are responsive and support border radiuses based on your specific `MarkdownThemeData`.
+[![Spectacular mountain landscape](https://picsum.photos/id/1011/960/400)](https://picsum.photos)
 
-![Spectacular mountain landscape](https://picsum.photos/id/1011/960/400)
+## 6. The Edge Cases & Formatting
 
-## 6. The Edge Cases
+Horizontal rules separate content cleanly:
+
+***
+
+You can also use HTML tags like `<kbd>` depending on your parser config: Press <kbd>Ctrl</kbd> + <kbd>C</kbd> to copy.
 
 Finally, testing seamless text selection bridging an empty paragraph line to a dense block of text!
 
@@ -150,6 +172,11 @@ def test_edge_case():
     
     print("Empty lines inside code blocks shouldn't break corner heuristics!")
 ```
+
+## Footnotes
+
+[^1]: This is the first footnote. It provides additional context about the text above without breaking the flow.
+[^2]: This is the second footnote. It can also contain inline formulas like \( a^2 + b^2 = c^2 \).
 
 End of showcase. Feel free to break things!
 ''';

@@ -112,7 +112,7 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
       tableCellPadding:
           const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       inlineCodeBorderRadius: BorderRadius.circular(6),
-      codeBlockBorderRadius: BorderRadius.circular(16),
+      codeBlockBorderRadius: BorderRadius.circular(4),
       imageBorderRadius: BorderRadius.circular(6),
       quoteBorderRadius: BorderRadius.circular(4),
       tableBorderRadius: BorderRadius.circular(6),
@@ -199,7 +199,7 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
       codeBlockPadding: const EdgeInsets.all(12),
       tableCellPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       inlineCodeBorderRadius: BorderRadius.circular(4),
-      codeBlockBorderRadius: BorderRadius.circular(8),
+      codeBlockBorderRadius: BorderRadius.circular(2),
       imageBorderRadius: BorderRadius.circular(6),
       quoteBorderRadius: BorderRadius.circular(4),
       tableBorderRadius: BorderRadius.circular(4),

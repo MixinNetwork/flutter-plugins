@@ -254,6 +254,21 @@ Reference[^note]
     expect(footnotes.items, hasLength(1));
   });
 
+  test('strips the synthetic trailing newline from fenced code blocks', () {
+    const input = '''
+```dart
+const value = 42;
+return value;
+```
+''';
+
+    final document = const MarkdownDocumentParser().parse(input);
+    final codeBlock = document.blocks.single as CodeBlock;
+
+    expect(codeBlock.code, 'const value = 42;\nreturn value;');
+    expect(codeBlock.code.endsWith('\n'), isFalse);
+  });
+
   test('parses simple inline html anchor tags into link nodes', () {
     const input = '''
 💡 <a href="/MixinNetwork/flutter-plugins/new/main?filename=.github/instructions/*.instructions.md" class="Link--inTextBlock" target="_blank" rel="noopener noreferrer">Add Copilot custom instructions</a> for smarter, more guided reviews. <a href="https://docs.github.com/en/copilot/customizing-copilot/adding-repository-custom-instructions-for-github-copilot" class="Link--inTextBlock" target="_blank" rel="noopener noreferrer">Learn how to get started</a>.
@@ -856,7 +871,13 @@ Paragraph body
       ),
     );
 
-    expect(find.text('math'), findsOneWidget);
+    final decoratedBoxes = tester
+        .widgetList<DecoratedBox>(find.byType(DecoratedBox))
+        .where((widget) {
+      final decoration = widget.decoration;
+      return decoration is BoxDecoration && decoration.color != null;
+    }).toList(growable: false);
+    expect(decoratedBoxes, isNotEmpty);
   });
 
   testWidgets(
@@ -1326,6 +1347,68 @@ copy me
     expect(find.text('Dart'), findsOneWidget);
     expect(find.textContaining('copy me'), findsOneWidget);
     expect(find.byTooltip('Copy code'), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is SingleChildScrollView &&
+            widget.scrollDirection == Axis.horizontal,
+      ),
+      findsWidgets,
+    );
+  });
+
+  testWidgets(
+      'code blocks render without an outer border and keep copy in the top right',
+      (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: '''
+```dart
+final settleResult = 42;
+```
+''',
+          ),
+        ),
+      ),
+    );
+
+    final theme = MarkdownTheme.of(tester.element(find.byType(MarkdownWidget)));
+    final codeBlockBox = tester
+        .widgetList<DecoratedBox>(find.byType(DecoratedBox))
+        .firstWhere((widget) {
+      final decoration = widget.decoration;
+      return decoration is BoxDecoration &&
+          decoration.color != null &&
+          decoration.borderRadius != null &&
+          decoration.border == null;
+    });
+    final decoration = codeBlockBox.decoration as BoxDecoration;
+    expect(decoration.border, isNull);
+    expect(decoration.color, theme.inlineCodeBackgroundColor);
+
+    final codeBlockFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is DecoratedBox &&
+          widget.decoration is BoxDecoration &&
+          (widget.decoration as BoxDecoration).color ==
+              theme.inlineCodeBackgroundColor &&
+          (widget.decoration as BoxDecoration).border == null,
+    );
+    expect(codeBlockFinder, findsOneWidget);
+
+    final copyButton = find.byTooltip('Copy code');
+    expect(copyButton, findsOneWidget);
+    final buttonTopRight = tester.getTopRight(copyButton);
+    final codeBlockTopRight = tester.getTopRight(codeBlockFinder);
+    expect((buttonTopRight.dx - codeBlockTopRight.dx).abs(), lessThan(36));
+    expect((buttonTopRight.dy - codeBlockTopRight.dy).abs(), lessThan(36));
+
+    final markdownWidth = tester.getSize(find.byType(MarkdownWidget)).width -
+        theme.padding.resolve(TextDirection.ltr).horizontal;
+    final codeBlockWidth = tester.getSize(codeBlockFinder).width;
+    expect(codeBlockWidth, closeTo(markdownWidth, 1.0));
   });
 
   testWidgets('wraps compact tables inside the viewport when columns are few',
@@ -1537,6 +1620,7 @@ const value = 42;
       richText.text.style?.fontFamilyFallback,
       containsAllInOrder(const <String>['SF Mono', 'Roboto Mono', 'Menlo']),
     );
+    expect(richText.softWrap, isFalse);
   });
 
   testWidgets('selecting text across inline code does not throw',
@@ -1961,7 +2045,9 @@ const value = 42;
           ),
         ],
       ),
-      String.fromCharCodes(const <int>[0xFFFC, 0xFFFC]),
+      '${String.fromCharCode(0xFFFC)}${String.fromCharCodes(
+        List<int>.filled('inline_code'.length, 0xFFFC),
+      )}',
     );
 
     expect(
@@ -1996,7 +2082,36 @@ const value = 42;
       ),
     );
 
-    expect(find.text('code'), findsOneWidget);
+    final context = tester.element(find.byType(MarkdownWidget));
+    final theme = MarkdownTheme.of(context);
+
+    final tableFinder = find.byType(Table);
+    expect(tableFinder, findsOneWidget);
+
+    final cellRichTextFinder = find.descendant(
+      of: tableFinder,
+      matching: find.byWidgetPredicate(
+        (widget) =>
+            widget is RichText &&
+            widget.text.toPlainText().contains(
+                  String.fromCharCodes(const <int>[0xFFFC, 0xFFFC]),
+                ),
+      ),
+    );
+    expect(cellRichTextFinder, findsOneWidget);
+
+    final inlineCodeDecorationFinder = find.descendant(
+      of: cellRichTextFinder,
+      matching: find.byWidgetPredicate((widget) {
+        if (widget is! DecoratedBox) {
+          return false;
+        }
+        final decoration = widget.decoration;
+        return decoration is BoxDecoration &&
+            decoration.color == theme.inlineCodeBackgroundColor;
+      }),
+    );
+    expect(inlineCodeDecorationFinder, findsWidgets);
   });
 
   testWidgets('undecorated runs render as a single direct rich text block', (
@@ -2799,12 +2914,79 @@ return value;
     );
 
     expect(matchedRect.contains(expectedRect.center), isTrue);
-    expect(matchedRect.top, greaterThan(blockOrigin.dy + 20));
+    expect(matchedRect.top, greaterThan(blockOrigin.dy + 8));
     expect(matchedRect.left, greaterThan(blockOrigin.dx + 8));
     expect(matchedRect.left, closeTo(expectedRect.left - 1.5, 2.0));
     expect(matchedRect.top, closeTo(expectedRect.top - 1.5, 2.0));
     expect(matchedRect.right, closeTo(expectedRect.right + 1.5, 2.0));
     expect(matchedRect.bottom, closeTo(expectedRect.bottom + 1.5, 2.0));
+  });
+
+  testWidgets('code block selection follows horizontal scrolling', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 220,
+            child: MarkdownWidget(
+              data: '''
+```dart
+const veryLongValueName = 42;
+```
+''',
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final blockFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is SelectableMarkdownBlock &&
+          widget.spec.plainText.contains('const veryLongValueName = 42;'),
+    );
+    final block = tester.widget<SelectableMarkdownBlock>(blockFinder);
+    final blockContext = tester.element(blockFinder);
+    final blockRenderBox = tester.renderObject<RenderBox>(blockFinder);
+    const selectionText = 'veryLongValueName';
+    final start = block.spec.plainText.indexOf(selectionText);
+    final end = start + selectionText.length;
+    final range = DocumentRange(
+      start: DocumentPosition(
+        blockIndex: 0,
+        path: const PathInBlock(<int>[0]),
+        textOffset: start,
+      ),
+      end: DocumentPosition(
+        blockIndex: 0,
+        path: const PathInBlock(<int>[0]),
+        textOffset: end,
+      ),
+    );
+
+    final beforeRects = block.spec.selectionRectResolver!(
+      blockContext,
+      blockRenderBox.size,
+      range,
+    );
+
+    final scrollable = tester.widgetList<SingleChildScrollView>(
+      find.byType(SingleChildScrollView),
+    ).firstWhere((widget) => widget.scrollDirection == Axis.horizontal);
+    scrollable.controller!.jumpTo(60);
+    await tester.pump();
+
+    final afterRects = block.spec.selectionRectResolver!(
+      blockContext,
+      blockRenderBox.size,
+      range,
+    );
+
+    expect(beforeRects, isNotEmpty);
+    expect(afterRects, isNotEmpty);
+    expect(afterRects.first.left, lessThan(beforeRects.first.left));
   });
 
   testWidgets('dragging inside a list selects list text', (tester) async {

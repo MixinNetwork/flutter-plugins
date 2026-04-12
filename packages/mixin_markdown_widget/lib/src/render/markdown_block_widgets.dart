@@ -331,63 +331,75 @@ class MarkdownCodeBlockView extends StatelessWidget {
   const MarkdownCodeBlockView({
     super.key,
     required this.theme,
-    required this.code,
+    required this.codeSpan,
     required this.onCopyCode,
-    required this.toolbarHeight,
-    this.language,
+    required this.scrollController,
+    this.directTextKey,
   });
 
   final MarkdownThemeData theme;
-  final Widget code;
+  final InlineSpan codeSpan;
   final VoidCallback onCopyCode;
-  final double toolbarHeight;
-  final String? language;
+  final ScrollController scrollController;
+  final GlobalKey? directTextKey;
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: theme.codeBlockBackgroundColor,
-        borderRadius: theme.codeBlockBorderRadius,
-        border: Border.all(
-          color: theme.tableBorderColor.withOpacity(0.7),
+    final resolvedPadding = theme.codeBlockPadding.resolve(TextDirection.ltr);
+    final effectivePadding = EdgeInsets.fromLTRB(
+      resolvedPadding.left,
+      resolvedPadding.top,
+      math.max(8, resolvedPadding.right - 4),
+      resolvedPadding.top,
+    );
+
+    return SizedBox(
+      width: double.infinity,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: theme.inlineCodeBackgroundColor,
+          borderRadius: theme.codeBlockBorderRadius,
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          SizedBox(
-            height: toolbarHeight,
-            child: Padding(
-              padding: theme.codeBlockToolbarPadding,
-              child: Row(
-                children: <Widget>[
-                  if (language != null && language!.isNotEmpty)
-                    Text(
-                      language!,
-                      style: theme.bodyStyle.copyWith(
-                        fontSize: 12,
-                        color: theme.bodyStyle.color?.withOpacity(0.72),
-                      ),
-                    ),
-                  const Spacer(),
-                  Tooltip(
-                    message: 'Copy code',
-                    child: IconButton(
-                      visualDensity: VisualDensity.compact,
-                      icon: const Icon(Icons.copy_rounded, size: 18),
-                      onPressed: onCopyCode,
+        child: Padding(
+          padding: effectivePadding,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Expanded(
+                child: ClipRect(
+                  child: SingleChildScrollView(
+                    controller: scrollController,
+                    scrollDirection: Axis.horizontal,
+                    child: Text.rich(
+                      key: directTextKey,
+                      codeSpan,
+                      style: theme.codeBlockStyle,
+                      softWrap: false,
                     ),
                   ),
-                ],
+                ),
               ),
-            ),
+              const SizedBox(width: 8),
+              Tooltip(
+                message: 'Copy code',
+                child: IconButton(
+                  visualDensity: VisualDensity.compact,
+                  constraints: const BoxConstraints.tightFor(
+                    width: 28,
+                    height: 28,
+                  ),
+                  padding: EdgeInsets.zero,
+                  style: IconButton.styleFrom(
+                    backgroundColor: Colors.transparent,
+                    foregroundColor: theme.bodyStyle.color?.withOpacity(0.72),
+                  ),
+                  icon: const Icon(Icons.copy_rounded, size: 18),
+                  onPressed: onCopyCode,
+                ),
+              ),
+            ],
           ),
-          Padding(
-            padding: theme.codeBlockPadding,
-            child: code,
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -464,7 +476,7 @@ class MarkdownTableBlockView extends StatelessWidget {
         : const TableCellNode(inlines: <InlineNode>[]);
     final textStyle = row.isHeader ? theme.tableHeaderStyle : theme.bodyStyle;
     return Padding(
-      padding: theme.tableCellPadding,
+      padding: theme.tableCellPadding.resolve(Directionality.of(context)),
       child: Align(
         alignment: _alignmentFor(alignment),
         child: textWidgetBuilder(

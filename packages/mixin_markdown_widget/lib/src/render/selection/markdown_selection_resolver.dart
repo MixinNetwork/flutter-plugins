@@ -17,6 +17,7 @@ class MarkdownBlockKeysRegistry {
   final Map<String, List<List<GlobalKey>>> listItemChildKeysByBlock = {};
   final Map<String, List<GlobalKey>> quoteChildKeysByBlock = {};
   final Map<String, GlobalKey<State<StatefulWidget>>> tableBlockKeys = {};
+  final Map<String, ScrollController> codeBlockScrollControllers = {};
 
   List<GlobalKey> listItemKeysFor(ListBlock block) {
     final keys = listItemKeysByBlock.putIfAbsent(block.id, () => <GlobalKey>[]);
@@ -83,6 +84,12 @@ class MarkdownBlockKeysRegistry {
     listItemChildKeysByBlock.removeWhere((key, _) => !validIds.contains(key));
     quoteChildKeysByBlock.removeWhere((key, _) => !validIds.contains(key));
     tableBlockKeys.removeWhere((key, _) => !validIds.contains(key));
+    final staleCodeBlockIds = codeBlockScrollControllers.keys
+        .where((key) => !validIds.contains(key))
+        .toList(growable: false);
+    for (final blockId in staleCodeBlockIds) {
+      codeBlockScrollControllers.remove(blockId)?.dispose();
+    }
   }
 }
 

@@ -985,11 +985,21 @@ class _MarkdownAstBuilder {
             : null;
     return CodeBlock(
       id: _nextId(MarkdownBlockKind.codeBlock, node.textContent),
-      code: codeElement is md.Element
-          ? codeElement.textContent
-          : node.textContent,
+      code: _normalizeCodeBlockText(
+        codeElement is md.Element ? codeElement.textContent : node.textContent,
+      ),
       language: language,
     );
+  }
+
+  String _normalizeCodeBlockText(String code) {
+    if (code.endsWith('\r\n')) {
+      return code.substring(0, code.length - 2);
+    }
+    if (code.endsWith('\n') || code.endsWith('\r')) {
+      return code.substring(0, code.length - 1);
+    }
+    return code;
   }
 
   ImageBlock? _buildStandaloneImageParagraph(md.Element node) {

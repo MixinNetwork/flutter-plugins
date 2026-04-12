@@ -28,6 +28,8 @@ class SelectableBlockSpec {
     this.textOffsetResolver,
     this.selectionPaintOrder = SelectableBlockSelectionPaintOrder.behindChild,
     this.selectionColor,
+    this.repaintListenable,
+    this.selectionClipPadding,
   });
 
   final Widget child;
@@ -49,6 +51,8 @@ class SelectableBlockSpec {
   )? textOffsetResolver;
   final SelectableBlockSelectionPaintOrder selectionPaintOrder;
   final Color? selectionColor;
+  final Listenable? repaintListenable;
+  final EdgeInsets? selectionClipPadding;
 }
 
 class SelectableMarkdownBlock extends StatefulWidget {
@@ -71,6 +75,29 @@ class SelectableMarkdownBlock extends StatefulWidget {
 }
 
 class SelectableMarkdownBlockState extends State<SelectableMarkdownBlock> {
+  VoidCallback? _repaintListener;
+
+  @override
+  void initState() {
+    super.initState();
+    _attachRepaintListenable();
+  }
+
+  @override
+  void didUpdateWidget(covariant SelectableMarkdownBlock oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.spec.repaintListenable != widget.spec.repaintListenable) {
+      _detachRepaintListenable(oldWidget.spec.repaintListenable);
+      _attachRepaintListenable();
+    }
+  }
+
+  @override
+  void dispose() {
+    _detachRepaintListenable(widget.spec.repaintListenable);
+    super.dispose();
+  }
+
   Rect? get globalRect {
     final renderObject = context.findRenderObject();
     if (renderObject is! RenderBox || !renderObject.hasSize) {
@@ -78,6 +105,27 @@ class SelectableMarkdownBlockState extends State<SelectableMarkdownBlock> {
     }
     final origin = renderObject.localToGlobal(Offset.zero);
     return origin & renderObject.size;
+  }
+
+  void _attachRepaintListenable() {
+    final listenable = widget.spec.repaintListenable;
+    if (listenable == null) {
+      return;
+    }
+    _repaintListener = () {
+      if (mounted) {
+        setState(() {});
+      }
+    };
+    listenable.addListener(_repaintListener!);
+  }
+
+  void _detachRepaintListenable(Listenable? listenable) {
+    final listener = _repaintListener;
+    if (listenable != null && listener != null) {
+      listenable.removeListener(listener);
+    }
+    _repaintListener = null;
   }
 
   bool containsGlobal(Offset globalPosition) {
@@ -199,7 +247,7 @@ class SelectableMarkdownBlockState extends State<SelectableMarkdownBlock> {
           textDirection: Directionality.of(context),
           selectionRects: selectionRects,
         );
-        return CustomPaint(
+        final paintedChild = CustomPaint(
           painter: widget.spec.selectionPaintOrder ==
                   SelectableBlockSelectionPaintOrder.behindChild
               ? selectionPainter
@@ -209,6 +257,13 @@ class SelectableMarkdownBlockState extends State<SelectableMarkdownBlock> {
               ? selectionPainter
               : null,
           child: widget.spec.child,
+        );
+        if (widget.spec.highlightBorderRadius == null) {
+          return paintedChild;
+        }
+        return ClipRRect(
+          borderRadius: widget.spec.highlightBorderRadius!,
+          child: paintedChild,
         );
       },
     );
@@ -387,10 +442,24 @@ class _BlockSelectionPainter extends CustomPainter {
       return;
     }
     final paint = Paint()..color = selectionColor;
+    final clipPadding = spec.selectionClipPadding;
+    if (clipPadding != null) {
+      final clipRect = Rect.fromLTRB(
+        clipPadding.left,
+        clipPadding.top,
+        math.max(clipPadding.left, size.width - clipPadding.right),
+        math.max(clipPadding.top, size.height - clipPadding.bottom),
+      );
+      canvas.save();
+      canvas.clipRect(clipRect);
+    }
 
     final selectionRects = this.selectionRects;
     if (selectionRects != null) {
       _paintSelectionRects(canvas, paint, selectionRects);
+      if (clipPadding != null) {
+        canvas.restore();
+      }
       return;
     }
 
@@ -426,12 +495,18 @@ class _BlockSelectionPainter extends CustomPainter {
             )
             .toList(growable: false),
       );
+      if (clipPadding != null) {
+        canvas.restore();
+      }
       return;
     }
 
     final borderRadius =
         spec.highlightBorderRadius ?? BorderRadius.circular(12);
     canvas.drawRRect(borderRadius.toRRect(Offset.zero & size), paint);
+    if (clipPadding != null) {
+      canvas.restore();
+    }
   }
 
   @override

@@ -366,26 +366,50 @@ class MarkdownBlockBuilder {
           theme: theme,
           language: codeBlock.language,
         );
+        final codeSpan = _buildCodeTextSpan(codeBlock);
         final directTextKey = _createDirectTextKeyIfNeeded(codeRuns);
+        final scrollController = keysRegistry.codeBlockScrollControllers
+            .putIfAbsent(codeBlock.id, ScrollController.new);
         return _buildPretextTextSpec(
           child: _buildDecoratedCodeBlock(
             codeBlock,
-            code: MarkdownPretextTextBlock.rich(
-              runs: codeRuns,
-              fallbackStyle: theme.codeBlockStyle,
-              preferDirectRichText: directTextKey != null,
-              directTextKey: directTextKey,
-            ),
+            codeSpan: codeSpan,
+            directTextKey: directTextKey,
+            scrollController: scrollController,
           ),
           plainText: codeBlock.code,
           runs: codeRuns,
           fallbackStyle: theme.codeBlockStyle,
           directTextKey: directTextKey,
-          measurementPadding:
-              theme.codeBlockPadding.resolve(Directionality.of(context)) +
-                  const EdgeInsets.only(top: 36.0), // _codeToolbarHeight
+          measurementPadding: EdgeInsets.fromLTRB(
+            theme.codeBlockPadding.resolve(Directionality.of(context)).left,
+            math.max(
+              0,
+              theme.codeBlockPadding.resolve(Directionality.of(context)).top,
+            ),
+            theme.codeBlockPadding.resolve(Directionality.of(context)).right +
+                32,
+            math.max(
+              0,
+              theme.codeBlockPadding.resolve(Directionality.of(context)).top,
+            ),
+          ),
+          selectionClipPadding: EdgeInsets.fromLTRB(
+            theme.codeBlockPadding.resolve(Directionality.of(context)).left,
+            math.max(
+              0,
+              theme.codeBlockPadding.resolve(Directionality.of(context)).top,
+            ),
+            theme.codeBlockPadding.resolve(Directionality.of(context)).right +
+                32,
+            math.max(
+              0,
+              theme.codeBlockPadding.resolve(Directionality.of(context)).top,
+            ),
+          ),
           highlightBorderRadius: theme.codeBlockBorderRadius,
           selectionPaintOrder: SelectableBlockSelectionPaintOrder.aboveChild,
+          repaintListenable: scrollController,
         );
       case MarkdownBlockKind.table:
         return SelectableBlockSpec(
@@ -424,6 +448,8 @@ class MarkdownBlockBuilder {
     EdgeInsets measurementPadding = EdgeInsets.zero,
     BorderRadius? highlightBorderRadius,
     SelectableBlockSelectionPaintOrder? selectionPaintOrder,
+    Listenable? repaintListenable,
+    EdgeInsets? selectionClipPadding,
   }) {
     final hasInlineSurface = runs.any(
       (run) => run.decoration != null || run.renderSpan != null,
@@ -445,6 +471,8 @@ class MarkdownBlockBuilder {
           (hasInlineSurface
               ? SelectableBlockSelectionPaintOrder.aboveChild
               : SelectableBlockSelectionPaintOrder.behindChild),
+      repaintListenable: repaintListenable,
+      selectionClipPadding: selectionClipPadding,
       selectionRectResolver: (context, constraints, range) {
         if (directTextKey != null) {
           final directRects = _resolveDirectRichTextSelectionRects(
@@ -550,8 +578,7 @@ class MarkdownBlockBuilder {
     List<({double top, double bottom})> lineExtents;
     try {
       lineExtents = _computeParagraphLineExtents(renderParagraph);
-      selectionBoxes =
-          renderParagraph.getBoxesForSelection(renderSelection);
+      selectionBoxes = renderParagraph.getBoxesForSelection(renderSelection);
     } on AssertionError {
       return null;
     }
@@ -596,7 +623,6 @@ class MarkdownBlockBuilder {
     );
     return markdownPretextPlainOffsetForRenderOffset(runs, textPosition.offset);
   }
-
 
   RenderParagraph? _resolveDirectRenderParagraph(
     GlobalKey directTextKey, {
@@ -835,35 +861,40 @@ class MarkdownBlockBuilder {
   }
 
   Widget _buildCodeBlock(CodeBlock block) {
-    final runs = codeSyntaxHighlighter.buildPretextRuns(
-      source: block.code,
-      baseStyle: theme.codeBlockStyle,
-      theme: theme,
-      language: block.language,
-    );
+    final scrollController = keysRegistry.codeBlockScrollControllers
+        .putIfAbsent(block.id, ScrollController.new);
     return _buildDecoratedCodeBlock(
       block,
-      code: MarkdownPretextTextBlock.rich(
-        runs: runs,
-        fallbackStyle: theme.codeBlockStyle,
-        preferDirectRichText: markdownPretextCanUseDirectRichTextGeometry(runs),
-      ),
+      codeSpan: _buildCodeTextSpan(block),
+      scrollController: scrollController,
     );
   }
 
   Widget _buildDecoratedCodeBlock(
     CodeBlock block, {
-    required Widget code,
+    required InlineSpan codeSpan,
+    ScrollController? scrollController,
+    GlobalKey? directTextKey,
   }) {
-    final language = block.language?.trim();
     return MarkdownCodeBlockView(
       theme: theme,
-      code: code,
-      toolbarHeight: 36, // _codeToolbarHeight
-      language: language,
+      codeSpan: codeSpan,
+      directTextKey: directTextKey,
+      scrollController: scrollController ??
+          keysRegistry.codeBlockScrollControllers
+              .putIfAbsent(block.id, ScrollController.new),
       onCopyCode: () {
         Clipboard.setData(ClipboardData(text: block.code));
       },
+    );
+  }
+
+  InlineSpan _buildCodeTextSpan(CodeBlock block) {
+    return codeSyntaxHighlighter.buildTextSpan(
+      source: block.code,
+      baseStyle: theme.codeBlockStyle,
+      theme: theme,
+      language: block.language,
     );
   }
 
@@ -1116,9 +1147,8 @@ class MarkdownBlockBuilder {
       final resolvedTop = previous != null
           ? (previous.bottom + current.top) / 2.0
           : current.top;
-      final resolvedBottom = next != null
-          ? (current.bottom + next.top) / 2.0
-          : current.bottom;
+      final resolvedBottom =
+          next != null ? (current.bottom + next.top) / 2.0 : current.bottom;
 
       contiguousLines.add((top: resolvedTop, bottom: resolvedBottom));
     }
