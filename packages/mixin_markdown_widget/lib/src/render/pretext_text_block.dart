@@ -123,7 +123,6 @@ class MarkdownPretextTextBlock extends StatelessWidget {
         buildMarkdownPretextSpan(
           runs: effectiveRuns,
           fallbackStyle: fallbackStyle,
-          compactDecoratedRuns: true,
         ),
         key: directTextKey,
         style: fallbackStyle,
@@ -211,17 +210,11 @@ bool markdownPretextCanUseDirectRichTextGeometry(
 InlineSpan buildMarkdownPretextSpan({
   required List<MarkdownPretextInlineRun> runs,
   required TextStyle fallbackStyle,
-  bool compactDecoratedRuns = false,
 }) {
-  return _buildFullSpan(
-    runs: runs,
-    fallbackStyle: fallbackStyle,
-    compactDecoratedRuns: compactDecoratedRuns,
-  );
+  return _buildFullSpan(runs: runs, fallbackStyle: fallbackStyle);
 }
 
 String markdownPretextRenderText(List<MarkdownPretextInlineRun> runs) {
-  final compactDecoratedRuns = runs.any((run) => run.renderSpan != null);
   final buffer = StringBuffer();
   for (final run in runs) {
     if (run.renderSpan != null) {
@@ -229,7 +222,7 @@ String markdownPretextRenderText(List<MarkdownPretextInlineRun> runs) {
       continue;
     }
     if (run.decoration != null) {
-      if (compactDecoratedRuns || !run.allowCharacterWrap) {
+      if (!run.allowCharacterWrap) {
         buffer.writeCharCode(0xFFFC);
         continue;
       }
@@ -248,15 +241,11 @@ String markdownPretextRenderText(List<MarkdownPretextInlineRun> runs) {
   return buffer.toString();
 }
 
-int _markdownPretextRenderLengthForRun(
-  MarkdownPretextInlineRun run, {
-  required bool compactDecoratedRuns,
-}) {
+int _markdownPretextRenderLengthForRun(MarkdownPretextInlineRun run) {
   if (run.renderSpan != null) {
     return 1;
   }
-  if (run.decoration != null &&
-      (compactDecoratedRuns || !run.allowCharacterWrap)) {
+  if (run.decoration != null && !run.allowCharacterWrap) {
     return 1;
   }
   return run.text.length;
@@ -268,17 +257,13 @@ int markdownPretextRenderOffsetForPlainOffset(
   required bool preferEnd,
 }) {
   final clampedPlainOffset = math.max(plainOffset, 0);
-  final compactDecoratedRuns = runs.any((run) => run.renderSpan != null);
   var plainCursor = 0;
   var renderCursor = 0;
 
   for (final run in runs) {
     final plainStart = plainCursor;
     final plainEnd = plainStart + run.text.length;
-    final renderLength = _markdownPretextRenderLengthForRun(
-      run,
-      compactDecoratedRuns: compactDecoratedRuns,
-    );
+    final renderLength = _markdownPretextRenderLengthForRun(run);
     final renderStart = renderCursor;
     final renderEnd = renderStart + renderLength;
 
@@ -308,17 +293,13 @@ int markdownPretextPlainOffsetForRenderOffset(
   int renderOffset,
 ) {
   final clampedRenderOffset = math.max(renderOffset, 0);
-  final compactDecoratedRuns = runs.any((run) => run.renderSpan != null);
   var plainCursor = 0;
   var renderCursor = 0;
 
   for (final run in runs) {
     final plainStart = plainCursor;
     final plainEnd = plainStart + run.text.length;
-    final renderLength = _markdownPretextRenderLengthForRun(
-      run,
-      compactDecoratedRuns: compactDecoratedRuns,
-    );
+    final renderLength = _markdownPretextRenderLengthForRun(run);
     final renderStart = renderCursor;
     final renderEnd = renderStart + renderLength;
 
@@ -746,7 +727,6 @@ class MarkdownPretextLayoutSegment {
 InlineSpan _buildFullSpan({
   required List<MarkdownPretextInlineRun> runs,
   required TextStyle fallbackStyle,
-  required bool compactDecoratedRuns,
 }) {
   return TextSpan(
     style: fallbackStyle,
@@ -761,7 +741,7 @@ InlineSpan _buildFullSpan({
             mouseCursor: run.mouseCursor,
             recognizer: run.recognizer,
           )
-        else if (run.allowCharacterWrap && !compactDecoratedRuns)
+        else if (run.allowCharacterWrap)
           ..._buildBreakableDecoratedFullSpans(run)
         else
           WidgetSpan(
@@ -792,6 +772,7 @@ List<InlineSpan> _buildBreakableDecoratedFullSpans(
     final chunkEnd = newlineIndex == -1 ? text.length : newlineIndex;
     if (chunkEnd > chunkStart) {
       final chunk = text.substring(chunkStart, chunkEnd);
+      final baseBorderRadius = run.decoration!.borderRadius;
       for (var index = 0; index < chunk.length; index++) {
         final character = chunk[index];
         final isFirst = index == 0;
@@ -804,6 +785,14 @@ List<InlineSpan> _buildBreakableDecoratedFullSpans(
               text: character,
               style: run.style,
               decoration: run.decoration!.copyWith(
+                borderRadius: BorderRadius.only(
+                  topLeft: isFirst ? baseBorderRadius.topLeft : Radius.zero,
+                  bottomLeft:
+                      isFirst ? baseBorderRadius.bottomLeft : Radius.zero,
+                  topRight: isLast ? baseBorderRadius.topRight : Radius.zero,
+                  bottomRight:
+                      isLast ? baseBorderRadius.bottomRight : Radius.zero,
+                ),
                 padding: EdgeInsets.only(
                   left: isFirst ? run.decoration!.padding.left : 0,
                   right: isLast ? run.decoration!.padding.right : 0,

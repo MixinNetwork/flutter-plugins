@@ -456,10 +456,6 @@ class MarkdownBlockBuilder {
           if (directRects != null) {
             return directRects;
           }
-          throw _missingDirectRenderParagraphError(
-            plainText: plainText,
-            runs: runs,
-          );
         }
         final textScaler =
             MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling;
@@ -487,10 +483,6 @@ class MarkdownBlockBuilder {
           if (directOffset != null) {
             return directOffset;
           }
-          throw _missingDirectRenderParagraphError(
-            plainText: plainText,
-            runs: runs,
-          );
         }
         final textScaler =
             MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling;
@@ -552,9 +544,17 @@ class MarkdownBlockBuilder {
     final paragraphOrigin = blockRenderObject.globalToLocal(
       renderParagraph.localToGlobal(Offset.zero),
     );
-    final lineExtents = _computeParagraphLineExtents(renderParagraph);
-    final selectionBoxes =
-        renderParagraph.getBoxesForSelection(renderSelection);
+    // The paragraph found via GlobalKey may not have completed layout
+    // in the current frame (e.g. during scroll-triggered rebuilds).
+    final List<TextBox> selectionBoxes;
+    List<({double top, double bottom})> lineExtents;
+    try {
+      lineExtents = _computeParagraphLineExtents(renderParagraph);
+      selectionBoxes =
+          renderParagraph.getBoxesForSelection(renderSelection);
+    } on AssertionError {
+      return null;
+    }
     final boxes = _mergeDirectTextSelectionBoxes(
       _normalizeBoxesToLineExtents(selectionBoxes, lineExtents),
     );
@@ -597,20 +597,6 @@ class MarkdownBlockBuilder {
     return markdownPretextPlainOffsetForRenderOffset(runs, textPosition.offset);
   }
 
-  FlutterError _missingDirectRenderParagraphError({
-    required String plainText,
-    required List<MarkdownPretextInlineRun> runs,
-  }) {
-    final snippet = plainText.length <= 120
-        ? plainText
-        : '${plainText.substring(0, 120)}...';
-    return FlutterError(
-      'Expected a live RenderParagraph for a direct-geometry markdown block, '
-      'but none could be resolved. This block must not fall back to a different '
-      'geometry model because that produces incorrect selection rects and hit '
-      'testing. plainText="$snippet" renderText="${markdownPretextRenderText(runs)}"',
-    );
-  }
 
   RenderParagraph? _resolveDirectRenderParagraph(
     GlobalKey directTextKey, {
@@ -1116,7 +1102,27 @@ class MarkdownBlockBuilder {
       }
     }
     lines.add((top: lineTop, bottom: lineBottom));
-    return lines;
+
+    // Eliminate vertical gaps between lines by expanding their top/bottom bounds
+    // to meet halfway. TextPainter limits boxes to glyph metrics, which omits
+    // the line-height multiplier spacing and leaves ugly horizontal gaps in the
+    // selection background.
+    final contiguousLines = <({double top, double bottom})>[];
+    for (var i = 0; i < lines.length; i++) {
+      final current = lines[i];
+      final previous = i > 0 ? lines[i - 1] : null;
+      final next = i < lines.length - 1 ? lines[i + 1] : null;
+
+      final resolvedTop = previous != null
+          ? (previous.bottom + current.top) / 2.0
+          : current.top;
+      final resolvedBottom = next != null
+          ? (current.bottom + next.top) / 2.0
+          : current.bottom;
+
+      contiguousLines.add((top: resolvedTop, bottom: resolvedBottom));
+    }
+    return contiguousLines;
   }
 
   List<TextBox> _normalizeBoxesToLineExtents(
