@@ -910,6 +910,55 @@ return value;
     expect(find.text('code'), findsOneWidget);
   });
 
+  testWidgets('inline code prefers the default Mono font family', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(data: 'Inline `code` sample'),
+        ),
+      ),
+    );
+
+    final codeText = tester.widget<Text>(find.text('code'));
+    expect(codeText.style?.fontFamily, 'Mono');
+    expect(
+      codeText.style?.fontFamilyFallback,
+      containsAllInOrder(const <String>['SF Mono', 'Roboto Mono', 'Menlo']),
+    );
+  });
+
+  testWidgets('code blocks prefer the default Mono font family',
+      (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: '''
+```dart
+const value = 42;
+```
+''',
+          ),
+        ),
+      ),
+    );
+
+    final richTextFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is RichText &&
+          widget.text.toPlainText().contains('const value = 42;'),
+    );
+
+    final richText = tester.widget<RichText>(richTextFinder);
+    expect(richText.text.style?.fontFamily, 'Mono');
+    expect(
+      richText.text.style?.fontFamilyFallback,
+      containsAllInOrder(const <String>['SF Mono', 'Roboto Mono', 'Menlo']),
+    );
+  });
+
   testWidgets('selecting text across inline code does not throw',
       (tester) async {
     await tester.pumpWidget(

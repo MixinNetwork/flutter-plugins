@@ -86,7 +86,17 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
           height: 1.7,
         );
     final mono = bodyStyle.copyWith(
-      fontFamilyFallback: const <String>['Menlo', 'Monaco', 'monospace'],
+      fontFamily: 'Mono',
+      fontFamilyFallback: const <String>[
+        'SF Mono',
+        'Roboto Mono',
+        'Menlo',
+        'Monaco',
+        'Consolas',
+        'Liberation Mono',
+        'Courier New',
+        'monospace',
+      ],
       fontSize: (bodyStyle.fontSize ?? 16) - 1,
       height: 1.6,
     );
