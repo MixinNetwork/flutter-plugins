@@ -81,10 +81,11 @@ class SelectableMarkdownTableBlockState
         theme: widget.theme,
         selectionOverlayColor:
             widget.documentSelected ? widget.selectionColor : null,
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Table(
-            defaultColumnWidth: const IntrinsicColumnWidth(),
+        child: MarkdownAdaptiveTableLayout(
+          block: widget.block,
+          tableBuilder: (columnWidths, defaultColumnWidth) => Table(
+            columnWidths: columnWidths,
+            defaultColumnWidth: defaultColumnWidth,
             border: TableBorder(
               horizontalInside:
                   BorderSide(color: widget.theme.tableBorderColor),

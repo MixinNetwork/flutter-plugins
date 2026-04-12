@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../core/document.dart';
@@ -31,6 +33,120 @@ typedef MarkdownInlineTextWidgetBuilder = Widget Function(
   List<InlineNode> inlines,
   TextAlign textAlign,
 );
+
+typedef MarkdownTableWidgetBuilder = Widget Function(
+  Map<int, TableColumnWidth>? columnWidths,
+  TableColumnWidth defaultColumnWidth,
+);
+
+int _estimateInlineTextLength(List<InlineNode> inlines) {
+  int length = 0;
+  for (final inline in inlines) {
+    if (inline is TextInline) {
+      length += inline.text.length;
+    } else if (inline is InlineCode) {
+      length += inline.text.length;
+    } else if (inline is MathInline) {
+      length += inline.tex.length;
+    } else if (inline is EmphasisInline) {
+      length += _estimateInlineTextLength(inline.children);
+    } else if (inline is StrongInline) {
+      length += _estimateInlineTextLength(inline.children);
+    } else if (inline is StrikethroughInline) {
+      length += _estimateInlineTextLength(inline.children);
+    } else if (inline is HighlightInline) {
+      length += _estimateInlineTextLength(inline.children);
+    } else if (inline is SubscriptInline) {
+      length += _estimateInlineTextLength(inline.children);
+    } else if (inline is SuperscriptInline) {
+      length += _estimateInlineTextLength(inline.children);
+    } else if (inline is LinkInline) {
+      length += _estimateInlineTextLength(inline.children);
+    } else if (inline is SoftBreakInline || inline is HardBreakInline) {
+      length += 1;
+    }
+  }
+  return length;
+}
+
+class MarkdownAdaptiveTableLayout extends StatelessWidget {
+  const MarkdownAdaptiveTableLayout({
+    super.key,
+    required this.block,
+    required this.tableBuilder,
+  });
+
+  final TableBlock block;
+  final MarkdownTableWidgetBuilder tableBuilder;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableWidth = math.max(constraints.maxWidth, 0.0);
+
+        final columnCount = block.rows.fold<int>(
+          0,
+          (maxCount, row) =>
+              row.cells.length > maxCount ? row.cells.length : maxCount,
+        );
+
+        if (columnCount == 0) {
+          return const SizedBox.shrink();
+        }
+
+        final colMaxChars = List.filled(columnCount, 0);
+        for (final row in block.rows) {
+          for (var i = 0; i < row.cells.length && i < columnCount; i++) {
+            final textLen = _estimateInlineTextLength(row.cells[i].inlines);
+            if (textLen > colMaxChars[i]) {
+              colMaxChars[i] = textLen;
+            }
+          }
+        }
+
+        final Map<int, TableColumnWidth> customWidths = {};
+        double estimatedMins = 0;
+        bool hasFlex = false;
+
+        for (var i = 0; i < columnCount; i++) {
+          if (colMaxChars[i] > 30) {
+            customWidths[i] = FlexColumnWidth(colMaxChars[i].toDouble());
+            estimatedMins +=
+                80.0; // flex columns are given a generous minimum reasonable width before giving up and scrolling
+            hasFlex = true;
+          } else {
+            customWidths[i] = const IntrinsicColumnWidth();
+            // Estimate minimum required space for intrinsic columns to avoid horizontal squashing before scroll triggers
+            estimatedMins += math.min(colMaxChars[i] * 10.0 + 24.0, 100.0);
+          }
+        }
+
+        if (!hasFlex) {
+          final table = tableBuilder(null, const IntrinsicColumnWidth());
+          return SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: table,
+          );
+        }
+
+        final idealWidth = math.max(availableWidth, estimatedMins);
+        final table = tableBuilder(customWidths, const FlexColumnWidth());
+
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minWidth: idealWidth,
+              maxWidth: idealWidth,
+            ),
+            child: table,
+          ),
+        );
+      },
+    );
+  }
+}
 
 class MarkdownQuoteBlockView extends StatelessWidget {
   const MarkdownQuoteBlockView({
@@ -305,10 +421,11 @@ class MarkdownTableBlockView extends StatelessWidget {
 
     return MarkdownTableFrame(
       theme: theme,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Table(
-          defaultColumnWidth: const IntrinsicColumnWidth(),
+      child: MarkdownAdaptiveTableLayout(
+        block: block,
+        tableBuilder: (columnWidths, defaultColumnWidth) => Table(
+          columnWidths: columnWidths,
+          defaultColumnWidth: defaultColumnWidth,
           border: TableBorder(
             horizontalInside: BorderSide(color: theme.tableBorderColor),
             verticalInside: BorderSide(color: theme.tableBorderColor),

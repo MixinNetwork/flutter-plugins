@@ -847,6 +847,94 @@ copy me
     expect(find.byTooltip('Copy code'), findsOneWidget);
   });
 
+  testWidgets('wraps compact tables inside the viewport when columns are few',
+      (tester) async {
+    const input = '''
+| Name | Description |
+| --- | --- |
+| Dart | This description is intentionally long so the table should wrap inside the available width instead of forcing a horizontal scroll for a simple two-column layout. |
+''';
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 320,
+              child: MarkdownWidget(
+                data: input,
+                selectable: false,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final horizontalScrollFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is SingleChildScrollView &&
+          widget.scrollDirection == Axis.horizontal,
+    );
+    expect(horizontalScrollFinder, findsOneWidget);
+
+    final tableRenderBox = tester.renderObject<RenderBox>(find.byType(Table));
+    // The table should be exactly taking its available width (320 max minus markdown container padding, ~272)
+    expect(tableRenderBox.size.width, closeTo(272.0, 2.0));
+
+    final descriptionHeaderFinder =
+        find.text('Description', findRichText: true);
+    final descriptionCellFinder = find.textContaining(
+      'This description is intentionally long',
+      findRichText: true,
+    );
+
+    expect(descriptionHeaderFinder, findsOneWidget);
+    expect(descriptionCellFinder, findsOneWidget);
+    expect(
+      tester.getSize(descriptionCellFinder).height,
+      greaterThan(tester.getSize(descriptionHeaderFinder).height * 1.5),
+    );
+  });
+
+  testWidgets('keeps horizontal scrolling for wider comparison tables', (
+    tester,
+  ) async {
+    const input = '''
+| A | B | C | D | E |
+| --- | --- | --- | --- | --- |
+| alpha | beta | gamma | delta | epsilon |
+''';
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 320,
+              child: MarkdownWidget(
+                data: input,
+                selectable: false,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final horizontalScrollFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is SingleChildScrollView &&
+          widget.scrollDirection == Axis.horizontal,
+    );
+    expect(horizontalScrollFinder, findsOneWidget);
+
+    final tableRenderBox = tester.renderObject<RenderBox>(find.byType(Table));
+    expect(tableRenderBox.size.width, greaterThan(320.0));
+  });
+
   testWidgets('renders syntax-highlighted code spans', (tester) async {
     const input = '''
 ```dart
