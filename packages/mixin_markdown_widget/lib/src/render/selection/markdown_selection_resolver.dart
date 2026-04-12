@@ -422,17 +422,21 @@ class MarkdownSelectionResolver {
     final paragraphOrigin = renderObject.globalToLocal(
       paragraph.localToGlobal(Offset.zero),
     );
+    final lineExtents = _computeParagraphLineExtents(paragraph);
     final boxes = _mergeAdjacentTextSelectionBoxes(
-      paragraph.getBoxesForSelection(renderSelection),
+      _normalizeBoxesToLineExtents(
+        paragraph.getBoxesForSelection(renderSelection),
+        lineExtents,
+      ),
     );
     return boxes
         .map(
           (box) => Rect.fromLTRB(
-            box.left + paragraphOrigin.dx + origin.dx,
+            box.left + paragraphOrigin.dx + origin.dx - 1.5,
             box.top + paragraphOrigin.dy + origin.dy,
-            box.right + paragraphOrigin.dx + origin.dx,
+            box.right + paragraphOrigin.dx + origin.dx + 1.5,
             box.bottom + paragraphOrigin.dy + origin.dy,
-          ).inflate(1.5),
+          ),
         )
         .toList(growable: false);
   }
@@ -491,11 +495,11 @@ class MarkdownSelectionResolver {
     return boxes
         .map(
           (box) => Rect.fromLTRB(
-            box.left + origin.dx,
+            box.left + origin.dx - 1.5,
             box.top + origin.dy,
-            box.right + origin.dx,
+            box.right + origin.dx + 1.5,
             box.bottom + origin.dy,
-          ).inflate(1.5),
+          ),
         )
         .toList(growable: false);
   }
@@ -701,9 +705,9 @@ class MarkdownSelectionResolver {
     );
     return Rect.fromLTRB(
       rowOrigin.dx,
-      top - 1.5,
+      top,
       rowOrigin.dx + extent,
-      top + height + 1.5,
+      top + height,
     );
   }
 
@@ -760,7 +764,7 @@ class MarkdownSelectionResolver {
         ),
         end: DocumentPosition(
           blockIndex: 0,
-          path: const PathInBlock(<int>[0]),
+          path: PathInBlock(<int>[0]),
           textOffset: math.min(1, descriptor.plainText.length),
         ),
       ),
@@ -1114,7 +1118,10 @@ class MarkdownSelectionResolver {
       case MarkdownBlockKind.table:
       case MarkdownBlockKind.image:
       case MarkdownBlockKind.thematicBreak:
-        return <Rect>[(origin & renderObject.size).inflate(1.5)];
+        final rect = origin & renderObject.size;
+        return <Rect>[
+          Rect.fromLTRB(rect.left - 1.5, rect.top, rect.right + 1.5, rect.bottom),
+        ];
     }
   }
 
@@ -1238,24 +1245,124 @@ class MarkdownSelectionResolver {
     )..layout(
         maxWidth: math.max(size.width - measurementPadding.horizontal, 0),
       );
+    final lineExtents = _computeTextPainterLineExtents(textPainter);
     final boxes = _mergeAdjacentTextSelectionBoxes(
-      textPainter.getBoxesForSelection(
-        TextSelection(
-          baseOffset: range.start.textOffset,
-          extentOffset: range.end.textOffset,
+      _normalizeBoxesToLineExtents(
+        textPainter.getBoxesForSelection(
+          TextSelection(
+            baseOffset: range.start.textOffset,
+            extentOffset: range.end.textOffset,
+          ),
         ),
+        lineExtents,
       ),
     );
     return boxes
         .map(
           (box) => Rect.fromLTRB(
-            box.left + measurementPadding.left + origin.dx,
+            box.left + measurementPadding.left + origin.dx - 1.5,
             box.top + measurementPadding.top + origin.dy,
-            box.right + measurementPadding.left + origin.dx,
+            box.right + measurementPadding.left + origin.dx + 1.5,
             box.bottom + measurementPadding.top + origin.dy,
-          ).inflate(1.5),
+          ),
         )
         .toList(growable: false);
+  }
+
+  List<({double top, double bottom})> _computeParagraphLineExtents(
+    RenderParagraph renderParagraph,
+  ) {
+    final fullText =
+        renderParagraph.text.toPlainText(includePlaceholders: true);
+    if (fullText.isEmpty) {
+      return const <({double top, double bottom})>[];
+    }
+    final allBoxes = renderParagraph.getBoxesForSelection(
+      TextSelection(baseOffset: 0, extentOffset: fullText.length),
+    );
+    if (allBoxes.isEmpty) {
+      return const <({double top, double bottom})>[];
+    }
+    return _resolveContiguousLinesFromBoxes(allBoxes);
+  }
+
+  List<({double top, double bottom})> _computeTextPainterLineExtents(
+    TextPainter textPainter,
+  ) {
+    final fullText = textPainter.text?.toPlainText(includePlaceholders: true) ?? '';
+    if (fullText.isEmpty) {
+      return const <({double top, double bottom})>[];
+    }
+    final allBoxes = textPainter.getBoxesForSelection(
+      TextSelection(baseOffset: 0, extentOffset: fullText.length),
+    );
+    if (allBoxes.isEmpty) {
+      return const <({double top, double bottom})>[];
+    }
+    return _resolveContiguousLinesFromBoxes(allBoxes);
+  }
+
+  List<({double top, double bottom})> _resolveContiguousLinesFromBoxes(
+      List<TextBox> allBoxes) {
+    final sorted = allBoxes.toList(growable: false)
+      ..sort((a, b) => a.top.compareTo(b.top));
+
+    final lines = <({double top, double bottom})>[];
+    var lineTop = sorted.first.top;
+    var lineBottom = sorted.first.bottom;
+    for (final box in sorted.skip(1)) {
+      if (box.top < lineBottom - 1.0) {
+        lineTop = math.min(lineTop, box.top);
+        lineBottom = math.max(lineBottom, box.bottom);
+      } else {
+        lines.add((top: lineTop, bottom: lineBottom));
+        lineTop = box.top;
+        lineBottom = box.bottom;
+      }
+    }
+    lines.add((top: lineTop, bottom: lineBottom));
+
+    final contiguousLines = <({double top, double bottom})>[];
+    for (var i = 0; i < lines.length; i++) {
+      final current = lines[i];
+      final previous = i > 0 ? lines[i - 1] : null;
+      final next = i < lines.length - 1 ? lines[i + 1] : null;
+
+      final resolvedTop = previous != null
+          ? (previous.bottom + current.top) / 2.0
+          : current.top;
+      final resolvedBottom = next != null
+          ? (current.bottom + next.top) / 2.0
+          : current.bottom;
+
+      contiguousLines.add((top: resolvedTop, bottom: resolvedBottom));
+    }
+    return contiguousLines;
+  }
+
+  List<TextBox> _normalizeBoxesToLineExtents(
+    List<TextBox> boxes,
+    List<({double top, double bottom})> lineExtents,
+  ) {
+    if (lineExtents.isEmpty) {
+      return boxes;
+    }
+    return boxes.map((box) {
+      for (final extent in lineExtents) {
+        final overlapTop = math.max(box.top, extent.top);
+        final overlapBottom = math.min(box.bottom, extent.bottom);
+        if (overlapBottom - overlapTop > 0.5) {
+          return TextBox.fromLTRBD(
+            box.left,
+            extent.top,
+            box.right,
+            extent.bottom,
+            box.direction,
+          );
+        }
+      }
+      return box;
+    }).toList(growable: false);
   }
 
   List<TextBox> _mergeAdjacentTextSelectionBoxes(List<TextBox> boxes) {
@@ -1264,7 +1371,7 @@ class MarkdownSelectionResolver {
     }
 
     const lineTolerance = 2.0;
-    const gapTolerance = 6.0;
+    const gapTolerance = double.infinity;
 
     final sorted = boxes.toList(growable: false)
       ..sort((a, b) {

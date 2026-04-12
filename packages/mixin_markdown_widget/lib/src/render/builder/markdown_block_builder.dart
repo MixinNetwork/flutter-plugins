@@ -561,11 +561,11 @@ class MarkdownBlockBuilder {
     return boxes
         .map(
           (box) => Rect.fromLTRB(
-            box.left + paragraphOrigin.dx,
+            box.left + paragraphOrigin.dx - 1.5,
             box.top + paragraphOrigin.dy,
-            box.right + paragraphOrigin.dx,
+            box.right + paragraphOrigin.dx + 1.5,
             box.bottom + paragraphOrigin.dy,
-          ).inflate(1.5),
+          ),
         )
         .toList(growable: false);
   }
@@ -1034,7 +1034,7 @@ class MarkdownBlockBuilder {
     }
 
     const lineTolerance = 2.0;
-    const gapTolerance = 6.0;
+    const gapTolerance = double.infinity;
 
     final sorted = boxes.toList(growable: false)
       ..sort((a, b) {

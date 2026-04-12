@@ -418,11 +418,11 @@ class _BlockSelectionPainter extends CustomPainter {
         boxes
             .map(
               (box) => Rect.fromLTRB(
-                box.left + spec.measurementPadding.left,
+                box.left + spec.measurementPadding.left - 1.5,
                 box.top + spec.measurementPadding.top,
-                box.right + spec.measurementPadding.left,
+                box.right + spec.measurementPadding.left + 1.5,
                 box.bottom + spec.measurementPadding.top,
-              ).inflate(1.5),
+              ),
             )
             .toList(growable: false),
       );
@@ -472,29 +472,29 @@ class _BlockSelectionPainter extends CustomPainter {
     const radius = Radius.circular(4);
     final rect = rects[index];
 
-    final topLeftRounded = !_hasVerticalNeighborAtX(
+    final topLeftRounded = !_hasVerticalNeighborForCorner(
       rects,
       index,
       lookAbove: true,
-      x: rect.left + radius.x,
+      isLeftCorner: true,
     );
-    final topRightRounded = !_hasVerticalNeighborAtX(
+    final topRightRounded = !_hasVerticalNeighborForCorner(
       rects,
       index,
       lookAbove: true,
-      x: rect.right - radius.x,
+      isLeftCorner: false,
     );
-    final bottomLeftRounded = !_hasVerticalNeighborAtX(
+    final bottomLeftRounded = !_hasVerticalNeighborForCorner(
       rects,
       index,
       lookAbove: false,
-      x: rect.left + radius.x,
+      isLeftCorner: true,
     );
-    final bottomRightRounded = !_hasVerticalNeighborAtX(
+    final bottomRightRounded = !_hasVerticalNeighborForCorner(
       rects,
       index,
       lookAbove: false,
-      x: rect.right - radius.x,
+      isLeftCorner: false,
     );
 
     return RRect.fromRectAndCorners(
@@ -506,16 +506,18 @@ class _BlockSelectionPainter extends CustomPainter {
     );
   }
 
-  bool _hasVerticalNeighborAtX(
+  bool _hasVerticalNeighborForCorner(
     List<Rect> rects,
     int index, {
     required bool lookAbove,
-    required double x,
+    required bool isLeftCorner,
   }) {
     const verticalTolerance = 2.0;
     const horizontalTolerance = 0.5;
 
     final target = rects[index];
+    final testRadius = math.min(4.0, target.width / 2.0);
+
     for (var otherIndex = 0; otherIndex < rects.length; otherIndex++) {
       if (otherIndex == index) {
         continue;
@@ -535,12 +537,27 @@ class _BlockSelectionPainter extends CustomPainter {
         continue;
       }
 
-      if (x < other.left - horizontalTolerance ||
-          x > other.right + horizontalTolerance) {
-        continue;
+      if (isLeftCorner) {
+        final isFlushLeft =
+            (other.left - target.left).abs() <= horizontalTolerance;
+        if (isFlushLeft) {
+          return true;
+        }
+        if (other.right >= target.left + testRadius - horizontalTolerance &&
+            other.left <= target.left + testRadius + horizontalTolerance) {
+          return true;
+        }
+      } else {
+        final isFlushRight =
+            (other.right - target.right).abs() <= horizontalTolerance;
+        if (isFlushRight) {
+          return true;
+        }
+        if (other.left <= target.right - testRadius + horizontalTolerance &&
+            other.right >= target.right - testRadius - horizontalTolerance) {
+          return true;
+        }
       }
-
-      return true;
     }
     return false;
   }
@@ -566,50 +583,43 @@ class _BlockSelectionPainter extends CustomPainter {
         continue;
       }
 
-      if (next.left > current.left + 0.5) {
+      if (current.right <= next.left + 0.5 ||
+          next.right <= current.left + 0.5) {
+        continue;
+      }
+
+      if (next.left >= current.left + maxRadius * 2) {
         _fillQuarterTransition(
           canvas,
           paint,
           corner: Offset(next.left, current.bottom),
-          radius: math.min(
-            maxRadius,
-            math.min(next.left - current.left, current.height / 2),
-          ),
+          radius: maxRadius,
           quadrant: _SelectionCornerQuadrant.bottomLeft,
         );
-      } else if (current.left > next.left + 0.5) {
+      } else if (current.left >= next.left + maxRadius * 2) {
         _fillQuarterTransition(
           canvas,
           paint,
           corner: Offset(current.left, next.top),
-          radius: math.min(
-            maxRadius,
-            math.min(current.left - next.left, next.height / 2),
-          ),
+          radius: maxRadius,
           quadrant: _SelectionCornerQuadrant.topLeft,
         );
       }
 
-      if (current.right > next.right + 0.5) {
+      if (current.right >= next.right + maxRadius * 2) {
         _fillQuarterTransition(
           canvas,
           paint,
           corner: Offset(next.right, current.bottom),
-          radius: math.min(
-            maxRadius,
-            math.min(current.right - next.right, current.height / 2),
-          ),
+          radius: maxRadius,
           quadrant: _SelectionCornerQuadrant.bottomRight,
         );
-      } else if (next.right > current.right + 0.5) {
+      } else if (next.right >= current.right + maxRadius * 2) {
         _fillQuarterTransition(
           canvas,
           paint,
           corner: Offset(current.right, next.top),
-          radius: math.min(
-            maxRadius,
-            math.min(next.right - current.right, next.height / 2),
-          ),
+          radius: maxRadius,
           quadrant: _SelectionCornerQuadrant.topRight,
         );
       }
@@ -679,7 +689,7 @@ class _BlockSelectionPainter extends CustomPainter {
     }
 
     const lineTolerance = 2.0;
-    const gapTolerance = 6.0;
+    const gapTolerance = double.infinity;
 
     final sorted = boxes.toList()
       ..sort((a, b) {
