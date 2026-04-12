@@ -353,7 +353,8 @@ class MarkdownSelectionResolver {
     SelectableTextDescriptor descriptor,
   ) {
     final pretext = descriptor.pretext;
-    return pretext != null && pretext.runs.any((run) => run.renderSpan != null);
+    return pretext != null &&
+        markdownPretextCanUseDirectRichTextGeometry(pretext.runs);
   }
 
   RenderParagraph? _findDirectRenderParagraphForRuns(
@@ -380,54 +381,6 @@ class MarkdownSelectionResolver {
     return paragraph;
   }
 
-  List<Rect> _resolveDirectRenderParagraphSelectionRects(
-    RenderBox rootRenderObject, {
-    required List<MarkdownPretextInlineRun> runs,
-    required RenderObject renderObject,
-    required DocumentRange range,
-  }) {
-    final paragraph = _findDirectRenderParagraphForRuns(renderObject, runs);
-    if (paragraph == null || !paragraph.hasSize) {
-      return const <Rect>[];
-    }
-
-    final plainStart = math.min(range.start.textOffset, range.end.textOffset);
-    final plainEnd = math.max(range.start.textOffset, range.end.textOffset);
-    if (plainStart >= plainEnd) {
-      return const <Rect>[];
-    }
-    final renderStart = markdownPretextRenderOffsetForPlainOffset(
-      runs,
-      plainStart,
-      preferEnd: false,
-    );
-    final renderEnd = markdownPretextRenderOffsetForPlainOffset(
-      runs,
-      plainEnd,
-      preferEnd: true,
-    );
-    if (renderStart >= renderEnd) {
-      return const <Rect>[];
-    }
-
-    final origin = rootRenderObject.globalToLocal(
-      paragraph.localToGlobal(Offset.zero),
-    );
-    return paragraph
-        .getBoxesForSelection(
-          TextSelection(baseOffset: renderStart, extentOffset: renderEnd),
-        )
-        .map(
-          (box) => Rect.fromLTRB(
-            box.left + origin.dx,
-            box.top + origin.dy,
-            box.right + origin.dx,
-            box.bottom + origin.dy,
-          ).inflate(1.5),
-        )
-        .toList(growable: false);
-  }
-
   int? _resolveDirectRenderParagraphTextOffset(
     RenderObject renderObject, {
     required Offset globalPosition,
@@ -441,6 +394,65 @@ class MarkdownSelectionResolver {
     final localPosition = paragraph.globalToLocal(globalPosition);
     final textPosition = paragraph.getPositionForOffset(localPosition);
     return markdownPretextPlainOffsetForRenderOffset(runs, textPosition.offset);
+  }
+
+  List<Rect>? _resolveDirectRenderParagraphSelectionRects(
+    RenderBox renderObject, {
+    required DocumentRange range,
+    required Offset origin,
+    required List<MarkdownPretextInlineRun> runs,
+  }) {
+    final paragraph = _findDirectRenderParagraphForRuns(renderObject, runs);
+    if (paragraph == null || !paragraph.hasSize) {
+      return null;
+    }
+
+    final renderSelection = TextSelection(
+      baseOffset: markdownPretextRenderOffsetForPlainOffset(
+        runs,
+        range.start.textOffset,
+        preferEnd: false,
+      ),
+      extentOffset: markdownPretextRenderOffsetForPlainOffset(
+        runs,
+        range.end.textOffset,
+        preferEnd: true,
+      ),
+    );
+    final paragraphOrigin = renderObject.globalToLocal(
+      paragraph.localToGlobal(Offset.zero),
+    );
+    final boxes = _mergeAdjacentTextSelectionBoxes(
+      paragraph.getBoxesForSelection(renderSelection),
+    );
+    return boxes
+        .map(
+          (box) => Rect.fromLTRB(
+            box.left + paragraphOrigin.dx + origin.dx,
+            box.top + paragraphOrigin.dy + origin.dy,
+            box.right + paragraphOrigin.dx + origin.dx,
+            box.bottom + paragraphOrigin.dy + origin.dy,
+          ).inflate(1.5),
+        )
+        .toList(growable: false);
+  }
+
+  FlutterError _missingDirectRenderParagraphError(
+    SelectableTextDescriptor descriptor,
+  ) {
+    final plainText = descriptor.plainText;
+    final snippet = plainText.length <= 120
+        ? plainText
+        : '${plainText.substring(0, 120)}...';
+    final renderText = descriptor.pretext == null
+        ? plainText
+        : markdownPretextRenderText(descriptor.pretext!.runs);
+    return FlutterError(
+      'Expected a live RenderParagraph for a direct-geometry markdown block, '
+      'but none could be resolved. This block must not fall back to a different '
+      'geometry model because that produces incorrect selection rects and hit '
+      'testing. plainText="$snippet" renderText="$renderText"',
+    );
   }
 
   List<Rect> resolveDescriptorSelectionRects(
@@ -1021,14 +1033,15 @@ class MarkdownSelectionResolver {
       case MarkdownBlockKind.definitionList:
         if (_descriptorUsesDirectRichTextMetrics(descriptor)) {
           final directRects = _resolveDirectRenderParagraphSelectionRects(
-            rootRenderObject,
-            runs: descriptor.pretext!.runs,
-            renderObject: renderObject,
+            renderObject,
             range: range,
+            origin: origin,
+            runs: descriptor.pretext!.runs,
           );
-          if (directRects.isNotEmpty) {
+          if (directRects != null) {
             return directRects;
           }
+          throw _missingDirectRenderParagraphError(descriptor);
         }
         return resolveDescriptorSelectionRects(
           context,
@@ -1064,12 +1077,31 @@ class MarkdownSelectionResolver {
           range: range,
         );
       case MarkdownBlockKind.codeBlock:
+        final codeBlock = block as CodeBlock;
+        final codeRuns = codeSyntaxHighlighter.buildPretextRuns(
+          source: codeBlock.code,
+          baseStyle: theme.codeBlockStyle,
+          theme: theme,
+          language: codeBlock.language,
+        );
+        if (markdownPretextCanUseDirectRichTextGeometry(codeRuns)) {
+          final directRects = _resolveDirectRenderParagraphSelectionRects(
+            renderObject,
+            range: range,
+            origin: origin,
+            runs: codeRuns,
+          );
+          if (directRects != null) {
+            return directRects;
+          }
+          throw _missingDirectRenderParagraphError(descriptor);
+        }
         return resolveTextSpanSelectionRects(
           codeSyntaxHighlighter.buildTextSpan(
-            source: (block as CodeBlock).code,
+            source: codeBlock.code,
             baseStyle: theme.codeBlockStyle,
             theme: theme,
-            language: block.language,
+            language: codeBlock.language,
           ),
           range,
           size: renderObject.size,
@@ -1110,6 +1142,7 @@ class MarkdownSelectionResolver {
           if (directOffset != null) {
             return directOffset;
           }
+          throw _missingDirectRenderParagraphError(descriptor);
         }
         return resolveDescriptorTextOffset(
           context,
@@ -1147,12 +1180,30 @@ class MarkdownSelectionResolver {
             ) ??
             0;
       case MarkdownBlockKind.codeBlock:
+        final codeBlock = block as CodeBlock;
+        final codeRuns = codeSyntaxHighlighter.buildPretextRuns(
+          source: codeBlock.code,
+          baseStyle: theme.codeBlockStyle,
+          theme: theme,
+          language: codeBlock.language,
+        );
+        if (markdownPretextCanUseDirectRichTextGeometry(codeRuns)) {
+          final directOffset = _resolveDirectRenderParagraphTextOffset(
+            renderObject,
+            globalPosition: globalPosition,
+            runs: codeRuns,
+          );
+          if (directOffset != null) {
+            return directOffset;
+          }
+          throw _missingDirectRenderParagraphError(descriptor);
+        }
         return resolveTextSpanTextOffset(
           codeSyntaxHighlighter.buildTextSpan(
-            source: (block as CodeBlock).code,
+            source: codeBlock.code,
             baseStyle: theme.codeBlockStyle,
             theme: theme,
-            language: block.language,
+            language: codeBlock.language,
           ),
           descriptor.plainText.length,
           localPosition: localPosition,

@@ -746,6 +746,13 @@ Paragraph body
       globalSelectionRects.any((rect) => rect.overlaps(mathRect.inflate(1))),
       isTrue,
     );
+    final mathSelectionRect = globalSelectionRects.firstWhere(
+      (rect) => rect.overlaps(mathRect.inflate(1)),
+    );
+    expect(mathSelectionRect.contains(mathRect.center), isTrue);
+    expect(mathSelectionRect.width, lessThan(mathRect.width + 16));
+    expect(mathSelectionRect.left, lessThanOrEqualTo(mathRect.left + 6));
+    expect(mathSelectionRect.right, greaterThanOrEqualTo(mathRect.right - 6));
 
     final leftOffset = block.spec.textOffsetResolver!(
       blockContext,
@@ -760,6 +767,160 @@ Paragraph body
 
     expect(leftOffset, mathStart);
     expect(rightOffset, mathEnd);
+  });
+
+  testWidgets(
+      'math selection geometry tracks live widget bounds after inline code',
+      (tester) async {
+    const data =
+        'test `math` a \\( x = \\frac{-b \\pm \\sqrt{b^2-4ac}}{2a} \\)';
+    const mathText = r'x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}';
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: data,
+          ),
+        ),
+      ),
+    );
+
+    final blockFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is SelectableMarkdownBlock &&
+          widget.spec.plainText.contains('test math a ') &&
+          widget.spec.plainText.contains(mathText),
+    );
+    final block = tester.widget<SelectableMarkdownBlock>(blockFinder);
+    final blockContext = tester.element(blockFinder);
+    final blockRenderBox = tester.renderObject<RenderBox>(blockFinder);
+    final blockOrigin = blockRenderBox.localToGlobal(Offset.zero);
+    final mathRect = tester.getRect(find.byType(Math).first);
+    final mathStart = block.spec.plainText.indexOf(mathText);
+    final mathEnd = mathStart + mathText.length;
+
+    final selectionRects = block.spec.selectionRectResolver!(
+      blockContext,
+      blockRenderBox.size,
+      DocumentRange(
+        start: DocumentPosition(
+          blockIndex: 0,
+          path: const PathInBlock(<int>[0]),
+          textOffset: mathStart,
+        ),
+        end: DocumentPosition(
+          blockIndex: 0,
+          path: const PathInBlock(<int>[0]),
+          textOffset: mathEnd,
+        ),
+      ),
+    );
+    final globalSelectionRects = selectionRects
+        .map((rect) => rect.shift(blockOrigin))
+        .toList(growable: false);
+
+    expect(globalSelectionRects, isNotEmpty);
+    final mathSelectionRect = globalSelectionRects.firstWhere(
+      (rect) => rect.overlaps(mathRect.inflate(1)),
+    );
+    expect(mathSelectionRect.contains(mathRect.center), isTrue);
+    expect(mathSelectionRect.width, lessThan(mathRect.width + 16));
+    expect(mathSelectionRect.left, lessThanOrEqualTo(mathRect.left + 6));
+    expect(mathSelectionRect.right, greaterThanOrEqualTo(mathRect.right - 6));
+
+    final leftOffset = block.spec.textOffsetResolver!(
+      blockContext,
+      blockRenderBox.size,
+      blockRenderBox.globalToLocal(mathRect.centerLeft + const Offset(1, 0)),
+    );
+    final rightOffset = block.spec.textOffsetResolver!(
+      blockContext,
+      blockRenderBox.size,
+      blockRenderBox.globalToLocal(mathRect.centerRight + const Offset(2, 0)),
+    );
+
+    expect(leftOffset, mathStart);
+    expect(rightOffset, mathEnd);
+  });
+
+  testWidgets('pretext blocks with math paint selection above child',
+      (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(data: r'before $x^2$ after'),
+        ),
+      ),
+    );
+
+    final paragraphFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is SelectableMarkdownBlock &&
+          widget.spec.plainText.contains('before x^2 after'),
+    );
+    final paragraph = tester.widget<SelectableMarkdownBlock>(paragraphFinder);
+
+    expect(
+      paragraph.spec.selectionPaintOrder,
+      SelectableBlockSelectionPaintOrder.aboveChild,
+    );
+  });
+
+  testWidgets('display math selection geometry tracks live widget bounds', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: r'$$x^2$$',
+          ),
+        ),
+      ),
+    );
+
+    final blockFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is SelectableMarkdownBlock &&
+          widget.spec.plainText.contains('x^2'),
+    );
+    final block = tester.widget<SelectableMarkdownBlock>(blockFinder);
+    final blockContext = tester.element(blockFinder);
+    final blockRenderBox = tester.renderObject<RenderBox>(blockFinder);
+    final blockOrigin = blockRenderBox.localToGlobal(Offset.zero);
+    final mathRect = tester.getRect(find.byType(Math).first);
+    final mathStart = block.spec.plainText.indexOf('x^2');
+    final mathEnd = mathStart + 'x^2'.length;
+
+    final selectionRects = block.spec.selectionRectResolver!(
+      blockContext,
+      blockRenderBox.size,
+      DocumentRange(
+        start: DocumentPosition(
+          blockIndex: 0,
+          path: const PathInBlock(<int>[0]),
+          textOffset: mathStart,
+        ),
+        end: DocumentPosition(
+          blockIndex: 0,
+          path: const PathInBlock(<int>[0]),
+          textOffset: mathEnd,
+        ),
+      ),
+    );
+    final globalSelectionRects = selectionRects
+        .map((rect) => rect.shift(blockOrigin))
+        .toList(growable: false);
+
+    expect(globalSelectionRects, isNotEmpty);
+    final mathSelectionRect = globalSelectionRects.firstWhere(
+      (rect) => rect.overlaps(mathRect.inflate(1)),
+    );
+    expect(mathSelectionRect.contains(mathRect.center), isTrue);
+    expect(mathSelectionRect.width, lessThan(mathRect.width + 16));
+    expect(mathSelectionRect.left, lessThanOrEqualTo(mathRect.left + 6));
+    expect(mathSelectionRect.right, greaterThanOrEqualTo(mathRect.right - 6));
   });
 
   testWidgets('math selection geometry tracks live widget bounds inside lists',
@@ -1605,6 +1766,207 @@ const value = 42;
     }
   });
 
+  test('render-span pretext layout keeps per-line heights local', () {
+    const baseStyle = TextStyle(fontSize: 14, height: 1.2);
+    final layout = computeMarkdownPretextLayoutFromRuns(
+      runs: <MarkdownPretextInlineRun>[
+        const MarkdownPretextInlineRun(
+          text: 'alpha beta gamma ',
+          style: baseStyle,
+        ),
+        MarkdownPretextInlineRun(
+          text: 'x^2',
+          style: baseStyle,
+          renderSpan: const WidgetSpan(
+            child: SizedBox(width: 36, height: 28),
+          ),
+          estimatedWidth: 36,
+          estimatedLineHeight: 32,
+        ),
+        const MarkdownPretextInlineRun(
+          text: ' delta epsilon zeta eta theta',
+          style: baseStyle,
+        ),
+      ],
+      fallbackStyle: baseStyle,
+      maxWidth: 96,
+      textScaleFactor: 1,
+    );
+
+    expect(layout.lines.length, greaterThan(1));
+    expect(
+      layout.lines.map((line) => line.height).toSet().length,
+      greaterThan(1),
+    );
+  });
+
+  test('direct rich text geometry is used for undecorated or render-span runs',
+      () {
+    const baseStyle = TextStyle(fontSize: 14, height: 1.2);
+
+    expect(
+      markdownPretextCanUseDirectRichTextGeometry(
+        const <MarkdownPretextInlineRun>[
+          MarkdownPretextInlineRun(text: 'plain text', style: baseStyle),
+        ],
+      ),
+      isTrue,
+    );
+
+    expect(
+      markdownPretextCanUseDirectRichTextGeometry(
+        <MarkdownPretextInlineRun>[
+          MarkdownPretextInlineRun(
+            text: 'x^2',
+            style: baseStyle,
+            renderSpan:
+                const WidgetSpan(child: SizedBox(width: 20, height: 16)),
+            estimatedWidth: 20,
+            estimatedLineHeight: 18,
+          ),
+        ],
+      ),
+      isTrue,
+    );
+
+    expect(
+      markdownPretextCanUseDirectRichTextGeometry(
+        <MarkdownPretextInlineRun>[
+          const MarkdownPretextInlineRun(
+            text: 'prefix ',
+            style: baseStyle,
+          ),
+          const MarkdownPretextInlineRun(
+            text: 'inline_code',
+            style: baseStyle,
+            allowCharacterWrap: true,
+            decoration: MarkdownPretextInlineDecoration(
+              backgroundColor: Color(0xFFE9EDF2),
+              borderRadius: BorderRadius.all(Radius.circular(6)),
+              padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            ),
+          ),
+          MarkdownPretextInlineRun(
+            text: 'x^2',
+            style: baseStyle,
+            renderSpan:
+                const WidgetSpan(child: SizedBox(width: 20, height: 16)),
+            estimatedWidth: 20,
+            estimatedLineHeight: 18,
+          ),
+        ],
+      ),
+      isTrue,
+    );
+
+    expect(
+      markdownPretextCanUseDirectRichTextGeometry(
+        const <MarkdownPretextInlineRun>[
+          MarkdownPretextInlineRun(
+            text: 'inline_code',
+            style: baseStyle,
+            allowCharacterWrap: true,
+            decoration: MarkdownPretextInlineDecoration(
+              backgroundColor: Color(0xFFE9EDF2),
+              borderRadius: BorderRadius.all(Radius.circular(6)),
+              padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            ),
+          ),
+        ],
+      ),
+      isFalse,
+    );
+  });
+
+  testWidgets('undecorated runs render as a single direct rich text block', (
+    tester,
+  ) async {
+    const baseStyle = TextStyle(fontSize: 14, height: 1.2);
+    const runs = <MarkdownPretextInlineRun>[
+      MarkdownPretextInlineRun(
+        text:
+            'This plain paragraph is intentionally long so it wraps across multiple lines without inline code.',
+        style: baseStyle,
+      ),
+    ];
+
+    await tester.pumpWidget(
+      const Directionality(
+        textDirection: TextDirection.ltr,
+        child: MediaQuery(
+          data: MediaQueryData(),
+          child: Center(
+            child: SizedBox(
+              width: 120,
+              child: MarkdownPretextTextBlock.rich(
+                runs: runs,
+                fallbackStyle: baseStyle,
+                preferDirectRichText: true,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final blockFinder = find.byType(MarkdownPretextTextBlock);
+    expect(
+      find.descendant(of: blockFinder, matching: find.byType(Column)),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: blockFinder, matching: find.byType(RichText)),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('decorated inline code blocks stay on the pretext line layout', (
+    tester,
+  ) async {
+    const baseStyle = TextStyle(fontSize: 14, height: 1.2);
+    const runs = <MarkdownPretextInlineRun>[
+      MarkdownPretextInlineRun(text: 'prefix ', style: baseStyle),
+      MarkdownPretextInlineRun(
+        text: 'inline_code_token',
+        style: baseStyle,
+        allowCharacterWrap: true,
+        decoration: MarkdownPretextInlineDecoration(
+          backgroundColor: Color(0xFFE9EDF2),
+          borderRadius: BorderRadius.all(Radius.circular(6)),
+          padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        ),
+      ),
+      MarkdownPretextInlineRun(
+        text: ' suffix that forces wrapping.',
+        style: baseStyle,
+      ),
+    ];
+
+    await tester.pumpWidget(
+      const Directionality(
+        textDirection: TextDirection.ltr,
+        child: MediaQuery(
+          data: MediaQueryData(),
+          child: Center(
+            child: SizedBox(
+              width: 120,
+              child: MarkdownPretextTextBlock.rich(
+                runs: runs,
+                fallbackStyle: baseStyle,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final blockFinder = find.byType(MarkdownPretextTextBlock);
+    expect(
+      find.descendant(of: blockFinder, matching: find.byType(Column)),
+      findsOneWidget,
+    );
+  });
+
   test('breakable decorated inline keeps wrapped settle_result visible', () {
     const padding = EdgeInsets.symmetric(horizontal: 6, vertical: 2);
     const runs = <MarkdownPretextInlineRun>[
@@ -1675,6 +2037,68 @@ const value = 42;
             lineDecoratedSegments.last.padding.right, greaterThanOrEqualTo(0));
         expect(lineDecoratedSegments.last.padding.right,
             lessThanOrEqualTo(padding.right));
+      }
+    }
+  });
+
+  test('multiple wrapped inline code runs preserve all trailing text', () {
+    const padding = EdgeInsets.symmetric(horizontal: 6, vertical: 2);
+    const baseStyle = TextStyle(fontSize: 14, height: 1.2);
+    const expected =
+        'Introduces a fixed minimum refund threshold (0.1) used during settle_result to skip very small refunds.';
+    const runs = <MarkdownPretextInlineRun>[
+      MarkdownPretextInlineRun(
+        text: 'Introduces a fixed minimum refund threshold (',
+        style: baseStyle,
+      ),
+      MarkdownPretextInlineRun(
+        text: '0.1',
+        style: baseStyle,
+        allowCharacterWrap: true,
+        decoration: MarkdownPretextInlineDecoration(
+          backgroundColor: Color(0xFFE9EDF2),
+          borderRadius: BorderRadius.all(Radius.circular(6)),
+          padding: padding,
+        ),
+      ),
+      MarkdownPretextInlineRun(
+        text: ') used during ',
+        style: baseStyle,
+      ),
+      MarkdownPretextInlineRun(
+        text: 'settle_result',
+        style: baseStyle,
+        allowCharacterWrap: true,
+        decoration: MarkdownPretextInlineDecoration(
+          backgroundColor: Color(0xFFE9EDF2),
+          borderRadius: BorderRadius.all(Radius.circular(6)),
+          padding: padding,
+        ),
+      ),
+      MarkdownPretextInlineRun(
+        text: ' to skip very small refunds.',
+        style: baseStyle,
+      ),
+    ];
+
+    for (final width in <double>[220, 180, 160, 140, 120]) {
+      final layout = computeMarkdownPretextLayoutFromRuns(
+        runs: runs,
+        fallbackStyle: baseStyle,
+        maxWidth: width,
+        textScaleFactor: 1,
+      );
+
+      expect(
+        layout.lines.map((line) => line.text).join().replaceAll(' ', ''),
+        expected.replaceAll(' ', ''),
+      );
+      for (final line in layout.lines) {
+        final actualWidth = line.segments.fold<double>(
+          0,
+          (sum, segment) => sum + (segment.right - segment.left),
+        );
+        expect(actualWidth, lessThanOrEqualTo(width + 0.01));
       }
     }
   });
@@ -2175,6 +2599,91 @@ return value;
       tester.widget<CustomPaint>(paintFinder.first).foregroundPainter,
       isNotNull,
     );
+  });
+
+  testWidgets('code block selection geometry tracks rendered text boxes', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: '''
+```dart
+const value = 42;
+return value;
+```
+''',
+          ),
+        ),
+      ),
+    );
+
+    final blockFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is SelectableMarkdownBlock &&
+          widget.spec.plainText.contains('const value = 42;'),
+    );
+    final block = tester.widget<SelectableMarkdownBlock>(blockFinder);
+    final blockContext = tester.element(blockFinder);
+    final blockRenderBox = tester.renderObject<RenderBox>(blockFinder);
+    final blockOrigin = blockRenderBox.localToGlobal(Offset.zero);
+
+    final richTextFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is RichText &&
+          widget.text.toPlainText().contains('const value = 42;'),
+    );
+    final richText = tester.widget<RichText>(richTextFinder);
+    final richTextRenderBox = tester.renderObject<RenderBox>(richTextFinder);
+    final richTextOrigin = richTextRenderBox.localToGlobal(Offset.zero);
+    final painter = TextPainter(
+      text: richText.text,
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: richTextRenderBox.size.width);
+
+    final codeText = richText.text.toPlainText();
+    final start = codeText.indexOf('value');
+    final end = start + 'value'.length;
+    final expectedRect = painter
+        .getBoxesForSelection(
+          TextSelection(baseOffset: start, extentOffset: end),
+        )
+        .first
+        .toRect()
+        .shift(richTextOrigin);
+
+    final selectionRects = block.spec.selectionRectResolver!(
+      blockContext,
+      blockRenderBox.size,
+      DocumentRange(
+        start: DocumentPosition(
+          blockIndex: 0,
+          path: const PathInBlock(<int>[0]),
+          textOffset: start,
+        ),
+        end: DocumentPosition(
+          blockIndex: 0,
+          path: const PathInBlock(<int>[0]),
+          textOffset: end,
+        ),
+      ),
+    );
+
+    final globalSelectionRects = selectionRects
+        .map((rect) => rect.shift(blockOrigin))
+        .toList(growable: false);
+    final matchedRect = globalSelectionRects.firstWhere(
+      (rect) => rect.overlaps(expectedRect.inflate(1)),
+    );
+
+    expect(matchedRect.contains(expectedRect.center), isTrue);
+    expect(matchedRect.top, greaterThan(blockOrigin.dy + 20));
+    expect(matchedRect.left, greaterThan(blockOrigin.dx + 8));
+    expect(matchedRect.left, closeTo(expectedRect.left - 1.5, 2.0));
+    expect(matchedRect.top, closeTo(expectedRect.top - 1.5, 2.0));
+    expect(matchedRect.right, closeTo(expectedRect.right + 1.5, 2.0));
+    expect(matchedRect.bottom, closeTo(expectedRect.bottom + 1.5, 2.0));
   });
 
   testWidgets('dragging inside a list selects list text', (tester) async {
@@ -2681,10 +3190,18 @@ return value;
     expect(selectionController.selectedPlainText, contains('Nested line'));
     expect(selectionController.selectedPlainText, isNot(contains('>')));
     expect(globalSelectionRects, hasLength(3));
-    expect(globalSelectionRects.first.top, closeTo(headingRect.top, 0.5));
-    expect(globalSelectionRects.first.bottom, closeTo(headingRect.bottom, 0.5));
-    expect(globalSelectionRects.last.top, closeTo(nestedRect.top, 0.5));
-    expect(globalSelectionRects.last.bottom, closeTo(nestedRect.bottom, 0.5));
+    expect(
+      globalSelectionRects.first.overlaps(headingRect.deflate(1)),
+      isTrue,
+    );
+    expect(
+      globalSelectionRects.last.overlaps(nestedRect.deflate(1)),
+      isTrue,
+    );
+    expect(
+        globalSelectionRects.first.center.dy, lessThan(nestedRect.center.dy));
+    expect(globalSelectionRects.last.center.dy,
+        greaterThan(headingRect.center.dy));
   });
 
   testWidgets(

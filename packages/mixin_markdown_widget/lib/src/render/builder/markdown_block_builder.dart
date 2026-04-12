@@ -219,6 +219,7 @@ class MarkdownBlockBuilder {
               runs: runs,
               fallbackStyle: style,
               directTextKey: directTextKey,
+              preferDirectRichText: directTextKey != null,
               textAlign: MarkdownInlineBuilder.resolvedInlineTextAlign(
                 heading.inlines,
               ),
@@ -365,17 +366,21 @@ class MarkdownBlockBuilder {
           theme: theme,
           language: codeBlock.language,
         );
+        final directTextKey = _createDirectTextKeyIfNeeded(codeRuns);
         return _buildPretextTextSpec(
           child: _buildDecoratedCodeBlock(
             codeBlock,
             code: MarkdownPretextTextBlock.rich(
               runs: codeRuns,
               fallbackStyle: theme.codeBlockStyle,
+              preferDirectRichText: directTextKey != null,
+              directTextKey: directTextKey,
             ),
           ),
           plainText: codeBlock.code,
           runs: codeRuns,
           fallbackStyle: theme.codeBlockStyle,
+          directTextKey: directTextKey,
           measurementPadding:
               theme.codeBlockPadding.resolve(Directionality.of(context)) +
                   const EdgeInsets.only(top: 36.0), // _codeToolbarHeight
@@ -420,13 +425,16 @@ class MarkdownBlockBuilder {
     BorderRadius? highlightBorderRadius,
     SelectableBlockSelectionPaintOrder? selectionPaintOrder,
   }) {
-    final hasDecoratedInline = runs.any((run) => run.decoration != null);
+    final hasInlineSurface = runs.any(
+      (run) => run.decoration != null || run.renderSpan != null,
+    );
     return SelectableBlockSpec(
       child: child ??
           MarkdownPretextTextBlock.rich(
             runs: runs,
             fallbackStyle: fallbackStyle,
             directTextKey: directTextKey,
+            preferDirectRichText: directTextKey != null,
             textAlign: textAlign,
           ),
       plainText: plainText,
@@ -434,16 +442,23 @@ class MarkdownBlockBuilder {
       measurementPadding: measurementPadding,
       highlightBorderRadius: highlightBorderRadius,
       selectionPaintOrder: selectionPaintOrder ??
-          (hasDecoratedInline
+          (hasInlineSurface
               ? SelectableBlockSelectionPaintOrder.aboveChild
               : SelectableBlockSelectionPaintOrder.behindChild),
       selectionRectResolver: (context, constraints, range) {
         if (directTextKey != null) {
-          return _resolveDirectRichTextSelectionRects(
+          final directRects = _resolveDirectRichTextSelectionRects(
             context,
             directTextKey,
-            runs,
             range,
+            runs,
+          );
+          if (directRects != null) {
+            return directRects;
+          }
+          throw _missingDirectRenderParagraphError(
+            plainText: plainText,
+            runs: runs,
           );
         }
         final textScaler =
@@ -463,11 +478,18 @@ class MarkdownBlockBuilder {
       },
       textOffsetResolver: (context, size, localPosition) {
         if (directTextKey != null) {
-          return _resolveDirectRichTextTextOffset(
+          final directOffset = _resolveDirectRichTextTextOffset(
             context,
             directTextKey,
             localPosition,
             runs,
+          );
+          if (directOffset != null) {
+            return directOffset;
+          }
+          throw _missingDirectRenderParagraphError(
+            plainText: plainText,
+            runs: runs,
           );
         }
         final textScaler =
@@ -491,50 +513,47 @@ class MarkdownBlockBuilder {
   GlobalKey? _createDirectTextKeyIfNeeded(
     List<MarkdownPretextInlineRun> runs,
   ) {
-    if (runs.any((run) => run.renderSpan != null)) {
+    if (markdownPretextCanUseDirectRichTextGeometry(runs)) {
       return GlobalKey();
     }
     return null;
   }
 
-  List<Rect> _resolveDirectRichTextSelectionRects(
+  List<Rect>? _resolveDirectRichTextSelectionRects(
     BuildContext context,
     GlobalKey directTextKey,
-    List<MarkdownPretextInlineRun> runs,
     DocumentRange range,
+    List<MarkdownPretextInlineRun> runs,
   ) {
-    final renderParagraph = _resolveDirectRenderParagraph(directTextKey);
     final blockRenderObject = context.findRenderObject();
+    final renderParagraph = _resolveDirectRenderParagraph(
+      directTextKey,
+      runs: runs,
+      fallbackRoot: blockRenderObject,
+    );
     if (renderParagraph == null ||
         blockRenderObject is! RenderBox ||
         !blockRenderObject.hasSize) {
-      return const <Rect>[];
+      return null;
     }
 
-    final plainStart = math.min(range.start.textOffset, range.end.textOffset);
-    final plainEnd = math.max(range.start.textOffset, range.end.textOffset);
-    if (plainStart >= plainEnd) {
-      return const <Rect>[];
-    }
-    final renderStart = markdownPretextRenderOffsetForPlainOffset(
-      runs,
-      plainStart,
-      preferEnd: false,
+    final renderSelection = TextSelection(
+      baseOffset: markdownPretextRenderOffsetForPlainOffset(
+        runs,
+        range.start.textOffset,
+        preferEnd: false,
+      ),
+      extentOffset: markdownPretextRenderOffsetForPlainOffset(
+        runs,
+        range.end.textOffset,
+        preferEnd: true,
+      ),
     );
-    final renderEnd = markdownPretextRenderOffsetForPlainOffset(
-      runs,
-      plainEnd,
-      preferEnd: true,
-    );
-    if (renderStart >= renderEnd) {
-      return const <Rect>[];
-    }
-
     final paragraphOrigin = blockRenderObject.globalToLocal(
       renderParagraph.localToGlobal(Offset.zero),
     );
-    final boxes = renderParagraph.getBoxesForSelection(
-      TextSelection(baseOffset: renderStart, extentOffset: renderEnd),
+    final boxes = _mergeDirectTextSelectionBoxes(
+      renderParagraph.getBoxesForSelection(renderSelection),
     );
     return boxes
         .map(
@@ -554,8 +573,12 @@ class MarkdownBlockBuilder {
     Offset localPosition,
     List<MarkdownPretextInlineRun> runs,
   ) {
-    final renderParagraph = _resolveDirectRenderParagraph(directTextKey);
     final blockRenderObject = context.findRenderObject();
+    final renderParagraph = _resolveDirectRenderParagraph(
+      directTextKey,
+      runs: runs,
+      fallbackRoot: blockRenderObject,
+    );
     if (renderParagraph == null ||
         blockRenderObject is! RenderBox ||
         !blockRenderObject.hasSize) {
@@ -571,12 +594,62 @@ class MarkdownBlockBuilder {
     return markdownPretextPlainOffsetForRenderOffset(runs, textPosition.offset);
   }
 
-  RenderParagraph? _resolveDirectRenderParagraph(GlobalKey directTextKey) {
+  FlutterError _missingDirectRenderParagraphError({
+    required String plainText,
+    required List<MarkdownPretextInlineRun> runs,
+  }) {
+    final snippet = plainText.length <= 120
+        ? plainText
+        : '${plainText.substring(0, 120)}...';
+    return FlutterError(
+      'Expected a live RenderParagraph for a direct-geometry markdown block, '
+      'but none could be resolved. This block must not fall back to a different '
+      'geometry model because that produces incorrect selection rects and hit '
+      'testing. plainText="$snippet" renderText="${markdownPretextRenderText(runs)}"',
+    );
+  }
+
+  RenderParagraph? _resolveDirectRenderParagraph(
+    GlobalKey directTextKey, {
+    List<MarkdownPretextInlineRun>? runs,
+    RenderObject? fallbackRoot,
+  }) {
     final renderObject = directTextKey.currentContext?.findRenderObject();
-    if (renderObject is RenderParagraph && renderObject.hasSize) {
+    final expectedRenderText =
+        runs == null ? null : markdownPretextRenderText(runs);
+    if (renderObject is RenderParagraph &&
+        renderObject.hasSize &&
+        (expectedRenderText == null ||
+            renderObject.text.toPlainText(includePlaceholders: true) ==
+                expectedRenderText)) {
       return renderObject;
     }
-    return null;
+    RenderParagraph? paragraph;
+
+    void visit(RenderObject node) {
+      if (paragraph != null) {
+        return;
+      }
+      if (node is RenderParagraph &&
+          node.hasSize &&
+          (expectedRenderText == null ||
+              node.text.toPlainText(includePlaceholders: true) ==
+                  expectedRenderText)) {
+        paragraph = node;
+        return;
+      }
+      node.visitChildren(visit);
+    }
+
+    if (renderObject != null) {
+      visit(renderObject);
+    }
+    if (paragraph == null &&
+        fallbackRoot != null &&
+        fallbackRoot != renderObject) {
+      visit(fallbackRoot);
+    }
+    return paragraph;
   }
 
   Widget _buildNestedBlockContent(BuildContext context, BlockNode block) {
@@ -739,10 +812,12 @@ class MarkdownBlockBuilder {
     required List<InlineNode> inlines,
     TextAlign textAlign = TextAlign.start,
   }) {
+    final runs = inlineBuilder.buildPretextRuns(style, inlines);
     return MarkdownPretextTextBlock.rich(
-      runs: inlineBuilder.buildPretextRuns(style, inlines),
+      runs: runs,
       fallbackStyle: style,
       textAlign: textAlign,
+      preferDirectRichText: markdownPretextCanUseDirectRichTextGeometry(runs),
     );
   }
 
@@ -782,6 +857,7 @@ class MarkdownBlockBuilder {
       code: MarkdownPretextTextBlock.rich(
         runs: runs,
         fallbackStyle: theme.codeBlockStyle,
+        preferDirectRichText: markdownPretextCanUseDirectRichTextGeometry(runs),
       ),
     );
   }
@@ -958,7 +1034,49 @@ class MarkdownBlockBuilder {
       directTextKey: directTextKey,
       textAlign: pretext.textAlign,
       intrinsicWidthSafe: intrinsicWidthSafe,
+      preferDirectRichText:
+          markdownPretextCanUseDirectRichTextGeometry(pretext.runs),
     );
+  }
+
+  List<TextBox> _mergeDirectTextSelectionBoxes(List<TextBox> boxes) {
+    if (boxes.length < 2) {
+      return boxes;
+    }
+
+    const lineTolerance = 2.0;
+    const gapTolerance = 0.5;
+
+    final sorted = boxes.toList(growable: false)
+      ..sort((a, b) {
+        final topCompare = a.top.compareTo(b.top);
+        if (topCompare != 0) {
+          return topCompare;
+        }
+        return a.left.compareTo(b.left);
+      });
+
+    final merged = <TextBox>[];
+    var current = sorted.first;
+    for (final next in sorted.skip(1)) {
+      final sameLine = (next.top - current.top).abs() <= lineTolerance &&
+          (next.bottom - current.bottom).abs() <= lineTolerance;
+      final closeEnough = next.left <= current.right + gapTolerance;
+      if (sameLine && closeEnough) {
+        current = TextBox.fromLTRBD(
+          math.min(current.left, next.left),
+          math.min(current.top, next.top),
+          math.max(current.right, next.right),
+          math.max(current.bottom, next.bottom),
+          current.direction,
+        );
+        continue;
+      }
+      merged.add(current);
+      current = next;
+    }
+    merged.add(current);
+    return merged;
   }
 
   SelectableBlockSpec _buildSelectableDescriptorTextSpec({

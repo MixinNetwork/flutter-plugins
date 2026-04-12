@@ -83,6 +83,7 @@ class MarkdownPretextTextBlock extends StatelessWidget {
     this.textAlign = TextAlign.start,
     this.intrinsicWidthSafe = false,
     this.directTextKey,
+    this.preferDirectRichText = false,
   })  : runs = null,
         fallbackStyle = style;
 
@@ -93,6 +94,7 @@ class MarkdownPretextTextBlock extends StatelessWidget {
     this.textAlign = TextAlign.start,
     this.intrinsicWidthSafe = false,
     this.directTextKey,
+    this.preferDirectRichText = false,
   })  : text = '',
         style = fallbackStyle;
 
@@ -103,6 +105,7 @@ class MarkdownPretextTextBlock extends StatelessWidget {
   final TextAlign textAlign;
   final bool intrinsicWidthSafe;
   final GlobalKey? directTextKey;
+  final bool preferDirectRichText;
 
   @override
   Widget build(BuildContext context) {
@@ -113,7 +116,9 @@ class MarkdownPretextTextBlock extends StatelessWidget {
         <MarkdownPretextInlineRun>[
           MarkdownPretextInlineRun(text: text, style: style),
         ];
-    if (intrinsicWidthSafe || _requiresDirectTextRichRendering(effectiveRuns)) {
+    if (intrinsicWidthSafe ||
+        preferDirectRichText ||
+        _requiresDirectTextRichRendering(effectiveRuns)) {
       return Text.rich(
         buildMarkdownPretextSpan(
           runs: effectiveRuns,
@@ -144,7 +149,7 @@ class MarkdownPretextTextBlock extends StatelessWidget {
             for (final line in constrainedLayout.lines)
               SizedBox(
                 width: double.infinity,
-                height: constrainedLayout.lineHeight,
+                height: line.height,
                 child: Padding(
                   padding: EdgeInsets.only(left: line.leadingOffset),
                   child: Text.rich(
@@ -195,6 +200,13 @@ bool _requiresDirectTextRichRendering(List<MarkdownPretextInlineRun> runs) {
   return runs.any((run) => run.renderSpan != null);
 }
 
+bool markdownPretextCanUseDirectRichTextGeometry(
+  List<MarkdownPretextInlineRun> runs,
+) {
+  return runs.every((run) => run.decoration == null) ||
+      runs.any((run) => run.renderSpan != null);
+}
+
 InlineSpan buildMarkdownPretextSpan({
   required List<MarkdownPretextInlineRun> runs,
   required TextStyle fallbackStyle,
@@ -209,9 +221,34 @@ String markdownPretextRenderText(List<MarkdownPretextInlineRun> runs) {
       buffer.writeCharCode(0xFFFC);
       continue;
     }
+    if (run.decoration != null) {
+      if (!run.allowCharacterWrap) {
+        buffer.writeCharCode(0xFFFC);
+        continue;
+      }
+      for (var index = 0; index < run.text.length; index++) {
+        final character = run.text[index];
+        if (character == '\n') {
+          buffer.write(character);
+        } else {
+          buffer.writeCharCode(0xFFFC);
+        }
+      }
+      continue;
+    }
     buffer.write(run.text);
   }
   return buffer.toString();
+}
+
+int _markdownPretextRenderLengthForRun(MarkdownPretextInlineRun run) {
+  if (run.renderSpan != null) {
+    return 1;
+  }
+  if (run.decoration != null && !run.allowCharacterWrap) {
+    return 1;
+  }
+  return run.text.length;
 }
 
 int markdownPretextRenderOffsetForPlainOffset(
@@ -226,7 +263,7 @@ int markdownPretextRenderOffsetForPlainOffset(
   for (final run in runs) {
     final plainStart = plainCursor;
     final plainEnd = plainStart + run.text.length;
-    final renderLength = run.renderSpan != null ? 1 : run.text.length;
+    final renderLength = _markdownPretextRenderLengthForRun(run);
     final renderStart = renderCursor;
     final renderEnd = renderStart + renderLength;
 
@@ -234,7 +271,8 @@ int markdownPretextRenderOffsetForPlainOffset(
       return renderStart;
     }
     if (clampedPlainOffset < plainEnd) {
-      if (run.renderSpan != null) {
+      if (run.renderSpan != null ||
+          (run.decoration != null && !run.allowCharacterWrap)) {
         return preferEnd ? renderEnd : renderStart;
       }
       return renderStart + (clampedPlainOffset - plainStart);
@@ -261,7 +299,7 @@ int markdownPretextPlainOffsetForRenderOffset(
   for (final run in runs) {
     final plainStart = plainCursor;
     final plainEnd = plainStart + run.text.length;
-    final renderLength = run.renderSpan != null ? 1 : run.text.length;
+    final renderLength = _markdownPretextRenderLengthForRun(run);
     final renderStart = renderCursor;
     final renderEnd = renderStart + renderLength;
 
@@ -269,7 +307,8 @@ int markdownPretextPlainOffsetForRenderOffset(
       return plainStart;
     }
     if (clampedRenderOffset < renderEnd) {
-      if (run.renderSpan != null) {
+      if (run.renderSpan != null ||
+          (run.decoration != null && !run.allowCharacterWrap)) {
         return plainStart;
       }
       return plainStart + (clampedRenderOffset - renderStart);
@@ -337,10 +376,7 @@ MarkdownPretextLayoutResult computeMarkdownPretextLayoutFromRuns({
       .where((run) => run.decoration != null && run.allowCharacterWrap)
       .fold<double>(
         0,
-        (current, run) => math.max(
-          current,
-          run.decoration!.padding.horizontal,
-        ),
+        (current, run) => current + run.decoration!.padding.horizontal,
       );
   final segmentBuilder = _MarkdownPretextSegmentBuilder(
     textScaleFactor: textScaleFactor,
@@ -365,18 +401,29 @@ MarkdownPretextLayoutResult computeMarkdownPretextLayoutFromRuns({
 
   final lines = <MarkdownPretextLayoutLine>[];
   var cursor = 0;
+  var originalCursor = 0;
   for (final line in result.lines) {
-    final fittedVisibleTextLength = _fitVisibleTextLengthToRenderedWidth(
+    final carryLength = math.max(originalCursor - cursor, 0);
+    final visibleTextLength = carryLength + line.text.length;
+    final fittedVisibleTextLength =
+        _fitVisibleTextLengthToRenderedWidthFromOffset(
       segments: segments,
-      startSegmentIndex: line.start.segmentIndex,
+      startOffset: cursor,
       endSegmentIndex: line.end.segmentIndex,
-      visibleTextLength: line.text.length,
+      visibleTextLength: visibleTextLength,
       maxRenderedWidth: safeMaxWidth,
       textScaleFactor: textScaleFactor,
     );
-    final renderedLineText = fittedVisibleTextLength == line.text.length
-        ? line.text
-        : line.text.substring(0, fittedVisibleTextLength);
+    final lineFragments = _buildLineFragmentsFromOffset(
+      segments: segments,
+      startOffset: cursor,
+      endSegmentIndex: line.end.segmentIndex,
+      visibleTextLength: fittedVisibleTextLength,
+      maxRenderedWidth: safeMaxWidth,
+      textScaleFactor: textScaleFactor,
+    );
+    final renderedLineText =
+        lineFragments.map((fragment) => fragment.text).join();
     final startOffset = cursor;
     final visibleEndOffset =
         _consumeVisibleText(plainText, cursor, renderedLineText);
@@ -387,29 +434,48 @@ MarkdownPretextLayoutResult computeMarkdownPretextLayoutFromRuns({
     if (endOffset < plainText.length && plainText[endOffset] == '\n') {
       endOffset += 1;
     }
+    final originalVisibleEndOffset =
+        _consumeVisibleText(plainText, originalCursor, line.text);
+    var originalEndOffset = originalVisibleEndOffset;
+    while (originalEndOffset < plainText.length &&
+        plainText[originalEndOffset] == ' ') {
+      originalEndOffset += 1;
+    }
+    if (originalEndOffset < plainText.length &&
+        plainText[originalEndOffset] == '\n') {
+      originalEndOffset += 1;
+    }
     lines.add(
       MarkdownPretextLayoutLine(
         text: renderedLineText,
-        span: _buildLineSpan(
-          segments: segments,
-          startSegmentIndex: line.start.segmentIndex,
-          endSegmentIndex: line.end.segmentIndex,
-          visibleTextLength: fittedVisibleTextLength,
+        span: _buildLineSpanFromFragments(
+          lineFragments,
           fallbackStyle: fallbackStyle,
-          maxRenderedWidth: safeMaxWidth,
+        ),
+        segments: _buildLineSegmentsFromFragments(
+          lineFragments,
           textScaleFactor: textScaleFactor,
         ),
-        segments: _buildLineSegments(
-          segments: segments,
-          startSegmentIndex: line.start.segmentIndex,
-          endSegmentIndex: line.end.segmentIndex,
-          visibleTextLength: fittedVisibleTextLength,
-          maxRenderedWidth: safeMaxWidth,
+        width: math.min(
+          _measureRenderedFragmentWidth(
+            lineFragments,
+            textScaleFactor: textScaleFactor,
+          ),
+          safeMaxWidth,
+        ),
+        height: _measureRenderedFragmentLineHeight(
+          lineFragments,
+          fallbackStyle: fallbackStyle,
           textScaleFactor: textScaleFactor,
         ),
-        width: math.min(line.width, safeMaxWidth),
         leadingOffset: _resolveLineLeadingOffset(
-          lineWidth: math.min(line.width, safeMaxWidth),
+          lineWidth: math.min(
+            _measureRenderedFragmentWidth(
+              lineFragments,
+              textScaleFactor: textScaleFactor,
+            ),
+            safeMaxWidth,
+          ),
           maxWidth: alignmentWidth,
           textAlign: textAlign,
           textDirection: textDirection,
@@ -420,12 +486,16 @@ MarkdownPretextLayoutResult computeMarkdownPretextLayoutFromRuns({
       ),
     );
     cursor = endOffset;
+    originalCursor = originalEndOffset;
   }
 
   return MarkdownPretextLayoutResult(
     plainText: plainText,
     lines: List<MarkdownPretextLayoutLine>.unmodifiable(lines),
-    lineHeight: lineHeight,
+    lineHeight: lines.fold<double>(
+      lineHeight,
+      (current, line) => math.max(current, line.height),
+    ),
     textScaleFactor: textScaleFactor,
   );
 }
@@ -449,6 +519,7 @@ class MarkdownPretextLayoutResult {
     required TextDirection textDirection,
   }) {
     final rects = <Rect>[];
+    var lineTop = 0.0;
     for (var lineIndex = 0; lineIndex < lines.length; lineIndex++) {
       final line = lines[lineIndex];
       final selectionStart = math.max(range.start.textOffset, line.startOffset);
@@ -458,7 +529,6 @@ class MarkdownPretextLayoutResult {
         continue;
       }
 
-      final lineTop = lineIndex * lineHeight;
       final mergedBoxes = _mergeSelectionBoxes(
         _selectionBoxesForLine(
           line,
@@ -478,6 +548,7 @@ class MarkdownPretextLayoutResult {
           ),
         );
       }
+      lineTop += line.height;
     }
     return rects;
   }
@@ -490,9 +561,16 @@ class MarkdownPretextLayoutResult {
       return 0;
     }
 
-    final clampedLineIndex =
-        (localPosition.dy / lineHeight).floor().clamp(0, lines.length - 1);
-    final line = lines[clampedLineIndex];
+    var lineTop = 0.0;
+    MarkdownPretextLayoutLine line = lines.last;
+    for (final candidate in lines) {
+      final lineBottom = lineTop + candidate.height;
+      if (localPosition.dy <= lineBottom) {
+        line = candidate;
+        break;
+      }
+      lineTop = lineBottom;
+    }
     if (line.text.isEmpty) {
       return localPosition.dx <= line.leadingOffset
           ? line.startOffset
@@ -539,7 +617,7 @@ class MarkdownPretextLayoutResult {
                 textDirection: textDirection,
               );
       yield Rect.fromLTRB(left + line.leadingOffset, lineTop,
-          right + line.leadingOffset, lineTop + lineHeight);
+          right + line.leadingOffset, lineTop + line.height);
     }
   }
 
@@ -603,6 +681,7 @@ class MarkdownPretextLayoutLine {
     required this.span,
     required this.segments,
     required this.width,
+    required this.height,
     required this.leadingOffset,
     required this.startOffset,
     required this.endOffset,
@@ -613,6 +692,7 @@ class MarkdownPretextLayoutLine {
   final InlineSpan span;
   final List<MarkdownPretextLayoutSegment> segments;
   final double width;
+  final double height;
   final double leadingOffset;
   final int startOffset;
   final int endOffset;
@@ -778,28 +858,12 @@ double _resolveLineLeadingOffset({
   }
 }
 
-InlineSpan _buildLineSpan({
-  required List<_MarkdownPretextMeasuredSegment> segments,
-  required int startSegmentIndex,
-  required int endSegmentIndex,
-  required int visibleTextLength,
+InlineSpan _buildLineSpanFromFragments(
+  List<_MarkdownPretextLineFragment> fragments, {
   required TextStyle fallbackStyle,
-  required double maxRenderedWidth,
-  required double textScaleFactor,
 }) {
-  if (visibleTextLength <= 0) {
-    return TextSpan(style: fallbackStyle, text: ' ');
-  }
-
   final children = <InlineSpan>[];
-  for (final fragment in _buildLineFragments(
-    segments: segments,
-    startSegmentIndex: startSegmentIndex,
-    endSegmentIndex: endSegmentIndex,
-    visibleTextLength: visibleTextLength,
-    maxRenderedWidth: maxRenderedWidth,
-    textScaleFactor: textScaleFactor,
-  )) {
+  for (final fragment in fragments) {
     if (fragment.renderSpan != null) {
       children.add(fragment.renderSpan!);
       continue;
@@ -834,26 +898,15 @@ InlineSpan _buildLineSpan({
   return TextSpan(style: fallbackStyle, children: children);
 }
 
-List<MarkdownPretextLayoutSegment> _buildLineSegments({
-  required List<_MarkdownPretextMeasuredSegment> segments,
-  required int startSegmentIndex,
-  required int endSegmentIndex,
-  required int visibleTextLength,
-  required double maxRenderedWidth,
+List<MarkdownPretextLayoutSegment> _buildLineSegmentsFromFragments(
+  List<_MarkdownPretextLineFragment> fragments, {
   required double textScaleFactor,
 }) {
   final lineSegments = <MarkdownPretextLayoutSegment>[];
   final measurer = _TextPainterSegmentMeasurer();
   var cursor = 0.0;
 
-  for (final fragment in _buildLineFragments(
-    segments: segments,
-    startSegmentIndex: startSegmentIndex,
-    endSegmentIndex: endSegmentIndex,
-    visibleTextLength: visibleTextLength,
-    maxRenderedWidth: maxRenderedWidth,
-    textScaleFactor: textScaleFactor,
-  )) {
+  for (final fragment in fragments) {
     final width = fragment.estimatedWidth ??
         measurer.measure(
           fragment.text,
@@ -880,36 +933,52 @@ List<MarkdownPretextLayoutSegment> _buildLineSegments({
   return List<MarkdownPretextLayoutSegment>.unmodifiable(lineSegments);
 }
 
-List<_MarkdownPretextLineFragment> _buildLineFragments({
+List<_MarkdownPretextLineFragment> _buildLineFragmentsFromOffset({
   required List<_MarkdownPretextMeasuredSegment> segments,
-  required int startSegmentIndex,
+  required int startOffset,
   required int endSegmentIndex,
   required int visibleTextLength,
   required double maxRenderedWidth,
   required double textScaleFactor,
 }) {
+  if (visibleTextLength <= 0) {
+    return const <_MarkdownPretextLineFragment>[];
+  }
+
   final fragments = <_MarkdownPretextLineFragment>[];
   var remaining = visibleTextLength;
+  var startSegmentIndex = _segmentIndexForOffset(segments, startOffset);
+  if (startSegmentIndex < 0) {
+    startSegmentIndex = 0;
+  }
 
   for (var index = startSegmentIndex;
-      index < endSegmentIndex && remaining > 0;
+      index < endSegmentIndex && index < segments.length && remaining > 0;
       index++) {
     final segment = segments[index];
     if (segment.kind == pretext_segment.SegmentKind.hardBreak ||
         segment.displayText.isEmpty) {
       continue;
     }
+
+    final localStartOffset = math.max(startOffset, segment.startOffset);
+    if (localStartOffset >= segment.endOffset) {
+      continue;
+    }
+
+    final startIndexInSegment = localStartOffset - segment.startOffset;
+    final availableText = segment.displayText.substring(startIndexInSegment);
     final takeLength = segment.renderSpan != null
-        ? segment.displayText.length
-        : math.min(segment.displayText.length, remaining);
+        ? availableText.length
+        : math.min(availableText.length, remaining);
     if (takeLength <= 0) {
       continue;
     }
-    final text = takeLength == segment.displayText.length
-        ? segment.displayText
-        : segment.displayText.substring(0, takeLength);
-    final startOffset = segment.startOffset;
-    final endOffset = segment.startOffset + text.length;
+
+    final text = takeLength == availableText.length
+        ? availableText
+        : availableText.substring(0, takeLength);
+    final endOffset = localStartOffset + text.length;
     fragments.add(
       _MarkdownPretextLineFragment(
         text: text,
@@ -919,11 +988,18 @@ List<_MarkdownPretextLineFragment> _buildLineFragments({
         renderSpan: segment.renderSpan,
         decoration: segment.decoration,
         estimatedWidth: segment.renderSpan != null ? segment.width : null,
-        padding: _paddingForDecoratedFragment(segment),
-        startOffset: startOffset,
+        estimatedLineHeight: segment.estimatedLineHeight,
+        padding: _paddingForDecoratedFragmentSlice(
+          segment,
+          startOffset: localStartOffset,
+          endOffset: endOffset,
+        ),
+        startOffset: localStartOffset,
         endOffset: endOffset,
-        startsDecoratedChunk: segment.startsDecoratedChunk,
-        endsDecoratedChunk: segment.endsDecoratedChunk,
+        startsDecoratedChunk: segment.startsDecoratedChunk &&
+            localStartOffset == segment.startOffset,
+        endsDecoratedChunk:
+            segment.endsDecoratedChunk && endOffset == segment.endOffset,
       ),
     );
     remaining -= takeLength;
@@ -936,14 +1012,27 @@ List<_MarkdownPretextLineFragment> _buildLineFragments({
   );
 }
 
-int _fitVisibleTextLengthToRenderedWidth({
+int _segmentIndexForOffset(
+  List<_MarkdownPretextMeasuredSegment> segments,
+  int offset,
+) {
+  for (var index = 0; index < segments.length; index++) {
+    if (segments[index].endOffset > offset) {
+      return index;
+    }
+  }
+  return segments.length - 1;
+}
+
+int _fitVisibleTextLengthToRenderedWidthFromOffset({
   required List<_MarkdownPretextMeasuredSegment> segments,
-  required int startSegmentIndex,
+  required int startOffset,
   required int endSegmentIndex,
   required int visibleTextLength,
   required double maxRenderedWidth,
   required double textScaleFactor,
 }) {
+  final startSegmentIndex = _segmentIndexForOffset(segments, startOffset);
   for (var index = startSegmentIndex;
       index < endSegmentIndex && index < segments.length;
       index++) {
@@ -953,9 +1042,9 @@ int _fitVisibleTextLengthToRenderedWidth({
   }
   var fittedLength = visibleTextLength;
   while (fittedLength > 0) {
-    final fragments = _buildLineFragments(
+    final fragments = _buildLineFragmentsFromOffset(
       segments: segments,
-      startSegmentIndex: startSegmentIndex,
+      startOffset: startOffset,
       endSegmentIndex: endSegmentIndex,
       visibleTextLength: fittedLength,
       maxRenderedWidth: maxRenderedWidth,
@@ -992,15 +1081,48 @@ double _measureRenderedFragmentWidth(
   );
 }
 
-EdgeInsets _paddingForDecoratedFragment(
-    _MarkdownPretextMeasuredSegment segment) {
+double _measureRenderedFragmentLineHeight(
+  List<_MarkdownPretextLineFragment> fragments, {
+  required TextStyle fallbackStyle,
+  required double textScaleFactor,
+}) {
+  if (fragments.isEmpty) {
+    return _measureLineHeight(fallbackStyle, textScaleFactor);
+  }
+
+  var height = 0.0;
+  for (final fragment in fragments) {
+    final measured = fragment.renderSpan != null
+        ? fragment.estimatedLineHeight ??
+            _measureLineHeight(fragment.style, textScaleFactor)
+        : _measureLineHeight(
+            fragment.style,
+            textScaleFactor,
+            padding: fragment.decoration == null ? null : fragment.padding,
+          );
+    if (measured > height) {
+      height = measured;
+    }
+  }
+  return height;
+}
+
+EdgeInsets _paddingForDecoratedFragmentSlice(
+  _MarkdownPretextMeasuredSegment segment, {
+  required int startOffset,
+  required int endOffset,
+}) {
   final decoration = segment.decoration;
   if (decoration == null) {
     return EdgeInsets.zero;
   }
   return EdgeInsets.only(
-    left: segment.startsDecoratedChunk ? decoration.padding.left : 0,
-    right: segment.endsDecoratedChunk ? decoration.padding.right : 0,
+    left: segment.startsDecoratedChunk && startOffset == segment.startOffset
+        ? decoration.padding.left
+        : 0,
+    right: segment.endsDecoratedChunk && endOffset == segment.endOffset
+        ? decoration.padding.right
+        : 0,
     top: decoration.padding.top,
     bottom: decoration.padding.bottom,
   );
@@ -1232,6 +1354,7 @@ class _MarkdownPretextSegmentBuilder {
             mouseCursor: run.mouseCursor,
             recognizer: run.recognizer,
             renderSpan: run.renderSpan,
+            estimatedLineHeight: run.estimatedLineHeight,
             startOffset: plainTextOffset,
             endOffset: plainTextOffset + text.length,
           ),
@@ -1305,6 +1428,7 @@ class _MarkdownPretextSegmentBuilder {
                 mouseCursor: last.mouseCursor,
                 recognizer: last.recognizer,
                 renderSpan: last.renderSpan,
+                estimatedLineHeight: last.estimatedLineHeight,
                 decoration: last.decoration,
                 startsDecoratedChunk: last.startsDecoratedChunk,
                 endsDecoratedChunk: true,
@@ -1403,6 +1527,7 @@ class _MarkdownPretextMeasuredSegment {
     this.mouseCursor,
     this.recognizer,
     this.renderSpan,
+    this.estimatedLineHeight,
     this.decoration,
     this.startsDecoratedChunk = false,
     this.endsDecoratedChunk = false,
@@ -1415,6 +1540,7 @@ class _MarkdownPretextMeasuredSegment {
   final MouseCursor? mouseCursor;
   final GestureRecognizer? recognizer;
   final InlineSpan? renderSpan;
+  final double? estimatedLineHeight;
   final MarkdownPretextInlineDecoration? decoration;
   final int startOffset;
   final int endOffset;
@@ -1432,6 +1558,7 @@ class _MarkdownPretextLineFragment {
     required this.renderSpan,
     required this.decoration,
     required this.estimatedWidth,
+    required this.estimatedLineHeight,
     required this.padding,
     required this.startOffset,
     required this.endOffset,
@@ -1446,6 +1573,7 @@ class _MarkdownPretextLineFragment {
   final InlineSpan? renderSpan;
   final MarkdownPretextInlineDecoration? decoration;
   final double? estimatedWidth;
+  final double? estimatedLineHeight;
   final EdgeInsets padding;
   final int startOffset;
   final int endOffset;
@@ -1464,6 +1592,7 @@ class _MarkdownPretextLineFragment {
       renderSpan: renderSpan,
       decoration: decoration ?? this.decoration,
       estimatedWidth: estimatedWidth,
+      estimatedLineHeight: estimatedLineHeight,
       padding: padding ?? this.padding,
       startOffset: startOffset,
       endOffset: endOffset,
