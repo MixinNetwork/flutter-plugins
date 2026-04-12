@@ -261,12 +261,15 @@ MarkdownPretextLayoutResult computeMarkdownPretextLayoutFromRuns({
           endSegmentIndex: line.end.segmentIndex,
           visibleTextLength: line.text.length,
           fallbackStyle: fallbackStyle,
+          maxRenderedWidth: safeMaxWidth,
+          textScaleFactor: textScaleFactor,
         ),
         segments: _buildLineSegments(
           segments: segments,
           startSegmentIndex: line.start.segmentIndex,
           endSegmentIndex: line.end.segmentIndex,
           visibleTextLength: line.text.length,
+          maxRenderedWidth: safeMaxWidth,
           textScaleFactor: textScaleFactor,
         ),
         width: line.width,
@@ -642,6 +645,8 @@ InlineSpan _buildLineSpan({
   required int endSegmentIndex,
   required int visibleTextLength,
   required TextStyle fallbackStyle,
+  required double maxRenderedWidth,
+  required double textScaleFactor,
 }) {
   if (visibleTextLength <= 0) {
     return TextSpan(style: fallbackStyle, text: ' ');
@@ -653,6 +658,8 @@ InlineSpan _buildLineSpan({
     startSegmentIndex: startSegmentIndex,
     endSegmentIndex: endSegmentIndex,
     visibleTextLength: visibleTextLength,
+    maxRenderedWidth: maxRenderedWidth,
+    textScaleFactor: textScaleFactor,
   )) {
     if (fragment.decoration == null) {
       children.add(
@@ -689,6 +696,7 @@ List<MarkdownPretextLayoutSegment> _buildLineSegments({
   required int startSegmentIndex,
   required int endSegmentIndex,
   required int visibleTextLength,
+  required double maxRenderedWidth,
   required double textScaleFactor,
 }) {
   final lineSegments = <MarkdownPretextLayoutSegment>[];
@@ -700,6 +708,8 @@ List<MarkdownPretextLayoutSegment> _buildLineSegments({
     startSegmentIndex: startSegmentIndex,
     endSegmentIndex: endSegmentIndex,
     visibleTextLength: visibleTextLength,
+    maxRenderedWidth: maxRenderedWidth,
+    textScaleFactor: textScaleFactor,
   )) {
     final width = measurer.measure(
       fragment.text,
@@ -730,6 +740,8 @@ List<_MarkdownPretextLineFragment> _buildLineFragments({
   required int startSegmentIndex,
   required int endSegmentIndex,
   required int visibleTextLength,
+  required double maxRenderedWidth,
+  required double textScaleFactor,
 }) {
   final fragments = <_MarkdownPretextLineFragment>[];
   var remaining = visibleTextLength;
@@ -751,31 +763,26 @@ List<_MarkdownPretextLineFragment> _buildLineFragments({
         : segment.displayText.substring(0, takeLength);
     final startOffset = segment.startOffset;
     final endOffset = segment.startOffset + text.length;
-    if (segment.decoration != null &&
-        fragments.isNotEmpty &&
-        fragments.last.canMergeWith(segment)) {
-      fragments[fragments.length - 1] = fragments.last.merge(
+    fragments.add(
+      _MarkdownPretextLineFragment(
         text: text,
+        style: segment.style,
+        mouseCursor: segment.mouseCursor,
+        recognizer: segment.recognizer,
+        decoration: segment.decoration,
+        padding: _paddingForDecoratedFragment(segment),
+        startOffset: startOffset,
         endOffset: endOffset,
-      );
-    } else {
-      fragments.add(
-        _MarkdownPretextLineFragment(
-          text: text,
-          style: segment.style,
-          mouseCursor: segment.mouseCursor,
-          recognizer: segment.recognizer,
-          decoration: segment.decoration,
-          padding: _paddingForDecoratedFragment(segment),
-          startOffset: startOffset,
-          endOffset: endOffset,
-        ),
-      );
-    }
+      ),
+    );
     remaining -= takeLength;
   }
 
-  return fragments;
+  return _applyLineLocalDecoratedPadding(
+    fragments,
+    maxRenderedWidth: maxRenderedWidth,
+    textScaleFactor: textScaleFactor,
+  );
 }
 
 EdgeInsets _paddingForDecoratedFragment(
@@ -784,7 +791,88 @@ EdgeInsets _paddingForDecoratedFragment(
   if (decoration == null) {
     return EdgeInsets.zero;
   }
-  return decoration.padding;
+  return EdgeInsets.only(
+    top: decoration.padding.top,
+    bottom: decoration.padding.bottom,
+  );
+}
+
+List<_MarkdownPretextLineFragment> _applyLineLocalDecoratedPadding(
+  List<_MarkdownPretextLineFragment> fragments, {
+  required double maxRenderedWidth,
+  required double textScaleFactor,
+}) {
+  if (fragments.isEmpty) {
+    return fragments;
+  }
+
+  final measurer = _TextPainterSegmentMeasurer();
+  final baseWidth = fragments.fold<double>(
+    0,
+    (current, fragment) =>
+        current +
+        measurer.measure(fragment.text, fragment.style, textScaleFactor),
+  );
+  final horizontalPaddingBudget = math.max(maxRenderedWidth - baseWidth, 0.0);
+  final desiredHorizontalPadding =
+      fragments.fold<double>(0, (current, fragment) {
+    final decoration = fragment.decoration;
+    if (decoration == null) {
+      return current;
+    }
+    return current + decoration.padding.left + decoration.padding.right;
+  });
+  final horizontalPaddingScale = desiredHorizontalPadding <= 0
+      ? 1.0
+      : math.min(horizontalPaddingBudget / desiredHorizontalPadding, 1.0);
+
+  final normalized = <_MarkdownPretextLineFragment>[];
+  var index = 0;
+  while (index < fragments.length) {
+    final fragment = fragments[index];
+    if (fragment.decoration == null) {
+      normalized.add(fragment);
+      index += 1;
+      continue;
+    }
+
+    var end = index + 1;
+    while (end < fragments.length && fragments[end].decoration != null) {
+      end += 1;
+    }
+
+    for (var current = index; current < end; current++) {
+      final currentFragment = fragments[current];
+      final decoration = currentFragment.decoration!;
+      final isFirst = current == index;
+      final isLast = current == end - 1;
+      normalized.add(
+        currentFragment.copyWith(
+          decoration: decoration.copyWith(
+            borderRadius: BorderRadius.only(
+              topLeft: isFirst ? decoration.borderRadius.topLeft : Radius.zero,
+              bottomLeft:
+                  isFirst ? decoration.borderRadius.bottomLeft : Radius.zero,
+              topRight: isLast ? decoration.borderRadius.topRight : Radius.zero,
+              bottomRight:
+                  isLast ? decoration.borderRadius.bottomRight : Radius.zero,
+            ),
+          ),
+          padding: EdgeInsets.only(
+            left:
+                isFirst ? decoration.padding.left * horizontalPaddingScale : 0,
+            right:
+                isLast ? decoration.padding.right * horizontalPaddingScale : 0,
+            top: decoration.padding.top,
+            bottom: decoration.padding.bottom,
+          ),
+        ),
+      );
+    }
+    index = end;
+  }
+
+  return normalized;
 }
 
 double _measureMaxLineHeight(
@@ -1090,27 +1178,17 @@ class _MarkdownPretextLineFragment {
   final int startOffset;
   final int endOffset;
 
-  bool canMergeWith(_MarkdownPretextMeasuredSegment segment) {
-    return decoration != null &&
-        segment.decoration != null &&
-        style == segment.style &&
-        mouseCursor == segment.mouseCursor &&
-        recognizer == segment.recognizer &&
-        decoration == segment.decoration &&
-        endOffset == segment.startOffset;
-  }
-
-  _MarkdownPretextLineFragment merge({
-    required String text,
-    required int endOffset,
+  _MarkdownPretextLineFragment copyWith({
+    MarkdownPretextInlineDecoration? decoration,
+    EdgeInsets? padding,
   }) {
     return _MarkdownPretextLineFragment(
-      text: '${this.text}$text',
+      text: text,
       style: style,
       mouseCursor: mouseCursor,
       recognizer: recognizer,
-      decoration: decoration,
-      padding: decoration!.padding,
+      decoration: decoration ?? this.decoration,
+      padding: padding ?? this.padding,
       startOffset: startOffset,
       endOffset: endOffset,
     );

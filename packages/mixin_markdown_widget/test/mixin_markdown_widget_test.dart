@@ -1079,18 +1079,23 @@ return value;
         .where((widget) {
       final decoration = widget.decoration;
       return decoration is BoxDecoration &&
-          decoration.color == theme.inlineCodeBackgroundColor &&
-          decoration.borderRadius == theme.inlineCodeBorderRadius;
+          decoration.color == theme.inlineCodeBackgroundColor;
     }).toList(growable: false);
 
-    expect(decoratedBoxes, hasLength(1));
+    expect(decoratedBoxes, isNotEmpty);
 
     final paddingFinder = find.byWidgetPredicate(
       (widget) =>
-          widget is Padding && widget.padding == theme.inlineCodePadding,
+          widget is Padding &&
+          widget.padding is EdgeInsets &&
+          (widget.padding as EdgeInsets).vertical ==
+              theme.inlineCodePadding.vertical,
     );
     expect(paddingFinder, findsWidgets);
-    expect(find.text('code'), findsOneWidget);
+    expect(find.text('c'), findsOneWidget);
+    expect(find.text('o'), findsOneWidget);
+    expect(find.text('d'), findsOneWidget);
+    expect(find.text('e'), findsOneWidget);
   });
 
   testWidgets('inline code prefers the default Mono font family', (
@@ -1104,12 +1109,22 @@ return value;
       ),
     );
 
-    final codeText = tester.widget<Text>(find.text('code'));
-    expect(codeText.style?.fontFamily, 'Mono');
-    expect(
-      codeText.style?.fontFamilyFallback,
-      containsAllInOrder(const <String>['SF Mono', 'Roboto Mono', 'Menlo']),
-    );
+    final codeTexts = tester
+        .widgetList<Text>(
+          find.descendant(
+            of: find.byType(DecoratedBox),
+            matching: find.byType(Text),
+          ),
+        )
+        .toList(growable: false);
+    expect(codeTexts, isNotEmpty);
+    for (final codeText in codeTexts) {
+      expect(codeText.style?.fontFamily, 'Mono');
+      expect(
+        codeText.style?.fontFamilyFallback,
+        containsAllInOrder(const <String>['SF Mono', 'Roboto Mono', 'Menlo']),
+      );
+    }
   });
 
   testWidgets('code blocks prefer the default Mono font family',
@@ -1400,16 +1415,91 @@ const value = 42;
 
     expect(layout.lines.length, greaterThan(1));
     expect(layout.lines.map((line) => line.text).join(), 'abcdefghij');
-    final decoratedSegments = layout.lines
-        .expand((line) => line.segments)
-        .where((segment) => segment.decoration != null)
-        .toList(growable: false);
+    for (final line in layout.lines) {
+      final decoratedSegments = line.segments
+          .where((segment) => segment.decoration != null)
+          .toList(growable: false);
+      expect(decoratedSegments, isNotEmpty);
+      expect(decoratedSegments.first.padding.left, greaterThan(0));
+      expect(decoratedSegments.first.padding.left,
+          lessThanOrEqualTo(padding.left));
+      expect(decoratedSegments.last.padding.right, greaterThan(0));
+      expect(decoratedSegments.last.padding.right,
+          lessThanOrEqualTo(padding.right));
+      for (final middle in decoratedSegments.skip(1).take(
+            decoratedSegments.length > 2 ? decoratedSegments.length - 2 : 0,
+          )) {
+        expect(middle.padding.left, 0);
+        expect(middle.padding.right, 0);
+      }
+    }
+  });
 
-    expect(decoratedSegments, isNotEmpty);
-    expect(
-      decoratedSegments.every((segment) => segment.padding == padding),
-      isTrue,
-    );
+  test('breakable decorated inline keeps wrapped settle_result visible', () {
+    const padding = EdgeInsets.symmetric(horizontal: 6, vertical: 2);
+    const runs = <MarkdownPretextInlineRun>[
+      MarkdownPretextInlineRun(
+        text: 'used during ',
+        style: TextStyle(fontSize: 14, height: 1.2),
+      ),
+      MarkdownPretextInlineRun(
+        text: 'settle_result',
+        style: TextStyle(fontSize: 14, height: 1.2),
+        allowCharacterWrap: true,
+        decoration: MarkdownPretextInlineDecoration(
+          backgroundColor: Color(0xFFE9EDF2),
+          borderRadius: BorderRadius.all(Radius.circular(6)),
+          padding: padding,
+        ),
+      ),
+      MarkdownPretextInlineRun(
+        text: ' to skip very small refunds.',
+        style: TextStyle(fontSize: 14, height: 1.2),
+      ),
+    ];
+
+    for (final width in <double>[132, 96, 72, 56]) {
+      final layout = computeMarkdownPretextLayoutFromRuns(
+        runs: runs,
+        fallbackStyle: const TextStyle(fontSize: 14, height: 1.2),
+        maxWidth: width,
+        textScaleFactor: 1,
+      );
+
+      expect(layout.lines.length, greaterThan(1));
+      expect(
+        layout.plainText,
+        'used during settle_result to skip very small refunds.',
+      );
+
+      final decoratedSegments = layout.lines
+          .expand((line) => line.segments)
+          .where((segment) => segment.decoration != null)
+          .toList(growable: false);
+      expect(decoratedSegments, isNotEmpty);
+      expect(
+        decoratedSegments.map((segment) => segment.text).join(),
+        'settle_result',
+      );
+
+      for (final line in layout.lines) {
+        final lineDecoratedSegments = line.segments
+            .where((segment) => segment.decoration != null)
+            .toList(growable: false);
+        if (lineDecoratedSegments.isEmpty) {
+          continue;
+        }
+        expect(lineDecoratedSegments.first.text, isNotEmpty);
+        expect(
+            lineDecoratedSegments.first.padding.left, greaterThanOrEqualTo(0));
+        expect(lineDecoratedSegments.first.padding.left,
+            lessThanOrEqualTo(padding.left));
+        expect(
+            lineDecoratedSegments.last.padding.right, greaterThanOrEqualTo(0));
+        expect(lineDecoratedSegments.last.padding.right,
+            lessThanOrEqualTo(padding.right));
+      }
+    }
   });
 
   testWidgets('reuses cached unchanged pretext block widgets on append', (
