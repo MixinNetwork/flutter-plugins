@@ -47,49 +47,111 @@ class _MarkdownDemoPageState extends State<MarkdownDemoPage> {
   var _chunkIndex = 0;
   var _isApplyingProgrammaticEdit = false;
 
-  static const _initialMarkdown = '''
-# mixin_markdown_widget
+  static const _initialMarkdown = r'''
+# Mixin Markdown Widget Showcase
 
-This example lets you **edit Markdown on the left** and inspect the live preview on the right.
+Welcome to the comprehensive demo of **mixin_markdown_widget**. This document is designed to push the parser and renderer to their limits, ensuring robust selection, beautiful geometry, and full feature coverage.
 
-> The current version focuses on a strong reading surface first: theming, tables, code blocks, images, and controller-driven updates.
-
-## How to use this demo
-
-1. Edit the source in the left editor.
-2. Watch the preview update immediately.
-3. Use the theme button in the app bar to switch the reading surface.
-4. Use the append action to simulate streamed output.
-
-## Included blocks
-
-- Headings and paragraphs
-- Block quotes and lists
-- Fenced code blocks
-- Tables
-- Images
-- Horizontal rules
-
-## Sample code
-
-```dart
-final controller = MarkdownController(data: '# Hello');
-controller.appendChunk('\n\nNew data streamed in.');
-```
-
-## Sample table
-
-| Capability | Status |
-| --- | --- |
-| Theme data | Ready |
-| Stream append | Ready |
-| Incremental parser | Planned |
+> **Note:** You can edit this text on the left, and it will render instantly on the right. Try selecting text across different blocks to see our advanced path-based smooth selection highlights!
 
 ---
 
-![Demo image](https://picsum.photos/960/360)
+## 1. Typography & Inline Styles
 
-Visit [GitHub](https://github.com/MixinNetwork/flutter-plugins) for the monorepo.
+This widget supports all standard inline syntax, including *italicized text*, **bold emphasis**, ~~strikethrough~~, and `inline code snippets`. 
+You can mix them up: ***bold italics*** or **bold with `code`**.
+
+Here is a block with mixed inline math: Einstein's famous equation is \( E = mc^2 \), while the quadratic formula is \( x = \frac{-b \pm \sqrt{b^2 -4ac}}{2a} \). 
+Notice how selection seamlessly wraps around inline blocks without layout jumps.
+
+## 2. Lists & Nesting
+
+Markdown isn't complete without lists. And lists inside lists. And quotes inside lists!
+
+*   **Fruit**
+    *   Apple
+    *   Banana
+        *   Cavendish
+        *   Plantain
+*   **Vegetables**
+    1.  Carrot
+    2.  Broccoli
+
+### Lists containing advanced blocks
+
+1.  **Code implementation:**
+    Here is a quick way to compute a sum in JavaScript:
+    
+    ```javascript
+    function sum(a, b) {
+      return a + b;
+    }
+    console.log(sum(5, 10)); // 15
+    ```
+
+2.  **Mathematical definitions:**
+    And here is the sum expressed mathematically:
+    
+    $$
+    \sum_{i=1}^{n} i = \frac{n(n+1)}{2}
+    $$
+    
+    > Blockquotes can also live gracefully inside list items. The selection background will adapt to the indentation perfectly.
+
+## 3. Deeply Nested Blockquotes
+
+We tested the nested layout extensively to ensure borders, padding, and text selections don't break even under extreme nesting.
+
+> Level 1: The outer quote.
+> > Level 2: The inner quote.
+> > > Level 3: Deep quote containing a math block!
+> > > 
+> > > $$
+> > > \int_a^b f(x) dx = F(b) - F(a)
+> > > $$
+> > > 
+> > > And some inline `code` for good measure.
+> > 
+> > Back to Level 2.
+> 
+> Back to Level 1.
+
+## 4. Complex Tables
+
+Tables support varying alignments, complex cell contents, and inline styles.
+
+| Feature | Description | Status |
+| :--- | :---: | ---: |
+| **Parsing** | Fast incremental markdown parsing | ✅ |
+| **Selection** | Seamless multi-block text selection | ✅ |
+| **Math** | Full LaTeX parsing & rendering (\( \alpha^2 \)) | ✅ |
+| **Code** | Syntax highlighting with *re_highlight* | 🚀 Built |
+
+## 5. Media & Links
+
+Links are fully clickable and interactive: [Visit the Flutter website](https://flutter.dev).
+
+Images are responsive and support border radiuses based on your specific `MarkdownThemeData`.
+
+![Spectacular mountain landscape](https://picsum.photos/id/1011/960/400)
+
+## 6. The Edge Cases
+
+Finally, testing seamless text selection bridging an empty paragraph line to a dense block of text!
+
+Line one.
+
+Line two.
+
+```python
+def test_edge_case():
+    # Notice the selection corners on the empty lines below:
+    
+    
+    print("Empty lines inside code blocks shouldn't break corner heuristics!")
+```
+
+End of showcase. Feel free to break things!
 ''';
 
   static const _streamChunks = <String>[
