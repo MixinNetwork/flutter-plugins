@@ -1,3 +1,5 @@
+import 'image_caption_layout.dart';
+
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -520,23 +522,76 @@ class MarkdownImageBlockView extends StatelessWidget {
     required this.theme,
     required this.image,
     this.caption,
+    this.hasErrorNotifier,
+    this.hasKnownSize = false,
   });
 
   final MarkdownThemeData theme;
   final Widget image;
   final Widget? caption;
+  final ValueNotifier<bool>? hasErrorNotifier;
+  final bool hasKnownSize;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        image,
-        if (caption != null) ...<Widget>[
-          SizedBox(height: theme.imageCaptionSpacing),
-          caption!,
-        ],
-      ],
+    if (hasErrorNotifier == null) {
+      return _buildContent(false, image);
+    }
+    return ValueListenableBuilder<bool>(
+      valueListenable: hasErrorNotifier!,
+      child: image,
+      builder: (context, hasError, imageChild) {
+        return _buildContent(hasError, imageChild!);
+      },
+    );
+  }
+
+  Widget _buildContent(bool hasError, Widget imageChild) {
+    if (caption == null) {
+      return imageChild;
+    }
+
+    if (!hasKnownSize && hasError) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: theme.imagePlaceholderBackgroundColor,
+          borderRadius: theme.imageBorderRadius,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            imageChild,
+            const SizedBox(width: 8),
+            Flexible(
+              child: DefaultTextStyle.merge(
+                style: theme.bodyStyle.copyWith(
+                  color: theme.bodyStyle.color?.withValues(alpha: 0.72),
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                child: caption!,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final showCaption = hasKnownSize || !hasError;
+    if (!showCaption) {
+      return imageChild;
+    }
+
+    return ImageCaptionLayout(
+      image: imageChild,
+      spacing: theme.imageCaptionSpacing,
+      caption: DefaultTextStyle.merge(
+        textAlign: TextAlign.center,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        child: caption!,
+      ),
     );
   }
 }

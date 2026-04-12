@@ -4,5 +4,10 @@
 <dict>
 	<key>com.apple.security.app-sandbox</key>
 	<true/>
+	<key>com.apple.security.network.client</key>
+	<true/>
 </dict>
 </plist>
+Images are responsive and support border radiuses based on your specific MarkdownThemeData. They can also act as image links!
+
+Spectacular mountain landscape

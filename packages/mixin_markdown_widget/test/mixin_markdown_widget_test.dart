@@ -2972,9 +2972,11 @@ const veryLongValueName = 42;
       range,
     );
 
-    final scrollable = tester.widgetList<SingleChildScrollView>(
-      find.byType(SingleChildScrollView),
-    ).firstWhere((widget) => widget.scrollDirection == Axis.horizontal);
+    final scrollable = tester
+        .widgetList<SingleChildScrollView>(
+          find.byType(SingleChildScrollView),
+        )
+        .firstWhere((widget) => widget.scrollDirection == Axis.horizontal);
     scrollable.controller!.jumpTo(60);
     await tester.pump();
 
@@ -3756,7 +3758,7 @@ const veryLongValueName = 42;
       MaterialApp(
         home: Scaffold(
           body: MarkdownWidget(
-            data: '![Caption text](missing-image.png)',
+            data: '![Caption text](missing-image.png?w=400&h=200)',
             selectionController: selectionController,
           ),
         ),
@@ -3781,6 +3783,44 @@ const veryLongValueName = 42;
     expect(selectionController.selectedPlainText, 'Caption text');
   });
 
+  testWidgets(
+      'dragging inside an image caption with unknown size selects caption text',
+      (
+    tester,
+  ) async {
+    final selectionController = MarkdownSelectionController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: '![Caption text](missing-image.png)',
+            selectionController: selectionController,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final captionFinder = find.text('Caption text');
+    expect(captionFinder, findsOneWidget);
+
+    final start = tester.getTopLeft(captionFinder) + const Offset(1, 4);
+    final end = tester.getTopRight(captionFinder) + const Offset(-1, 4);
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: start);
+    await gesture.down(start);
+    await tester.pump();
+    await gesture.moveTo(end);
+    await tester.pump();
+    await gesture.up();
+    await tester.pump();
+
+    expect(selectionController.hasSelection, isTrue);
+    expect(selectionController.selectedPlainText, 'Caption text');
+  });
+
   testWidgets('custom imageBuilder blocks participate in selection', (
     tester,
   ) async {
@@ -3790,7 +3830,7 @@ const veryLongValueName = 42;
       MaterialApp(
         home: Scaffold(
           body: MarkdownWidget(
-            data: '![Custom caption](missing-image.png)',
+            data: '![Custom caption](missing-image.png?w=400&h=200)',
             selectionController: selectionController,
             imageBuilder: (context, block, theme) {
               return Container(

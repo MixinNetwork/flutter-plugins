@@ -75,6 +75,7 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
     required this.tableRowBackgroundColor,
     required this.selectionColor,
     required this.quoteBorderWidth,
+    required this.imagePlaceholderBackgroundColor,
   });
 
   factory MarkdownThemeData.fallback(BuildContext context) {
@@ -163,6 +164,7 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
       tableRowBackgroundColor: colorScheme.surface,
       selectionColor: colorScheme.primary.withOpacity(0.24),
       quoteBorderWidth: 4,
+      imagePlaceholderBackgroundColor: colorScheme.surface.withOpacity(0.92),
     );
   }
 
@@ -250,6 +252,7 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
       tableRowBackgroundColor: colorScheme.surface,
       selectionColor: colorScheme.primary.withOpacity(0.24),
       quoteBorderWidth: 4,
+      imagePlaceholderBackgroundColor: colorScheme.surface.withOpacity(0.92),
     );
   }
 
@@ -290,6 +293,7 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
   final Color tableRowBackgroundColor;
   final Color selectionColor;
   final double quoteBorderWidth;
+  final Color imagePlaceholderBackgroundColor;
 
   TextStyle headingStyleForLevel(int level) {
     switch (level) {
@@ -348,6 +352,7 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
     Color? tableRowBackgroundColor,
     Color? selectionColor,
     double? quoteBorderWidth,
+    Color? imagePlaceholderBackgroundColor,
   }) {
     return MarkdownThemeData(
       padding: padding ?? this.padding,
@@ -394,6 +399,8 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
           tableRowBackgroundColor ?? this.tableRowBackgroundColor,
       selectionColor: selectionColor ?? this.selectionColor,
       quoteBorderWidth: quoteBorderWidth ?? this.quoteBorderWidth,
+      imagePlaceholderBackgroundColor: imagePlaceholderBackgroundColor ??
+          this.imagePlaceholderBackgroundColor,
     );
   }
 
@@ -530,6 +537,12 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
       quoteBorderWidth:
           lerpDouble(quoteBorderWidth, other.quoteBorderWidth, t) ??
               quoteBorderWidth,
+      imagePlaceholderBackgroundColor: Color.lerp(
+            imagePlaceholderBackgroundColor,
+            other.imagePlaceholderBackgroundColor,
+            t,
+          ) ??
+          imagePlaceholderBackgroundColor,
     );
   }
 
@@ -587,6 +600,7 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
       tableRowBackgroundColor,
       selectionColor,
       quoteBorderWidth,
+      imagePlaceholderBackgroundColor,
     ]);
   }
 
@@ -632,6 +646,8 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
         other.tableHeaderBackgroundColor == tableHeaderBackgroundColor &&
         other.tableRowBackgroundColor == tableRowBackgroundColor &&
         other.selectionColor == selectionColor &&
-        other.quoteBorderWidth == quoteBorderWidth;
+        other.quoteBorderWidth == quoteBorderWidth &&
+        other.imagePlaceholderBackgroundColor ==
+            imagePlaceholderBackgroundColor;
   }
 }

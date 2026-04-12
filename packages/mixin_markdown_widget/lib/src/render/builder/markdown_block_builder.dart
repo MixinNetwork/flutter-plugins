@@ -150,9 +150,12 @@ class MarkdownBlockBuilder {
         );
         final captionDescriptor =
             descriptorExtractor.buildImageCaptionDescriptor(block);
+        final imageState = _buildImageVisual(context, block, hasCaption: true);
         return MarkdownImageBlockView(
           theme: theme,
-          image: _buildImageVisual(context, block),
+          image: imageState.image,
+          hasErrorNotifier: imageState.hasErrorNotifier,
+          hasKnownSize: imageState.hasKnownSize,
           caption: SelectableMarkdownBlock(
             key: key,
             blockIndex: blockIndex,
@@ -930,49 +933,129 @@ class MarkdownBlockBuilder {
     final caption = MarkdownDescriptorExtractor.imageCaptionText(block);
     final captionDescriptor =
         descriptorExtractor.buildImageCaptionDescriptor(block);
+    final imageState =
+        _buildImageVisual(context, block, hasCaption: caption.isNotEmpty);
     return MarkdownImageBlockView(
       theme: theme,
-      image: _buildImageVisual(context, block),
+      image: imageState.image,
+      hasErrorNotifier: imageState.hasErrorNotifier,
+      hasKnownSize: imageState.hasKnownSize,
       caption: caption.isNotEmpty
           ? _buildDescriptorTextWidget(captionDescriptor)
           : null,
     );
   }
 
-  Widget _buildImageVisual(BuildContext context, ImageBlock block) {
+  ({Widget image, ValueNotifier<bool> hasErrorNotifier, bool hasKnownSize})
+      _buildImageVisual(BuildContext context, ImageBlock block,
+          {bool hasCaption = false}) {
+    final uri = Uri.tryParse(block.url);
+    double? w;
+    double? h;
+    if (uri != null) {
+      final wStr = uri.queryParameters['w'] ?? uri.queryParameters['width'];
+      final hStr = uri.queryParameters['h'] ?? uri.queryParameters['height'];
+      if (wStr != null) w = double.tryParse(wStr);
+      if (hStr != null) h = double.tryParse(hStr);
+    }
+    final hasKnownSize = w != null && h != null;
+    final hasErrorNotifier = keysRegistry.imageErrorNotifiers
+        .putIfAbsent(block.id, () => ValueNotifier<bool>(false));
+
     if (imageBuilder != null) {
-      return _wrapLinkedImage(
-        block,
-        imageBuilder!(context, block, theme),
+      return (
+        image: _wrapLinkedImage(block, imageBuilder!(context, block, theme)),
+        hasErrorNotifier: hasErrorNotifier,
+        hasKnownSize: hasKnownSize,
       );
     }
-    final uri = Uri.tryParse(block.url);
     final isNetwork =
         uri != null && (uri.scheme == 'http' || uri.scheme == 'https');
     final localImageProvider = resolveMarkdownLocalImageProvider(block.url);
+
+    Widget errorBuilder(BuildContext ctx, Object err, StackTrace? st) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!hasErrorNotifier.value) hasErrorNotifier.value = true;
+      });
+      if (hasKnownSize) {
+        return Container(
+          width: w,
+          height: h,
+          color: theme.imagePlaceholderBackgroundColor,
+          alignment: Alignment.center,
+          child: Icon(Icons.broken_image_outlined, color: theme.dividerColor),
+        );
+      } else {
+        if (hasCaption) {
+          return Icon(
+            Icons.broken_image_outlined,
+            size: 18,
+            color: theme.bodyStyle.color?.withValues(alpha: 0.72),
+          );
+        }
+        final altText = MarkdownDescriptorExtractor.imageCaptionText(block);
+        final text = altText.isNotEmpty ? altText : 'Image';
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: theme.imagePlaceholderBackgroundColor,
+            borderRadius: theme.imageBorderRadius,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.broken_image_outlined,
+                  size: 18,
+                  color: theme.bodyStyle.color?.withValues(alpha: 0.72)),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  text,
+                  style: theme.bodyStyle.copyWith(
+                      color: theme.bodyStyle.color?.withValues(alpha: 0.72)),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+    }
+
     final image = isNetwork
         ? Image.network(
             block.url,
+            width: w,
+            height: h,
             fit: BoxFit.cover,
-            errorBuilder: _imageErrorBuilder,
+            errorBuilder: errorBuilder,
           )
         : localImageProvider != null
             ? Image(
                 image: localImageProvider,
+                width: w,
+                height: h,
                 fit: BoxFit.cover,
-                errorBuilder: _imageErrorBuilder,
+                errorBuilder: errorBuilder,
               )
             : Image.asset(
                 block.url,
+                width: w,
+                height: h,
                 fit: BoxFit.cover,
-                errorBuilder: _imageErrorBuilder,
+                errorBuilder: errorBuilder,
               );
-    return _wrapLinkedImage(
-      block,
-      ClipRRect(
-        borderRadius: theme.imageBorderRadius,
-        child: image,
+    return (
+      image: _wrapLinkedImage(
+        block,
+        ClipRRect(
+          borderRadius: theme.imageBorderRadius,
+          child: image,
+        ),
       ),
+      hasErrorNotifier: hasErrorNotifier,
+      hasKnownSize: hasKnownSize,
     );
   }
 
@@ -996,34 +1079,22 @@ class MarkdownBlockBuilder {
     );
   }
 
-  Widget _imageErrorBuilder(
-    BuildContext context,
-    Object error,
-    StackTrace? stackTrace,
-  ) {
-    return Container(
-      height: 180,
-      alignment: Alignment.center,
-      color: theme.codeBlockBackgroundColor,
-      child: Text(
-        'Unable to load image',
-        style: theme.bodyStyle,
-      ),
-    );
-  }
-
   SelectableBlockSpec _buildCustomImageBuilderSpec(
       BuildContext context, ImageBlock block) {
     final caption = MarkdownDescriptorExtractor.imageCaptionText(block);
     final blockPlainText = caption.isEmpty ? block.url : caption;
+    final imageState = _buildImageVisual(context, block);
     return SelectableBlockSpec(
       child: MarkdownImageBlockView(
         theme: theme,
-        image: _buildImageVisual(context, block),
+        image: imageState.image,
+        hasErrorNotifier: imageState.hasErrorNotifier,
+        hasKnownSize: imageState.hasKnownSize,
         caption: caption.isEmpty
             ? null
             : _buildDescriptorTextWidget(
                 descriptorExtractor.buildImageCaptionDescriptor(block),
+                intrinsicWidthSafe: true,
               ),
       ),
       plainText: blockPlainText,

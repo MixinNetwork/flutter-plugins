@@ -18,6 +18,7 @@ class MarkdownBlockKeysRegistry {
   final Map<String, List<GlobalKey>> quoteChildKeysByBlock = {};
   final Map<String, GlobalKey<State<StatefulWidget>>> tableBlockKeys = {};
   final Map<String, ScrollController> codeBlockScrollControllers = {};
+  final Map<String, ValueNotifier<bool>> imageErrorNotifiers = {};
 
   List<GlobalKey> listItemKeysFor(ListBlock block) {
     final keys = listItemKeysByBlock.putIfAbsent(block.id, () => <GlobalKey>[]);
@@ -89,6 +90,12 @@ class MarkdownBlockKeysRegistry {
         .toList(growable: false);
     for (final blockId in staleCodeBlockIds) {
       codeBlockScrollControllers.remove(blockId)?.dispose();
+    }
+    final staleImageNotifierIds = imageErrorNotifiers.keys
+        .where((key) => !validIds.contains(key))
+        .toList(growable: false);
+    for (final blockId in staleImageNotifierIds) {
+      imageErrorNotifiers.remove(blockId)?.dispose();
     }
   }
 }
@@ -1127,7 +1134,8 @@ class MarkdownSelectionResolver {
       case MarkdownBlockKind.thematicBreak:
         final rect = origin & renderObject.size;
         return <Rect>[
-          Rect.fromLTRB(rect.left - 1.5, rect.top, rect.right + 1.5, rect.bottom),
+          Rect.fromLTRB(
+              rect.left - 1.5, rect.top, rect.right + 1.5, rect.bottom),
         ];
     }
   }
@@ -1296,7 +1304,8 @@ class MarkdownSelectionResolver {
   List<({double top, double bottom})> _computeTextPainterLineExtents(
     TextPainter textPainter,
   ) {
-    final fullText = textPainter.text?.toPlainText(includePlaceholders: true) ?? '';
+    final fullText =
+        textPainter.text?.toPlainText(includePlaceholders: true) ?? '';
     if (fullText.isEmpty) {
       return const <({double top, double bottom})>[];
     }
@@ -1338,9 +1347,8 @@ class MarkdownSelectionResolver {
       final resolvedTop = previous != null
           ? (previous.bottom + current.top) / 2.0
           : current.top;
-      final resolvedBottom = next != null
-          ? (current.bottom + next.top) / 2.0
-          : current.bottom;
+      final resolvedBottom =
+          next != null ? (current.bottom + next.top) / 2.0 : current.bottom;
 
       contiguousLines.add((top: resolvedTop, bottom: resolvedBottom));
     }
