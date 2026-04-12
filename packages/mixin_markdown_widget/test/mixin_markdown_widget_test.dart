@@ -254,6 +254,52 @@ Reference[^note]
     expect(footnotes.items, hasLength(1));
   });
 
+  test('parses simple inline html anchor tags into link nodes', () {
+    const input = '''
+💡 <a href="/MixinNetwork/flutter-plugins/new/main?filename=.github/instructions/*.instructions.md" class="Link--inTextBlock" target="_blank" rel="noopener noreferrer">Add Copilot custom instructions</a> for smarter, more guided reviews. <a href="https://docs.github.com/en/copilot/customizing-copilot/adding-repository-custom-instructions-for-github-copilot" class="Link--inTextBlock" target="_blank" rel="noopener noreferrer">Learn how to get started</a>.
+''';
+
+    final document = const MarkdownDocumentParser().parse(input);
+    final paragraph = document.blocks.single as ParagraphBlock;
+    final links = _flattenInlineNodes(paragraph.inlines)
+        .whereType<LinkInline>()
+        .toList(growable: false);
+
+    expect(links, hasLength(2));
+    expect(
+      links[0].destination,
+      '/MixinNetwork/flutter-plugins/new/main?filename=.github/instructions/*.instructions.md',
+    );
+    expect(
+        _inlinePlainText(links[0].children), 'Add Copilot custom instructions');
+    expect(
+      links[1].destination,
+      'https://docs.github.com/en/copilot/customizing-copilot/adding-repository-custom-instructions-for-github-copilot',
+    );
+    expect(_inlinePlainText(links[1].children), 'Learn how to get started');
+  });
+
+  test('parses additional simple inline html tags into existing inline nodes',
+      () {
+    const input = '''
+Before <b>bold</b> <i>italic</i> <s>strike</s> <kbd>cmd</kbd> <span data-x="1">span text</span> <small>small text</small> <u>underlined</u> <ins>inserted</ins> after
+''';
+
+    final document = const MarkdownDocumentParser().parse(input);
+    final paragraph = document.blocks.single as ParagraphBlock;
+    final flattened =
+        _flattenInlineNodes(paragraph.inlines).toList(growable: false);
+
+    expect(flattened.any((inline) => inline is StrongInline), isTrue);
+    expect(flattened.any((inline) => inline is EmphasisInline), isTrue);
+    expect(flattened.any((inline) => inline is StrikethroughInline), isTrue);
+    expect(flattened.any((inline) => inline is InlineCode), isTrue);
+    expect(
+      _inlinePlainText(paragraph.inlines),
+      'Before bold italic strike cmd span text small text underlined inserted after',
+    );
+  });
+
   test('does not treat footnote references as custom superscript spans', () {
     const input = '''
 Here is a statement with a footnote.[^1] Another reference can be added here.[^long]
@@ -698,6 +744,55 @@ Paragraph body
 
     expect(tappedDestination, 'https://example.com');
     expect(tappedLabel, 'Example');
+  });
+
+  testWidgets('tap on inline html anchor tags triggers onTapLink',
+      (tester) async {
+    String? tappedDestination;
+    String? tappedLabel;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data:
+                '💡 <a href="https://docs.github.com/en/copilot/customizing-copilot/adding-repository-custom-instructions-for-github-copilot" class="Link--inTextBlock" target="_blank" rel="noopener noreferrer">Learn how to get started</a>.',
+            onTapLink: (destination, title, label) {
+              tappedDestination = destination;
+              tappedLabel = label;
+            },
+          ),
+        ),
+      ),
+    );
+
+    final richTextFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is RichText &&
+          widget.text.toPlainText().contains('Learn how to get started'),
+    );
+    final richText = tester.widget<RichText>(richTextFinder);
+    final renderBox = tester.renderObject<RenderBox>(richTextFinder);
+    final painter = TextPainter(
+      text: richText.text,
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: renderBox.size.width);
+    final plainText = richText.text.toPlainText();
+    final start = plainText.indexOf('Learn how to get started');
+    final end = start + 'Learn how to get started'.length;
+    final linkBoxes = painter.getBoxesForSelection(
+      TextSelection(baseOffset: start, extentOffset: end),
+    );
+
+    await tester
+        .tapAt(renderBox.localToGlobal(linkBoxes.first.toRect().center));
+    await tester.pump();
+
+    expect(
+      tappedDestination,
+      'https://docs.github.com/en/copilot/customizing-copilot/adding-repository-custom-instructions-for-github-copilot',
+    );
+    expect(tappedLabel, 'Learn how to get started');
   });
 
   testWidgets('uses pretext for list items, quotes, and table cells', (

@@ -1121,16 +1121,19 @@ class _MarkdownAstBuilder {
         continue;
       }
       switch (node.tag) {
+        case 'i':
         case 'em':
           inlines.add(EmphasisInline(
               children:
                   List<InlineNode>.unmodifiable(_buildInlines(node.children))));
           break;
+        case 'b':
         case 'strong':
           inlines.add(StrongInline(
               children:
                   List<InlineNode>.unmodifiable(_buildInlines(node.children))));
           break;
+        case 's':
         case 'del':
           inlines.add(StrikethroughInline(
               children:
@@ -1169,6 +1172,7 @@ class _MarkdownAstBuilder {
             ),
           );
           break;
+        case 'kbd':
         case 'code':
           inlines.add(InlineCode(text: node.textContent));
           break;

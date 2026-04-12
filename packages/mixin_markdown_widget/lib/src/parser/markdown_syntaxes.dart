@@ -193,13 +193,35 @@ class MarkdownDefinitionListSyntax extends md.BlockSyntax {
 class MarkdownInlineHtmlTagSyntax extends md.InlineSyntax {
   MarkdownInlineHtmlTagSyntax() : super(r'<', startCharacter: 0x3C);
 
+  static const Set<String> _supportedTags = <String>{
+    'a',
+    'b',
+    'i',
+    's',
+    'span',
+    'small',
+    'kbd',
+    'u',
+    'ins',
+    'em',
+    'strong',
+    'del',
+    'mark',
+    'sub',
+    'sup',
+    'code',
+  };
   static final RegExp _lineBreakPattern = RegExp(
-    r'^<br\s*/?>',
+    r'^<br(?:\s+[^>]*)?\s*/?>',
     caseSensitive: false,
   );
   static final RegExp _pairedTagPattern = RegExp(
-    r'^<(em|strong|del|mark|sub|sup|code)>(.*?)</\1>',
+    r'^<([A-Za-z][A-Za-z0-9-]*)(\s+[^>]*)?>(.*?)</\1>',
     caseSensitive: false,
+    dotAll: true,
+  );
+  static final RegExp _attributePattern = RegExp(
+    r"""([A-Za-z_:][A-Za-z0-9_:\-.]*)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>/=`]+)))?""",
   );
 
   @override
@@ -224,18 +246,37 @@ class MarkdownInlineHtmlTagSyntax extends md.InlineSyntax {
     }
 
     final tag = pairMatch.group(1)!.toLowerCase();
-    final content = pairMatch.group(2) ?? '';
+    if (!_supportedTags.contains(tag)) {
+      return false;
+    }
+    final rawAttributes = pairMatch.group(2);
+    final content = pairMatch.group(3) ?? '';
     parser.writeText();
-    parser.addNode(
-      md.Element(
-        tag,
-        tag == 'code'
-            ? <md.Node>[md.Text(content)]
-            : parser.document.parseInline(content),
-      ),
+    final element = md.Element(
+      tag,
+      tag == 'code'
+          ? <md.Node>[md.Text(content)]
+          : parser.document.parseInline(content),
     );
+    if (rawAttributes != null && rawAttributes.trim().isNotEmpty) {
+      element.attributes.addAll(_parseAttributes(rawAttributes));
+    }
+    parser.addNode(element);
     parser.consume(pairMatch.group(0)!.length);
     return true;
+  }
+
+  Map<String, String> _parseAttributes(String source) {
+    final attributes = <String, String>{};
+    for (final match in _attributePattern.allMatches(source)) {
+      final name = match.group(1);
+      if (name == null || name.isEmpty) {
+        continue;
+      }
+      final value = match.group(2) ?? match.group(3) ?? match.group(4) ?? '';
+      attributes[name.toLowerCase()] = value;
+    }
+    return attributes;
   }
 
   @override
