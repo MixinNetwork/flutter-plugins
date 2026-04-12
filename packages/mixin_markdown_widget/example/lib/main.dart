@@ -4,6 +4,7 @@ import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
 enum _DemoThemePreset {
   ocean,
   warm,
+  tight,
 }
 
 enum _DemoLayoutMode {
@@ -135,11 +136,12 @@ This content was appended through `MarkdownController.appendChunk`.
 
   @override
   Widget build(BuildContext context) {
-    final baseTheme = MarkdownThemeData.fallback(context);
+    final baseTheme = _themePreset == _DemoThemePreset.tight
+        ? MarkdownThemeData.tight(context)
+        : MarkdownThemeData.fallback(context);
     final markdownTheme = _themePreset == _DemoThemePreset.warm
         ? baseTheme.copyWith(
             maxContentWidth: 860,
-            bodyStyle: baseTheme.bodyStyle.copyWith(height: 1.8),
             quoteBackgroundColor: const Color(0xFFFFF5E0),
             quoteBorderColor: const Color(0xFFD79B36),
             codeBlockBackgroundColor: const Color(0xFFF3E7D2),
@@ -183,11 +185,15 @@ This content was appended through `MarkdownController.appendChunk`.
             itemBuilder: (context) => const <PopupMenuEntry<_DemoThemePreset>>[
               PopupMenuItem<_DemoThemePreset>(
                 value: _DemoThemePreset.ocean,
-                child: Text('Ocean theme'),
+                child: Text('Ocean theme (default)'),
               ),
               PopupMenuItem<_DemoThemePreset>(
                 value: _DemoThemePreset.warm,
-                child: Text('Warm theme'),
+                child: Text('Warm theme (loose)'),
+              ),
+              PopupMenuItem<_DemoThemePreset>(
+                value: _DemoThemePreset.tight,
+                child: Text('Tight theme (compact)'),
               ),
             ],
           ),
@@ -242,7 +248,6 @@ This content was appended through `MarkdownController.appendChunk`.
               textAlignVertical: TextAlignVertical.top,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     fontFamily: 'Menlo',
-                    height: 1.55,
                   ),
               decoration: const InputDecoration(
                 border: InputBorder.none,
@@ -410,6 +415,8 @@ This content was appended through `MarkdownController.appendChunk`.
         return 'Ocean';
       case _DemoThemePreset.warm:
         return 'Warm';
+      case _DemoThemePreset.tight:
+        return 'Tight';
     }
   }
 }

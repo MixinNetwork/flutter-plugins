@@ -165,7 +165,7 @@ class MarkdownQuoteBlockView extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: theme.quoteBackgroundColor,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: theme.quoteBorderRadius,
         border: Border(
           left: BorderSide(
             color: theme.quoteBorderColor,
@@ -225,11 +225,11 @@ class MarkdownTableFrame extends StatelessWidget {
     return CustomPaint(
       foregroundPainter: _MarkdownTableFramePainter(
         borderColor: theme.tableBorderColor,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: theme.tableBorderRadius,
         selectionOverlayColor: selectionOverlayColor,
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: theme.tableBorderRadius,
         child: child,
       ),
     );
@@ -359,7 +359,7 @@ class MarkdownCodeBlockView extends StatelessWidget {
           SizedBox(
             height: toolbarHeight,
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 8, 0),
+              padding: theme.codeBlockToolbarPadding,
               child: Row(
                 children: <Widget>[
                   if (language != null && language!.isNotEmpty)
@@ -508,10 +508,12 @@ class MarkdownTableBlockView extends StatelessWidget {
 class MarkdownImageBlockView extends StatelessWidget {
   const MarkdownImageBlockView({
     super.key,
+    required this.theme,
     required this.image,
     this.caption,
   });
 
+  final MarkdownThemeData theme;
   final Widget image;
   final Widget? caption;
 
@@ -522,7 +524,7 @@ class MarkdownImageBlockView extends StatelessWidget {
       children: <Widget>[
         image,
         if (caption != null) ...<Widget>[
-          const SizedBox(height: 8),
+          SizedBox(height: theme.imageCaptionSpacing),
           caption!,
         ],
       ],

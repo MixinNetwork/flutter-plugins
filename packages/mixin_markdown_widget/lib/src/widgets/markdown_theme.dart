@@ -49,6 +49,10 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
     required this.inlineCodeBorderRadius,
     required this.codeBlockBorderRadius,
     required this.imageBorderRadius,
+    required this.quoteBorderRadius,
+    required this.tableBorderRadius,
+    required this.imageCaptionSpacing,
+    required this.codeBlockToolbarPadding,
     required this.bodyStyle,
     required this.quoteStyle,
     required this.linkStyle,
@@ -80,11 +84,9 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
     final borderColor =
         Color.lerp(colorScheme.outline, colorScheme.onSurface, 0.24) ??
             colorScheme.outline;
-    final bodyStyle = textTheme.bodyLarge ??
-        const TextStyle(
-          fontSize: 16,
-          height: 1.7,
-        );
+    final bodyStyle = (textTheme.bodyMedium ?? const TextStyle()).copyWith(
+      fontSize: 16,
+    );
     final mono = bodyStyle.copyWith(
       fontFamily: 'Mono',
       fontFamilyFallback: const <String>[
@@ -97,22 +99,25 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
         'Courier New',
         'monospace',
       ],
-      fontSize: (bodyStyle.fontSize ?? 16) - 1,
-      height: 1.6,
+      fontSize: 15,
     );
     return MarkdownThemeData(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
-      blockSpacing: 18,
-      listItemSpacing: 6,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      blockSpacing: 16,
+      listItemSpacing: 4,
       maxContentWidth: 920,
-      quotePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      inlineCodePadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      quotePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      inlineCodePadding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
       codeBlockPadding: const EdgeInsets.all(16),
       tableCellPadding:
           const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       inlineCodeBorderRadius: BorderRadius.circular(6),
       codeBlockBorderRadius: BorderRadius.circular(16),
-      imageBorderRadius: BorderRadius.circular(18),
+      imageBorderRadius: BorderRadius.circular(6),
+      quoteBorderRadius: BorderRadius.circular(4),
+      tableBorderRadius: BorderRadius.circular(6),
+      imageCaptionSpacing: 8,
+      codeBlockToolbarPadding: const EdgeInsets.fromLTRB(12, 8, 8, 0),
       bodyStyle: bodyStyle,
       quoteStyle: bodyStyle.copyWith(
         color: colorScheme.onSurface.withOpacity(0.82),
@@ -123,35 +128,116 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
         decoration: TextDecoration.underline,
         decorationColor: colorScheme.primary,
       ),
-      inlineCodeStyle: mono.copyWith(height: 1.2),
+      inlineCodeStyle: mono,
       codeBlockStyle: mono.copyWith(
         color: colorScheme.onSurface,
       ),
       tableHeaderStyle: bodyStyle.copyWith(fontWeight: FontWeight.w700),
       heading1Style:
           textTheme.displaySmall?.copyWith(fontWeight: FontWeight.w700) ??
-              bodyStyle.copyWith(
-                  fontSize: 34, fontWeight: FontWeight.w700, height: 1.2),
+              bodyStyle.copyWith(fontSize: 34, fontWeight: FontWeight.w700),
       heading2Style:
           textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700) ??
-              bodyStyle.copyWith(
-                  fontSize: 28, fontWeight: FontWeight.w700, height: 1.25),
+              bodyStyle.copyWith(fontSize: 28, fontWeight: FontWeight.w700),
       heading3Style:
           textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700) ??
-              bodyStyle.copyWith(
-                  fontSize: 24, fontWeight: FontWeight.w700, height: 1.3),
+              bodyStyle.copyWith(fontSize: 24, fontWeight: FontWeight.w700),
       heading4Style:
           textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700) ??
-              bodyStyle.copyWith(
-                  fontSize: 21, fontWeight: FontWeight.w700, height: 1.35),
+              bodyStyle.copyWith(fontSize: 21, fontWeight: FontWeight.w700),
       heading5Style:
           textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700) ??
-              bodyStyle.copyWith(
-                  fontSize: 18, fontWeight: FontWeight.w700, height: 1.4),
+              bodyStyle.copyWith(fontSize: 18, fontWeight: FontWeight.w700),
       heading6Style:
           textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700) ??
-              bodyStyle.copyWith(
-                  fontSize: 16, fontWeight: FontWeight.w700, height: 1.4),
+              bodyStyle.copyWith(fontSize: 16, fontWeight: FontWeight.w700),
+      quoteBackgroundColor: colorScheme.surface.withOpacity(0.7),
+      quoteBorderColor: colorScheme.primary.withOpacity(0.4),
+      inlineCodeBackgroundColor:
+          Color.lerp(colorScheme.surface, colorScheme.onSurface, 0.06) ??
+              colorScheme.surface,
+      codeBlockBackgroundColor: colorScheme.surface.withOpacity(0.92),
+      dividerColor: borderColor,
+      tableBorderColor: borderColor,
+      tableHeaderBackgroundColor: colorScheme.primary.withOpacity(0.08),
+      tableRowBackgroundColor: colorScheme.surface,
+      selectionColor: colorScheme.primary.withOpacity(0.24),
+      quoteBorderWidth: 4,
+    );
+  }
+
+  factory MarkdownThemeData.tight(BuildContext context) {
+    final theme = Theme.of(context);
+    final textTheme = theme.textTheme;
+    final colorScheme = theme.colorScheme;
+    final borderColor =
+        Color.lerp(colorScheme.outline, colorScheme.onSurface, 0.24) ??
+            colorScheme.outline;
+    final bodyStyle =
+        (textTheme.bodyMedium ?? const TextStyle()).copyWith(fontSize: 14);
+    final mono = bodyStyle.copyWith(
+      fontFamily: 'Mono',
+      fontFamilyFallback: const <String>[
+        'SF Mono',
+        'Roboto Mono',
+        'Menlo',
+        'Monaco',
+        'Consolas',
+        'Liberation Mono',
+        'Courier New',
+        'monospace',
+      ],
+      fontSize: 13,
+    );
+    return MarkdownThemeData(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      blockSpacing: 10,
+      listItemSpacing: 2,
+      maxContentWidth: 920,
+      quotePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      inlineCodePadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      codeBlockPadding: const EdgeInsets.all(12),
+      tableCellPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      inlineCodeBorderRadius: BorderRadius.circular(4),
+      codeBlockBorderRadius: BorderRadius.circular(8),
+      imageBorderRadius: BorderRadius.circular(6),
+      quoteBorderRadius: BorderRadius.circular(4),
+      tableBorderRadius: BorderRadius.circular(4),
+      imageCaptionSpacing: 4,
+      codeBlockToolbarPadding: const EdgeInsets.fromLTRB(12, 6, 6, 0),
+      bodyStyle: bodyStyle,
+      quoteStyle: bodyStyle.copyWith(
+        color: colorScheme.onSurface.withOpacity(0.82),
+        fontStyle: FontStyle.italic,
+      ),
+      linkStyle: bodyStyle.copyWith(
+        color: colorScheme.primary,
+        decoration: TextDecoration.underline,
+        decorationColor: colorScheme.primary,
+      ),
+      inlineCodeStyle: mono.copyWith(),
+      codeBlockStyle: mono.copyWith(
+        color: colorScheme.onSurface,
+      ),
+      tableHeaderStyle: bodyStyle.copyWith(fontWeight: FontWeight.w700),
+      heading1Style:
+          textTheme.displaySmall?.copyWith(fontWeight: FontWeight.w700) ??
+              bodyStyle.copyWith(fontSize: 28, fontWeight: FontWeight.w700),
+      heading2Style:
+          textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700) ??
+              bodyStyle.copyWith(fontSize: 22, fontWeight: FontWeight.w700),
+      heading3Style:
+          textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700) ??
+              bodyStyle.copyWith(fontSize: 18, fontWeight: FontWeight.w700),
+      heading4Style:
+          textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700) ??
+              bodyStyle.copyWith(fontSize: 16, fontWeight: FontWeight.w700),
+      heading5Style:
+          textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700) ??
+              bodyStyle.copyWith(fontSize: 14, fontWeight: FontWeight.w700),
+      heading6Style:
+          textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700) ??
+              bodyStyle.copyWith(fontSize: 13, fontWeight: FontWeight.w700),
       quoteBackgroundColor: colorScheme.surface.withOpacity(0.7),
       quoteBorderColor: colorScheme.primary.withOpacity(0.4),
       inlineCodeBackgroundColor:
@@ -178,6 +264,10 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
   final BorderRadius inlineCodeBorderRadius;
   final BorderRadius codeBlockBorderRadius;
   final BorderRadius imageBorderRadius;
+  final BorderRadius quoteBorderRadius;
+  final BorderRadius tableBorderRadius;
+  final double imageCaptionSpacing;
+  final EdgeInsetsGeometry codeBlockToolbarPadding;
   final TextStyle bodyStyle;
   final TextStyle quoteStyle;
   final TextStyle linkStyle;
@@ -232,6 +322,10 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
     BorderRadius? inlineCodeBorderRadius,
     BorderRadius? codeBlockBorderRadius,
     BorderRadius? imageBorderRadius,
+    BorderRadius? quoteBorderRadius,
+    BorderRadius? tableBorderRadius,
+    double? imageCaptionSpacing,
+    EdgeInsetsGeometry? codeBlockToolbarPadding,
     TextStyle? bodyStyle,
     TextStyle? quoteStyle,
     TextStyle? linkStyle,
@@ -269,6 +363,11 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
       codeBlockBorderRadius:
           codeBlockBorderRadius ?? this.codeBlockBorderRadius,
       imageBorderRadius: imageBorderRadius ?? this.imageBorderRadius,
+      quoteBorderRadius: quoteBorderRadius ?? this.quoteBorderRadius,
+      tableBorderRadius: tableBorderRadius ?? this.tableBorderRadius,
+      imageCaptionSpacing: imageCaptionSpacing ?? this.imageCaptionSpacing,
+      codeBlockToolbarPadding:
+          codeBlockToolbarPadding ?? this.codeBlockToolbarPadding,
       bodyStyle: bodyStyle ?? this.bodyStyle,
       quoteStyle: quoteStyle ?? this.quoteStyle,
       linkStyle: linkStyle ?? this.linkStyle,
@@ -347,6 +446,27 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
             t,
           ) ??
           imageBorderRadius,
+      quoteBorderRadius: BorderRadius.lerp(
+            quoteBorderRadius,
+            other.quoteBorderRadius,
+            t,
+          ) ??
+          quoteBorderRadius,
+      tableBorderRadius: BorderRadius.lerp(
+            tableBorderRadius,
+            other.tableBorderRadius,
+            t,
+          ) ??
+          tableBorderRadius,
+      imageCaptionSpacing:
+          lerpDouble(imageCaptionSpacing, other.imageCaptionSpacing, t) ??
+              imageCaptionSpacing,
+      codeBlockToolbarPadding: EdgeInsetsGeometry.lerp(
+            codeBlockToolbarPadding,
+            other.codeBlockToolbarPadding,
+            t,
+          ) ??
+          codeBlockToolbarPadding,
       bodyStyle: TextStyle.lerp(bodyStyle, other.bodyStyle, t) ?? bodyStyle,
       quoteStyle: TextStyle.lerp(quoteStyle, other.quoteStyle, t) ?? quoteStyle,
       linkStyle: TextStyle.lerp(linkStyle, other.linkStyle, t) ?? linkStyle,
@@ -419,6 +539,7 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
     properties.add(DoubleProperty('blockSpacing', blockSpacing));
     properties.add(DoubleProperty('listItemSpacing', listItemSpacing));
     properties.add(DoubleProperty('maxContentWidth', maxContentWidth));
+    properties.add(DoubleProperty('imageCaptionSpacing', imageCaptionSpacing));
     properties.add(DoubleProperty('quoteBorderWidth', quoteBorderWidth));
     properties.add(ColorProperty('selectionColor', selectionColor));
     properties.add(DiagnosticsProperty<TextStyle>('bodyStyle', bodyStyle));
@@ -440,6 +561,10 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
       inlineCodeBorderRadius,
       codeBlockBorderRadius,
       imageBorderRadius,
+      quoteBorderRadius,
+      tableBorderRadius,
+      imageCaptionSpacing,
+      codeBlockToolbarPadding,
       bodyStyle,
       quoteStyle,
       linkStyle,
@@ -482,6 +607,10 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
         other.inlineCodeBorderRadius == inlineCodeBorderRadius &&
         other.codeBlockBorderRadius == codeBlockBorderRadius &&
         other.imageBorderRadius == imageBorderRadius &&
+        other.quoteBorderRadius == quoteBorderRadius &&
+        other.tableBorderRadius == tableBorderRadius &&
+        other.imageCaptionSpacing == imageCaptionSpacing &&
+        other.codeBlockToolbarPadding == codeBlockToolbarPadding &&
         other.bodyStyle == bodyStyle &&
         other.quoteStyle == quoteStyle &&
         other.linkStyle == linkStyle &&

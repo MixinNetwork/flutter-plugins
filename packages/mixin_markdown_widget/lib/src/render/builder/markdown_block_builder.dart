@@ -150,6 +150,7 @@ class MarkdownBlockBuilder {
         final captionDescriptor =
             descriptorExtractor.buildImageCaptionDescriptor(block);
         return MarkdownImageBlockView(
+          theme: theme,
           image: _buildImageVisual(context, block),
           caption: SelectableMarkdownBlock(
             key: key,
@@ -710,6 +711,7 @@ class MarkdownBlockBuilder {
     }
     final caption = MarkdownDescriptorExtractor.imageCaptionText(block);
     return MarkdownImageBlockView(
+      theme: theme,
       image: _buildImageVisual(context, block),
       caption: caption.isNotEmpty
           ? Text(
@@ -798,6 +800,7 @@ class MarkdownBlockBuilder {
     final caption = MarkdownDescriptorExtractor.imageCaptionText(block);
     return SelectableBlockSpec(
       child: MarkdownImageBlockView(
+        theme: theme,
         image: _buildImageVisual(context, block),
         caption: caption.isEmpty
             ? null

@@ -975,8 +975,8 @@ copy me
     expect(horizontalScrollFinder, findsOneWidget);
 
     final tableRenderBox = tester.renderObject<RenderBox>(find.byType(Table));
-    // The table should be exactly taking its available width (320 max minus markdown container padding, ~272)
-    expect(tableRenderBox.size.width, closeTo(272.0, 2.0));
+    // The table should be exactly taking its available width (320 max minus markdown container padding, ~288)
+    expect(tableRenderBox.size.width, closeTo(288.0, 2.0));
 
     final descriptionHeaderFinder =
         find.text('Description', findRichText: true);
