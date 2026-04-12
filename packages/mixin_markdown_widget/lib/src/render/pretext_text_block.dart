@@ -16,12 +16,27 @@ class MarkdownPretextInlineRun {
     required this.style,
     this.mouseCursor,
     this.recognizer,
+    this.decoration,
   });
 
   final String text;
   final TextStyle style;
   final MouseCursor? mouseCursor;
   final GestureRecognizer? recognizer;
+  final MarkdownPretextInlineDecoration? decoration;
+}
+
+@immutable
+class MarkdownPretextInlineDecoration {
+  const MarkdownPretextInlineDecoration({
+    required this.backgroundColor,
+    required this.borderRadius,
+    required this.padding,
+  });
+
+  final Color backgroundColor;
+  final BorderRadius borderRadius;
+  final EdgeInsets padding;
 }
 
 class MarkdownPretextTextBlock extends StatelessWidget {
@@ -163,7 +178,11 @@ MarkdownPretextLayoutResult computeMarkdownPretextLayoutFromRuns({
 }) {
   final plainText = runs.map((run) => run.text).join();
   final lineHeight = _measureMaxLineHeight(
-    runs.isEmpty ? <TextStyle>[fallbackStyle] : runs.map((run) => run.style),
+    runs.isEmpty
+        ? <MarkdownPretextInlineRun>[
+            MarkdownPretextInlineRun(text: '', style: fallbackStyle),
+          ]
+        : runs,
     textScaleFactor,
   );
   if (runs.isEmpty || plainText.isEmpty) {
@@ -216,6 +235,13 @@ MarkdownPretextLayoutResult computeMarkdownPretextLayoutFromRuns({
           visibleTextLength: line.text.length,
           fallbackStyle: fallbackStyle,
         ),
+        segments: _buildLineSegments(
+          segments: segments,
+          startSegmentIndex: line.start.segmentIndex,
+          endSegmentIndex: line.end.segmentIndex,
+          visibleTextLength: line.text.length,
+          textScaleFactor: textScaleFactor,
+        ),
         width: line.width,
         leadingOffset: _resolveLineLeadingOffset(
           lineWidth: line.width,
@@ -267,22 +293,14 @@ class MarkdownPretextLayoutResult {
         continue;
       }
 
-      final textPainter = _buildLinePainter(line.span, textDirection);
-      final boxes = textPainter.getBoxesForSelection(
-        TextSelection(
-          baseOffset: selectionStart - line.startOffset,
-          extentOffset: selectionEnd - line.startOffset,
-        ),
-      );
       final lineTop = lineIndex * lineHeight;
       final mergedBoxes = _mergeSelectionBoxes(
-        boxes.map(
-          (box) => Rect.fromLTRB(
-            box.left + line.leadingOffset,
-            lineTop,
-            box.right + line.leadingOffset,
-            lineTop + lineHeight,
-          ),
+        _selectionBoxesForLine(
+          line,
+          selectionStart: selectionStart,
+          selectionEnd: selectionEnd,
+          lineTop: lineTop,
+          textDirection: textDirection,
         ),
       );
       for (final box in mergedBoxes) {
@@ -316,31 +334,70 @@ class MarkdownPretextLayoutResult {
           : line.endOffset;
     }
 
-    final textPainter = _buildLinePainter(line.span, textDirection);
-    final lineTop = clampedLineIndex * lineHeight;
-    final clampedOffset = Offset(
-      (localPosition.dx - line.leadingOffset)
-          .clamp(0.0, math.max(textPainter.width, 0.0)),
-      (localPosition.dy - lineTop)
-          .clamp(0.0, math.max(textPainter.height, 0.0)),
+    final localDx = (localPosition.dx - line.leadingOffset)
+        .clamp(0.0, math.max(line.width, 0.0));
+    return _textOffsetAtLineDx(
+      line,
+      localDx.toDouble(),
+      textDirection: textDirection,
     );
-    final textPosition = textPainter.getPositionForOffset(clampedOffset);
-    final offsetInLine = textPosition.offset.clamp(0, line.text.length);
-    return line.startOffset + offsetInLine;
   }
 
-  TextPainter _buildLinePainter(
-    InlineSpan span,
-    TextDirection textDirection,
-  ) {
-    final textPainter = TextPainter(
-      text: span,
-      textDirection: textDirection,
-      textScaler: TextScaler.linear(textScaleFactor),
-      maxLines: 1,
-    );
-    textPainter.layout(maxWidth: double.infinity);
-    return textPainter;
+  Iterable<Rect> _selectionBoxesForLine(
+    MarkdownPretextLayoutLine line, {
+    required int selectionStart,
+    required int selectionEnd,
+    required double lineTop,
+    required TextDirection textDirection,
+  }) sync* {
+    for (final segment in line.segments) {
+      final segmentSelectionStart =
+          math.max(selectionStart, segment.startOffset);
+      final segmentSelectionEnd = math.min(selectionEnd, segment.endOffset);
+      if (segmentSelectionStart >= segmentSelectionEnd) {
+        continue;
+      }
+      final left = segmentSelectionStart == segment.startOffset
+          ? segment.left
+          : segment.left +
+              _horizontalOffsetForTextOffset(
+                segment,
+                segmentSelectionStart - segment.startOffset,
+                textDirection: textDirection,
+              );
+      final right = segmentSelectionEnd == segment.endOffset
+          ? segment.right
+          : segment.left +
+              _horizontalOffsetForTextOffset(
+                segment,
+                segmentSelectionEnd - segment.startOffset,
+                textDirection: textDirection,
+              );
+      yield Rect.fromLTRB(left + line.leadingOffset, lineTop,
+          right + line.leadingOffset, lineTop + lineHeight);
+    }
+  }
+
+  int _textOffsetAtLineDx(
+    MarkdownPretextLayoutLine line,
+    double localDx, {
+    required TextDirection textDirection,
+  }) {
+    for (final segment in line.segments) {
+      if (localDx > segment.right) {
+        continue;
+      }
+      if (localDx <= segment.left) {
+        return segment.startOffset;
+      }
+      final offsetInSegment = _textOffsetForHorizontalPosition(
+        segment,
+        localDx - segment.left,
+        textDirection: textDirection,
+      );
+      return segment.startOffset + offsetInSegment;
+    }
+    return line.endOffset;
   }
 
   Iterable<Rect> _mergeSelectionBoxes(Iterable<Rect> boxes) sync* {
@@ -379,6 +436,7 @@ class MarkdownPretextLayoutLine {
   const MarkdownPretextLayoutLine({
     required this.text,
     required this.span,
+    required this.segments,
     required this.width,
     required this.leadingOffset,
     required this.startOffset,
@@ -388,11 +446,33 @@ class MarkdownPretextLayoutLine {
 
   final String text;
   final InlineSpan span;
+  final List<MarkdownPretextLayoutSegment> segments;
   final double width;
   final double leadingOffset;
   final int startOffset;
   final int endOffset;
   final int visibleEndOffset;
+}
+
+@immutable
+class MarkdownPretextLayoutSegment {
+  const MarkdownPretextLayoutSegment({
+    required this.text,
+    required this.style,
+    required this.startOffset,
+    required this.endOffset,
+    required this.left,
+    required this.right,
+    this.decoration,
+  });
+
+  final String text;
+  final TextStyle style;
+  final int startOffset;
+  final int endOffset;
+  final double left;
+  final double right;
+  final MarkdownPretextInlineDecoration? decoration;
 }
 
 InlineSpan _buildFullSpan({
@@ -403,14 +483,51 @@ InlineSpan _buildFullSpan({
     style: fallbackStyle,
     children: <InlineSpan>[
       for (final run in runs)
-        TextSpan(
-          text: run.text,
-          style: run.style,
-          mouseCursor: run.mouseCursor,
-          recognizer: run.recognizer,
-        ),
+        if (run.decoration == null)
+          TextSpan(
+            text: run.text,
+            style: run.style,
+            mouseCursor: run.mouseCursor,
+            recognizer: run.recognizer,
+          )
+        else
+          WidgetSpan(
+            alignment: PlaceholderAlignment.baseline,
+            baseline: TextBaseline.alphabetic,
+            child: _DecoratedInlineText(
+              text: run.text,
+              style: run.style,
+              decoration: run.decoration!,
+            ),
+          ),
     ],
   );
+}
+
+class _DecoratedInlineText extends StatelessWidget {
+  const _DecoratedInlineText({
+    required this.text,
+    required this.style,
+    required this.decoration,
+  });
+
+  final String text;
+  final TextStyle style;
+  final MarkdownPretextInlineDecoration decoration;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: decoration.backgroundColor,
+        borderRadius: decoration.borderRadius,
+      ),
+      child: Padding(
+        padding: decoration.padding,
+        child: Text(text, style: style),
+      ),
+    );
+  }
 }
 
 double _resolveLineLeadingOffset({
@@ -465,7 +582,11 @@ InlineSpan _buildLineSpan({
     if (takeLength <= 0) {
       continue;
     }
-    children.add(segment.toInlineSpan(takeLength: takeLength));
+    children.add(
+      segment.toInlineSpan(
+        takeLength: takeLength,
+      ),
+    );
     remaining -= takeLength;
   }
 
@@ -475,13 +596,70 @@ InlineSpan _buildLineSpan({
   return TextSpan(style: fallbackStyle, children: children);
 }
 
+List<MarkdownPretextLayoutSegment> _buildLineSegments({
+  required List<_MarkdownPretextMeasuredSegment> segments,
+  required int startSegmentIndex,
+  required int endSegmentIndex,
+  required int visibleTextLength,
+  required double textScaleFactor,
+}) {
+  final lineSegments = <MarkdownPretextLayoutSegment>[];
+  final measurer = _TextPainterSegmentMeasurer();
+  var remaining = visibleTextLength;
+  var cursor = 0.0;
+
+  for (var index = startSegmentIndex;
+      index < endSegmentIndex && remaining > 0;
+      index++) {
+    final segment = segments[index];
+    if (segment.kind == pretext_segment.SegmentKind.hardBreak ||
+        segment.displayText.isEmpty) {
+      continue;
+    }
+    final takeLength = math.min(segment.displayText.length, remaining);
+    if (takeLength <= 0) {
+      continue;
+    }
+    final text = takeLength == segment.displayText.length
+        ? segment.displayText
+        : segment.displayText.substring(0, takeLength);
+    final width = takeLength == segment.displayText.length
+        ? segment.width
+        : measurer.measure(
+            text,
+            segment.style,
+            textScaleFactor,
+            padding: segment.decoration?.padding,
+          );
+    lineSegments.add(
+      MarkdownPretextLayoutSegment(
+        text: text,
+        style: segment.style,
+        startOffset: segment.startOffset,
+        endOffset: segment.startOffset + text.length,
+        left: cursor,
+        right: cursor + width,
+        decoration: segment.decoration,
+      ),
+    );
+    cursor += width;
+    remaining -= takeLength;
+  }
+
+  return List<MarkdownPretextLayoutSegment>.unmodifiable(lineSegments);
+}
+
 double _measureMaxLineHeight(
-  Iterable<TextStyle> styles,
+  Iterable<MarkdownPretextInlineRun> runs,
   double textScaleFactor,
 ) {
   var lineHeight = 0.0;
-  for (final style in styles) {
-    final measured = _measureLineHeight(style, textScaleFactor);
+  for (final run in runs) {
+    final measured = _measureLineHeight(
+      run.style,
+      textScaleFactor,
+      padding: run.decoration?.padding,
+    );
     if (measured > lineHeight) {
       lineHeight = measured;
     }
@@ -489,14 +667,18 @@ double _measureMaxLineHeight(
   return lineHeight;
 }
 
-double _measureLineHeight(TextStyle style, double textScaleFactor) {
+double _measureLineHeight(
+  TextStyle style,
+  double textScaleFactor, {
+  EdgeInsets? padding,
+}) {
   final textPainter = TextPainter(
     text: TextSpan(text: ' ', style: style),
     textDirection: TextDirection.ltr,
     textScaler: TextScaler.linear(textScaleFactor),
     maxLines: 1,
   )..layout(maxWidth: double.infinity);
-  return textPainter.preferredLineHeight;
+  return textPainter.preferredLineHeight + (padding?.vertical ?? 0);
 }
 
 int _consumeVisibleText(String source, int startOffset, String visibleText) {
@@ -508,6 +690,54 @@ int _consumeVisibleText(String source, int startOffset, String visibleText) {
     cursor += 1;
   }
   return cursor;
+}
+
+double _horizontalOffsetForTextOffset(
+  MarkdownPretextLayoutSegment segment,
+  int textOffset, {
+  required TextDirection textDirection,
+}) {
+  final clampedOffset = textOffset.clamp(0, segment.text.length);
+  final prefix = segment.text.substring(0, clampedOffset);
+  final textWidth = _measureInlineTextWidth(prefix, segment.style,
+      textDirection: textDirection);
+  if (segment.decoration == null) {
+    return textWidth;
+  }
+  return segment.decoration!.padding.left + textWidth;
+}
+
+int _textOffsetForHorizontalPosition(
+  MarkdownPretextLayoutSegment segment,
+  double dx, {
+  required TextDirection textDirection,
+}) {
+  final decoration = segment.decoration;
+  if (decoration != null) {
+    final textWidth = _measureInlineTextWidth(
+      segment.text,
+      segment.style,
+      textDirection: textDirection,
+    );
+    if (dx <= decoration.padding.left) {
+      return 0;
+    }
+    if (dx >= decoration.padding.left + textWidth) {
+      return segment.text.length;
+    }
+    return _resolveTextOffsetForSegment(
+      segment.text,
+      segment.style,
+      dx - decoration.padding.left,
+      textDirection: textDirection,
+    );
+  }
+  return _resolveTextOffsetForSegment(
+    segment.text,
+    segment.style,
+    dx,
+    textDirection: textDirection,
+  );
 }
 
 class _MarkdownPretextSegmentBuilder {
@@ -536,6 +766,7 @@ class _MarkdownPretextSegmentBuilder {
               style: run.style,
               mouseCursor: run.mouseCursor,
               recognizer: run.recognizer,
+              decoration: run.decoration,
               startOffset: plainTextOffset,
               endOffset: plainTextOffset + 1,
             ),
@@ -543,6 +774,30 @@ class _MarkdownPretextSegmentBuilder {
           index += 1;
           plainTextOffset += 1;
           continue;
+        }
+
+        if (run.decoration != null) {
+          final displayText = text.substring(index);
+          segments.add(
+            _MarkdownPretextMeasuredSegment(
+              displayText: displayText,
+              kind: pretext_segment.SegmentKind.word,
+              width: _measurer.measure(
+                displayText,
+                run.style,
+                textScaleFactor,
+                padding: run.decoration?.padding,
+              ),
+              style: run.style,
+              mouseCursor: run.mouseCursor,
+              recognizer: run.recognizer,
+              decoration: run.decoration,
+              startOffset: plainTextOffset,
+              endOffset: plainTextOffset + displayText.length,
+            ),
+          );
+          plainTextOffset += displayText.length;
+          break;
         }
 
         final isWhitespace = character.trim().isEmpty;
@@ -575,10 +830,12 @@ class _MarkdownPretextSegmentBuilder {
               displayText,
               run.style,
               textScaleFactor,
+              padding: run.decoration?.padding,
             ),
             style: run.style,
             mouseCursor: run.mouseCursor,
             recognizer: run.recognizer,
+            decoration: run.decoration,
             startOffset: startOffset,
             endOffset: plainTextOffset,
           ),
@@ -601,6 +858,7 @@ class _MarkdownPretextMeasuredSegment {
     required this.endOffset,
     this.mouseCursor,
     this.recognizer,
+    this.decoration,
   });
 
   final String displayText;
@@ -609,13 +867,27 @@ class _MarkdownPretextMeasuredSegment {
   final TextStyle style;
   final MouseCursor? mouseCursor;
   final GestureRecognizer? recognizer;
+  final MarkdownPretextInlineDecoration? decoration;
   final int startOffset;
   final int endOffset;
 
-  InlineSpan toInlineSpan({int? takeLength}) {
+  InlineSpan toInlineSpan({
+    int? takeLength,
+  }) {
     final text = takeLength == null || takeLength >= displayText.length
         ? displayText
         : displayText.substring(0, takeLength);
+    if (decoration != null) {
+      return WidgetSpan(
+        alignment: PlaceholderAlignment.baseline,
+        baseline: TextBaseline.alphabetic,
+        child: _DecoratedInlineText(
+          text: text,
+          style: style,
+          decoration: decoration!,
+        ),
+      );
+    }
     return TextSpan(
       text: text,
       style: style,
@@ -635,14 +907,51 @@ class _TextPainterSegmentMeasurer {
   double measure(
     String segment,
     TextStyle style,
-    double textScaleFactor,
-  ) {
-    final key = Object.hash(segment, style, textScaleFactor);
+    double textScaleFactor, {
+    EdgeInsets? padding,
+  }) {
+    final key = Object.hash(segment, style, textScaleFactor, padding);
     return _cache.putIfAbsent(key, () {
       _textPainter.text = TextSpan(text: segment, style: style);
       _textPainter.textScaler = TextScaler.linear(textScaleFactor);
       _textPainter.layout(maxWidth: double.infinity);
-      return _textPainter.width;
+      return _textPainter.width + (padding?.horizontal ?? 0);
     });
   }
+}
+
+double _measureInlineTextWidth(
+  String text,
+  TextStyle style, {
+  required TextDirection textDirection,
+}) {
+  if (text.isEmpty) {
+    return 0;
+  }
+  final textPainter = TextPainter(
+    text: TextSpan(text: text, style: style),
+    textDirection: textDirection,
+    maxLines: 1,
+  )..layout(maxWidth: double.infinity);
+  return textPainter.width;
+}
+
+int _resolveTextOffsetForSegment(
+  String text,
+  TextStyle style,
+  double dx, {
+  required TextDirection textDirection,
+}) {
+  if (text.isEmpty) {
+    return 0;
+  }
+  final textPainter = TextPainter(
+    text: TextSpan(text: text, style: style),
+    textDirection: textDirection,
+    maxLines: 1,
+  )..layout(maxWidth: double.infinity);
+  final position = textPainter.getPositionForOffset(
+    Offset(dx.clamp(0.0, math.max(textPainter.width, 0.0)), 0),
+  );
+  return position.offset.clamp(0, text.length);
 }

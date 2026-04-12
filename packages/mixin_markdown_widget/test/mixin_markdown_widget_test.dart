@@ -877,6 +877,251 @@ return value;
         _countStyledDescendantSpans(rootSpan, rootSpan.style), greaterThan(0));
   });
 
+  testWidgets('renders inline code with rounded background and padding', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(data: 'Inline `code` sample'),
+        ),
+      ),
+    );
+
+    final context = tester.element(find.byType(MarkdownWidget));
+    final theme = MarkdownTheme.of(context);
+
+    final decoratedBoxes = tester
+        .widgetList<DecoratedBox>(find.byType(DecoratedBox))
+        .where((widget) {
+      final decoration = widget.decoration;
+      return decoration is BoxDecoration &&
+          decoration.color == theme.inlineCodeBackgroundColor &&
+          decoration.borderRadius == theme.inlineCodeBorderRadius;
+    }).toList(growable: false);
+
+    expect(decoratedBoxes, hasLength(1));
+
+    final paddingFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is Padding && widget.padding == theme.inlineCodePadding,
+    );
+    expect(paddingFinder, findsWidgets);
+    expect(find.text('code'), findsOneWidget);
+  });
+
+  testWidgets('selecting text across inline code does not throw',
+      (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(data: '- before `code` after'),
+        ),
+      ),
+    );
+
+    final richTextFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is RichText &&
+          widget.text.toPlainText().contains('before') &&
+          widget.text.toPlainText().contains('after'),
+    );
+    expect(richTextFinder, findsOneWidget);
+
+    final richTextRect = tester.getRect(richTextFinder);
+    final gesture = await tester.startGesture(
+      richTextRect.centerLeft + const Offset(12, 0),
+      kind: PointerDeviceKind.mouse,
+    );
+    await tester.pump();
+    await gesture.moveTo(richTextRect.centerRight - const Offset(12, 0));
+    await tester.pump();
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('pretext blocks with inline code paint selection above child',
+      (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(data: 'before `code` after'),
+        ),
+      ),
+    );
+
+    final customPaints = tester
+        .widgetList<CustomPaint>(find.byType(CustomPaint))
+        .where((widget) => widget.foregroundPainter != null)
+        .toList(growable: false);
+
+    expect(customPaints, isNotEmpty);
+  });
+
+  test('partial selection on decorated inline uses partial text geometry', () {
+    final layout = computeMarkdownPretextLayoutFromRuns(
+      runs: const <MarkdownPretextInlineRun>[
+        MarkdownPretextInlineRun(
+          text: 'code',
+          style: TextStyle(fontSize: 14, height: 1.2),
+          decoration: MarkdownPretextInlineDecoration(
+            backgroundColor: Color(0xFFE9EDF2),
+            borderRadius: BorderRadius.all(Radius.circular(6)),
+            padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          ),
+        ),
+      ],
+      fallbackStyle: const TextStyle(fontSize: 14, height: 1.2),
+      maxWidth: 300,
+      textScaleFactor: 1,
+    );
+
+    final partialRects = layout.selectionRectsForRange(
+      DocumentRange(
+        start: DocumentPosition(
+          blockIndex: 0,
+          path: const PathInBlock(<int>[0]),
+          textOffset: 0,
+        ),
+        end: DocumentPosition(
+          blockIndex: 0,
+          path: const PathInBlock(<int>[0]),
+          textOffset: 2,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    );
+    final fullRects = layout.selectionRectsForRange(
+      DocumentRange(
+        start: DocumentPosition(
+          blockIndex: 0,
+          path: const PathInBlock(<int>[0]),
+          textOffset: 0,
+        ),
+        end: DocumentPosition(
+          blockIndex: 0,
+          path: const PathInBlock(<int>[0]),
+          textOffset: 4,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    );
+
+    expect(partialRects, isNotEmpty);
+    expect(fullRects, isNotEmpty);
+    expect(partialRects.first.width, lessThan(fullRects.first.width));
+  });
+
+  test('text offset after decorated inline accounts for inline padding', () {
+    final layout = computeMarkdownPretextLayoutFromRuns(
+      runs: const <MarkdownPretextInlineRun>[
+        MarkdownPretextInlineRun(
+          text: 'before ',
+          style: TextStyle(fontSize: 14, height: 1.2),
+        ),
+        MarkdownPretextInlineRun(
+          text: 'code',
+          style: TextStyle(fontSize: 14, height: 1.2),
+          decoration: MarkdownPretextInlineDecoration(
+            backgroundColor: Color(0xFFE9EDF2),
+            borderRadius: BorderRadius.all(Radius.circular(6)),
+            padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          ),
+        ),
+        MarkdownPretextInlineRun(
+          text: 'z',
+          style: TextStyle(fontSize: 14, height: 1.2),
+        ),
+      ],
+      fallbackStyle: const TextStyle(fontSize: 14, height: 1.2),
+      maxWidth: 300,
+      textScaleFactor: 1,
+    );
+
+    final codeRects = layout.selectionRectsForRange(
+      DocumentRange(
+        start: DocumentPosition(
+          blockIndex: 0,
+          path: const PathInBlock(<int>[0]),
+          textOffset: 7,
+        ),
+        end: DocumentPosition(
+          blockIndex: 0,
+          path: const PathInBlock(<int>[0]),
+          textOffset: 11,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    );
+
+    expect(codeRects, isNotEmpty);
+    final offsetAfterCode = layout.textOffsetAt(
+      Offset(codeRects.first.right + 1, layout.lineHeight / 2),
+      textDirection: TextDirection.ltr,
+    );
+    expect(offsetAfterCode, greaterThanOrEqualTo(11));
+  });
+
+  test('full selection on decorated inline covers horizontal padding', () {
+    const padding = EdgeInsets.symmetric(horizontal: 6, vertical: 2);
+    final layout = computeMarkdownPretextLayoutFromRuns(
+      runs: const <MarkdownPretextInlineRun>[
+        MarkdownPretextInlineRun(
+          text: 'code',
+          style: TextStyle(fontSize: 14, height: 1.2),
+          decoration: MarkdownPretextInlineDecoration(
+            backgroundColor: Color(0xFFE9EDF2),
+            borderRadius: BorderRadius.all(Radius.circular(6)),
+            padding: padding,
+          ),
+        ),
+      ],
+      fallbackStyle: const TextStyle(fontSize: 14, height: 1.2),
+      maxWidth: 300,
+      textScaleFactor: 1,
+    );
+
+    final fullRects = layout.selectionRectsForRange(
+      DocumentRange(
+        start: DocumentPosition(
+          blockIndex: 0,
+          path: const PathInBlock(<int>[0]),
+          textOffset: 0,
+        ),
+        end: DocumentPosition(
+          blockIndex: 0,
+          path: const PathInBlock(<int>[0]),
+          textOffset: 4,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    );
+    final partialRects = layout.selectionRectsForRange(
+      DocumentRange(
+        start: DocumentPosition(
+          blockIndex: 0,
+          path: const PathInBlock(<int>[0]),
+          textOffset: 1,
+        ),
+        end: DocumentPosition(
+          blockIndex: 0,
+          path: const PathInBlock(<int>[0]),
+          textOffset: 3,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    );
+
+    expect(fullRects, isNotEmpty);
+    expect(partialRects, isNotEmpty);
+    expect(
+      fullRects.first.width - partialRects.first.width,
+      greaterThan(padding.horizontal),
+    );
+  });
+
   testWidgets('reuses cached unchanged pretext block widgets on append', (
     tester,
   ) async {

@@ -43,8 +43,10 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
     required this.listItemSpacing,
     required this.maxContentWidth,
     required this.quotePadding,
+    required this.inlineCodePadding,
     required this.codeBlockPadding,
     required this.tableCellPadding,
+    required this.inlineCodeBorderRadius,
     required this.codeBlockBorderRadius,
     required this.imageBorderRadius,
     required this.bodyStyle,
@@ -61,6 +63,7 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
     required this.heading6Style,
     required this.quoteBackgroundColor,
     required this.quoteBorderColor,
+    required this.inlineCodeBackgroundColor,
     required this.codeBlockBackgroundColor,
     required this.dividerColor,
     required this.tableBorderColor,
@@ -93,9 +96,11 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
       listItemSpacing: 6,
       maxContentWidth: 920,
       quotePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      inlineCodePadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       codeBlockPadding: const EdgeInsets.all(16),
       tableCellPadding:
           const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      inlineCodeBorderRadius: BorderRadius.circular(6),
       codeBlockBorderRadius: BorderRadius.circular(16),
       imageBorderRadius: BorderRadius.circular(18),
       bodyStyle: bodyStyle,
@@ -108,9 +113,7 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
         decoration: TextDecoration.underline,
         decorationColor: colorScheme.primary,
       ),
-      inlineCodeStyle: mono.copyWith(
-        backgroundColor: colorScheme.primary.withOpacity(0.08),
-      ),
+      inlineCodeStyle: mono.copyWith(height: 1.2),
       codeBlockStyle: mono.copyWith(
         color: colorScheme.onSurface,
       ),
@@ -141,6 +144,9 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
                   fontSize: 16, fontWeight: FontWeight.w700, height: 1.4),
       quoteBackgroundColor: colorScheme.surface.withOpacity(0.7),
       quoteBorderColor: colorScheme.primary.withOpacity(0.4),
+      inlineCodeBackgroundColor:
+          Color.lerp(colorScheme.surface, colorScheme.onSurface, 0.06) ??
+              colorScheme.surface,
       codeBlockBackgroundColor: colorScheme.surface.withOpacity(0.92),
       dividerColor: borderColor,
       tableBorderColor: borderColor,
@@ -156,8 +162,10 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
   final double listItemSpacing;
   final double maxContentWidth;
   final EdgeInsetsGeometry quotePadding;
+  final EdgeInsets inlineCodePadding;
   final EdgeInsetsGeometry codeBlockPadding;
   final EdgeInsetsGeometry tableCellPadding;
+  final BorderRadius inlineCodeBorderRadius;
   final BorderRadius codeBlockBorderRadius;
   final BorderRadius imageBorderRadius;
   final TextStyle bodyStyle;
@@ -174,6 +182,7 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
   final TextStyle heading6Style;
   final Color quoteBackgroundColor;
   final Color quoteBorderColor;
+  final Color inlineCodeBackgroundColor;
   final Color codeBlockBackgroundColor;
   final Color dividerColor;
   final Color tableBorderColor;
@@ -207,8 +216,10 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
     double? listItemSpacing,
     double? maxContentWidth,
     EdgeInsetsGeometry? quotePadding,
+    EdgeInsets? inlineCodePadding,
     EdgeInsetsGeometry? codeBlockPadding,
     EdgeInsetsGeometry? tableCellPadding,
+    BorderRadius? inlineCodeBorderRadius,
     BorderRadius? codeBlockBorderRadius,
     BorderRadius? imageBorderRadius,
     TextStyle? bodyStyle,
@@ -225,6 +236,7 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
     TextStyle? heading6Style,
     Color? quoteBackgroundColor,
     Color? quoteBorderColor,
+    Color? inlineCodeBackgroundColor,
     Color? codeBlockBackgroundColor,
     Color? dividerColor,
     Color? tableBorderColor,
@@ -239,8 +251,11 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
       listItemSpacing: listItemSpacing ?? this.listItemSpacing,
       maxContentWidth: maxContentWidth ?? this.maxContentWidth,
       quotePadding: quotePadding ?? this.quotePadding,
+      inlineCodePadding: inlineCodePadding ?? this.inlineCodePadding,
       codeBlockPadding: codeBlockPadding ?? this.codeBlockPadding,
       tableCellPadding: tableCellPadding ?? this.tableCellPadding,
+      inlineCodeBorderRadius:
+          inlineCodeBorderRadius ?? this.inlineCodeBorderRadius,
       codeBlockBorderRadius:
           codeBlockBorderRadius ?? this.codeBlockBorderRadius,
       imageBorderRadius: imageBorderRadius ?? this.imageBorderRadius,
@@ -258,6 +273,8 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
       heading6Style: heading6Style ?? this.heading6Style,
       quoteBackgroundColor: quoteBackgroundColor ?? this.quoteBackgroundColor,
       quoteBorderColor: quoteBorderColor ?? this.quoteBorderColor,
+      inlineCodeBackgroundColor:
+          inlineCodeBackgroundColor ?? this.inlineCodeBackgroundColor,
       codeBlockBackgroundColor:
           codeBlockBackgroundColor ?? this.codeBlockBackgroundColor,
       dividerColor: dividerColor ?? this.dividerColor,
@@ -287,6 +304,9 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
       quotePadding:
           EdgeInsetsGeometry.lerp(quotePadding, other.quotePadding, t) ??
               quotePadding,
+      inlineCodePadding:
+          EdgeInsets.lerp(inlineCodePadding, other.inlineCodePadding, t) ??
+              inlineCodePadding,
       codeBlockPadding: EdgeInsetsGeometry.lerp(
             codeBlockPadding,
             other.codeBlockPadding,
@@ -299,6 +319,12 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
             t,
           ) ??
           tableCellPadding,
+      inlineCodeBorderRadius: BorderRadius.lerp(
+            inlineCodeBorderRadius,
+            other.inlineCodeBorderRadius,
+            t,
+          ) ??
+          inlineCodeBorderRadius,
       codeBlockBorderRadius: BorderRadius.lerp(
             codeBlockBorderRadius,
             other.codeBlockBorderRadius,
@@ -340,6 +366,12 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
       quoteBorderColor:
           Color.lerp(quoteBorderColor, other.quoteBorderColor, t) ??
               quoteBorderColor,
+      inlineCodeBackgroundColor: Color.lerp(
+            inlineCodeBackgroundColor,
+            other.inlineCodeBackgroundColor,
+            t,
+          ) ??
+          inlineCodeBackgroundColor,
       codeBlockBackgroundColor: Color.lerp(
             codeBlockBackgroundColor,
             other.codeBlockBackgroundColor,
@@ -392,8 +424,10 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
       listItemSpacing,
       maxContentWidth,
       quotePadding,
+      inlineCodePadding,
       codeBlockPadding,
       tableCellPadding,
+      inlineCodeBorderRadius,
       codeBlockBorderRadius,
       imageBorderRadius,
       bodyStyle,
@@ -410,6 +444,7 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
       heading6Style,
       quoteBackgroundColor,
       quoteBorderColor,
+      inlineCodeBackgroundColor,
       codeBlockBackgroundColor,
       dividerColor,
       tableBorderColor,
@@ -431,8 +466,10 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
         other.listItemSpacing == listItemSpacing &&
         other.maxContentWidth == maxContentWidth &&
         other.quotePadding == quotePadding &&
+        other.inlineCodePadding == inlineCodePadding &&
         other.codeBlockPadding == codeBlockPadding &&
         other.tableCellPadding == tableCellPadding &&
+        other.inlineCodeBorderRadius == inlineCodeBorderRadius &&
         other.codeBlockBorderRadius == codeBlockBorderRadius &&
         other.imageBorderRadius == imageBorderRadius &&
         other.bodyStyle == bodyStyle &&
@@ -449,6 +486,7 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
         other.heading6Style == heading6Style &&
         other.quoteBackgroundColor == quoteBackgroundColor &&
         other.quoteBorderColor == quoteBorderColor &&
+        other.inlineCodeBackgroundColor == inlineCodeBackgroundColor &&
         other.codeBlockBackgroundColor == codeBlockBackgroundColor &&
         other.dividerColor == dividerColor &&
         other.tableBorderColor == tableBorderColor &&

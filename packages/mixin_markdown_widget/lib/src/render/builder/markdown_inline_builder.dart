@@ -99,6 +99,11 @@ class MarkdownInlineBuilder {
           MarkdownPretextInlineRun(
             text: code.text,
             style: baseStyle.merge(theme.inlineCodeStyle),
+            decoration: MarkdownPretextInlineDecoration(
+              backgroundColor: theme.inlineCodeBackgroundColor,
+              borderRadius: theme.inlineCodeBorderRadius,
+              padding: theme.inlineCodePadding,
+            ),
           ),
         ];
       case MarkdownInlineKind.softBreak:
@@ -244,9 +249,22 @@ class MarkdownInlineBuilder {
       case MarkdownInlineKind.inlineCode:
         final code = inline as InlineCode;
         return <InlineSpan>[
-          TextSpan(
-            text: code.text,
-            style: baseStyle.merge(theme.inlineCodeStyle),
+          WidgetSpan(
+            alignment: PlaceholderAlignment.baseline,
+            baseline: TextBaseline.alphabetic,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: theme.inlineCodeBackgroundColor,
+                borderRadius: theme.inlineCodeBorderRadius,
+              ),
+              child: Padding(
+                padding: theme.inlineCodePadding,
+                child: Text(
+                  code.text,
+                  style: baseStyle.merge(theme.inlineCodeStyle),
+                ),
+              ),
+            ),
           ),
         ];
       case MarkdownInlineKind.softBreak:
@@ -280,8 +298,7 @@ class MarkdownInlineBuilder {
   }
 
   TextStyle subscriptStyle(TextStyle baseStyle) {
-    final baseFontSize =
-        baseStyle.fontSize ?? theme.bodyStyle.fontSize ?? 16;
+    final baseFontSize = baseStyle.fontSize ?? theme.bodyStyle.fontSize ?? 16;
     return baseStyle.copyWith(
       fontSize: baseFontSize * 0.82,
       fontFeatures: const <FontFeature>[FontFeature.subscripts()],
@@ -289,8 +306,7 @@ class MarkdownInlineBuilder {
   }
 
   TextStyle superscriptStyle(TextStyle baseStyle) {
-    final baseFontSize =
-        baseStyle.fontSize ?? theme.bodyStyle.fontSize ?? 16;
+    final baseFontSize = baseStyle.fontSize ?? theme.bodyStyle.fontSize ?? 16;
     return baseStyle.copyWith(
       fontSize: baseFontSize * 0.82,
       fontFeatures: const <FontFeature>[FontFeature.superscripts()],

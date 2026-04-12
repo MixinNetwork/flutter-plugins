@@ -174,7 +174,8 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       {required bool clamp}) {
     for (final block in widget.document.blocks) {
       // Depending on imports / architecture, blockKeys might store State directly
-      final blockState = _keysRegistry.blockKeys[block.id]?.currentState as dynamic;
+      final blockState =
+          _keysRegistry.blockKeys[block.id]?.currentState as dynamic;
       final hit = blockState?.hitTestGlobal(globalPosition);
       if (hit != null) {
         return hit as DocumentPosition;
@@ -187,7 +188,8 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     dynamic nearestState;
     double bestDistance = double.infinity;
     for (final block in widget.document.blocks) {
-      final blockState = _keysRegistry.blockKeys[block.id]?.currentState as dynamic;
+      final blockState =
+          _keysRegistry.blockKeys[block.id]?.currentState as dynamic;
       final rect = blockState?.globalRect;
       if (blockState == null || rect == null) {
         continue;
@@ -208,12 +210,15 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
         nearestState = blockState;
       }
     }
-    return nearestState?.boundaryPositionForGlobal(globalPosition) as DocumentPosition?;
+    return nearestState?.boundaryPositionForGlobal(globalPosition)
+        as DocumentPosition?;
   }
 
-  SelectableMarkdownTableBlockState? _tableBlockStateContaining(Offset globalPosition) {
+  SelectableMarkdownTableBlockState? _tableBlockStateContaining(
+      Offset globalPosition) {
     for (final block in widget.document.blocks) {
-      final state = _keysRegistry.tableBlockKeys[block.id]?.currentState as dynamic;
+      final state =
+          _keysRegistry.tableBlockKeys[block.id]?.currentState as dynamic;
       if (state != null && state.containsGlobal(globalPosition) == true) {
         return state as SelectableMarkdownTableBlockState?;
       }
@@ -232,7 +237,8 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       if (block is! TableBlock) {
         continue;
       }
-      final state = _keysRegistry.tableBlockKeys[block.id]?.currentState as dynamic;
+      final state =
+          _keysRegistry.tableBlockKeys[block.id]?.currentState as dynamic;
       if (state == null || state.containsGlobal(globalPosition) != true) {
         continue;
       }
@@ -347,7 +353,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     final selectionRange = widget.selectionController?.normalizedRange;
     final tableSelection = widget.selectionController?.tableCellSelection;
     final scrollController = _effectiveScrollController;
-    
+
     final scrollable = Scrollbar(
       controller: scrollController,
       child: ListView.builder(

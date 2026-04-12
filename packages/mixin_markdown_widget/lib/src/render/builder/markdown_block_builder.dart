@@ -79,9 +79,8 @@ class MarkdownBlockBuilder {
 
     final widget = Padding(
       padding: EdgeInsets.only(
-        bottom: blockIndex == document.blocks.length - 1
-            ? 0
-            : theme.blockSpacing,
+        bottom:
+            blockIndex == document.blocks.length - 1 ? 0 : theme.blockSpacing,
       ),
       child: Align(
         alignment: AlignmentDirectional.topStart,
@@ -228,7 +227,8 @@ class MarkdownBlockBuilder {
           plainText: plainText,
           runs: inlineBuilder.buildPretextRuns(style, heading.inlines),
           fallbackStyle: style,
-          textAlign: MarkdownInlineBuilder.resolvedInlineTextAlign(heading.inlines),
+          textAlign:
+              MarkdownInlineBuilder.resolvedInlineTextAlign(heading.inlines),
         );
       case MarkdownBlockKind.paragraph:
         final paragraph = block as ParagraphBlock;
@@ -318,6 +318,7 @@ class MarkdownBlockBuilder {
             listBlock,
             localPosition,
           ),
+          selectionPaintOrder: SelectableBlockSelectionPaintOrder.aboveChild,
         );
       case MarkdownBlockKind.definitionList:
         final definitionList = block as DefinitionListBlock;
@@ -377,9 +378,9 @@ class MarkdownBlockBuilder {
           plainText: codeBlock.code,
           hitTestBehavior: SelectableBlockHitTestBehavior.text,
           textSpan: codeSpan,
-          measurementPadding: theme.codeBlockPadding
-                  .resolve(Directionality.of(context)) +
-              const EdgeInsets.only(top: 36.0), // _codeToolbarHeight
+          measurementPadding:
+              theme.codeBlockPadding.resolve(Directionality.of(context)) +
+                  const EdgeInsets.only(top: 36.0), // _codeToolbarHeight
           highlightBorderRadius: theme.codeBlockBorderRadius,
           selectionPaintOrder: SelectableBlockSelectionPaintOrder.aboveChild,
         );
@@ -416,6 +417,7 @@ class MarkdownBlockBuilder {
     required TextStyle fallbackStyle,
     TextAlign textAlign = TextAlign.start,
   }) {
+    final hasDecoratedInline = runs.any((run) => run.decoration != null);
     return SelectableBlockSpec(
       child: MarkdownPretextTextBlock.rich(
         runs: runs,
@@ -424,6 +426,9 @@ class MarkdownBlockBuilder {
       ),
       plainText: plainText,
       hitTestBehavior: SelectableBlockHitTestBehavior.text,
+      selectionPaintOrder: hasDecoratedInline
+          ? SelectableBlockSelectionPaintOrder.aboveChild
+          : SelectableBlockSelectionPaintOrder.behindChild,
       selectionRectResolver: (context, constraints, range) {
         final textScaler =
             MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling;
@@ -538,9 +543,8 @@ class MarkdownBlockBuilder {
           key: blockKeyBuilder?.call(index),
           child: Padding(
             padding: EdgeInsets.only(
-              bottom: index == blocks.length - 1
-                  ? 0
-                  : theme.blockSpacing * 0.65,
+              bottom:
+                  index == blocks.length - 1 ? 0 : theme.blockSpacing * 0.65,
             ),
             child: _buildNestedBlockContent(context, blocks[index]),
           ),
@@ -571,9 +575,11 @@ class MarkdownBlockBuilder {
   }
 
   Widget _buildFootnoteList(BuildContext context, FootnoteListBlock block) {
-    final orderedFootnotes = MarkdownDescriptorExtractor.footnoteListAsOrderedList(block);
+    final orderedFootnotes =
+        MarkdownDescriptorExtractor.footnoteListAsOrderedList(block);
     final itemRowKeys = keysRegistry.listItemKeysFor(orderedFootnotes);
-    final itemContentKeys = keysRegistry.listItemContentKeysFor(orderedFootnotes);
+    final itemContentKeys =
+        keysRegistry.listItemContentKeysFor(orderedFootnotes);
     return _buildFootnoteListContainer(
       child: MarkdownListBlockView(
         theme: theme,
@@ -620,7 +626,9 @@ class MarkdownBlockBuilder {
   }) {
     if (MarkdownInlineBuilder.inlinesContainMath(inlines)) {
       return Text.rich(
-        TextSpan(style: style, children: inlineBuilder.buildInlineSpans(style, inlines)),
+        TextSpan(
+            style: style,
+            children: inlineBuilder.buildInlineSpans(style, inlines)),
         textAlign: textAlign,
       );
     }
@@ -679,7 +687,9 @@ class MarkdownBlockBuilder {
   ) {
     if (MarkdownInlineBuilder.inlinesContainMath(inlines)) {
       return Text.rich(
-        TextSpan(style: style, children: inlineBuilder.buildInlineSpans(style, inlines)),
+        TextSpan(
+            style: style,
+            children: inlineBuilder.buildInlineSpans(style, inlines)),
         textAlign: textAlign,
       );
     }
@@ -749,9 +759,7 @@ class MarkdownBlockBuilder {
 
   Widget _wrapLinkedImage(ImageBlock block, Widget child) {
     final destination = block.linkDestination;
-    if (destination == null ||
-        destination.isEmpty ||
-        onTapLink == null) {
+    if (destination == null || destination.isEmpty || onTapLink == null) {
       return child;
     }
     final label = MarkdownDescriptorExtractor.imageCaptionText(block).isNotEmpty
