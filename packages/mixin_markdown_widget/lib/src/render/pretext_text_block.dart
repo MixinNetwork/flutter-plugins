@@ -123,6 +123,7 @@ class MarkdownPretextTextBlock extends StatelessWidget {
         buildMarkdownPretextSpan(
           runs: effectiveRuns,
           fallbackStyle: fallbackStyle,
+          compactDecoratedRuns: true,
         ),
         key: directTextKey,
         style: fallbackStyle,
@@ -210,11 +211,17 @@ bool markdownPretextCanUseDirectRichTextGeometry(
 InlineSpan buildMarkdownPretextSpan({
   required List<MarkdownPretextInlineRun> runs,
   required TextStyle fallbackStyle,
+  bool compactDecoratedRuns = false,
 }) {
-  return _buildFullSpan(runs: runs, fallbackStyle: fallbackStyle);
+  return _buildFullSpan(
+    runs: runs,
+    fallbackStyle: fallbackStyle,
+    compactDecoratedRuns: compactDecoratedRuns,
+  );
 }
 
 String markdownPretextRenderText(List<MarkdownPretextInlineRun> runs) {
+  final compactDecoratedRuns = runs.any((run) => run.renderSpan != null);
   final buffer = StringBuffer();
   for (final run in runs) {
     if (run.renderSpan != null) {
@@ -222,7 +229,7 @@ String markdownPretextRenderText(List<MarkdownPretextInlineRun> runs) {
       continue;
     }
     if (run.decoration != null) {
-      if (!run.allowCharacterWrap) {
+      if (compactDecoratedRuns || !run.allowCharacterWrap) {
         buffer.writeCharCode(0xFFFC);
         continue;
       }
@@ -241,11 +248,15 @@ String markdownPretextRenderText(List<MarkdownPretextInlineRun> runs) {
   return buffer.toString();
 }
 
-int _markdownPretextRenderLengthForRun(MarkdownPretextInlineRun run) {
+int _markdownPretextRenderLengthForRun(
+  MarkdownPretextInlineRun run, {
+  required bool compactDecoratedRuns,
+}) {
   if (run.renderSpan != null) {
     return 1;
   }
-  if (run.decoration != null && !run.allowCharacterWrap) {
+  if (run.decoration != null &&
+      (compactDecoratedRuns || !run.allowCharacterWrap)) {
     return 1;
   }
   return run.text.length;
@@ -257,13 +268,17 @@ int markdownPretextRenderOffsetForPlainOffset(
   required bool preferEnd,
 }) {
   final clampedPlainOffset = math.max(plainOffset, 0);
+  final compactDecoratedRuns = runs.any((run) => run.renderSpan != null);
   var plainCursor = 0;
   var renderCursor = 0;
 
   for (final run in runs) {
     final plainStart = plainCursor;
     final plainEnd = plainStart + run.text.length;
-    final renderLength = _markdownPretextRenderLengthForRun(run);
+    final renderLength = _markdownPretextRenderLengthForRun(
+      run,
+      compactDecoratedRuns: compactDecoratedRuns,
+    );
     final renderStart = renderCursor;
     final renderEnd = renderStart + renderLength;
 
@@ -272,7 +287,7 @@ int markdownPretextRenderOffsetForPlainOffset(
     }
     if (clampedPlainOffset < plainEnd) {
       if (run.renderSpan != null ||
-          (run.decoration != null && !run.allowCharacterWrap)) {
+          (run.decoration != null && renderLength == 1)) {
         return preferEnd ? renderEnd : renderStart;
       }
       return renderStart + (clampedPlainOffset - plainStart);
@@ -293,13 +308,17 @@ int markdownPretextPlainOffsetForRenderOffset(
   int renderOffset,
 ) {
   final clampedRenderOffset = math.max(renderOffset, 0);
+  final compactDecoratedRuns = runs.any((run) => run.renderSpan != null);
   var plainCursor = 0;
   var renderCursor = 0;
 
   for (final run in runs) {
     final plainStart = plainCursor;
     final plainEnd = plainStart + run.text.length;
-    final renderLength = _markdownPretextRenderLengthForRun(run);
+    final renderLength = _markdownPretextRenderLengthForRun(
+      run,
+      compactDecoratedRuns: compactDecoratedRuns,
+    );
     final renderStart = renderCursor;
     final renderEnd = renderStart + renderLength;
 
@@ -308,7 +327,7 @@ int markdownPretextPlainOffsetForRenderOffset(
     }
     if (clampedRenderOffset < renderEnd) {
       if (run.renderSpan != null ||
-          (run.decoration != null && !run.allowCharacterWrap)) {
+          (run.decoration != null && renderLength == 1)) {
         return plainStart;
       }
       return plainStart + (clampedRenderOffset - renderStart);
@@ -727,6 +746,7 @@ class MarkdownPretextLayoutSegment {
 InlineSpan _buildFullSpan({
   required List<MarkdownPretextInlineRun> runs,
   required TextStyle fallbackStyle,
+  required bool compactDecoratedRuns,
 }) {
   return TextSpan(
     style: fallbackStyle,
@@ -741,7 +761,7 @@ InlineSpan _buildFullSpan({
             mouseCursor: run.mouseCursor,
             recognizer: run.recognizer,
           )
-        else if (run.allowCharacterWrap)
+        else if (run.allowCharacterWrap && !compactDecoratedRuns)
           ..._buildBreakableDecoratedFullSpans(run)
         else
           WidgetSpan(

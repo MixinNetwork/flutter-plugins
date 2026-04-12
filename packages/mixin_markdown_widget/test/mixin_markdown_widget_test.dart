@@ -772,9 +772,7 @@ Paragraph body
   testWidgets(
       'math selection geometry tracks live widget bounds after inline code',
       (tester) async {
-    const data =
-        'test `math` a \\( x = \\frac{-b \\pm \\sqrt{b^2-4ac}}{2a} \\)';
-    const mathText = r'x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}';
+    const data = r'test `math` a \( x = \frac{-b \pm \sqrt{b^2-4ac}}{2a} \)';
 
     await tester.pumpWidget(
       const MaterialApp(
@@ -790,15 +788,17 @@ Paragraph body
       (widget) =>
           widget is SelectableMarkdownBlock &&
           widget.spec.plainText.contains('test math a ') &&
-          widget.spec.plainText.contains(mathText),
+          widget.spec.plainText
+              .contains(r'x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}'),
     );
     final block = tester.widget<SelectableMarkdownBlock>(blockFinder);
     final blockContext = tester.element(blockFinder);
     final blockRenderBox = tester.renderObject<RenderBox>(blockFinder);
     final blockOrigin = blockRenderBox.localToGlobal(Offset.zero);
     final mathRect = tester.getRect(find.byType(Math).first);
-    final mathStart = block.spec.plainText.indexOf(mathText);
-    final mathEnd = mathStart + mathText.length;
+    final mathStart =
+        block.spec.plainText.indexOf(r'x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}');
+    final mathEnd = mathStart + r'x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}'.length;
 
     final selectionRects = block.spec.selectionRectResolver!(
       blockContext,
@@ -842,6 +842,85 @@ Paragraph body
 
     expect(leftOffset, mathStart);
     expect(rightOffset, mathEnd);
+  });
+
+  testWidgets('inline code stays compact when a paragraph also contains math',
+      (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: r'test `math` a \( x = \frac{-b \pm \sqrt{b^2-4ac}}{2a} \)',
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('math'), findsOneWidget);
+  });
+
+  testWidgets(
+      'selection across text inline code and math does not produce overlapping boxes',
+      (tester) async {
+    const data = r'test `math` a \( x = \frac{-b \pm \sqrt{b^2-4ac}}{2a} \)';
+    const mathText = r'x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}';
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: data,
+          ),
+        ),
+      ),
+    );
+
+    final blockFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is SelectableMarkdownBlock &&
+          widget.spec.plainText.contains('test math a ') &&
+          widget.spec.plainText.contains(mathText),
+    );
+    final block = tester.widget<SelectableMarkdownBlock>(blockFinder);
+    final blockContext = tester.element(blockFinder);
+    final blockRenderBox = tester.renderObject<RenderBox>(blockFinder);
+    final mathEnd = block.spec.plainText.indexOf(mathText) + mathText.length;
+    final selectionRects = block.spec.selectionRectResolver!(
+      blockContext,
+      blockRenderBox.size,
+      DocumentRange(
+        start: const DocumentPosition(
+          blockIndex: 0,
+          path: PathInBlock(<int>[0]),
+          textOffset: 0,
+        ),
+        end: DocumentPosition(
+          blockIndex: 0,
+          path: const PathInBlock(<int>[0]),
+          textOffset: mathEnd,
+        ),
+      ),
+    );
+
+    expect(selectionRects, isNotEmpty);
+    final sortedRects = selectionRects.toList(growable: false)
+      ..sort((a, b) {
+        final topCompare = a.top.compareTo(b.top);
+        if (topCompare != 0) {
+          return topCompare;
+        }
+        return a.left.compareTo(b.left);
+      });
+    for (var index = 0; index < sortedRects.length - 1; index++) {
+      final current = sortedRects[index];
+      final next = sortedRects[index + 1];
+      final sameLine = (next.top - current.top).abs() <= 2.0 &&
+          (next.bottom - current.bottom).abs() <= 2.0;
+      if (!sameLine) {
+        continue;
+      }
+      expect(current.overlaps(next), isFalse);
+    }
   });
 
   testWidgets('pretext blocks with math paint selection above child',
@@ -1860,6 +1939,32 @@ const value = 42;
     );
 
     expect(
+      markdownPretextRenderText(
+        <MarkdownPretextInlineRun>[
+          const MarkdownPretextInlineRun(
+            text: 'inline_code',
+            style: baseStyle,
+            allowCharacterWrap: true,
+            decoration: MarkdownPretextInlineDecoration(
+              backgroundColor: Color(0xFFE9EDF2),
+              borderRadius: BorderRadius.all(Radius.circular(6)),
+              padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            ),
+          ),
+          MarkdownPretextInlineRun(
+            text: 'x^2',
+            style: baseStyle,
+            renderSpan:
+                const WidgetSpan(child: SizedBox(width: 20, height: 16)),
+            estimatedWidth: 20,
+            estimatedLineHeight: 18,
+          ),
+        ],
+      ),
+      String.fromCharCodes(const <int>[0xFFFC, 0xFFFC]),
+    );
+
+    expect(
       markdownPretextCanUseDirectRichTextGeometry(
         const <MarkdownPretextInlineRun>[
           MarkdownPretextInlineRun(
@@ -1876,6 +1981,22 @@ const value = 42;
       ),
       isFalse,
     );
+  });
+
+  testWidgets('table cells keep inline code compact when mixed with math', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: '| Value |\n| --- |\n| `code` \(x^2\) |',
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('code'), findsOneWidget);
   });
 
   testWidgets('undecorated runs render as a single direct rich text block', (

@@ -552,8 +552,11 @@ class MarkdownBlockBuilder {
     final paragraphOrigin = blockRenderObject.globalToLocal(
       renderParagraph.localToGlobal(Offset.zero),
     );
+    final lineExtents = _computeParagraphLineExtents(renderParagraph);
+    final selectionBoxes =
+        renderParagraph.getBoxesForSelection(renderSelection);
     final boxes = _mergeDirectTextSelectionBoxes(
-      renderParagraph.getBoxesForSelection(renderSelection),
+      _normalizeBoxesToLineExtents(selectionBoxes, lineExtents),
     );
     return boxes
         .map(
@@ -1045,7 +1048,7 @@ class MarkdownBlockBuilder {
     }
 
     const lineTolerance = 2.0;
-    const gapTolerance = 0.5;
+    const gapTolerance = 6.0;
 
     final sorted = boxes.toList(growable: false)
       ..sort((a, b) {
@@ -1077,6 +1080,68 @@ class MarkdownBlockBuilder {
     }
     merged.add(current);
     return merged;
+  }
+
+  /// Compute each visual line's vertical extent by grouping the full
+  /// paragraph's boxes (all characters selected) by vertical overlap.
+  List<({double top, double bottom})> _computeParagraphLineExtents(
+    RenderParagraph renderParagraph,
+  ) {
+    final fullText =
+        renderParagraph.text.toPlainText(includePlaceholders: true);
+    if (fullText.isEmpty) {
+      return const <({double top, double bottom})>[];
+    }
+    final allBoxes = renderParagraph.getBoxesForSelection(
+      TextSelection(baseOffset: 0, extentOffset: fullText.length),
+    );
+    if (allBoxes.isEmpty) {
+      return const <({double top, double bottom})>[];
+    }
+
+    final sorted = allBoxes.toList(growable: false)
+      ..sort((a, b) => a.top.compareTo(b.top));
+
+    final lines = <({double top, double bottom})>[];
+    var lineTop = sorted.first.top;
+    var lineBottom = sorted.first.bottom;
+    for (final box in sorted.skip(1)) {
+      if (box.top < lineBottom - 1.0) {
+        lineTop = math.min(lineTop, box.top);
+        lineBottom = math.max(lineBottom, box.bottom);
+      } else {
+        lines.add((top: lineTop, bottom: lineBottom));
+        lineTop = box.top;
+        lineBottom = box.bottom;
+      }
+    }
+    lines.add((top: lineTop, bottom: lineBottom));
+    return lines;
+  }
+
+  List<TextBox> _normalizeBoxesToLineExtents(
+    List<TextBox> boxes,
+    List<({double top, double bottom})> lineExtents,
+  ) {
+    if (lineExtents.isEmpty) {
+      return boxes;
+    }
+    return boxes.map((box) {
+      for (final extent in lineExtents) {
+        final overlapTop = math.max(box.top, extent.top);
+        final overlapBottom = math.min(box.bottom, extent.bottom);
+        if (overlapBottom - overlapTop > 0.5) {
+          return TextBox.fromLTRBD(
+            box.left,
+            extent.top,
+            box.right,
+            extent.bottom,
+            box.direction,
+          );
+        }
+      }
+      return box;
+    }).toList(growable: false);
   }
 
   SelectableBlockSpec _buildSelectableDescriptorTextSpec({

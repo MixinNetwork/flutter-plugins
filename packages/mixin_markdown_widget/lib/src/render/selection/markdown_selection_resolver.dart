@@ -1264,7 +1264,7 @@ class MarkdownSelectionResolver {
     }
 
     const lineTolerance = 2.0;
-    const gapTolerance = 0.5;
+    const gapTolerance = 6.0;
 
     final sorted = boxes.toList(growable: false)
       ..sort((a, b) {
