@@ -99,6 +99,7 @@ class MarkdownInlineBuilder {
           MarkdownPretextInlineRun(
             text: code.text,
             style: baseStyle.merge(theme.inlineCodeStyle),
+            allowCharacterWrap: true,
             decoration: MarkdownPretextInlineDecoration(
               backgroundColor: theme.inlineCodeBackgroundColor,
               borderRadius: theme.inlineCodeBorderRadius,

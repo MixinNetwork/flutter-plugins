@@ -1171,6 +1171,64 @@ const value = 42;
     );
   });
 
+  test('breakable decorated inline preserves explicit newlines', () {
+    final layout = computeMarkdownPretextLayoutFromRuns(
+      runs: const <MarkdownPretextInlineRun>[
+        MarkdownPretextInlineRun(
+          text: 'ab\ncd',
+          style: TextStyle(fontSize: 14, height: 1.2),
+          allowCharacterWrap: true,
+          decoration: MarkdownPretextInlineDecoration(
+            backgroundColor: Color(0xFFE9EDF2),
+            borderRadius: BorderRadius.all(Radius.circular(6)),
+            padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          ),
+        ),
+      ],
+      fallbackStyle: const TextStyle(fontSize: 14, height: 1.2),
+      maxWidth: 300,
+      textScaleFactor: 1,
+    );
+
+    expect(layout.lines, hasLength(2));
+    expect(
+        layout.lines.map((line) => line.text).toList(), <String>['ab', 'cd']);
+  });
+
+  test('breakable decorated inline wraps across lines', () {
+    const padding = EdgeInsets.symmetric(horizontal: 6, vertical: 2);
+    final layout = computeMarkdownPretextLayoutFromRuns(
+      runs: const <MarkdownPretextInlineRun>[
+        MarkdownPretextInlineRun(
+          text: 'abcdefghij',
+          style: TextStyle(fontSize: 14, height: 1.2),
+          allowCharacterWrap: true,
+          decoration: MarkdownPretextInlineDecoration(
+            backgroundColor: Color(0xFFE9EDF2),
+            borderRadius: BorderRadius.all(Radius.circular(6)),
+            padding: padding,
+          ),
+        ),
+      ],
+      fallbackStyle: const TextStyle(fontSize: 14, height: 1.2),
+      maxWidth: 44,
+      textScaleFactor: 1,
+    );
+
+    expect(layout.lines.length, greaterThan(1));
+    expect(layout.lines.map((line) => line.text).join(), 'abcdefghij');
+    final decoratedSegments = layout.lines
+        .expand((line) => line.segments)
+        .where((segment) => segment.decoration != null)
+        .toList(growable: false);
+
+    expect(decoratedSegments, isNotEmpty);
+    expect(
+      decoratedSegments.every((segment) => segment.padding == padding),
+      isTrue,
+    );
+  });
+
   testWidgets('reuses cached unchanged pretext block widgets on append', (
     tester,
   ) async {
