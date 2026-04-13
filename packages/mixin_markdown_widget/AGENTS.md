@@ -54,6 +54,9 @@ The public entrypoint is [packages/mixin_markdown_widget/lib/mixin_markdown_widg
 - Selection is model-based: `DocumentPosition`, `DocumentSelection`, `DocumentRange`, and `TableCellSelection` must stay coherent with what is rendered.
 - `MarkdownPlainTextSerializer` defines copy semantics. If rendering or selection behavior changes, make sure serializer output still matches the logical selection.
 - Table text selection and table-cell selection are separate behaviors. Do not collapse them into one mechanism.
+- Composite blocks such as lists, quotes, tables, and footnotes now use a structured selection index: `DocumentPosition.path` identifies the semantic leaf while `textOffset` stays in block display-text space. Do not flatten these selections back to `PathInBlock([0])` just to make offset math easier.
+- Range-copy serialization should use the structured visible-text space when selection offsets come from rendered interaction, and full-document export/select-all should come from the same structured model's export leaves.
+- Structured blocks now also carry export-text leaves. Full-block export and `selectAll` should use those structured export leaves while keeping selection offsets in visible text space; do not depend on serialized-length mismatches to trigger fallback behavior.
 - Recursive hit-test and selection-unit helpers for list/quote/table containers must return block-local displayed offsets or ranges; convert back to parent space exactly once at the parent boundary.
 - Double-click word selection and triple-click selection-unit resolution must stay aligned with the same offset mapping semantics used by drag selection.
 

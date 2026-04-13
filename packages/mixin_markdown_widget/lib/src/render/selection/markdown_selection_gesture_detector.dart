@@ -10,6 +10,9 @@ typedef MarkdownHitTestPositionCallback = DocumentPosition? Function(
   Offset globalPosition, {
   required bool clamp,
 });
+typedef MarkdownHitTestExactTextPositionCallback = DocumentPosition? Function(
+  Offset globalPosition,
+);
 typedef MarkdownSelectWordCallback = void Function(DocumentPosition position);
 typedef MarkdownSelectBlockCallback = void Function(int blockIndex);
 typedef MarkdownSelectSelectionUnitCallback = void Function(
@@ -28,6 +31,7 @@ class MarkdownSelectionGestureDetector extends StatefulWidget {
     required this.scrollController,
     required this.onRequestToolbar,
     required this.hitTestPosition,
+    required this.hitTestExactTextPosition,
     required this.selectWordAt,
     required this.selectBlockAt,
     required this.selectSelectionUnitAt,
@@ -41,6 +45,7 @@ class MarkdownSelectionGestureDetector extends StatefulWidget {
   final ScrollController scrollController;
   final void Function(Offset) onRequestToolbar;
   final MarkdownHitTestPositionCallback hitTestPosition;
+  final MarkdownHitTestExactTextPositionCallback hitTestExactTextPosition;
   final MarkdownSelectWordCallback selectWordAt;
   final MarkdownSelectBlockCallback selectBlockAt;
   final MarkdownSelectSelectionUnitCallback selectSelectionUnitAt;
@@ -96,7 +101,7 @@ class _MarkdownSelectionGestureDetectorState
       return;
     }
 
-    final exactPosition = widget.hitTestPosition(event.position, clamp: false);
+    final exactPosition = widget.hitTestExactTextPosition(event.position);
     final position =
         exactPosition ?? widget.hitTestPosition(event.position, clamp: true);
     if (position == null) {
@@ -106,7 +111,7 @@ class _MarkdownSelectionGestureDetectorState
     }
 
     _updateTapCount(event);
-    if (exactPosition != null && _consecutiveTapCount >= 3) {
+    if (_consecutiveTapCount >= 3) {
       widget.selectSelectionUnitAt(event.position, position);
       _isDraggingSelection = false;
       _dragBasePosition = null;
@@ -114,8 +119,12 @@ class _MarkdownSelectionGestureDetectorState
       _clearSelectionOnPointerUp = false;
       return;
     }
-    if (exactPosition != null && _consecutiveTapCount == 2) {
-      widget.selectWordAt(position);
+    if (_consecutiveTapCount == 2) {
+      if (exactPosition != null) {
+        widget.selectWordAt(position);
+      } else {
+        widget.selectSelectionUnitAt(event.position, position);
+      }
       _isDraggingSelection = false;
       _dragBasePosition = null;
       _dragStartPointerPosition = null;

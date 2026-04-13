@@ -6,6 +6,7 @@ import 'dart:math' as math;
 import '../../clipboard/plain_text_serializer.dart';
 import '../../core/document.dart';
 import '../../selection/selection_controller.dart';
+import '../../selection/structured_block_selection.dart';
 import '../../widgets/markdown_theme.dart';
 import '../../widgets/markdown_types.dart';
 import '../code_syntax_highlighter.dart';
@@ -241,6 +242,10 @@ class MarkdownBlockBuilder {
             ),
           ),
           plainText: descriptor.plainText,
+          selectionStructure: _matchingSelectionStructure(
+            quoteBlock,
+            descriptor.plainText,
+          ),
           hitTestBehavior: SelectableBlockHitTestBehavior.text,
           textSpan: descriptor.span,
           highlightBorderRadius: BorderRadius.circular(16),
@@ -292,6 +297,10 @@ class MarkdownBlockBuilder {
             itemContentKeyBuilder: (index) => itemContentKeys[index],
           ),
           plainText: descriptor.plainText,
+          selectionStructure: _matchingSelectionStructure(
+            listBlock,
+            descriptor.plainText,
+          ),
           hitTestBehavior: SelectableBlockHitTestBehavior.text,
           textSpan: descriptor.span,
           selectionRectResolver: (context, _, range) =>
@@ -330,6 +339,10 @@ class MarkdownBlockBuilder {
             .buildDefinitionListSelectableDescriptor(definitionList);
         return _buildSelectableDescriptorTextSpec(
           descriptor: definitionDescriptor,
+          selectionStructure: _matchingSelectionStructure(
+            definitionList,
+            definitionDescriptor.plainText,
+          ),
         );
       case MarkdownBlockKind.footnoteList:
         final footnoteList = block as FootnoteListBlock;
@@ -352,6 +365,10 @@ class MarkdownBlockBuilder {
             ),
           ),
           plainText: footnoteDescriptor.plainText,
+          selectionStructure: _matchingSelectionStructure(
+            orderedFootnotes,
+            footnoteDescriptor.plainText,
+          ),
           hitTestBehavior: SelectableBlockHitTestBehavior.text,
           textSpan: footnoteDescriptor.span,
           selectionRectResolver: (context, _, range) =>
@@ -453,6 +470,10 @@ class MarkdownBlockBuilder {
                 cellTextKeys[rowIndex][columnIndex],
           ),
           plainText: descriptor.plainText,
+          selectionStructure: _matchingSelectionStructure(
+            tableBlock,
+            descriptor.plainText,
+          ),
           hitTestBehavior: SelectableBlockHitTestBehavior.text,
           textSpan: descriptor.span,
           highlightBorderRadius: theme.tableBorderRadius,
@@ -518,6 +539,7 @@ class MarkdownBlockBuilder {
     SelectableBlockSelectionPaintOrder? selectionPaintOrder,
     Listenable? repaintListenable,
     EdgeInsets? selectionClipPadding,
+    StructuredBlockSelection? selectionStructure,
   }) {
     final hasInlineSurface = runs.any(
       (run) => run.decoration != null || run.renderSpan != null,
@@ -533,6 +555,7 @@ class MarkdownBlockBuilder {
           ),
       plainText: plainText,
       hitTestBehavior: SelectableBlockHitTestBehavior.text,
+      selectionStructure: selectionStructure,
       measurementPadding: measurementPadding,
       highlightBorderRadius: highlightBorderRadius,
       selectionPaintOrder: selectionPaintOrder ??
@@ -596,6 +619,18 @@ class MarkdownBlockBuilder {
         );
       },
       selectionUnitRangeResolver: (context, size, localPosition, position) {
+        if (directTextKey != null) {
+          final directRange = _resolveDirectRichTextLineRange(
+            context,
+            directTextKey,
+            position,
+            localPosition,
+            runs,
+          );
+          if (directRange != null) {
+            return directRange;
+          }
+        }
         final textScaler =
             MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling;
         final layout = computeMarkdownPretextLayoutFromRuns(
@@ -627,6 +662,184 @@ class MarkdownBlockBuilder {
         );
       },
     );
+  }
+
+  DocumentRange? _resolveDirectRichTextLineRange(
+    BuildContext context,
+    GlobalKey directTextKey,
+    DocumentPosition position,
+    Offset? localPosition,
+    List<MarkdownPretextInlineRun> runs,
+  ) {
+    final blockRenderObject = context.findRenderObject();
+    final renderParagraph = _resolveDirectRenderParagraph(
+      directTextKey,
+      runs: runs,
+      fallbackRoot: blockRenderObject,
+    );
+    if (renderParagraph == null ||
+        blockRenderObject is! RenderBox ||
+        !blockRenderObject.hasSize) {
+      return null;
+    }
+
+    final textPosition = localPosition == null
+        ? TextPosition(
+            offset: markdownPretextRenderOffsetForPlainOffset(
+              runs,
+              position.textOffset,
+              preferEnd: false,
+            ),
+          )
+        : renderParagraph.getPositionForOffset(
+            renderParagraph.globalToLocal(
+              blockRenderObject.localToGlobal(localPosition),
+            ),
+          );
+    final lineBoundary = _resolveDirectRenderParagraphLineBoundary(
+      renderParagraph,
+      textPosition.offset,
+    );
+    if (lineBoundary == null) {
+      return null;
+    }
+    final plainText = runs.map((run) => run.text).join();
+    var plainStart = markdownPretextPlainOffsetForRenderOffset(
+      runs,
+      lineBoundary.start,
+    );
+    var plainEnd = markdownPretextPlainOffsetForRenderOffset(
+      runs,
+      lineBoundary.end,
+    );
+    if (plainStart < plainText.length &&
+        plainText.codeUnitAt(plainStart) == 0x0A) {
+      plainStart += 1;
+    }
+    if (plainEnd > plainStart &&
+        plainEnd <= plainText.length &&
+        plainText.codeUnitAt(plainEnd - 1) == 0x0A) {
+      plainEnd -= 1;
+    }
+
+    return DocumentRange(
+      start: DocumentPosition(
+        blockIndex: position.blockIndex,
+        path: const PathInBlock(<int>[0]),
+        textOffset: plainStart,
+      ),
+      end: DocumentPosition(
+        blockIndex: position.blockIndex,
+        path: const PathInBlock(<int>[0]),
+        textOffset: plainEnd,
+      ),
+    );
+  }
+
+  ({int start, int end})? _resolveDirectRenderParagraphLineBoundary(
+    RenderParagraph renderParagraph,
+    int renderOffset,
+  ) {
+    final fullText =
+        renderParagraph.text.toPlainText(includePlaceholders: true);
+    if (fullText.isEmpty) {
+      return const (start: 0, end: 0);
+    }
+    final lineExtents = _computeParagraphLineExtents(renderParagraph);
+    if (lineExtents.isEmpty) {
+      return null;
+    }
+
+    var probe = renderOffset.clamp(0, fullText.length).toInt();
+    if (probe == fullText.length && probe > 0) {
+      probe -= 1;
+    }
+
+    List<TextBox> probeBoxes = _boxesForDirectRenderOffset(
+      renderParagraph,
+      fullText,
+      probe,
+    );
+    while (probeBoxes.isEmpty && probe > 0) {
+      probe -= 1;
+      probeBoxes =
+          _boxesForDirectRenderOffset(renderParagraph, fullText, probe);
+    }
+    while (probeBoxes.isEmpty && probe < fullText.length - 1) {
+      probe += 1;
+      probeBoxes =
+          _boxesForDirectRenderOffset(renderParagraph, fullText, probe);
+    }
+    if (probeBoxes.isEmpty) {
+      return null;
+    }
+
+    final lineExtent = lineExtents.firstWhere(
+      (extent) => _boxesOverlapLineExtent(probeBoxes, extent),
+      orElse: () => lineExtents.last,
+    );
+
+    var start = probe;
+    while (start > 0) {
+      final previousBoxes = _boxesForDirectRenderOffset(
+        renderParagraph,
+        fullText,
+        start - 1,
+      );
+      if (previousBoxes.isEmpty ||
+          !_boxesOverlapLineExtent(previousBoxes, lineExtent)) {
+        break;
+      }
+      start -= 1;
+    }
+
+    var end = probe + 1;
+    while (end < fullText.length) {
+      final nextBoxes = _boxesForDirectRenderOffset(
+        renderParagraph,
+        fullText,
+        end,
+      );
+      if (nextBoxes.isEmpty ||
+          !_boxesOverlapLineExtent(nextBoxes, lineExtent)) {
+        break;
+      }
+      end += 1;
+    }
+
+    return (start: start, end: end);
+  }
+
+  List<TextBox> _boxesForDirectRenderOffset(
+    RenderParagraph renderParagraph,
+    String fullText,
+    int renderOffset,
+  ) {
+    if (fullText.isEmpty) {
+      return const <TextBox>[];
+    }
+    final start = renderOffset.clamp(0, fullText.length - 1).toInt();
+    final end = math.min(start + 1, fullText.length);
+    if (start >= end) {
+      return const <TextBox>[];
+    }
+    return renderParagraph.getBoxesForSelection(
+      TextSelection(baseOffset: start, extentOffset: end),
+    );
+  }
+
+  bool _boxesOverlapLineExtent(
+    List<TextBox> boxes,
+    ({double top, double bottom}) lineExtent,
+  ) {
+    for (final box in boxes) {
+      final overlapTop = math.max(box.top, lineExtent.top);
+      final overlapBottom = math.min(box.bottom, lineExtent.bottom);
+      if (overlapBottom - overlapTop > 0.5) {
+        return true;
+      }
+    }
+    return false;
   }
 
   GlobalKey? _createDirectTextKeyIfNeeded(
@@ -1358,6 +1571,7 @@ class MarkdownBlockBuilder {
 
   SelectableBlockSpec _buildSelectableDescriptorTextSpec({
     required SelectableTextDescriptor descriptor,
+    StructuredBlockSelection? selectionStructure,
   }) {
     final pretext = descriptor.pretext;
     if (pretext == null) {
@@ -1366,6 +1580,7 @@ class MarkdownBlockBuilder {
         plainText: descriptor.plainText,
         hitTestBehavior: SelectableBlockHitTestBehavior.text,
         textSpan: descriptor.span,
+        selectionStructure: selectionStructure,
       );
     }
     final directTextKey = _createDirectTextKeyIfNeeded(pretext.runs);
@@ -1379,6 +1594,7 @@ class MarkdownBlockBuilder {
       fallbackStyle: pretext.fallbackStyle,
       directTextKey: directTextKey,
       textAlign: pretext.textAlign,
+      selectionStructure: selectionStructure,
     );
   }
 
@@ -1388,6 +1604,17 @@ class MarkdownBlockBuilder {
       0.2,
     );
     return theme.selectionColor.withOpacity(opacity);
+  }
+
+  StructuredBlockSelection? _matchingSelectionStructure(
+    BlockNode block,
+    String plainText,
+  ) {
+    final structure = StructuredBlockSelection.forBlock(block);
+    if (structure.plainText != plainText) {
+      return null;
+    }
+    return structure;
   }
 
   Widget _buildFootnoteListContainer({

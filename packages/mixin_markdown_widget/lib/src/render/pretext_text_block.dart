@@ -525,28 +525,26 @@ class MarkdownPretextLayoutResult {
       final selectionStart = math.max(range.start.textOffset, line.startOffset);
       final selectionEnd =
           math.min(range.end.textOffset, line.visibleEndOffset);
-      if (selectionStart >= selectionEnd || line.text.isEmpty) {
-        continue;
-      }
-
-      final mergedBoxes = _mergeSelectionBoxes(
-        _selectionBoxesForLine(
-          line,
-          selectionStart: selectionStart,
-          selectionEnd: selectionEnd,
-          lineTop: lineTop,
-          textDirection: textDirection,
-        ),
-      );
-      for (final box in mergedBoxes) {
-        rects.add(
-          Rect.fromLTRB(
-            box.left - 1.0,
-            box.top,
-            box.right + 1.0,
-            box.bottom,
+      if (selectionStart < selectionEnd && line.text.isNotEmpty) {
+        final mergedBoxes = _mergeSelectionBoxes(
+          _selectionBoxesForLine(
+            line,
+            selectionStart: selectionStart,
+            selectionEnd: selectionEnd,
+            lineTop: lineTop,
+            textDirection: textDirection,
           ),
         );
+        for (final box in mergedBoxes) {
+          rects.add(
+            Rect.fromLTRB(
+              box.left - 1.0,
+              box.top,
+              box.right + 1.0,
+              box.bottom,
+            ),
+          );
+        }
       }
       lineTop += line.height;
     }

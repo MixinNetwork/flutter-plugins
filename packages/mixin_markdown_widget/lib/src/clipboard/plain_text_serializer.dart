@@ -1,11 +1,12 @@
 import 'copy_serializer.dart';
 import '../core/document.dart';
+import '../selection/structured_block_selection.dart';
 
 class MarkdownPlainTextSerializer extends MarkdownCopySerializer {
   const MarkdownPlainTextSerializer();
 
   String serializeBlockText(BlockNode block) {
-    return _serializeBlock(block, indentLevel: 0);
+    return StructuredBlockSelection.serializeBlockText(block);
   }
 
   @override
@@ -30,13 +31,17 @@ class MarkdownPlainTextSerializer extends MarkdownCopySerializer {
     return DocumentSelection(
       base: DocumentPosition(
         blockIndex: first.blockIndex,
-        path: const PathInBlock(<int>[0]),
+        path: first.structure == null
+            ? const PathInBlock(<int>[0])
+            : first.structure!.startPosition(blockIndex: first.blockIndex).path,
         textOffset: 0,
       ),
       extent: DocumentPosition(
         blockIndex: last.blockIndex,
-        path: const PathInBlock(<int>[0]),
-        textOffset: last.text.length,
+        path: last.structure == null
+            ? const PathInBlock(<int>[0])
+            : last.structure!.endPosition(blockIndex: last.blockIndex).path,
+        textOffset: last.structure?.plainText.length ?? last.text.length,
       ),
     );
   }
@@ -79,15 +84,24 @@ class MarkdownPlainTextSerializer extends MarkdownCopySerializer {
           indexedBlock.blockIndex > normalizedRange.end.blockIndex) {
         continue;
       }
-      final section = _sliceBlock(
-        indexedBlock,
-        start: indexedBlock.blockIndex == normalizedRange.start.blockIndex
-            ? normalizedRange.start.textOffset
-            : 0,
-        end: indexedBlock.blockIndex == normalizedRange.end.blockIndex
-            ? normalizedRange.end.textOffset
-            : indexedBlock.text.length,
-      );
+      final blockStart =
+          indexedBlock.blockIndex == normalizedRange.start.blockIndex
+              ? normalizedRange.start.textOffset
+              : 0;
+      final structure = indexedBlock.structure;
+      final blockEnd = indexedBlock.blockIndex == normalizedRange.end.blockIndex
+          ? normalizedRange.end.textOffset
+          : indexedBlock.visibleTextLength;
+      final section = structure != null
+          ? structure.serializeDisplayedRange(
+              start: blockStart,
+              end: blockEnd,
+            )
+          : _sliceBlock(
+              indexedBlock,
+              start: blockStart,
+              end: blockEnd,
+            );
       if (section.isNotEmpty) {
         sections.add(section);
       }
@@ -95,238 +109,27 @@ class MarkdownPlainTextSerializer extends MarkdownCopySerializer {
     return sections.join('\n\n');
   }
 
-  String _serializeBlock(BlockNode block, {required int indentLevel}) {
-    switch (block.kind) {
-      case MarkdownBlockKind.heading:
-        return _flattenInlines((block as HeadingBlock).inlines);
-      case MarkdownBlockKind.paragraph:
-        return _flattenInlines((block as ParagraphBlock).inlines);
-      case MarkdownBlockKind.quote:
-        return _serializeQuote(block as QuoteBlock, indentLevel: indentLevel);
-      case MarkdownBlockKind.orderedList:
-      case MarkdownBlockKind.unorderedList:
-        return _serializeList(block as ListBlock, indentLevel: indentLevel);
-      case MarkdownBlockKind.definitionList:
-        return _serializeDefinitionList(block as DefinitionListBlock);
-      case MarkdownBlockKind.footnoteList:
-        return _serializeFootnoteList(block as FootnoteListBlock);
-      case MarkdownBlockKind.codeBlock:
-        return _trimTrailingNewlines((block as CodeBlock).code);
-      case MarkdownBlockKind.table:
-        return _serializeTable(block as TableBlock);
-      case MarkdownBlockKind.image:
-        return _serializeImage(block as ImageBlock);
-      case MarkdownBlockKind.thematicBreak:
-        return '---';
-    }
-  }
-
-  String _serializeQuote(QuoteBlock block, {required int indentLevel}) {
-    return block.children
-        .map((child) => _serializeBlock(child, indentLevel: indentLevel))
-        .where((value) => value.trim().isNotEmpty)
-        .join('\n\n');
-  }
-
-  String _serializeList(ListBlock block, {required int indentLevel}) {
-    final items = <String>[];
-    for (var index = 0; index < block.items.length; index++) {
-      final item = block.items[index];
-      final marker = block.ordered ? '${block.startIndex + index}.' : '-';
-      final content = _serializeListItem(
-        item,
-        indentLevel: indentLevel + 1,
-      );
-      final checkbox = _taskListPrefix(item.taskState);
-      final prefix = '${'  ' * indentLevel}$marker$checkbox ';
-      final continuation =
-          '${'  ' * indentLevel}${' ' * prefix.trimLeft().length}';
-      if (content.isEmpty && item.taskState == null) {
-        continue;
-      }
-      items.add(
-        content.isEmpty
-            ? prefix.trimRight()
-            : _prefixMultiline(content, prefix, continuation),
-      );
-    }
-    return items.join('\n');
-  }
-
-  String _serializeListItem(ListItemNode item, {required int indentLevel}) {
-    final sections = <String>[];
-    for (final child in item.children) {
-      final text = _serializeBlock(child, indentLevel: indentLevel);
-      if (text.trim().isEmpty) {
-        continue;
-      }
-      sections.add(text);
-    }
-    return sections.join('\n');
-  }
-
-  String _serializeTable(TableBlock block) {
-    return block.rows
-        .map((row) =>
-            row.cells.map((cell) => _flattenInlines(cell.inlines)).join('\t'))
-        .join('\n');
-  }
-
-  String _serializeDefinitionList(DefinitionListBlock block) {
-    final items = <String>[];
-    for (final item in block.items) {
-      final term = _flattenInlines(item.term).trimRight();
-      final definitions = <String>[];
-      for (final definition in item.definitions) {
-        final text = definition
-            .map((child) => _serializeBlock(child, indentLevel: 1))
-            .where((value) => value.trim().isNotEmpty)
-            .join('\n\n');
-        if (text.isNotEmpty) {
-          definitions.add(_prefixMultiline(text, ': ', '  '));
-        }
-      }
-      final sections = <String>[];
-      if (term.isNotEmpty) {
-        sections.add(term);
-      }
-      sections.addAll(definitions);
-      final serialized = sections.join('\n');
-      if (serialized.isNotEmpty) {
-        items.add(serialized);
-      }
-    }
-    return items.join('\n');
-  }
-
-  String _serializeFootnoteList(FootnoteListBlock block) {
-    final items = <String>[];
-    for (var index = 0; index < block.items.length; index++) {
-      final content = _serializeListItem(block.items[index], indentLevel: 1);
-      if (content.isEmpty) {
-        continue;
-      }
-      final marker = '${index + 1}.';
-      items.add(
-        _prefixMultiline(
-          content,
-          '$marker ',
-          '${' ' * (marker.length + 1)}',
-        ),
-      );
-    }
-    return items.join('\n');
-  }
-
-  String _taskListPrefix(MarkdownTaskListItemState? state) {
-    switch (state) {
-      case MarkdownTaskListItemState.checked:
-        return ' [x]';
-      case MarkdownTaskListItemState.unchecked:
-        return ' [ ]';
-      case null:
-        return '';
-    }
-  }
-
-  String _serializeImage(ImageBlock block) {
-    final label = block.alt?.trim().isNotEmpty == true
-        ? block.alt!.trim()
-        : block.title?.trim().isNotEmpty == true
-            ? block.title!.trim()
-            : block.url;
-    return label;
-  }
-
-  String _flattenInlines(List<InlineNode> inlines) {
-    final buffer = StringBuffer();
-    for (final inline in inlines) {
-      switch (inline.kind) {
-        case MarkdownInlineKind.text:
-          buffer.write((inline as TextInline).text);
-          break;
-        case MarkdownInlineKind.emphasis:
-          buffer.write(_flattenInlines((inline as EmphasisInline).children));
-          break;
-        case MarkdownInlineKind.strong:
-          buffer.write(_flattenInlines((inline as StrongInline).children));
-          break;
-        case MarkdownInlineKind.strikethrough:
-          buffer.write(
-            _flattenInlines((inline as StrikethroughInline).children),
-          );
-          break;
-        case MarkdownInlineKind.highlight:
-          buffer.write(_flattenInlines((inline as HighlightInline).children));
-          break;
-        case MarkdownInlineKind.subscript:
-          buffer.write(_flattenInlines((inline as SubscriptInline).children));
-          break;
-        case MarkdownInlineKind.superscript:
-          buffer.write(
-            _flattenInlines((inline as SuperscriptInline).children),
-          );
-          break;
-        case MarkdownInlineKind.link:
-          final link = inline as LinkInline;
-          final label = _flattenInlines(link.children).trim();
-          if (link.destination.isEmpty) {
-            buffer.write(label);
-          } else if (label.isEmpty || label == link.destination) {
-            buffer.write(link.destination);
-          } else {
-            buffer.write('$label (${link.destination})');
-          }
-          break;
-        case MarkdownInlineKind.math:
-          buffer.write((inline as MathInline).tex);
-          break;
-        case MarkdownInlineKind.inlineCode:
-          buffer.write((inline as InlineCode).text);
-          break;
-        case MarkdownInlineKind.softBreak:
-        case MarkdownInlineKind.hardBreak:
-          buffer.write('\n');
-          break;
-        case MarkdownInlineKind.image:
-          final image = inline as InlineImage;
-          buffer.write(image.alt ?? image.url);
-          break;
-      }
-    }
-    return buffer.toString();
-  }
-
-  String _prefixMultiline(
-    String input,
-    String firstPrefix,
-    String continuationPrefix,
-  ) {
-    final lines = input.split('\n');
-    if (lines.isEmpty) {
-      return firstPrefix.trimRight();
-    }
-    return <String>[
-      '$firstPrefix${lines.first}',
-      for (final line in lines.skip(1))
-        line.isEmpty
-            ? continuationPrefix.trimRight()
-            : '$continuationPrefix$line',
-    ].join('\n');
-  }
-
-  String _trimTrailingNewlines(String value) {
-    return value.replaceFirst(RegExp(r'\n+$'), '');
-  }
-
   List<_IndexedPlainTextBlock> _indexBlocks(MarkdownDocument document) {
     return <_IndexedPlainTextBlock>[
       for (var index = 0; index < document.blocks.length; index++)
-        _IndexedPlainTextBlock(
-          blockIndex: index,
-          text: _serializeBlock(document.blocks[index], indentLevel: 0),
-        ),
+        _indexedBlockFor(document.blocks[index], index),
     ].where((block) => block.text.isNotEmpty).toList(growable: false);
+  }
+
+  _IndexedPlainTextBlock _indexedBlockFor(BlockNode block, int blockIndex) {
+    final structure = StructuredBlockSelection.forBlock(block);
+    if (!structure.isEmpty) {
+      return _IndexedPlainTextBlock(
+        blockIndex: blockIndex,
+        text: structure.serializedText,
+        structure: structure,
+      );
+    }
+    return _IndexedPlainTextBlock(
+      blockIndex: blockIndex,
+      text: StructuredBlockSelection.serializeBlockText(block),
+      structure: null,
+    );
   }
 
   DocumentPosition _clampPosition(
@@ -346,9 +149,23 @@ class MarkdownPlainTextSerializer extends MarkdownCopySerializer {
     );
     final targetOffset = position.textOffset < 0
         ? 0
-        : position.textOffset > block.text.length
-            ? block.text.length
+        : position.textOffset > block.visibleTextLength
+            ? block.visibleTextLength
             : position.textOffset;
+    final structure = block.structure;
+    if (structure != null) {
+      return structure.normalizePosition(
+        blockIndex: block.blockIndex,
+        position: DocumentPosition(
+          blockIndex: block.blockIndex,
+          path: position.path,
+          textOffset: targetOffset,
+        ),
+        affinity: targetOffset == structure.plainText.length
+            ? StructuredSelectionAffinity.upstream
+            : StructuredSelectionAffinity.downstream,
+      );
+    }
     return DocumentPosition(
       blockIndex: block.blockIndex,
       path: const PathInBlock(<int>[0]),
@@ -382,8 +199,12 @@ class _IndexedPlainTextBlock {
   const _IndexedPlainTextBlock({
     required this.blockIndex,
     required this.text,
+    required this.structure,
   });
 
   final int blockIndex;
   final String text;
+  final StructuredBlockSelection? structure;
+
+  int get visibleTextLength => structure?.plainText.length ?? text.length;
 }

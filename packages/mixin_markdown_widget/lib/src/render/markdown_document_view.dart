@@ -213,6 +213,18 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
         as DocumentPosition?;
   }
 
+  DocumentPosition? _hitTestExactTextPosition(Offset globalPosition) {
+    for (final block in widget.document.blocks) {
+      final blockState =
+          _keysRegistry.blockKeys[block.id]?.currentState as dynamic;
+      final hit = blockState?.hitTestTextGlobal(globalPosition);
+      if (hit != null) {
+        return hit as DocumentPosition;
+      }
+    }
+    return null;
+  }
+
   void _selectWordAt(DocumentPosition position) {
     final selectionController = widget.selectionController;
     if (selectionController == null) {
@@ -348,6 +360,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       scrollController: scrollController,
       onRequestToolbar: _showToolbar,
       hitTestPosition: _hitTestPosition,
+      hitTestExactTextPosition: _hitTestExactTextPosition,
       selectWordAt: _selectWordAt,
       selectBlockAt: _selectBlockAt,
       selectSelectionUnitAt: _selectSelectionUnitAt,

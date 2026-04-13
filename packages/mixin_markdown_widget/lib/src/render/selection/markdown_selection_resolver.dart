@@ -244,14 +244,51 @@ class MarkdownSelectionResolver {
           indentLevel: entry.contentIndentLevel,
           separator: '\n',
         );
+        final childKeys =
+            keysRegistry.listItemChildKeysFor(block, entry.itemIndex);
+        var childContainsPosition = false;
+        for (final childEntry in childEntries) {
+          final childContext = childKeys[childEntry.childIndex].currentContext;
+          final childRenderObject = childContext?.findRenderObject();
+          if (childRenderObject is! RenderBox || !childRenderObject.hasSize) {
+            continue;
+          }
+          final childRect = childRenderObject.localToGlobal(Offset.zero) &
+              childRenderObject.size;
+          if (childRect.contains(globalPosition)) {
+            childContainsPosition = true;
+            break;
+          }
+        }
         childOffset = resolveIndexedBlockTextOffsetInRoot(
           context,
           rootRenderObject: rootRenderObject,
           entries: childEntries,
-          childKeys: keysRegistry.listItemChildKeysFor(block, entry.itemIndex),
+          childKeys: childKeys,
           globalPosition: globalPosition,
         );
         if (contentRect.contains(globalPosition)) {
+          if (!childContainsPosition) {
+            final projectedChildOffset = resolveIndexedBlockTextOffsetInRoot(
+              context,
+              rootRenderObject: rootRenderObject,
+              entries: childEntries,
+              childKeys: childKeys,
+              globalPosition: Offset(
+                contentRect.left + 1,
+                globalPosition.dy.clamp(
+                  contentRect.top + 0.5,
+                  contentRect.bottom - 0.5,
+                ),
+              ),
+            );
+            if (projectedChildOffset != null) {
+              return _mapListContentOffsetToDisplayedItemOffset(
+                entry,
+                projectedChildOffset,
+              );
+            }
+          }
           return _mapListContentOffsetToDisplayedItemOffset(
             entry,
             childOffset ?? 0,
@@ -403,13 +440,28 @@ class MarkdownSelectionResolver {
         indentLevel: entry.contentIndentLevel,
         separator: '\n',
       );
+      final childKeys =
+          keysRegistry.listItemChildKeysFor(block, entry.itemIndex);
       final childHit = _resolveIndexedBlockHitInRoot(
-        context,
-        rootRenderObject: rootRenderObject,
-        entries: childEntries,
-        childKeys: keysRegistry.listItemChildKeysFor(block, entry.itemIndex),
-        globalPosition: globalPosition,
-      );
+            context,
+            rootRenderObject: rootRenderObject,
+            entries: childEntries,
+            childKeys: childKeys,
+            globalPosition: globalPosition,
+          ) ??
+          _resolveIndexedBlockHitInRoot(
+            context,
+            rootRenderObject: rootRenderObject,
+            entries: childEntries,
+            childKeys: childKeys,
+            globalPosition: Offset(
+              contentRect.left + 1,
+              globalPosition.dy.clamp(
+                contentRect.top + 0.5,
+                contentRect.bottom - 0.5,
+              ),
+            ),
+          );
       if (childHit == null) {
         continue;
       }
@@ -645,6 +697,16 @@ class MarkdownSelectionResolver {
           );
 
     final pretext = descriptor.pretext;
+    if (pretext != null && _descriptorUsesDirectRichTextMetrics(descriptor)) {
+      final directRange = _resolveDirectRenderParagraphLineRange(
+        renderObject,
+        globalPosition: globalPosition,
+        runs: pretext.runs,
+      );
+      if (directRange != null) {
+        return directRange;
+      }
+    }
     if (pretext != null) {
       final layout = computeDescriptorPretextLayout(
         context,
@@ -734,23 +796,34 @@ class MarkdownSelectionResolver {
             measurementPadding: measurementPadding,
           );
 
-    final lineRange = _resolveLogicalLineRange(
+    final lineRange = markdownPretextCanUseDirectRichTextGeometry(codeRuns)
+        ? _resolveDirectRenderParagraphLineRange(
+            renderObject,
+            globalPosition: globalPosition,
+            runs: codeRuns,
+          )
+        : null;
+    if (lineRange != null) {
+      return lineRange;
+    }
+
+    final logicalLineRange = _resolveLogicalLineRange(
       descriptor.plainText,
       textOffset,
     );
-    if (lineRange == null) {
+    if (logicalLineRange == null) {
       return null;
     }
     return DocumentRange(
       start: DocumentPosition(
         blockIndex: 0,
         path: const PathInBlock(<int>[0]),
-        textOffset: lineRange.start,
+        textOffset: logicalLineRange.start,
       ),
       end: DocumentPosition(
         blockIndex: 0,
         path: const PathInBlock(<int>[0]),
-        textOffset: lineRange.end,
+        textOffset: logicalLineRange.end,
       ),
     );
   }
@@ -1039,6 +1112,150 @@ class MarkdownSelectionResolver {
     final localPosition = paragraph.globalToLocal(globalPosition);
     final textPosition = paragraph.getPositionForOffset(localPosition);
     return markdownPretextPlainOffsetForRenderOffset(runs, textPosition.offset);
+  }
+
+  DocumentRange? _resolveDirectRenderParagraphLineRange(
+    RenderObject renderObject, {
+    required Offset globalPosition,
+    required List<MarkdownPretextInlineRun> runs,
+  }) {
+    final paragraph = _findDirectRenderParagraphForRuns(renderObject, runs);
+    if (paragraph == null || !paragraph.hasSize) {
+      return null;
+    }
+
+    final textPosition = paragraph.getPositionForOffset(
+      paragraph.globalToLocal(globalPosition),
+    );
+    final lineBoundary = _resolveDirectParagraphRenderLineBoundary(
+        paragraph, textPosition.offset);
+    if (lineBoundary == null) {
+      return null;
+    }
+
+    final plainText = runs.map((run) => run.text).join();
+    var plainStart = markdownPretextPlainOffsetForRenderOffset(
+      runs,
+      lineBoundary.start,
+    );
+    var plainEnd = markdownPretextPlainOffsetForRenderOffset(
+      runs,
+      lineBoundary.end,
+    );
+    if (plainStart < plainText.length &&
+        plainText.codeUnitAt(plainStart) == 0x0A) {
+      plainStart += 1;
+    }
+    if (plainEnd > plainStart &&
+        plainEnd <= plainText.length &&
+        plainText.codeUnitAt(plainEnd - 1) == 0x0A) {
+      plainEnd -= 1;
+    }
+    return DocumentRange(
+      start: DocumentPosition(
+        blockIndex: 0,
+        path: const PathInBlock(<int>[0]),
+        textOffset: plainStart,
+      ),
+      end: DocumentPosition(
+        blockIndex: 0,
+        path: const PathInBlock(<int>[0]),
+        textOffset: plainEnd,
+      ),
+    );
+  }
+
+  ({int start, int end})? _resolveDirectParagraphRenderLineBoundary(
+    RenderParagraph paragraph,
+    int renderOffset,
+  ) {
+    final fullText = paragraph.text.toPlainText(includePlaceholders: true);
+    if (fullText.isEmpty) {
+      return const (start: 0, end: 0);
+    }
+    final lineExtents = _computeParagraphLineExtents(paragraph);
+    if (lineExtents.isEmpty) {
+      return null;
+    }
+
+    var probe = renderOffset.clamp(0, fullText.length).toInt();
+    if (probe == fullText.length && probe > 0) {
+      probe -= 1;
+    }
+
+    List<TextBox> probeBoxes =
+        _boxesForDirectParagraphOffset(paragraph, fullText, probe);
+    while (probeBoxes.isEmpty && probe > 0) {
+      probe -= 1;
+      probeBoxes = _boxesForDirectParagraphOffset(paragraph, fullText, probe);
+    }
+    while (probeBoxes.isEmpty && probe < fullText.length - 1) {
+      probe += 1;
+      probeBoxes = _boxesForDirectParagraphOffset(paragraph, fullText, probe);
+    }
+    if (probeBoxes.isEmpty) {
+      return null;
+    }
+
+    final lineExtent = lineExtents.firstWhere(
+      (extent) => _boxesOverlapParagraphLineExtent(probeBoxes, extent),
+      orElse: () => lineExtents.last,
+    );
+
+    var start = probe;
+    while (start > 0) {
+      final previousBoxes =
+          _boxesForDirectParagraphOffset(paragraph, fullText, start - 1);
+      if (previousBoxes.isEmpty ||
+          !_boxesOverlapParagraphLineExtent(previousBoxes, lineExtent)) {
+        break;
+      }
+      start -= 1;
+    }
+
+    var end = probe + 1;
+    while (end < fullText.length) {
+      final nextBoxes =
+          _boxesForDirectParagraphOffset(paragraph, fullText, end);
+      if (nextBoxes.isEmpty ||
+          !_boxesOverlapParagraphLineExtent(nextBoxes, lineExtent)) {
+        break;
+      }
+      end += 1;
+    }
+    return (start: start, end: end);
+  }
+
+  List<TextBox> _boxesForDirectParagraphOffset(
+    RenderParagraph paragraph,
+    String fullText,
+    int renderOffset,
+  ) {
+    if (fullText.isEmpty) {
+      return const <TextBox>[];
+    }
+    final start = renderOffset.clamp(0, fullText.length - 1).toInt();
+    final end = math.min(start + 1, fullText.length);
+    if (start >= end) {
+      return const <TextBox>[];
+    }
+    return paragraph.getBoxesForSelection(
+      TextSelection(baseOffset: start, extentOffset: end),
+    );
+  }
+
+  bool _boxesOverlapParagraphLineExtent(
+    List<TextBox> boxes,
+    ({double top, double bottom}) lineExtent,
+  ) {
+    for (final box in boxes) {
+      final overlapTop = math.max(box.top, lineExtent.top);
+      final overlapBottom = math.min(box.bottom, lineExtent.bottom);
+      if (overlapBottom - overlapTop > 0.5) {
+        return true;
+      }
+    }
+    return false;
   }
 
   List<Rect> _resolveTableSelectionRectsInRoot(

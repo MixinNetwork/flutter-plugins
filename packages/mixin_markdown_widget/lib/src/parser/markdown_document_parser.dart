@@ -1205,7 +1205,162 @@ class _MarkdownAstBuilder {
           break;
       }
     }
-    return inlines;
+    return _normalizeInlineSequence(inlines).nodes;
+  }
+
+  ({List<InlineNode> nodes, bool endsAtLineStart}) _normalizeInlineSequence(
+    List<InlineNode> inlines, {
+    bool atLineStart = true,
+  }) {
+    final normalized = <InlineNode>[];
+    var isAtLineStart = atLineStart;
+
+    for (final inline in inlines) {
+      switch (inline.kind) {
+        case MarkdownInlineKind.text:
+          var text = (inline as TextInline).text;
+          if (isAtLineStart) {
+            text = text.replaceFirst(RegExp(r'^[ \t]+'), '');
+          }
+          if (text.isNotEmpty) {
+            normalized.add(
+              TextInline(text: text, sourceRange: inline.sourceRange),
+            );
+            isAtLineStart = text.endsWith('\n');
+          }
+          break;
+        case MarkdownInlineKind.softBreak:
+          normalized.add(inline);
+          isAtLineStart = true;
+          break;
+        case MarkdownInlineKind.hardBreak:
+          normalized.add(inline);
+          isAtLineStart = true;
+          break;
+        case MarkdownInlineKind.emphasis:
+          final emphasis = inline as EmphasisInline;
+          final children = _normalizeInlineSequence(
+            emphasis.children,
+            atLineStart: isAtLineStart,
+          );
+          if (children.nodes.isNotEmpty) {
+            normalized.add(
+              EmphasisInline(
+                children: List<InlineNode>.unmodifiable(children.nodes),
+                sourceRange: inline.sourceRange,
+              ),
+            );
+          }
+          isAtLineStart = children.endsAtLineStart;
+          break;
+        case MarkdownInlineKind.strong:
+          final strong = inline as StrongInline;
+          final children = _normalizeInlineSequence(
+            strong.children,
+            atLineStart: isAtLineStart,
+          );
+          if (children.nodes.isNotEmpty) {
+            normalized.add(
+              StrongInline(
+                children: List<InlineNode>.unmodifiable(children.nodes),
+                sourceRange: inline.sourceRange,
+              ),
+            );
+          }
+          isAtLineStart = children.endsAtLineStart;
+          break;
+        case MarkdownInlineKind.strikethrough:
+          final strike = inline as StrikethroughInline;
+          final children = _normalizeInlineSequence(
+            strike.children,
+            atLineStart: isAtLineStart,
+          );
+          if (children.nodes.isNotEmpty) {
+            normalized.add(
+              StrikethroughInline(
+                children: List<InlineNode>.unmodifiable(children.nodes),
+                sourceRange: inline.sourceRange,
+              ),
+            );
+          }
+          isAtLineStart = children.endsAtLineStart;
+          break;
+        case MarkdownInlineKind.highlight:
+          final highlight = inline as HighlightInline;
+          final children = _normalizeInlineSequence(
+            highlight.children,
+            atLineStart: isAtLineStart,
+          );
+          if (children.nodes.isNotEmpty) {
+            normalized.add(
+              HighlightInline(
+                children: List<InlineNode>.unmodifiable(children.nodes),
+                sourceRange: inline.sourceRange,
+              ),
+            );
+          }
+          isAtLineStart = children.endsAtLineStart;
+          break;
+        case MarkdownInlineKind.subscript:
+          final subscript = inline as SubscriptInline;
+          final children = _normalizeInlineSequence(
+            subscript.children,
+            atLineStart: isAtLineStart,
+          );
+          if (children.nodes.isNotEmpty) {
+            normalized.add(
+              SubscriptInline(
+                children: List<InlineNode>.unmodifiable(children.nodes),
+                sourceRange: inline.sourceRange,
+              ),
+            );
+          }
+          isAtLineStart = children.endsAtLineStart;
+          break;
+        case MarkdownInlineKind.superscript:
+          final superscript = inline as SuperscriptInline;
+          final children = _normalizeInlineSequence(
+            superscript.children,
+            atLineStart: isAtLineStart,
+          );
+          if (children.nodes.isNotEmpty) {
+            normalized.add(
+              SuperscriptInline(
+                children: List<InlineNode>.unmodifiable(children.nodes),
+                sourceRange: inline.sourceRange,
+              ),
+            );
+          }
+          isAtLineStart = children.endsAtLineStart;
+          break;
+        case MarkdownInlineKind.link:
+          final link = inline as LinkInline;
+          final children = _normalizeInlineSequence(
+            link.children,
+            atLineStart: isAtLineStart,
+          );
+          if (children.nodes.isNotEmpty) {
+            normalized.add(
+              LinkInline(
+                destination: link.destination,
+                title: link.title,
+                children: List<InlineNode>.unmodifiable(children.nodes),
+                sourceRange: inline.sourceRange,
+              ),
+            );
+          }
+          isAtLineStart = children.endsAtLineStart;
+          break;
+        case MarkdownInlineKind.math:
+        case MarkdownInlineKind.inlineCode:
+        case MarkdownInlineKind.image:
+          normalized.add(inline);
+          isAtLineStart = false;
+          break;
+      }
+    }
+
+    return (nodes: normalized, endsAtLineStart: isAtLineStart);
   }
 
   String _normalizeInlineText(String text) {

@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../core/document.dart';
+import '../selection/structured_block_selection.dart';
 
 enum SelectableBlockHitTestBehavior {
   text,
@@ -27,6 +28,7 @@ class SelectableBlockSpec {
     this.selectionRectResolver,
     this.textOffsetResolver,
     this.selectionUnitRangeResolver,
+    this.selectionStructure,
     this.selectionPaintOrder = SelectableBlockSelectionPaintOrder.behindChild,
     this.selectionColor,
     this.repaintListenable,
@@ -56,6 +58,7 @@ class SelectableBlockSpec {
     Offset? localPosition,
     DocumentPosition position,
   )? selectionUnitRangeResolver;
+  final StructuredBlockSelection? selectionStructure;
   final SelectableBlockSelectionPaintOrder selectionPaintOrder;
   final Color? selectionColor;
   final Listenable? repaintListenable;
@@ -145,6 +148,13 @@ class SelectableMarkdownBlockState extends State<SelectableMarkdownBlock> {
   int get textLength => widget.spec.plainText.length;
 
   DocumentSelection selectWholeBlock() {
+    final structure = widget.spec.selectionStructure;
+    if (structure != null && !structure.isEmpty) {
+      return DocumentSelection(
+        base: structure.startPosition(blockIndex: widget.blockIndex),
+        extent: structure.endPosition(blockIndex: widget.blockIndex),
+      );
+    }
     return DocumentSelection(
       base: DocumentPosition(
         blockIndex: widget.blockIndex,
@@ -163,6 +173,17 @@ class SelectableMarkdownBlockState extends State<SelectableMarkdownBlock> {
     if (widget.spec.hitTestBehavior == SelectableBlockHitTestBehavior.block ||
         widget.spec.plainText.isEmpty) {
       return selectWholeBlock();
+    }
+    final structure = widget.spec.selectionStructure;
+    if (structure != null) {
+      final range = structure.wordRangeForPosition(
+        blockIndex: widget.blockIndex,
+        position: position,
+        isWordCharacter: _isWordCharacter,
+      );
+      if (range != null) {
+        return DocumentSelection(base: range.start, extent: range.end);
+      }
     }
     var start = position.textOffset < 0
         ? 0
@@ -225,6 +246,18 @@ class SelectableMarkdownBlockState extends State<SelectableMarkdownBlock> {
     if (range == null) {
       return selectWholeBlock();
     }
+    final structure = widget.spec.selectionStructure;
+    if (structure != null) {
+      final semanticRange = structure.rangeForDisplayedOffsets(
+        blockIndex: widget.blockIndex,
+        startOffset: range.start.textOffset,
+        endOffset: range.end.textOffset,
+      );
+      return DocumentSelection(
+        base: semanticRange.start,
+        extent: semanticRange.end,
+      );
+    }
     return DocumentSelection(base: range.start, extent: range.end);
   }
 
@@ -238,6 +271,33 @@ class SelectableMarkdownBlockState extends State<SelectableMarkdownBlock> {
       return null;
     }
     return _hitTestLocal(localPosition, renderObject.size);
+  }
+
+  DocumentPosition? hitTestTextGlobal(Offset globalPosition) {
+    final renderObject = context.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.hasSize) {
+      return null;
+    }
+    final localPosition = renderObject.globalToLocal(globalPosition);
+    if (!(Offset.zero & renderObject.size).contains(localPosition)) {
+      return null;
+    }
+    final position = _hitTestLocal(localPosition, renderObject.size);
+    if (position == null) {
+      return null;
+    }
+    if (widget.spec.hitTestBehavior == SelectableBlockHitTestBehavior.block) {
+      return position;
+    }
+    if (!_localPositionHitsRenderedText(
+      localPosition,
+      renderObject.size,
+      position,
+      globalPosition,
+    )) {
+      return null;
+    }
+    return position;
   }
 
   DocumentPosition boundaryPositionForGlobal(Offset globalPosition) {
@@ -255,6 +315,18 @@ class SelectableMarkdownBlockState extends State<SelectableMarkdownBlock> {
     if ((Offset.zero & renderObject.size).contains(localPosition)) {
       return _hitTestLocal(localPosition, renderObject.size) ??
           _edgePosition(preferEnd: preferEnd);
+    }
+    final verticallyInside =
+        localPosition.dy >= 0 && localPosition.dy <= renderObject.size.height;
+    if (verticallyInside) {
+      final clampedLocalPosition = Offset(
+        localPosition.dx.clamp(0.0, renderObject.size.width).toDouble(),
+        localPosition.dy.clamp(0.0, renderObject.size.height).toDouble(),
+      );
+      final position = _hitTestLocal(clampedLocalPosition, renderObject.size);
+      if (position != null) {
+        return position;
+      }
     }
     if (localPosition.dy < 0 || localPosition.dx < 0) {
       return _edgePosition(preferEnd: false);
@@ -323,6 +395,13 @@ class SelectableMarkdownBlockState extends State<SelectableMarkdownBlock> {
           : resolvedOffset > widget.spec.plainText.length
               ? widget.spec.plainText.length
               : resolvedOffset;
+      final structure = widget.spec.selectionStructure;
+      if (structure != null) {
+        return structure.positionForDisplayedOffset(
+          blockIndex: widget.blockIndex,
+          displayedOffset: textOffset,
+        );
+      }
       return DocumentPosition(
         blockIndex: widget.blockIndex,
         path: const PathInBlock(<int>[0]),
@@ -355,6 +434,13 @@ class SelectableMarkdownBlockState extends State<SelectableMarkdownBlock> {
         : position.offset > widget.spec.plainText.length
             ? widget.spec.plainText.length
             : position.offset;
+    final structure = widget.spec.selectionStructure;
+    if (structure != null) {
+      return structure.positionForDisplayedOffset(
+        blockIndex: widget.blockIndex,
+        displayedOffset: textOffset,
+      );
+    }
     return DocumentPosition(
       blockIndex: widget.blockIndex,
       path: const PathInBlock(<int>[0]),
@@ -394,7 +480,41 @@ class SelectableMarkdownBlockState extends State<SelectableMarkdownBlock> {
     );
   }
 
+  bool _localPositionHitsRenderedText(
+    Offset localPosition,
+    Size size,
+    DocumentPosition position,
+    Offset globalPosition,
+  ) {
+    final selectionRectResolver = widget.spec.selectionRectResolver;
+    if (selectionRectResolver == null || widget.spec.plainText.isEmpty) {
+      return true;
+    }
+
+    final selectionUnit = selectSelectionUnit(
+      position,
+      globalPosition: globalPosition,
+    );
+    final rects = selectionRectResolver(
+      context,
+      size,
+      selectionUnit.normalizedRange,
+    );
+    for (final rect in rects) {
+      if (rect.contains(localPosition)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   DocumentPosition _edgePosition({required bool preferEnd}) {
+    final structure = widget.spec.selectionStructure;
+    if (structure != null && !structure.isEmpty) {
+      return preferEnd
+          ? structure.endPosition(blockIndex: widget.blockIndex)
+          : structure.startPosition(blockIndex: widget.blockIndex);
+    }
     return DocumentPosition(
       blockIndex: widget.blockIndex,
       path: const PathInBlock(<int>[0]),
