@@ -386,6 +386,73 @@ class MarkdownDescriptorExtractor {
     return joined;
   }
 
+  DocumentRange? resolveSelectionUnitRange(
+    DocumentPosition position,
+    BlockNode block, {
+    int baseOffset = 0,
+    int indentLevel = 0,
+  }) {
+    switch (block.kind) {
+      case MarkdownBlockKind.quote:
+        final quoteBlock = block as QuoteBlock;
+        return _resolveQuoteBlockSelectionRange(
+          position,
+          quoteBlock,
+          indexedBlocks: buildIndexedBlockDescriptors(
+            quoteBlock.children,
+            separator: '\n\n',
+          ),
+          baseOffset: baseOffset,
+        );
+      case MarkdownBlockKind.orderedList:
+      case MarkdownBlockKind.unorderedList:
+        final listBlock = block as ListBlock;
+        return _resolveListItemSelectionRange(
+          position,
+          listBlock,
+          indexedItems: buildIndexedListSelectionDescriptors(
+            listBlock,
+            indentLevel: indentLevel,
+          ),
+          baseOffset: baseOffset,
+        );
+      case MarkdownBlockKind.footnoteList:
+        return resolveSelectionUnitRange(
+          position,
+          footnoteListAsOrderedList(block as FootnoteListBlock),
+          baseOffset: baseOffset,
+          indentLevel: indentLevel,
+        );
+      case MarkdownBlockKind.table:
+        return resolveTableCellSelectionRange(
+          position,
+          block as TableBlock,
+          baseOffset: baseOffset,
+        );
+      default:
+        return null;
+    }
+  }
+
+  DocumentRange? resolveTableCellSelectionRange(
+    DocumentPosition position,
+    TableBlock block, {
+    int baseOffset = 0,
+  }) {
+    final cellRange = _tableCellTextRange(
+      block,
+      position.textOffset - baseOffset,
+    );
+    if (cellRange == null) {
+      return null;
+    }
+    return _rangeForBlockOffsets(
+      blockIndex: position.blockIndex,
+      startOffset: baseOffset + cellRange.start,
+      endOffset: baseOffset + cellRange.end,
+    );
+  }
+
   SelectableTextDescriptor buildImageCaptionDescriptor(ImageBlock block) {
     final caption = imageCaptionText(block);
     return plainTextDescriptor(caption, imageCaptionStyle);
@@ -518,6 +585,193 @@ class MarkdownDescriptorExtractor {
       plainText: buffer.toString(),
       span: TextSpan(children: children),
     );
+  }
+
+  DocumentRange? _resolveListItemSelectionRange(
+    DocumentPosition position,
+    ListBlock block, {
+    required List<IndexedListSelectionDescriptor> indexedItems,
+    int baseOffset = 0,
+  }) {
+    if (indexedItems.isEmpty) {
+      return null;
+    }
+    final offset = position.textOffset;
+    for (final item in indexedItems) {
+      final start = baseOffset + item.startOffset;
+      final end = start + item.descriptor.plainText.length;
+      if (offset >= start && offset <= end) {
+        final childUnit = _resolveListItemChildSelectionRange(
+          position,
+          block.items[item.itemIndex].children,
+          itemStartOffset: start,
+          contentBaseOffset: start + item.prefixLength,
+          indentLevel: item.contentIndentLevel,
+          continuationIndent: item.prefixLength,
+        );
+        if (childUnit != null) {
+          return childUnit;
+        }
+        return _rangeForBlockOffsets(
+          blockIndex: position.blockIndex,
+          startOffset: start,
+          endOffset: end,
+        );
+      }
+    }
+    final last = indexedItems.last;
+    return _rangeForBlockOffsets(
+      blockIndex: position.blockIndex,
+      startOffset: baseOffset + last.startOffset,
+      endOffset:
+          baseOffset + last.startOffset + last.descriptor.plainText.length,
+    );
+  }
+
+  DocumentRange? _resolveQuoteBlockSelectionRange(
+    DocumentPosition position,
+    QuoteBlock block, {
+    required List<IndexedBlockDescriptor> indexedBlocks,
+    int baseOffset = 0,
+  }) {
+    if (indexedBlocks.isEmpty) {
+      return null;
+    }
+    final offset = position.textOffset;
+    for (final entry in indexedBlocks) {
+      final start = baseOffset + entry.startOffset;
+      final end = start + entry.descriptor.plainText.length;
+      if (offset >= start && offset <= end) {
+        final nested = resolveSelectionUnitRange(
+          position,
+          entry.block,
+          baseOffset: start,
+          indentLevel: entry.indentLevel,
+        );
+        if (nested != null) {
+          return nested;
+        }
+        return _rangeForBlockOffsets(
+          blockIndex: position.blockIndex,
+          startOffset: start,
+          endOffset: end,
+        );
+      }
+    }
+    final last = indexedBlocks.last;
+    return _rangeForBlockOffsets(
+      blockIndex: position.blockIndex,
+      startOffset: baseOffset + last.startOffset,
+      endOffset:
+          baseOffset + last.startOffset + last.descriptor.plainText.length,
+    );
+  }
+
+  DocumentRange? _resolveListItemChildSelectionRange(
+    DocumentPosition position,
+    List<BlockNode> blocks, {
+    required int itemStartOffset,
+    required int contentBaseOffset,
+    required int indentLevel,
+    int continuationIndent = 0,
+  }) {
+    final indexedBlocks = buildIndexedBlockDescriptors(
+      blocks,
+      indentLevel: indentLevel,
+      separator: '\n',
+    );
+    if (indexedBlocks.isEmpty) {
+      return null;
+    }
+    final offset = position.textOffset;
+    for (final entry in indexedBlocks) {
+      final rawChildBaseOffset = contentBaseOffset + entry.startOffset;
+      final rawChildEndOffset =
+          rawChildBaseOffset + entry.descriptor.plainText.length;
+      if (offset < rawChildBaseOffset || offset > rawChildEndOffset) {
+        continue;
+      }
+
+      final childUnit = resolveSelectionUnitRange(
+            position,
+            entry.block,
+            baseOffset: rawChildBaseOffset +
+                (entry.childIndex > 0 ? continuationIndent : 0),
+            indentLevel: entry.indentLevel,
+          ) ??
+          _rangeForBlockOffsets(
+            blockIndex: position.blockIndex,
+            startOffset: rawChildBaseOffset,
+            endOffset: rawChildEndOffset,
+          );
+
+      if (entry.childIndex == 0 && _isLeadListTextBlock(entry.block)) {
+        return _rangeForBlockOffsets(
+          blockIndex: position.blockIndex,
+          startOffset: itemStartOffset,
+          endOffset: childUnit.end.textOffset,
+        );
+      }
+      return childUnit;
+    }
+    return null;
+  }
+
+  bool _isLeadListTextBlock(BlockNode block) {
+    switch (block.kind) {
+      case MarkdownBlockKind.paragraph:
+      case MarkdownBlockKind.heading:
+        return true;
+      case MarkdownBlockKind.quote:
+      case MarkdownBlockKind.orderedList:
+      case MarkdownBlockKind.unorderedList:
+      case MarkdownBlockKind.definitionList:
+      case MarkdownBlockKind.footnoteList:
+      case MarkdownBlockKind.codeBlock:
+      case MarkdownBlockKind.table:
+      case MarkdownBlockKind.image:
+      case MarkdownBlockKind.thematicBreak:
+        return false;
+    }
+  }
+
+  DocumentRange _rangeForBlockOffsets({
+    required int blockIndex,
+    required int startOffset,
+    required int endOffset,
+  }) {
+    return DocumentRange(
+      start: DocumentPosition(
+        blockIndex: blockIndex,
+        path: const PathInBlock(<int>[0]),
+        textOffset: startOffset,
+      ),
+      end: DocumentPosition(
+        blockIndex: blockIndex,
+        path: const PathInBlock(<int>[0]),
+        textOffset: endOffset,
+      ),
+    );
+  }
+
+  ({int start, int end})? _tableCellTextRange(
+      TableBlock block, int textOffset) {
+    var currentOffset = 0;
+    for (var rowIndex = 0; rowIndex < block.rows.length; rowIndex++) {
+      final row = block.rows[rowIndex];
+      for (var columnIndex = 0; columnIndex < row.cells.length; columnIndex++) {
+        final cellLength = MarkdownInlineBuilder.flattenInlineText(
+          row.cells[columnIndex].inlines,
+        ).length;
+        final cellStart = currentOffset;
+        final cellEnd = cellStart + cellLength;
+        if (textOffset <= cellEnd) {
+          return (start: cellStart, end: cellEnd);
+        }
+        currentOffset = cellEnd + 1;
+      }
+    }
+    return null;
   }
 
   SelectableTextDescriptor prefixSelectableTextDescriptor(

@@ -1122,8 +1122,9 @@ class _MarkdownAstBuilder {
     final inlines = <InlineNode>[];
     for (final node in nodes ?? const <md.Node>[]) {
       if (node is md.Text) {
-        if (node.text.isNotEmpty) {
-          inlines.add(TextInline(text: node.text));
+        final normalizedText = _normalizeInlineText(node.text);
+        if (normalizedText.isNotEmpty) {
+          inlines.add(TextInline(text: normalizedText));
         }
         continue;
       }
@@ -1195,8 +1196,9 @@ class _MarkdownAstBuilder {
           break;
         default:
           final children = _buildInlines(node.children);
-          if (children.isEmpty && node.textContent.isNotEmpty) {
-            inlines.add(TextInline(text: node.textContent));
+          final normalizedText = _normalizeInlineText(node.textContent);
+          if (children.isEmpty && normalizedText.isNotEmpty) {
+            inlines.add(TextInline(text: normalizedText));
           } else {
             inlines.addAll(children);
           }
@@ -1204,6 +1206,13 @@ class _MarkdownAstBuilder {
       }
     }
     return inlines;
+  }
+
+  String _normalizeInlineText(String text) {
+    if (!text.contains('\n')) {
+      return text;
+    }
+    return text.replaceAll(RegExp(r'\n[ \t]+'), '\n');
   }
 
   MarkdownTableColumnAlignment _parseAlignment(String? raw) {

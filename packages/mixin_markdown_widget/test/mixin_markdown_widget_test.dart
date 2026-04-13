@@ -3996,6 +3996,684 @@ const veryLongValueName = 42;
     expect(selectionController.selectedPlainText, '42');
   });
 
+  testWidgets('triple click inside wrapped paragraph selects the current line',
+      (
+    tester,
+  ) async {
+    final selectionController = MarkdownSelectionController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 120,
+              child: MarkdownWidget(
+                data: 'alpha  \nbeta  \ngamma',
+                selectionController: selectionController,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final paragraphFinder = find.textContaining('alpha', findRichText: true);
+    final rect = tester.getRect(paragraphFinder);
+    final target = Offset(rect.center.dx, rect.top + rect.height / 2);
+
+    await tester.tapAt(target);
+    await tester.pump();
+    await tester.tapAt(target);
+    await tester.pump();
+    await tester.tapAt(target);
+    await tester.pump();
+
+    expect(selectionController.hasSelection, isTrue);
+    expect(selectionController.selectedPlainText, 'beta');
+  });
+
+  testWidgets(
+      'triple click on wrapped kbd paragraph selects only the first visual line',
+      (tester) async {
+    final selectionController = MarkdownSelectionController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 170,
+              child: MarkdownWidget(
+                data:
+                    'Press <kbd>Ctrl</kbd> + <kbd>C</kbd> to copy the current selection quickly.',
+                selectionController: selectionController,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final blockFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is SelectableMarkdownBlock &&
+          widget.spec.plainText.contains('Press Ctrl + C to copy'),
+    );
+    final block = tester.widget<SelectableMarkdownBlock>(blockFinder);
+    final blockElement = tester.element(blockFinder);
+    final blockRenderBox = tester.renderObject<RenderBox>(blockFinder);
+
+    final fullRects = block.spec.selectionRectResolver!(
+      blockElement,
+      blockRenderBox.size,
+      DocumentRange(
+        start: const DocumentPosition(
+          blockIndex: 0,
+          path: PathInBlock(<int>[0]),
+          textOffset: 0,
+        ),
+        end: DocumentPosition(
+          blockIndex: 0,
+          path: const PathInBlock(<int>[0]),
+          textOffset: block.spec.plainText.length,
+        ),
+      ),
+    )..sort((a, b) {
+        final topCompare = a.top.compareTo(b.top);
+        if (topCompare != 0) {
+          return topCompare;
+        }
+        return a.left.compareTo(b.left);
+      });
+
+    expect(fullRects.length, greaterThanOrEqualTo(2));
+
+    bool sameVisualLine(Rect a, Rect b) {
+      return (a.top - b.top).abs() <= 1.0 && (a.bottom - b.bottom).abs() <= 1.0;
+    }
+
+    final firstLineRects = fullRects
+        .where((rect) => sameVisualLine(rect, fullRects.first))
+        .toList(growable: false);
+    final secondLineAnchor =
+        fullRects.firstWhere((rect) => !sameVisualLine(rect, fullRects.first));
+    final secondLineRects = fullRects
+        .where((rect) => sameVisualLine(rect, secondLineAnchor))
+        .toList(growable: false);
+    final secondLineTop =
+        secondLineRects.map((rect) => rect.top).reduce(math.min);
+    final secondLineStartOffset = block.spec.textOffsetResolver!(
+      blockElement,
+      blockRenderBox.size,
+      Offset(secondLineRects.first.left + 1, secondLineRects.first.center.dy),
+    );
+
+    final target = blockRenderBox.localToGlobal(firstLineRects.first.center);
+
+    await tester.tapAt(target);
+    await tester.pump();
+    await tester.tapAt(target);
+    await tester.pump();
+    await tester.tapAt(target);
+    await tester.pump();
+
+    expect(selectionController.hasSelection, isTrue);
+    expect(selectionController.selectedPlainText.length,
+        lessThan(block.spec.plainText.length));
+
+    final selectionRange = selectionController.normalizedRange!;
+    expect(secondLineStartOffset, isNotNull);
+    expect(
+      selectionRange.end.textOffset,
+      lessThanOrEqualTo(secondLineStartOffset!),
+    );
+
+    final selectionRects = block.spec.selectionRectResolver!(
+      blockElement,
+      blockRenderBox.size,
+      selectionRange,
+    );
+    expect(selectionRects, isNotEmpty);
+    for (final rect in selectionRects) {
+      expect(rect.bottom, lessThanOrEqualTo(secondLineTop + 0.5));
+    }
+  });
+
+  testWidgets('triple click inside a code block does not throw',
+      (tester) async {
+    final selectionController = MarkdownSelectionController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: '''
+```dart
+const value = 42;
+return value;
+```
+''',
+            selectionController: selectionController,
+          ),
+        ),
+      ),
+    );
+
+    final target = tester.getCenter(find.textContaining('const value'));
+
+    await tester.tapAt(target);
+    await tester.pump();
+    await tester.tapAt(target);
+    await tester.pump();
+    await tester.tapAt(target);
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+    expect(selectionController.hasSelection, isTrue);
+  });
+
+  testWidgets('triple click inside a rich list item selects the current item',
+      (tester) async {
+    final selectionController = MarkdownSelectionController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: '''
+* *Italicized text*
+* **Bold emphasis**
+* ***Bold and italic***
+* ~~Strikethrough~~
+* `inline code snippets`
+* Link to [Flutter](https://flutter.dev), and an auto-link: <https://github.com>
+''',
+            selectionController: selectionController,
+          ),
+        ),
+      ),
+    );
+
+    final target = tester.getCenter(find.text('Bold emphasis'));
+
+    await tester.tapAt(target);
+    await tester.pump();
+    await tester.tapAt(target);
+    await tester.pump();
+    await tester.tapAt(target);
+    await tester.pump();
+
+    expect(selectionController.hasSelection, isTrue);
+    expect(selectionController.selectedPlainText, '- Bold emphasis');
+  });
+
+  testWidgets(
+      'triple click on a parent list item does not include its nested sublist',
+      (tester) async {
+    final selectionController = MarkdownSelectionController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: '''
+* Outer item
+  * Inner item
+''',
+            selectionController: selectionController,
+          ),
+        ),
+      ),
+    );
+
+    final target = tester.getCenter(find.text('Outer item'));
+
+    await tester.tapAt(target);
+    await tester.pump();
+    await tester.tapAt(target);
+    await tester.pump();
+    await tester.tapAt(target);
+    await tester.pump();
+
+    expect(selectionController.hasSelection, isTrue);
+    expect(selectionController.selectedPlainText, '- Outer item');
+  });
+
+  testWidgets(
+      'triple click inside a list item code block selects the code block only',
+      (tester) async {
+    final selectionController = MarkdownSelectionController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: '''
+* Parent item
+
+      const child = 42;
+''',
+            selectionController: selectionController,
+          ),
+        ),
+      ),
+    );
+
+    final target = tester.getCenter(find.textContaining('const child'));
+
+    await tester.tapAt(target);
+    await tester.pump();
+    await tester.tapAt(target);
+    await tester.pump();
+    await tester.tapAt(target);
+    await tester.pump();
+
+    expect(selectionController.hasSelection, isTrue);
+    expect(selectionController.selectedPlainText, 'const child = 42;');
+  });
+
+  testWidgets(
+      'triple click on ordered list lead line selects only that line with marker',
+      (tester) async {
+    final selectionController = MarkdownSelectionController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 500,
+              child: MarkdownWidget(
+                data: r'''
+### Lists containing advanced blocks
+
+1.  **Code implementation:**
+    Here is a quick way to compute a sum in JavaScript:
+    
+    ```javascript
+    function sum(a, b) {
+      return a + b;
+    }
+    console.log(sum(5, 10)); // 15
+    ```
+
+2.  **Mathematical definitions:**
+    And here is the sum expressed mathematically:
+    
+    $$
+    \sum_{i=1}^{n} i = \frac{n(n+1)}{2}
+    $$
+    
+    > Blockquotes can also live gracefully inside list items. The selection background will adapt to the indentation perfectly.
+''',
+                selectionController: selectionController,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final leadFinder =
+        find.textContaining('Code implementation', findRichText: true);
+    final leadRect = tester.getRect(leadFinder);
+    final target = Offset(
+      leadRect.left + 48,
+      leadRect.top + 10,
+    );
+
+    await tester.tapAt(target);
+    await tester.pump();
+    await tester.tapAt(target);
+    await tester.pump();
+    await tester.tapAt(target);
+    await tester.pump();
+
+    expect(selectionController.hasSelection, isTrue);
+    expect(selectionController.selectedPlainText, '1. Code implementation:');
+  });
+
+  testWidgets(
+      'double click on ordered list continuation text selects the tapped word',
+      (tester) async {
+    final selectionController = MarkdownSelectionController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 900,
+              child: MarkdownWidget(
+                data: '''
+1. **Code implementation:**
+    Here is a quick way to compute a sum in JavaScript:
+
+    ```javascript
+    function sum(a, b) {
+      return a + b;
+    }
+    console.log(sum(5, 10)); // 15
+    ```
+''',
+                selectionController: selectionController,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final sentenceFinder =
+        find.textContaining('Here is a quick way', findRichText: true);
+    final richText = tester.widget<RichText>(sentenceFinder.first);
+    final renderBox = tester.renderObject<RenderBox>(sentenceFinder.first);
+    final painter = TextPainter(
+      text: richText.text,
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: renderBox.size.width);
+    final sentenceText = richText.text.toPlainText();
+    final quickStart = sentenceText.indexOf('quick');
+    final quickEnd = quickStart + 'quick'.length;
+    final quickStartOffset = painter.getOffsetForCaret(
+      TextPosition(offset: quickStart),
+      Rect.zero,
+    );
+    final quickEndOffset = painter.getOffsetForCaret(
+      TextPosition(offset: quickEnd),
+      Rect.zero,
+    );
+    final target = renderBox.localToGlobal(
+      Offset(
+        (quickStartOffset.dx + quickEndOffset.dx) / 2,
+        quickStartOffset.dy + painter.preferredLineHeight / 2,
+      ),
+    );
+
+    await tester.tapAt(target);
+    await tester.pump();
+    await tester.tapAt(target);
+    await tester.pump();
+
+    expect(selectionController.hasSelection, isTrue);
+    expect(selectionController.selectedPlainText, 'quick');
+  });
+
+  testWidgets(
+      'triple click on ordered list continuation text selects the current visual line',
+      (tester) async {
+    final selectionController = MarkdownSelectionController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 900,
+              child: MarkdownWidget(
+                data: '''
+1. **Code implementation:**
+    Here is a quick way to compute a sum in JavaScript:
+
+    ```javascript
+    function sum(a, b) {
+      return a + b;
+    }
+    console.log(sum(5, 10)); // 15
+    ```
+''',
+                selectionController: selectionController,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final sentenceFinder =
+        find.textContaining('Here is a quick way', findRichText: true);
+    final richText = tester.widget<RichText>(sentenceFinder.first);
+    final renderBox = tester.renderObject<RenderBox>(sentenceFinder.first);
+    final painter = TextPainter(
+      text: richText.text,
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: renderBox.size.width);
+    final sentenceText = richText.text.toPlainText();
+    final quickStart = sentenceText.indexOf('quick');
+    final quickEnd = quickStart + 'quick'.length;
+    final expectedLineBoundary = painter.getLineBoundary(
+      TextPosition(offset: quickStart),
+    );
+    final expectedLine = sentenceText
+        .substring(
+          expectedLineBoundary.start,
+          expectedLineBoundary.end,
+        )
+        .trimRight();
+    final quickStartOffset = painter.getOffsetForCaret(
+      TextPosition(offset: quickStart),
+      Rect.zero,
+    );
+    final quickEndOffset = painter.getOffsetForCaret(
+      TextPosition(offset: quickEnd),
+      Rect.zero,
+    );
+    final target = renderBox.localToGlobal(
+      Offset(
+        (quickStartOffset.dx + quickEndOffset.dx) / 2,
+        quickStartOffset.dy + painter.preferredLineHeight / 2,
+      ),
+    );
+
+    await tester.tapAt(target);
+    await tester.pump();
+    await tester.tapAt(target);
+    await tester.pump();
+    await tester.tapAt(target);
+    await tester.pump();
+
+    expect(selectionController.hasSelection, isTrue);
+    expect(selectionController.selectedPlainText, expectedLine);
+  });
+
+  testWidgets(
+      'triple click on fenced code inside ordered list selects the current code line',
+      (tester) async {
+    final selectionController = MarkdownSelectionController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Align(
+            alignment: Alignment.topLeft,
+            child: SizedBox(
+              width: 900,
+              child: MarkdownWidget(
+                data: '''
+1. **Code implementation:**
+    Here is a quick way to compute a sum in JavaScript:
+
+    ```javascript
+    function sum(a, b) {
+      return a + b;
+    }
+    console.log(sum(5, 10)); // 15
+    ```
+''',
+                selectionController: selectionController,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final codeFinder = find.textContaining('function sum', findRichText: true);
+    final codeRect = tester.getRect(codeFinder);
+    final target = Offset(
+      codeRect.left + 120,
+      codeRect.top + codeRect.height * 0.42,
+    );
+
+    await tester.tapAt(target);
+    await tester.pump();
+    await tester.tapAt(target);
+    await tester.pump();
+    await tester.tapAt(target);
+    await tester.pump();
+
+    expect(selectionController.hasSelection, isTrue);
+    expect(selectionController.selectedPlainText, '  return a + b;');
+
+    // Verify selection background rects are within the selected code line.
+    final listFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is SelectableMarkdownBlock &&
+          widget.spec.plainText.contains('Code implementation'),
+    );
+    final listWidget = tester.widget<SelectableMarkdownBlock>(listFinder);
+    final listElement = tester.element(listFinder);
+    final listRenderBox = tester.renderObject<RenderBox>(listFinder);
+    final selectionRange = selectionController.normalizedRange!;
+    final selectionRects = listWidget.spec.selectionRectResolver!.call(
+      listElement,
+      listRenderBox.size,
+      selectionRange,
+    );
+    expect(selectionRects, isNotEmpty);
+
+    final listOrigin = listRenderBox.localToGlobal(Offset.zero);
+    final globalSelectionRects = selectionRects
+        .map((rect) => rect.shift(listOrigin))
+        .toList(growable: false);
+
+    // The selection rects must overlap the "return a + b" line vertically.
+    final codeRenderBox = tester.renderObject<RenderBox>(codeFinder);
+    final codeTextRect =
+        codeRenderBox.localToGlobal(Offset.zero) & codeRenderBox.size;
+
+    // Compute the vertical band of the "return a + b;" line by using
+    // proportional line height within the code block text widget.
+    // The code block has 4 lines; "return a + b;" is the second line.
+    final lineHeight = codeTextRect.height / 4;
+    final returnLineTop = codeTextRect.top + lineHeight;
+    final returnLineBottom = codeTextRect.top + lineHeight * 2;
+
+    for (final rect in globalSelectionRects) {
+      expect(
+        rect.top >= returnLineTop - 2 && rect.bottom <= returnLineBottom + 2,
+        isTrue,
+        reason: 'Selection rect $rect should be within the "return a + b;" '
+            'line band ($returnLineTop..$returnLineBottom), '
+            'but extends outside it.',
+      );
+    }
+  });
+
+  testWidgets('triple click inside a quote selects the current quoted block', (
+    tester,
+  ) async {
+    final selectionController = MarkdownSelectionController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: '''
+> First quoted paragraph
+>
+> Second quoted paragraph
+''',
+            selectionController: selectionController,
+          ),
+        ),
+      ),
+    );
+
+    final target = tester.getCenter(find.text('Second quoted paragraph'));
+
+    await tester.tapAt(target);
+    await tester.pump();
+    await tester.tapAt(target);
+    await tester.pump();
+    await tester.tapAt(target);
+    await tester.pump();
+
+    expect(selectionController.hasSelection, isTrue);
+    expect(selectionController.selectedPlainText, 'Second quoted paragraph');
+  });
+
+  testWidgets('triple click inside a nested list selects the innermost item', (
+    tester,
+  ) async {
+    final selectionController = MarkdownSelectionController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: '''
+* Outer item
+  * Inner item
+''',
+            selectionController: selectionController,
+          ),
+        ),
+      ),
+    );
+
+    final target = tester.getCenter(find.text('Inner item'));
+
+    await tester.tapAt(target);
+    await tester.pump();
+    await tester.tapAt(target);
+    await tester.pump();
+    await tester.tapAt(target);
+    await tester.pump();
+
+    expect(selectionController.hasSelection, isTrue);
+    expect(selectionController.selectedPlainText, '  - Inner item');
+  });
+
+  testWidgets('triple click inside a nested quote selects the innermost quote',
+      (
+    tester,
+  ) async {
+    final selectionController = MarkdownSelectionController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: '''
+> Outer quote
+> > Inner quote
+''',
+            selectionController: selectionController,
+          ),
+        ),
+      ),
+    );
+
+    final target = tester.getCenter(find.text('Inner quote'));
+
+    await tester.tapAt(target);
+    await tester.pump();
+    await tester.tapAt(target);
+    await tester.pump();
+    await tester.tapAt(target);
+    await tester.pump();
+
+    expect(selectionController.hasSelection, isTrue);
+    expect(selectionController.selectedPlainText, 'Inner quote');
+  });
+
   testWidgets('dragging into a table selects the table block content', (
     tester,
   ) async {

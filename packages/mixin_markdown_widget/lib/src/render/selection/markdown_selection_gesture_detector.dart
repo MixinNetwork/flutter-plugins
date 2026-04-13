@@ -12,8 +12,10 @@ typedef MarkdownHitTestPositionCallback = DocumentPosition? Function(
 });
 typedef MarkdownSelectWordCallback = void Function(DocumentPosition position);
 typedef MarkdownSelectBlockCallback = void Function(int blockIndex);
-typedef MarkdownSelectTableCellCallback = void Function(
-    DocumentPosition position);
+typedef MarkdownSelectSelectionUnitCallback = void Function(
+  Offset globalPosition,
+  DocumentPosition position,
+);
 
 class MarkdownSelectionGestureDetector extends StatefulWidget {
   const MarkdownSelectionGestureDetector({
@@ -28,7 +30,7 @@ class MarkdownSelectionGestureDetector extends StatefulWidget {
     required this.hitTestPosition,
     required this.selectWordAt,
     required this.selectBlockAt,
-    required this.selectTableCellAt,
+    required this.selectSelectionUnitAt,
   });
 
   final Widget child;
@@ -41,7 +43,7 @@ class MarkdownSelectionGestureDetector extends StatefulWidget {
   final MarkdownHitTestPositionCallback hitTestPosition;
   final MarkdownSelectWordCallback selectWordAt;
   final MarkdownSelectBlockCallback selectBlockAt;
-  final MarkdownSelectTableCellCallback selectTableCellAt;
+  final MarkdownSelectSelectionUnitCallback selectSelectionUnitAt;
 
   @override
   State<MarkdownSelectionGestureDetector> createState() =>
@@ -105,7 +107,7 @@ class _MarkdownSelectionGestureDetectorState
 
     _updateTapCount(event);
     if (exactPosition != null && _consecutiveTapCount >= 3) {
-      widget.selectTableCellAt(position);
+      widget.selectSelectionUnitAt(event.position, position);
       _isDraggingSelection = false;
       _dragBasePosition = null;
       _dragStartPointerPosition = null;

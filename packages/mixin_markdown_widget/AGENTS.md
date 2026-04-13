@@ -54,12 +54,15 @@ The public entrypoint is [packages/mixin_markdown_widget/lib/mixin_markdown_widg
 - Selection is model-based: `DocumentPosition`, `DocumentSelection`, `DocumentRange`, and `TableCellSelection` must stay coherent with what is rendered.
 - `MarkdownPlainTextSerializer` defines copy semantics. If rendering or selection behavior changes, make sure serializer output still matches the logical selection.
 - Table text selection and table-cell selection are separate behaviors. Do not collapse them into one mechanism.
+- Recursive hit-test and selection-unit helpers for list/quote/table containers must return block-local displayed offsets or ranges; convert back to parent space exactly once at the parent boundary.
+- Double-click word selection and triple-click selection-unit resolution must stay aligned with the same offset mapping semantics used by drag selection.
 
 ### Pretext-backed text rules
 
 - Headings, paragraphs, list item text, quote text, and table cell text share pretext-backed inline rendering in important paths.
 - Pretext selection rectangles must use the rendered line box height (`lineHeight`) for top/bottom edges, not glyph box heights from `TextPainter`, or selection backgrounds will look vertically short.
 - If selection looks horizontally correct but vertically off, inspect `pretext_text_block.dart` first.
+- Pretext selection units should prefer the clicked visual line when local pointer geometry is available; if only a text offset is available, fall back to explicit newline boundaries from descriptor plain text.
 
 ### Nested quote and list geometry rules
 

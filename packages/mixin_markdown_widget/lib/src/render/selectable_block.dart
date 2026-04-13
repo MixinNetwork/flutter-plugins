@@ -26,6 +26,7 @@ class SelectableBlockSpec {
     this.highlightBorderRadius,
     this.selectionRectResolver,
     this.textOffsetResolver,
+    this.selectionUnitRangeResolver,
     this.selectionPaintOrder = SelectableBlockSelectionPaintOrder.behindChild,
     this.selectionColor,
     this.repaintListenable,
@@ -49,6 +50,12 @@ class SelectableBlockSpec {
     Size size,
     Offset localPosition,
   )? textOffsetResolver;
+  final DocumentRange? Function(
+    BuildContext context,
+    Size size,
+    Offset? localPosition,
+    DocumentPosition position,
+  )? selectionUnitRangeResolver;
   final SelectableBlockSelectionPaintOrder selectionPaintOrder;
   final Color? selectionColor;
   final Listenable? repaintListenable;
@@ -192,6 +199,33 @@ class SelectableMarkdownBlockState extends State<SelectableMarkdownBlock> {
         textOffset: end,
       ),
     );
+  }
+
+  DocumentSelection selectSelectionUnit(
+    DocumentPosition position, {
+    Offset? globalPosition,
+  }) {
+    if (widget.spec.hitTestBehavior == SelectableBlockHitTestBehavior.block ||
+        widget.spec.plainText.isEmpty) {
+      return selectWholeBlock();
+    }
+
+    final renderObject = context.findRenderObject();
+    final size = renderObject is RenderBox && renderObject.hasSize
+        ? renderObject.size
+        : Size.zero;
+    final localPosition = renderObject is RenderBox &&
+            renderObject.hasSize &&
+            globalPosition != null
+        ? renderObject.globalToLocal(globalPosition)
+        : null;
+    final range = widget.spec.selectionUnitRangeResolver
+            ?.call(context, size, localPosition, position) ??
+        _resolveLineRangeWithTextPainter(position, size);
+    if (range == null) {
+      return selectWholeBlock();
+    }
+    return DocumentSelection(base: range.start, extent: range.end);
   }
 
   DocumentPosition? hitTestGlobal(Offset globalPosition) {
@@ -383,6 +417,53 @@ class SelectableMarkdownBlockState extends State<SelectableMarkdownBlock> {
         .toDouble();
     textPainter.layout(maxWidth: maxWidth);
     return textPainter;
+  }
+
+  DocumentRange? _resolveLineRangeWithTextPainter(
+    DocumentPosition position,
+    Size size,
+  ) {
+    final textSpan = widget.spec.textSpan;
+    if (textSpan == null || _containsWidgetSpan(textSpan)) {
+      return null;
+    }
+    final textPainter = _buildTextPainter(size, Directionality.of(context));
+    final clampedOffset = position.textOffset < 0
+        ? 0
+        : position.textOffset > widget.spec.plainText.length
+            ? widget.spec.plainText.length
+            : position.textOffset;
+    late final TextRange boundary;
+    try {
+      boundary =
+          textPainter.getLineBoundary(TextPosition(offset: clampedOffset));
+    } on AssertionError {
+      return null;
+    }
+    return DocumentRange(
+      start: DocumentPosition(
+        blockIndex: widget.blockIndex,
+        path: const PathInBlock(<int>[0]),
+        textOffset: boundary.start,
+      ),
+      end: DocumentPosition(
+        blockIndex: widget.blockIndex,
+        path: const PathInBlock(<int>[0]),
+        textOffset: boundary.end,
+      ),
+    );
+  }
+
+  bool _containsWidgetSpan(InlineSpan span) {
+    var containsWidget = false;
+    span.visitChildren((child) {
+      if (child is WidgetSpan) {
+        containsWidget = true;
+        return false;
+      }
+      return true;
+    });
+    return containsWidget;
   }
 
   bool _isWordCharacter(String character) {

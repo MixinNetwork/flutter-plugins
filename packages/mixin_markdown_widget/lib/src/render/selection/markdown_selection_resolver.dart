@@ -169,6 +169,46 @@ class MarkdownSelectionResolver {
     );
   }
 
+  DocumentRange? resolveListSelectionUnitRange(
+    BuildContext context,
+    ListBlock block,
+    Offset localPosition,
+    DocumentPosition position,
+  ) {
+    final rootRenderObject = context.findRenderObject();
+    if (rootRenderObject is! RenderBox || !rootRenderObject.hasSize) {
+      return null;
+    }
+
+    return _resolveListSelectionUnitRangeInRoot(
+      context,
+      rootRenderObject: rootRenderObject,
+      block: block,
+      globalPosition: rootRenderObject.localToGlobal(localPosition),
+      blockIndex: position.blockIndex,
+    );
+  }
+
+  DocumentRange? resolveQuoteSelectionUnitRange(
+    BuildContext context,
+    QuoteBlock block,
+    Offset localPosition,
+    DocumentPosition position,
+  ) {
+    final rootRenderObject = context.findRenderObject();
+    if (rootRenderObject is! RenderBox || !rootRenderObject.hasSize) {
+      return null;
+    }
+
+    return _resolveQuoteSelectionUnitRangeInRoot(
+      context,
+      rootRenderObject: rootRenderObject,
+      block: block,
+      globalPosition: rootRenderObject.localToGlobal(localPosition),
+      blockIndex: position.blockIndex,
+    );
+  }
+
   int? _resolveListTextOffsetInRoot(
     BuildContext context, {
     required RenderBox rootRenderObject,
@@ -212,7 +252,10 @@ class MarkdownSelectionResolver {
           globalPosition: globalPosition,
         );
         if (contentRect.contains(globalPosition)) {
-          return entry.startOffset + entry.prefixLength + (childOffset ?? 0);
+          return _mapListContentOffsetToDisplayedItemOffset(
+            entry,
+            childOffset ?? 0,
+          );
         }
       }
 
@@ -263,15 +306,19 @@ class MarkdownSelectionResolver {
               ),
             );
             if (projectedChildOffset != null) {
-              return entry.startOffset +
-                  entry.prefixLength +
-                  projectedChildOffset;
+              return _mapListContentOffsetToDisplayedItemOffset(
+                entry,
+                projectedChildOffset,
+              );
             }
           }
           if (localRowPosition.dx <= markerExtent) {
             return entry.startOffset;
           }
-          return entry.startOffset + entry.prefixLength + (childOffset ?? 0);
+          return _mapListContentOffsetToDisplayedItemOffset(
+            entry,
+            childOffset ?? 0,
+          );
         }
       }
     }
@@ -284,6 +331,153 @@ class MarkdownSelectionResolver {
     }
 
     return null;
+  }
+
+  DocumentRange? _resolveListSelectionUnitRangeInRoot(
+    BuildContext context, {
+    required RenderBox rootRenderObject,
+    required ListBlock block,
+    required Offset globalPosition,
+    required int blockIndex,
+    int indentLevel = 0,
+  }) {
+    final indexedDescriptors = extractor.buildIndexedListSelectionDescriptors(
+      block,
+      indentLevel: indentLevel,
+    );
+    if (indexedDescriptors.isEmpty) {
+      return null;
+    }
+
+    final contentKeys = keysRegistry.listItemContentKeysFor(block);
+    final rowKeys = keysRegistry.listItemKeysFor(block);
+    final textDirection = Directionality.of(context);
+
+    for (final entry in indexedDescriptors) {
+      final itemStart = entry.startOffset;
+      final itemEnd = itemStart + entry.descriptor.plainText.length;
+      final rowContext = rowKeys[entry.itemIndex].currentContext;
+      final rowRenderObject = rowContext?.findRenderObject();
+      if (rowRenderObject is RenderBox && rowRenderObject.hasSize) {
+        final rowRect =
+            rowRenderObject.localToGlobal(Offset.zero) & rowRenderObject.size;
+        if (rowRect.contains(globalPosition)) {
+          final localRowPosition =
+              rowRenderObject.globalToLocal(globalPosition);
+          final markerExtent = _resolveListMarkerExtent(
+            block: block,
+            itemIndex: entry.itemIndex,
+            rowRenderObject: rowRenderObject,
+            contentRenderObject: null,
+          );
+          if (localRowPosition.dx <= markerExtent) {
+            return DocumentRange(
+              start: DocumentPosition(
+                blockIndex: blockIndex,
+                path: const PathInBlock(<int>[0]),
+                textOffset: itemStart,
+              ),
+              end: DocumentPosition(
+                blockIndex: blockIndex,
+                path: const PathInBlock(<int>[0]),
+                textOffset: itemEnd,
+              ),
+            );
+          }
+        }
+      }
+
+      final contentContext = contentKeys[entry.itemIndex].currentContext;
+      final contentRenderObject = contentContext?.findRenderObject();
+      if (contentRenderObject is! RenderBox || !contentRenderObject.hasSize) {
+        continue;
+      }
+      final contentRect = contentRenderObject.localToGlobal(Offset.zero) &
+          contentRenderObject.size;
+      if (!contentRect.contains(globalPosition)) {
+        continue;
+      }
+
+      final childEntries = extractor.buildIndexedBlockDescriptors(
+        block.items[entry.itemIndex].children,
+        indentLevel: entry.contentIndentLevel,
+        separator: '\n',
+      );
+      final childHit = _resolveIndexedBlockHitInRoot(
+        context,
+        rootRenderObject: rootRenderObject,
+        entries: childEntries,
+        childKeys: keysRegistry.listItemChildKeysFor(block, entry.itemIndex),
+        globalPosition: globalPosition,
+      );
+      if (childHit == null) {
+        continue;
+      }
+
+      final childUnit = _resolveNestedBlockSelectionUnitRangeInRoot(
+        context,
+        rootRenderObject: rootRenderObject,
+        hit: childHit,
+        globalPosition: globalPosition,
+        textDirection: textDirection,
+      );
+      if (childUnit == null) {
+        return null;
+      }
+
+      return _mapListChildRangeToItemRange(
+        blockIndex: blockIndex,
+        itemEntry: entry,
+        childEntry: childHit.entry,
+        childRange: childUnit,
+      );
+    }
+
+    return null;
+  }
+
+  DocumentRange? _resolveQuoteSelectionUnitRangeInRoot(
+    BuildContext context, {
+    required RenderBox rootRenderObject,
+    required QuoteBlock block,
+    required Offset globalPosition,
+    required int blockIndex,
+  }) {
+    final entries = extractor.buildIndexedBlockDescriptors(
+      block.children,
+      separator: '\n\n',
+    );
+    if (entries.isEmpty) {
+      return null;
+    }
+
+    final childHit = _resolveIndexedBlockHitInRoot(
+      context,
+      rootRenderObject: rootRenderObject,
+      entries: entries,
+      childKeys: keysRegistry.quoteChildKeysFor(block),
+      globalPosition: globalPosition,
+    );
+    if (childHit == null) {
+      return null;
+    }
+
+    final childUnit = _resolveNestedBlockSelectionUnitRangeInRoot(
+      context,
+      rootRenderObject: rootRenderObject,
+      hit: childHit,
+      globalPosition: globalPosition,
+      textDirection: Directionality.of(context),
+    );
+    if (childUnit == null) {
+      return null;
+    }
+
+    return _mapIndexedChildRangeToParentRange(
+      blockIndex: blockIndex,
+      childEntry: childHit.entry,
+      childRange: childUnit,
+    );
   }
 
   int resolveTextOffsetInBox(
@@ -341,6 +535,444 @@ class MarkdownSelectionResolver {
       size,
       textDirection,
     );
+  }
+
+  DocumentRange? _resolveNestedBlockSelectionUnitRangeInRoot(
+    BuildContext context, {
+    required RenderBox rootRenderObject,
+    required _ResolvedIndexedBlockHit hit,
+    required Offset globalPosition,
+    required TextDirection textDirection,
+  }) {
+    switch (hit.entry.block.kind) {
+      case MarkdownBlockKind.heading:
+      case MarkdownBlockKind.paragraph:
+      case MarkdownBlockKind.definitionList:
+        return _resolveDescriptorLineRange(
+          context,
+          descriptor: hit.entry.descriptor,
+          renderObject: hit.renderObject,
+          globalPosition: globalPosition,
+          textDirection: textDirection,
+        );
+      case MarkdownBlockKind.codeBlock:
+        return _resolveCodeBlockLineRange(
+          context,
+          block: hit.entry.block as CodeBlock,
+          descriptor: hit.entry.descriptor,
+          renderObject: hit.renderObject,
+          globalPosition: globalPosition,
+          textDirection: textDirection,
+        );
+      case MarkdownBlockKind.orderedList:
+      case MarkdownBlockKind.unorderedList:
+        return _resolveListSelectionUnitRangeInRoot(
+          context,
+          rootRenderObject: rootRenderObject,
+          block: hit.entry.block as ListBlock,
+          globalPosition: globalPosition,
+          blockIndex: 0,
+          indentLevel: hit.entry.indentLevel,
+        );
+      case MarkdownBlockKind.footnoteList:
+        return _resolveListSelectionUnitRangeInRoot(
+          context,
+          rootRenderObject: rootRenderObject,
+          block: MarkdownDescriptorExtractor.footnoteListAsOrderedList(
+            hit.entry.block as FootnoteListBlock,
+          ),
+          globalPosition: globalPosition,
+          blockIndex: 0,
+          indentLevel: hit.entry.indentLevel,
+        );
+      case MarkdownBlockKind.quote:
+        return _resolveQuoteSelectionUnitRangeInRoot(
+          context,
+          rootRenderObject: rootRenderObject,
+          block: hit.entry.block as QuoteBlock,
+          globalPosition: globalPosition,
+          blockIndex: 0,
+        );
+      case MarkdownBlockKind.table:
+        return _resolveTableSelectionUnitRangeInRoot(
+          context,
+          rootRenderObject: rootRenderObject,
+          block: hit.entry.block as TableBlock,
+          globalPosition: globalPosition,
+          blockIndex: 0,
+        );
+      case MarkdownBlockKind.image:
+      case MarkdownBlockKind.thematicBreak:
+        if (hit.entry.descriptor.plainText.isEmpty) {
+          return null;
+        }
+        return DocumentRange(
+          start: const DocumentPosition(
+            blockIndex: 0,
+            path: PathInBlock(<int>[0]),
+            textOffset: 0,
+          ),
+          end: DocumentPosition(
+            blockIndex: 0,
+            path: const PathInBlock(<int>[0]),
+            textOffset: hit.entry.descriptor.plainText.length,
+          ),
+        );
+    }
+  }
+
+  DocumentRange? _resolveDescriptorLineRange(
+    BuildContext context, {
+    required SelectableTextDescriptor descriptor,
+    required RenderBox renderObject,
+    required Offset globalPosition,
+    required TextDirection textDirection,
+  }) {
+    final localPosition = renderObject.globalToLocal(globalPosition);
+    final textOffset = _descriptorUsesDirectRichTextMetrics(descriptor)
+        ? _resolveDirectRenderParagraphTextOffset(
+              renderObject,
+              globalPosition: globalPosition,
+              runs: descriptor.pretext!.runs,
+            ) ??
+            0
+        : resolveDescriptorTextOffset(
+            context,
+            descriptor: descriptor,
+            localPosition: localPosition,
+            size: renderObject.size,
+            textDirection: textDirection,
+          );
+
+    final pretext = descriptor.pretext;
+    if (pretext != null) {
+      final layout = computeDescriptorPretextLayout(
+        context,
+        descriptor: descriptor,
+        maxWidth: renderObject.size.width,
+        textDirection: textDirection,
+      );
+      final lineRange = layout.visualLineRangeForLocalPosition(localPosition) ??
+          layout.lineRangeForTextOffset(textOffset);
+      if (lineRange == null) {
+        return null;
+      }
+      return DocumentRange(
+        start: DocumentPosition(
+          blockIndex: 0,
+          path: const PathInBlock(<int>[0]),
+          textOffset: lineRange.start,
+        ),
+        end: DocumentPosition(
+          blockIndex: 0,
+          path: const PathInBlock(<int>[0]),
+          textOffset: lineRange.end,
+        ),
+      );
+    }
+
+    final textPainter = TextPainter(
+      text: descriptor.span,
+      textDirection: textDirection,
+      maxLines: null,
+    )..layout(maxWidth: renderObject.size.width);
+    final clampedOffset = textOffset.clamp(0, descriptor.plainText.length);
+    final boundary = textPainter.getLineBoundary(
+      TextPosition(offset: clampedOffset),
+    );
+    return DocumentRange(
+      start: DocumentPosition(
+        blockIndex: 0,
+        path: const PathInBlock(<int>[0]),
+        textOffset: boundary.start,
+      ),
+      end: DocumentPosition(
+        blockIndex: 0,
+        path: const PathInBlock(<int>[0]),
+        textOffset: boundary.end,
+      ),
+    );
+  }
+
+  DocumentRange? _resolveCodeBlockLineRange(
+    BuildContext context, {
+    required CodeBlock block,
+    required SelectableTextDescriptor descriptor,
+    required RenderBox renderObject,
+    required Offset globalPosition,
+    required TextDirection textDirection,
+  }) {
+    final localPosition = renderObject.globalToLocal(globalPosition);
+    final codeRuns = descriptor.pretext?.runs ??
+        codeSyntaxHighlighter.buildPretextRuns(
+          source: block.code,
+          baseStyle: theme.codeBlockStyle,
+          theme: theme,
+          language: block.language,
+        );
+    final measurementPadding =
+        theme.codeBlockPadding.resolve(Directionality.of(context)) +
+            const EdgeInsets.only(top: 36);
+    final textOffset = markdownPretextCanUseDirectRichTextGeometry(codeRuns)
+        ? _resolveDirectRenderParagraphTextOffset(
+              renderObject,
+              globalPosition: globalPosition,
+              runs: codeRuns,
+            ) ??
+            0
+        : resolveTextSpanTextOffset(
+            codeSyntaxHighlighter.buildTextSpan(
+              source: block.code,
+              baseStyle: theme.codeBlockStyle,
+              theme: theme,
+              language: block.language,
+            ),
+            descriptor.plainText.length,
+            localPosition: localPosition,
+            size: renderObject.size,
+            textDirection: textDirection,
+            measurementPadding: measurementPadding,
+          );
+
+    final lineRange = _resolveLogicalLineRange(
+      descriptor.plainText,
+      textOffset,
+    );
+    if (lineRange == null) {
+      return null;
+    }
+    return DocumentRange(
+      start: DocumentPosition(
+        blockIndex: 0,
+        path: const PathInBlock(<int>[0]),
+        textOffset: lineRange.start,
+      ),
+      end: DocumentPosition(
+        blockIndex: 0,
+        path: const PathInBlock(<int>[0]),
+        textOffset: lineRange.end,
+      ),
+    );
+  }
+
+  DocumentRange _mapListChildRangeToItemRange({
+    required int blockIndex,
+    required IndexedListSelectionDescriptor itemEntry,
+    required IndexedBlockDescriptor childEntry,
+    required DocumentRange childRange,
+  }) {
+    final itemStart = itemEntry.startOffset;
+    final mappedStart = _mapListContentOffsetToDisplayedItemOffset(
+      itemEntry,
+      childEntry.startOffset + childRange.start.textOffset,
+    );
+    final mappedEnd = _mapListContentOffsetToDisplayedItemOffset(
+      itemEntry,
+      childEntry.startOffset + childRange.end.textOffset,
+    );
+    final includeMarker = childEntry.childIndex == 0 &&
+        _isLeadListTextBlock(childEntry.block) &&
+        childRange.start.textOffset == 0;
+    return DocumentRange(
+      start: DocumentPosition(
+        blockIndex: blockIndex,
+        path: const PathInBlock(<int>[0]),
+        textOffset: includeMarker ? itemStart : mappedStart,
+      ),
+      end: DocumentPosition(
+        blockIndex: blockIndex,
+        path: const PathInBlock(<int>[0]),
+        textOffset: mappedEnd,
+      ),
+    );
+  }
+
+  DocumentRange _mapIndexedChildRangeToParentRange({
+    required int blockIndex,
+    required IndexedBlockDescriptor childEntry,
+    required DocumentRange childRange,
+  }) {
+    return DocumentRange(
+      start: DocumentPosition(
+        blockIndex: blockIndex,
+        path: const PathInBlock(<int>[0]),
+        textOffset: childEntry.startOffset + childRange.start.textOffset,
+      ),
+      end: DocumentPosition(
+        blockIndex: blockIndex,
+        path: const PathInBlock(<int>[0]),
+        textOffset: childEntry.startOffset + childRange.end.textOffset,
+      ),
+    );
+  }
+
+  DocumentRange? _resolveTableSelectionUnitRangeInRoot(
+    BuildContext context, {
+    required RenderBox rootRenderObject,
+    required TableBlock block,
+    required Offset globalPosition,
+    required int blockIndex,
+  }) {
+    final textOffset = _resolveTableTextOffsetInRoot(
+      context,
+      rootRenderObject: rootRenderObject,
+      block: block,
+      globalPosition: globalPosition,
+    );
+    if (textOffset == null) {
+      return null;
+    }
+
+    return extractor.resolveTableCellSelectionRange(
+      DocumentPosition(
+        blockIndex: blockIndex,
+        path: const PathInBlock(<int>[0]),
+        textOffset: textOffset,
+      ),
+      block,
+    );
+  }
+
+  ({int start, int end})? _resolveLogicalLineRange(
+    String plainText,
+    int textOffset,
+  ) {
+    if (plainText.isEmpty) {
+      return null;
+    }
+    var clampedOffset = textOffset.clamp(0, plainText.length).toInt();
+    if (clampedOffset == plainText.length && clampedOffset > 0) {
+      clampedOffset -= 1;
+    }
+    if (clampedOffset > 0 &&
+        clampedOffset < plainText.length &&
+        plainText.codeUnitAt(clampedOffset) == 0x0A) {
+      clampedOffset -= 1;
+    }
+
+    var start = clampedOffset;
+    while (start > 0 && plainText.codeUnitAt(start - 1) != 0x0A) {
+      start -= 1;
+    }
+    var end = clampedOffset;
+    while (end < plainText.length && plainText.codeUnitAt(end) != 0x0A) {
+      end += 1;
+    }
+    return (start: start, end: end);
+  }
+
+  int _mapDisplayedItemOffsetToContentOffset(
+    IndexedListSelectionDescriptor itemEntry,
+    int displayedOffset,
+  ) {
+    final raw =
+        displayedOffset - itemEntry.startOffset - itemEntry.prefixLength;
+    if (raw <= 0 || itemEntry.prefixLength == 0) {
+      return math.max(0, raw);
+    }
+    final plainText = itemEntry.contentDescriptor.plainText;
+    // Walk through content lines, subtracting the continuation prefix
+    // for each line boundary crossed.
+    var contentOffset = 0;
+    var remaining = raw;
+    for (var i = 0; i < plainText.length && remaining > 0; i++) {
+      if (plainText.codeUnitAt(i) == 0x0A) {
+        // Need 1 char for the newline itself plus prefixLength for the
+        // continuation prefix that was inserted in the displayed text.
+        final needed = 1 + itemEntry.prefixLength;
+        if (remaining < needed) {
+          contentOffset += remaining;
+          remaining = 0;
+          break;
+        }
+        remaining -= needed;
+        contentOffset += 1;
+      } else {
+        remaining -= 1;
+        contentOffset += 1;
+      }
+    }
+    contentOffset += remaining;
+    return contentOffset.clamp(0, plainText.length).toInt();
+  }
+
+  int _mapListContentOffsetToDisplayedItemOffset(
+    IndexedListSelectionDescriptor itemEntry,
+    int contentOffset,
+  ) {
+    final plainText = itemEntry.contentDescriptor.plainText;
+    final clampedOffset = contentOffset.clamp(0, plainText.length).toInt();
+    final lineIndex = _lineIndexForOffset(plainText, clampedOffset);
+    return itemEntry.startOffset +
+        itemEntry.prefixLength +
+        clampedOffset +
+        itemEntry.prefixLength * lineIndex;
+  }
+
+  int _lineIndexForOffset(String plainText, int offset) {
+    var lineIndex = 0;
+    for (var index = 0; index < offset; index++) {
+      if (plainText.codeUnitAt(index) == 0x0A) {
+        lineIndex += 1;
+      }
+    }
+    return lineIndex;
+  }
+
+  bool _isLeadListTextBlock(BlockNode block) {
+    switch (block.kind) {
+      case MarkdownBlockKind.paragraph:
+      case MarkdownBlockKind.heading:
+        return true;
+      case MarkdownBlockKind.quote:
+      case MarkdownBlockKind.orderedList:
+      case MarkdownBlockKind.unorderedList:
+      case MarkdownBlockKind.definitionList:
+      case MarkdownBlockKind.footnoteList:
+      case MarkdownBlockKind.codeBlock:
+      case MarkdownBlockKind.table:
+      case MarkdownBlockKind.image:
+      case MarkdownBlockKind.thematicBreak:
+        return false;
+    }
+  }
+
+  _ResolvedIndexedBlockHit? _resolveIndexedBlockHitInRoot(
+    BuildContext context, {
+    required RenderBox rootRenderObject,
+    required List<IndexedBlockDescriptor> entries,
+    required List<GlobalKey> childKeys,
+    required Offset globalPosition,
+  }) {
+    final textDirection = Directionality.of(context);
+    for (final entry in entries) {
+      final childContext = childKeys[entry.childIndex].currentContext;
+      final childRenderObject = childContext?.findRenderObject();
+      if (childRenderObject is! RenderBox || !childRenderObject.hasSize) {
+        continue;
+      }
+      final rect =
+          childRenderObject.localToGlobal(Offset.zero) & childRenderObject.size;
+      if (!rect.contains(globalPosition)) {
+        continue;
+      }
+      final childOffset = resolveNestedBlockTextOffset(
+        context,
+        rootRenderObject: rootRenderObject,
+        block: entry.block,
+        descriptor: entry.descriptor,
+        renderObject: childRenderObject,
+        globalPosition: globalPosition,
+        textDirection: textDirection,
+        indentLevel: entry.indentLevel,
+      );
+      return _ResolvedIndexedBlockHit(
+        entry: entry,
+        renderObject: childRenderObject,
+        textOffset: childOffset,
+      );
+    }
+    return null;
   }
 
   MarkdownPretextLayoutResult computeDescriptorPretextLayout(
@@ -473,10 +1105,28 @@ class MarkdownSelectionResolver {
                 ),
               );
               rects.addAll(boxes.map((box) => Rect.fromLTRB(
-                    box.left + paragraph.localToGlobal(Offset.zero, ancestor: rootRenderObject).dx - 1.5,
-                    box.top + paragraph.localToGlobal(Offset.zero, ancestor: rootRenderObject).dy,
-                    box.right + paragraph.localToGlobal(Offset.zero, ancestor: rootRenderObject).dx + 1.5,
-                    box.bottom + paragraph.localToGlobal(Offset.zero, ancestor: rootRenderObject).dy,
+                    box.left +
+                        paragraph
+                            .localToGlobal(Offset.zero,
+                                ancestor: rootRenderObject)
+                            .dx -
+                        1.5,
+                    box.top +
+                        paragraph
+                            .localToGlobal(Offset.zero,
+                                ancestor: rootRenderObject)
+                            .dy,
+                    box.right +
+                        paragraph
+                            .localToGlobal(Offset.zero,
+                                ancestor: rootRenderObject)
+                            .dx +
+                        1.5,
+                    box.bottom +
+                        paragraph
+                            .localToGlobal(Offset.zero,
+                                ancestor: rootRenderObject)
+                            .dy,
                   )));
             } else {
               final boxes = paragraph.getBoxesForSelection(TextSelection(
@@ -484,10 +1134,28 @@ class MarkdownSelectionResolver {
                 extentOffset: localEnd,
               ));
               rects.addAll(boxes.map((box) => Rect.fromLTRB(
-                    box.left + paragraph.localToGlobal(Offset.zero, ancestor: rootRenderObject).dx - 1.5,
-                    box.top + paragraph.localToGlobal(Offset.zero, ancestor: rootRenderObject).dy,
-                    box.right + paragraph.localToGlobal(Offset.zero, ancestor: rootRenderObject).dx + 1.5,
-                    box.bottom + paragraph.localToGlobal(Offset.zero, ancestor: rootRenderObject).dy,
+                    box.left +
+                        paragraph
+                            .localToGlobal(Offset.zero,
+                                ancestor: rootRenderObject)
+                            .dx -
+                        1.5,
+                    box.top +
+                        paragraph
+                            .localToGlobal(Offset.zero,
+                                ancestor: rootRenderObject)
+                            .dy,
+                    box.right +
+                        paragraph
+                            .localToGlobal(Offset.zero,
+                                ancestor: rootRenderObject)
+                            .dx +
+                        1.5,
+                    box.bottom +
+                        paragraph
+                            .localToGlobal(Offset.zero,
+                                ancestor: rootRenderObject)
+                            .dy,
                   )));
             }
           } else {
@@ -497,7 +1165,8 @@ class MarkdownSelectionResolver {
             if (cellRenderObject is RenderBox && cellRenderObject.hasSize) {
               final cellOrigin = cellRenderObject.localToGlobal(Offset.zero,
                   ancestor: rootRenderObject);
-              final localStart = math.max(0, range.start.textOffset - cellStart);
+              final localStart =
+                  math.max(0, range.start.textOffset - cellStart);
               final localEnd =
                   math.min(cellLength, range.end.textOffset - cellStart);
 
@@ -599,13 +1268,14 @@ class MarkdownSelectionResolver {
           final cellContext = cellKeys[rowIndex][columnIndex].currentContext;
           final cellRenderObject = cellContext?.findRenderObject();
           if (cellRenderObject is RenderBox && cellRenderObject.hasSize) {
-            final bounds =
-                cellRenderObject.localToGlobal(Offset.zero) & cellRenderObject.size;
+            final bounds = cellRenderObject.localToGlobal(Offset.zero) &
+                cellRenderObject.size;
             final distance = _distanceToRect(globalPosition, bounds);
 
             if (distance < bestDistance) {
               bestDistance = distance;
-              final localPosition = cellRenderObject.globalToLocal(globalPosition);
+              final localPosition =
+                  cellRenderObject.globalToLocal(globalPosition);
 
               final alignment = columnIndex < block.alignments.length
                   ? block.alignments[columnIndex]
@@ -868,12 +1538,18 @@ class MarkdownSelectionResolver {
           start: DocumentPosition(
             blockIndex: 0,
             path: const PathInBlock(<int>[0]),
-            textOffset: contentSelectionStart - itemStart - entry.prefixLength,
+            textOffset: _mapDisplayedItemOffsetToContentOffset(
+              entry,
+              contentSelectionStart,
+            ),
           ),
           end: DocumentPosition(
             blockIndex: 0,
             path: const PathInBlock(<int>[0]),
-            textOffset: contentSelectionEnd - itemStart - entry.prefixLength,
+            textOffset: _mapDisplayedItemOffsetToContentOffset(
+              entry,
+              contentSelectionEnd,
+            ),
           ),
         );
         final childEntries = extractor.buildIndexedBlockDescriptors(
@@ -1739,4 +2415,16 @@ class ResolvedIndexedBlockEntry {
   final IndexedBlockDescriptor entry;
   final RenderBox renderObject;
   final Rect rect;
+}
+
+class _ResolvedIndexedBlockHit {
+  const _ResolvedIndexedBlockHit({
+    required this.entry,
+    required this.renderObject,
+    required this.textOffset,
+  });
+
+  final IndexedBlockDescriptor entry;
+  final RenderBox renderObject;
+  final int textOffset;
 }

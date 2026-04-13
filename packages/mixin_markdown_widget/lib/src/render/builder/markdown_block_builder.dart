@@ -258,6 +258,22 @@ class MarkdownBlockBuilder {
             quoteBlock,
             localPosition,
           ),
+          selectionUnitRangeResolver: (context, _, localPosition, position) =>
+              localPosition == null
+                  ? descriptorExtractor.resolveSelectionUnitRange(
+                      position,
+                      quoteBlock,
+                    )
+                  : selectionResolver.resolveQuoteSelectionUnitRange(
+                        context,
+                        quoteBlock,
+                        localPosition,
+                        position,
+                      ) ??
+                      descriptorExtractor.resolveSelectionUnitRange(
+                        position,
+                        quoteBlock,
+                      ),
         );
       case MarkdownBlockKind.orderedList:
       case MarkdownBlockKind.unorderedList:
@@ -290,6 +306,22 @@ class MarkdownBlockBuilder {
             listBlock,
             localPosition,
           ),
+          selectionUnitRangeResolver: (context, _, localPosition, position) =>
+              localPosition == null
+                  ? descriptorExtractor.resolveSelectionUnitRange(
+                      position,
+                      listBlock,
+                    )
+                  : selectionResolver.resolveListSelectionUnitRange(
+                        context,
+                        listBlock,
+                        localPosition,
+                        position,
+                      ) ??
+                      descriptorExtractor.resolveSelectionUnitRange(
+                        position,
+                        listBlock,
+                      ),
           selectionPaintOrder: SelectableBlockSelectionPaintOrder.aboveChild,
         );
       case MarkdownBlockKind.definitionList:
@@ -334,6 +366,22 @@ class MarkdownBlockBuilder {
             orderedFootnotes,
             localPosition,
           ),
+          selectionUnitRangeResolver: (context, _, localPosition, position) =>
+              localPosition == null
+                  ? descriptorExtractor.resolveSelectionUnitRange(
+                      position,
+                      orderedFootnotes,
+                    )
+                  : selectionResolver.resolveListSelectionUnitRange(
+                        context,
+                        orderedFootnotes,
+                        localPosition,
+                        position,
+                      ) ??
+                      descriptorExtractor.resolveSelectionUnitRange(
+                        position,
+                        orderedFootnotes,
+                      ),
           highlightBorderRadius: BorderRadius.circular(8),
         );
       case MarkdownBlockKind.codeBlock:
@@ -431,6 +479,11 @@ class MarkdownBlockBuilder {
             globalPosition: (context.findRenderObject() as RenderBox)
                 .localToGlobal(localPosition), // Ignored
             textDirection: Directionality.of(context),
+          ),
+          selectionUnitRangeResolver: (_, __, ___, position) =>
+              descriptorExtractor.resolveSelectionUnitRange(
+            position,
+            tableBlock,
           ),
         );
       case MarkdownBlockKind.image:
@@ -540,6 +593,37 @@ class MarkdownBlockBuilder {
         return layout.textOffsetAt(
           localPosition,
           textDirection: Directionality.of(context),
+        );
+      },
+      selectionUnitRangeResolver: (context, size, localPosition, position) {
+        final textScaler =
+            MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling;
+        final layout = computeMarkdownPretextLayoutFromRuns(
+          runs: runs,
+          fallbackStyle: fallbackStyle,
+          maxWidth: size.width,
+          textScaleFactor: textScaler.scale(1.0),
+          textAlign: textAlign,
+          textDirection: Directionality.of(context),
+        );
+        final lineRange = localPosition == null
+            ? layout.lineRangeForTextOffset(position.textOffset)
+            : layout.visualLineRangeForLocalPosition(localPosition) ??
+                layout.lineRangeForTextOffset(position.textOffset);
+        if (lineRange == null) {
+          return null;
+        }
+        return DocumentRange(
+          start: DocumentPosition(
+            blockIndex: position.blockIndex,
+            path: const PathInBlock(<int>[0]),
+            textOffset: lineRange.start,
+          ),
+          end: DocumentPosition(
+            blockIndex: position.blockIndex,
+            path: const PathInBlock(<int>[0]),
+            textOffset: lineRange.end,
+          ),
         );
       },
     );

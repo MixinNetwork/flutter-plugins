@@ -557,19 +557,9 @@ class MarkdownPretextLayoutResult {
     Offset localPosition, {
     required TextDirection textDirection,
   }) {
-    if (lines.isEmpty) {
+    final line = _lineForLocalPosition(localPosition);
+    if (line == null) {
       return 0;
-    }
-
-    var lineTop = 0.0;
-    MarkdownPretextLayoutLine line = lines.last;
-    for (final candidate in lines) {
-      final lineBottom = lineTop + candidate.height;
-      if (localPosition.dy <= lineBottom) {
-        line = candidate;
-        break;
-      }
-      lineTop = lineBottom;
     }
     if (line.text.isEmpty) {
       return localPosition.dx <= line.leadingOffset
@@ -584,6 +574,63 @@ class MarkdownPretextLayoutResult {
       localDx.toDouble(),
       textDirection: textDirection,
     );
+  }
+
+  ({int start, int end})? visualLineRangeForLocalPosition(
+    Offset localPosition,
+  ) {
+    final line = _lineForLocalPosition(localPosition);
+    if (line == null) {
+      return null;
+    }
+    return (start: line.startOffset, end: line.visibleEndOffset);
+  }
+
+  ({int start, int end})? lineRangeForTextOffset(int textOffset) {
+    if (lines.isEmpty) {
+      return null;
+    }
+    if (plainText.isEmpty) {
+      return (start: 0, end: 0);
+    }
+
+    var clampedOffset = textOffset.clamp(0, plainText.length).toInt();
+    if (clampedOffset == plainText.length && clampedOffset > 0) {
+      clampedOffset -= 1;
+    }
+    if (clampedOffset > 0 &&
+        clampedOffset < plainText.length &&
+        plainText.codeUnitAt(clampedOffset) == 0x0A) {
+      clampedOffset -= 1;
+    }
+
+    var start = clampedOffset;
+    while (start > 0 && plainText.codeUnitAt(start - 1) != 0x0A) {
+      start -= 1;
+    }
+    var end = clampedOffset;
+    while (end < plainText.length && plainText.codeUnitAt(end) != 0x0A) {
+      end += 1;
+    }
+    return (start: start, end: end);
+  }
+
+  MarkdownPretextLayoutLine? _lineForLocalPosition(Offset localPosition) {
+    if (lines.isEmpty) {
+      return null;
+    }
+
+    var lineTop = 0.0;
+    var line = lines.last;
+    for (final candidate in lines) {
+      final lineBottom = lineTop + candidate.height;
+      if (localPosition.dy <= lineBottom) {
+        line = candidate;
+        break;
+      }
+      lineTop = lineBottom;
+    }
+    return line;
   }
 
   Iterable<Rect> _selectionBoxesForLine(
