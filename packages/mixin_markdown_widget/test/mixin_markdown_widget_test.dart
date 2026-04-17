@@ -194,6 +194,29 @@ Rect _mergedRect(Iterable<Rect> rects) {
   );
 }
 
+double _tightTextHeight(String text, TextStyle style) {
+  final textPainter = TextPainter(
+    text: TextSpan(text: text, style: style),
+    textDirection: TextDirection.ltr,
+    maxLines: 1,
+  )..layout(maxWidth: double.infinity);
+  final boxes = textPainter.getBoxesForSelection(
+    TextSelection(baseOffset: 0, extentOffset: text.length),
+  );
+  if (boxes.isNotEmpty) {
+    return boxes.map((box) => box.bottom).reduce(math.max) -
+        boxes.map((box) => box.top).reduce(math.min);
+  }
+  final lineMetrics = textPainter.computeLineMetrics().first;
+  return lineMetrics.ascent + lineMetrics.descent;
+}
+
+Finder _decoratedInlineTextFinder() {
+  return find.byWidgetPredicate(
+    (widget) => widget.runtimeType.toString() == '_DecoratedInlineText',
+  );
+}
+
 void main() {
   test('parses common markdown blocks into a document model', () {
     const input = '''
@@ -1020,13 +1043,7 @@ Term
       ),
     );
 
-    final decoratedBoxes = tester
-        .widgetList<DecoratedBox>(find.byType(DecoratedBox))
-        .where((widget) {
-      final decoration = widget.decoration;
-      return decoration is BoxDecoration && decoration.color != null;
-    }).toList(growable: false);
-    expect(decoratedBoxes, isNotEmpty);
+    expect(_decoratedInlineTextFinder(), findsWidgets);
   });
 
   testWidgets(
@@ -1757,25 +1774,23 @@ return value;
 
     final context = tester.element(find.byType(MarkdownWidget));
     final theme = MarkdownTheme.of(context);
-
-    final decoratedBoxes = tester
-        .widgetList<DecoratedBox>(find.byType(DecoratedBox))
-        .where((widget) {
-      final decoration = widget.decoration;
-      return decoration is BoxDecoration &&
-          decoration.color == theme.inlineCodeBackgroundColor;
-    }).toList(growable: false);
-
-    expect(decoratedBoxes, isNotEmpty);
-
-    final paddingFinder = find.byWidgetPredicate(
-      (widget) =>
-          widget is Padding &&
-          widget.padding is EdgeInsets &&
-          (widget.padding as EdgeInsets).vertical ==
-              theme.inlineCodePadding.vertical,
+    expect(
+      theme.inlineCodePadding,
+      const EdgeInsets.symmetric(horizontal: 5, vertical: 0.5),
     );
-    expect(paddingFinder, findsWidgets);
+
+    final inlineCodeFinder = _decoratedInlineTextFinder();
+    expect(inlineCodeFinder, findsWidgets);
+
+    final inlineCodeRenderBox =
+        tester.renderObject<RenderBox>(inlineCodeFinder.first);
+    final expectedHeight =
+        _tightTextHeight('code', theme.bodyStyle.merge(theme.inlineCodeStyle)) +
+            theme.inlineCodePadding.vertical;
+    expect(
+      inlineCodeRenderBox.size.height,
+      closeTo(expectedHeight, 0.001),
+    );
   });
 
   testWidgets('inline code prefers the default Mono font family', (
@@ -1789,22 +1804,13 @@ return value;
       ),
     );
 
-    final codeTexts = tester
-        .widgetList<Text>(
-          find.descendant(
-            of: find.byType(DecoratedBox),
-            matching: find.byType(Text),
-          ),
-        )
-        .toList(growable: false);
-    expect(codeTexts, isNotEmpty);
-    for (final codeText in codeTexts) {
-      expect(codeText.style?.fontFamily, 'Mono');
-      expect(
-        codeText.style?.fontFamilyFallback,
-        containsAllInOrder(const <String>['SF Mono', 'Roboto Mono', 'Menlo']),
-      );
-    }
+    final context = tester.element(find.byType(MarkdownWidget));
+    final inlineCodeStyle = MarkdownTheme.of(context).inlineCodeStyle;
+    expect(inlineCodeStyle.fontFamily, 'Mono');
+    expect(
+      inlineCodeStyle.fontFamilyFallback,
+      containsAllInOrder(const <String>['SF Mono', 'Roboto Mono', 'Menlo']),
+    );
   });
 
   testWidgets('code blocks prefer the default Mono font family',
@@ -2317,14 +2323,7 @@ const value = 42;
 
     final inlineCodeDecorationFinder = find.descendant(
       of: cellRichTextFinder,
-      matching: find.byWidgetPredicate((widget) {
-        if (widget is! DecoratedBox) {
-          return false;
-        }
-        final decoration = widget.decoration;
-        return decoration is BoxDecoration &&
-            decoration.color == theme.inlineCodeBackgroundColor;
-      }),
+      matching: _decoratedInlineTextFinder(),
     );
     expect(inlineCodeDecorationFinder, findsWidgets);
   });

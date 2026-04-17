@@ -1,31 +1,21 @@
 # mixin_markdown_widget
 
-`mixin_markdown_widget` is a desktop-first Flutter Markdown reader package. It focuses on a high-quality reading surface, configurable theming, block-based rendering, and controller APIs that can already support streamed updates.
+`mixin_markdown_widget` is a high-performance, desktop-first Flutter Markdown reader package. It focuses on a high-quality reading surface, highly customizable block-based rendering, model-driven text selection, and controller APIs optimized for streaming updates (like LLM responses).
 
-## Features
+## Key Features
 
-- `MarkdownWidget` for direct string input or controller-driven rendering
-- `MarkdownController` with `setData`, `replaceAll`, `appendChunk`, and `clear`
-- `MarkdownSelectionController` for model-driven selection, select-all, and copy-selection flows
-- Plain-text serialization and clipboard export through `MarkdownController.plainText` and `copyPlainTextToClipboard()`
-- `MarkdownThemeData` and `MarkdownTheme` for document-level styling
-- Built-in rendering for headings, paragraphs, quotes, ordered/unordered/task lists, definition lists, footnotes, code blocks, tables, images, and thematic breaks
-- Syntax-highlighted code blocks with character-level custom selection
-- Table cell drag selection with TSV/plain-text copy output
-- Custom desktop selection with text-level hit testing and highlight coverage across paragraphs, headings, lists, quotes, captions, and code blocks
-- Double-click word selection, triple-click block selection, and selection-aware copy flows
-- Right-click menu support for `Copy`, `Select all`, `Copy all`, and `Clear selection`
-- Copy button for code blocks
-- `Ctrl/Cmd+C` to copy the current custom selection, `Ctrl/Cmd+A` to select all, and `Ctrl/Cmd+Shift+C` to copy the full document as predictable plain text
-- Append-only incremental reparsing for `appendChunk`, with stable prefix block reuse
-- `pretext`-backed inline rendering for headings, paragraphs, list item text, quote text, and table cells, including rich inline emphasis/link/code runs
-- Math rendering powered by `flutter_math_fork`, including `$...$`, `$$...$$`, `\(...\)`, and `\[...\]`
-- Extended markdown syntax support for heading IDs, autolinks, emoji shortcodes, footnotes, task lists, definition lists, strikethrough, highlight, subscript, and superscript
-- Common inline HTML tag support for `em`, `strong`, `del`, `mark`, `sub`, `sup`, `code`, and `br`
-- Unified custom selection behavior even when no external `MarkdownSelectionController` is supplied
-- Custom `imageBuilder` output can participate in selection/copy flows using the image caption text
+- **Streaming Ready:** `MarkdownController` with `appendChunk` and `commitStream` supports append-only incremental parsing for smooth LLM output rendering.
+- **Custom Selection Engine:** Built-in model-driven selection (`MarkdownSelectionController`) supporting double-click word selection, triple-click block selection, table cell range selection, and predictable plain-text clipboard export.
+- **Rich Syntax Support:** Supports CommonMark, GFM task lists, tables, footnotes, definition lists, math (TeX), and common inline HTML tags.
+- **Highly Customizable Rendering:**
+  - Override specific block rendering using `codeBlockBuilder` and `bulletBuilder`.
+  - Customize image rendering with `imageBuilder` and link handling with `onTapLink`.
+  - Disable default scroll view (ListView) using `useColumn: true` for easy integration into existing custom scrollable layouts.
+- **Theming:** `MarkdownThemeData` allows deep customization of text styles, spacing, colors, and block decorations (e.g., hiding heading dividers via `showHeading1Divider`).
 
 ## Usage
+
+### Basic Rendering
 
 ```dart
 import 'package:flutter/material.dart';
@@ -36,45 +26,51 @@ class ExamplePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final baseTheme = MarkdownThemeData.fallback(context);
     return MarkdownWidget(
       data: '# Hello\n\nThis is **Markdown**.',
-      theme: baseTheme.copyWith(
-        maxContentWidth: 840,
-        codeBlockBackgroundColor: const Color(0xFFF5F7FB),
+      // Customize theme
+      theme: MarkdownThemeData.fallback(context).copyWith(
+        showHeading1Divider: false, // Hide H1 underlines
       ),
+      // Set to true if you are wrapping this in your own ScrollView
+      useColumn: false, 
     );
   }
 }
 ```
 
-Math syntax is available out of the box:
+### Customizing Blocks
 
-```markdown
-Inline: $a^2+b^2=c^2$
+You can easily override the default rendering for specific blocks:
 
-Display:
-$$
-\int_0^1 x^2 \, dx
-$$
+```dart
+MarkdownWidget(
+  data: data,
+  // Custom code block rendering
+  codeBlockBuilder: (context, code, language, theme) {
+    return CustomCodeBlockView(code: code, language: language);
+  },
+  // Custom list marker rendering
+  bulletBuilder: (context, index, isOrdered, orderedStart, taskState, theme) {
+    if (taskState != null) return CustomCheckbox(state: taskState);
+    if (isOrdered) return Text('${orderedStart! + index}.');
+    return const Icon(Icons.circle, size: 8);
+  },
+)
 ```
 
-For streaming or incremental updates, keep a controller and append chunks as they arrive:
+### Streaming / Incremental Updates
+
+For streaming or incremental updates, keep a controller and append chunks as they arrive. `appendChunk` reparses only the unstable trailing block instead of the full document, ensuring high performance.
 
 ```dart
 final controller = MarkdownController(data: '# Streamed output');
-final selectionController = MarkdownSelectionController();
 
+// As data arrives from network/LLM:
 controller.appendChunk('\n\nNew content arrived.');
+
+// When stream finishes:
 controller.commitStream();
-selectionController.attachDocument(controller.document);
-selectionController.selectAll();
 ```
 
-## Current scope
-
-This implementation now includes syntax-highlighted code blocks, character-level code selection, table cell range selection with TSV copy semantics, a document-level plain-text serializer, a model-level selection controller, custom pointer hit testing, and controller-managed draft/committed streaming state. `appendChunk` reparses only the unstable trailing block instead of the full document, unchanged cacheable blocks are reused across document updates, and inline text in headings, paragraphs, list item bodies, quote bodies, and table cells now shares the same `pretext`-backed inline rendering path even with rich inline formatting. In addition to the original CommonMark-style blocks, the package now covers task lists, definition lists, footnotes, heading IDs, autolinks, emoji shortcodes, highlight, subscript, superscript, TeX math, and a small safe subset of inline HTML tags.
-
-Run `flutter test benchmark/incremental_append_benchmark.dart` from this package to compare full reparsing against append-only incremental parsing.
-
-See `/example` for a runnable desktop demo.
+See the `/example` directory for a fully runnable desktop demo.

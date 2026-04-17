@@ -3,3 +3,5 @@
 cmake-build-*
 
 /.idea
+/.dart_tool/
+pubspec_overrides.yaml

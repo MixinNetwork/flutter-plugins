@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  validate:
+    name: Validate Workspace
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Show tool versions
+        run: |
+          flutter --version
+          dart --version
+
+      - name: Install workspace dependencies
+        run: dart pub get
+
+      - name: Set PR diff base
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch --no-tags origin ${{ github.base_ref }} --depth=1
+          echo "MELOS_DIFF=origin/${{ github.base_ref }}...HEAD" >> "$GITHUB_ENV"
+
+      - name: List workspace packages
+        run: dart run melos list
+
+      - name: List changed packages
+        if: github.event_name == 'pull_request'
+        run: dart run melos list --diff="$MELOS_DIFF"
+
+      - name: Check formatting
+        if: github.event_name != 'pull_request'
+        run: dart run melos run format
+
+      - name: Check formatting for changed packages
+        if: github.event_name == 'pull_request'
+        run: dart run melos run format --diff="$MELOS_DIFF"
+
+      - name: Analyze packages
+        if: github.event_name != 'pull_request'
+        run: dart run melos run analyze
+
+      - name: Analyze changed packages
+        if: github.event_name == 'pull_request'
+        run: dart run melos run analyze --diff="$MELOS_DIFF"
+
+      - name: Run Flutter tests
+        if: github.event_name != 'pull_request'
+        run: dart run melos run test:flutter
+
+      - name: Run Flutter tests for changed packages
+        if: github.event_name == 'pull_request'
+        run: dart run melos run test:flutter --diff="$MELOS_DIFF"
+
+      - name: Run Dart tests
+        if: github.event_name != 'pull_request'
+        run: dart run melos run test:dart
+
+      - name: Run Dart tests for changed packages
+        if: github.event_name == 'pull_request'
+        run: dart run melos run test:dart --diff="$MELOS_DIFF"

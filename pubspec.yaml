@@ -1,0 +1,51 @@
+name: flutter_plugins_workspace
+publish_to: none
+repository: https://github.com/MixinNetwork/flutter-plugins
+
+environment:
+  sdk: ^3.11.0
+
+workspace:
+  - packages/breakpad_client
+  - packages/bring_window_to_front
+  - packages/common_crypto
+  - packages/data_detector
+  - packages/debug_info_collector
+  - packages/desktop_drop
+  - packages/desktop_keep_screen_on
+  - packages/desktop_lifecycle
+  - packages/desktop_multi_window
+  - packages/desktop_webview_window
+  - packages/fts5_simple
+  - packages/mixin_logger
+  - packages/mixin_markdown_widget
+  - packages/ogg_opus_player
+  - packages/pasteboard
+  - packages/string_tokenizer
+  - packages/ui_device
+  - packages/web_qrcode
+  - packages/win_toast
+
+dev_dependencies:
+  melos: ^7.5.1
+
+melos:
+  scripts:
+    analyze:
+      description: Run dart analyze in all workspace packages.
+      run: dart run melos exec -- "dart analyze ."
+    example:
+      description: Run the example app for the selected package.
+      run: dart run melos exec -- "cd example && flutter run"
+      packageFilters:
+        flutter: true
+        dirExists: example
+    format:
+      description: Check formatting in all workspace packages.
+      run: dart run melos exec -- "dart format --output=none --set-exit-if-changed ."
+    test:flutter:
+      description: Run Flutter tests in Flutter packages.
+      run: dart run melos exec --flutter --dir-exists=test --concurrency=5 --fail-fast -- "flutter test"
+    test:dart:
+      description: Run Dart tests in Dart packages.
+      run: dart run melos exec --depends-on=test --no-flutter --dir-exists=test --concurrency=5 --fail-fast -- "dart test"

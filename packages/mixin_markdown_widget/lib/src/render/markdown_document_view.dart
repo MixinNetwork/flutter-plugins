@@ -23,6 +23,7 @@ class MarkdownDocumentView extends StatefulWidget {
     this.scrollController,
     this.physics,
     this.shrinkWrap = false,
+    this.useColumn = false,
     this.selectable = true,
     this.selectionController,
     this.onTapLink,
@@ -30,6 +31,8 @@ class MarkdownDocumentView extends StatefulWidget {
     this.enableCopyFullDocumentShortcut = true,
     this.showCopyAllInContextMenu = true,
     this.imageBuilder,
+    this.codeBlockBuilder,
+    this.bulletBuilder,
     this.contextMenuBuilder,
   });
 
@@ -38,6 +41,7 @@ class MarkdownDocumentView extends StatefulWidget {
   final ScrollController? scrollController;
   final ScrollPhysics? physics;
   final bool shrinkWrap;
+  final bool useColumn;
   final bool selectable;
   final MarkdownSelectionController? selectionController;
   final MarkdownTapLinkCallback? onTapLink;
@@ -45,6 +49,8 @@ class MarkdownDocumentView extends StatefulWidget {
   final bool enableCopyFullDocumentShortcut;
   final bool showCopyAllInContextMenu;
   final MarkdownImageBuilder? imageBuilder;
+  final MarkdownCodeBlockBuilder? codeBlockBuilder;
+  final MarkdownBulletBuilder? bulletBuilder;
   final MarkdownContextMenuBuilder? contextMenuBuilder;
 
   @override
@@ -317,6 +323,8 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       codeSyntaxHighlighter: _codeSyntaxHighlighter,
       plainTextSerializer: _plainTextSerializer,
       imageBuilder: widget.imageBuilder,
+      codeBlockBuilder: widget.codeBlockBuilder,
+      bulletBuilder: widget.bulletBuilder,
       onTapLink: widget.onTapLink,
       onRequestContextMenu: _showToolbar,
       cachedBlockRows: _cachedBlockRows,
@@ -326,27 +334,47 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
 
     final scrollController = _effectiveScrollController;
 
-    final scrollable = Scrollbar(
-      controller: scrollController,
-      child: ListView.builder(
-        key: _scrollableKey,
-        controller: scrollController,
-        primary: false,
-        physics: widget.physics,
-        shrinkWrap: widget.shrinkWrap,
+    Widget scrollable;
+    if (widget.useColumn) {
+      scrollable = Padding(
         padding: widget.theme.padding,
-        itemCount: widget.document.blocks.length,
-        itemBuilder: (context, index) {
-          final block = widget.document.blocks[index];
-          return _blockBuilder.buildBlockListItem(
-            context,
-            block: block,
-            blockIndex: index,
-            selectionRange: selectionRange,
-          );
-        },
-      ),
-    );
+        child: Column(
+          key: _scrollableKey,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: List<Widget>.generate(
+            widget.document.blocks.length,
+            (index) => _blockBuilder.buildBlockListItem(
+              context,
+              block: widget.document.blocks[index],
+              blockIndex: index,
+              selectionRange: selectionRange,
+            ),
+          ),
+        ),
+      );
+    } else {
+      scrollable = Scrollbar(
+        controller: scrollController,
+        child: ListView.builder(
+          key: _scrollableKey,
+          controller: scrollController,
+          primary: false,
+          physics: widget.physics,
+          shrinkWrap: widget.shrinkWrap,
+          padding: widget.theme.padding,
+          itemCount: widget.document.blocks.length,
+          itemBuilder: (context, index) {
+            final block = widget.document.blocks[index];
+            return _blockBuilder.buildBlockListItem(
+              context,
+              block: block,
+              blockIndex: index,
+              selectionRange: selectionRange,
+            );
+          },
+        ),
+      );
+    }
 
     if (!widget.selectable || widget.selectionController == null) {
       return scrollable;

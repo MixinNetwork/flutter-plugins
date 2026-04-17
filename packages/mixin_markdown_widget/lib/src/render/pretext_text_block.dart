@@ -861,7 +861,7 @@ List<InlineSpan> _buildBreakableDecoratedFullSpans(
   return spans;
 }
 
-class _DecoratedInlineText extends StatelessWidget {
+class _DecoratedInlineText extends LeafRenderObjectWidget {
   const _DecoratedInlineText({
     required this.text,
     required this.style,
@@ -873,17 +873,216 @@ class _DecoratedInlineText extends StatelessWidget {
   final MarkdownPretextInlineDecoration decoration;
 
   @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: decoration.backgroundColor,
-        borderRadius: decoration.borderRadius,
-      ),
-      child: Padding(
-        padding: decoration.padding,
-        child: Text(text, style: style),
-      ),
+  RenderObject createRenderObject(BuildContext context) {
+    return _RenderDecoratedInlineText(
+      text,
+      style,
+      decoration,
+      (MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling)
+          .scale(1.0),
+      View.of(context).devicePixelRatio,
     );
+  }
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    covariant _RenderDecoratedInlineText renderObject,
+  ) {
+    renderObject
+      ..text = text
+      ..style = style
+      ..decoration = decoration
+      ..textScaleFactor =
+          (MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling)
+              .scale(1.0)
+      ..devicePixelRatio = View.of(context).devicePixelRatio;
+  }
+}
+
+class _RenderDecoratedInlineText extends RenderBox {
+  _RenderDecoratedInlineText(
+    this._text,
+    this._style,
+    this._decoration,
+    this._textScaleFactor,
+    this._devicePixelRatio,
+  ) {
+    _textPainter.textDirection = TextDirection.ltr;
+    _textPainter.maxLines = 1;
+    _recomputeMetrics();
+  }
+
+  final TextPainter _textPainter = TextPainter();
+  _TightTextMetrics _metrics = const _TightTextMetrics(
+    tightTop: 0,
+    tightBottom: 0,
+    tightBaseline: 0,
+  );
+
+  String _text;
+  TextStyle _style;
+  MarkdownPretextInlineDecoration _decoration;
+  double _textScaleFactor;
+  double _devicePixelRatio;
+
+  String get text => _text;
+  set text(String value) {
+    if (value == _text) {
+      return;
+    }
+    _text = value;
+    _recomputeMetrics();
+    markNeedsLayout();
+    markNeedsPaint();
+  }
+
+  TextStyle get style => _style;
+  set style(TextStyle value) {
+    if (value == _style) {
+      return;
+    }
+    _style = value;
+    _recomputeMetrics();
+    markNeedsLayout();
+    markNeedsPaint();
+  }
+
+  MarkdownPretextInlineDecoration get decoration => _decoration;
+  set decoration(MarkdownPretextInlineDecoration value) {
+    if (value == _decoration) {
+      return;
+    }
+    _decoration = value;
+    markNeedsLayout();
+    markNeedsPaint();
+  }
+
+  double get textScaleFactor => _textScaleFactor;
+  set textScaleFactor(double value) {
+    if (value == _textScaleFactor) {
+      return;
+    }
+    _textScaleFactor = value;
+    _recomputeMetrics();
+    markNeedsLayout();
+    markNeedsPaint();
+  }
+
+  double get devicePixelRatio => _devicePixelRatio;
+  set devicePixelRatio(double value) {
+    if (value == _devicePixelRatio) {
+      return;
+    }
+    _devicePixelRatio = value;
+    markNeedsLayout();
+    markNeedsPaint();
+  }
+
+  void _recomputeMetrics() {
+    _textPainter
+      ..text = TextSpan(text: _text, style: _style)
+      ..textScaler = TextScaler.linear(_textScaleFactor)
+      ..layout(maxWidth: double.infinity);
+    _metrics = _measureTightTextMetrics(
+      _text,
+      _style,
+      _textScaleFactor,
+    );
+  }
+
+  Size _computeSize(BoxConstraints constraints) {
+    final desiredSize = Size(
+      _textPainter.width + _decoration.padding.horizontal,
+      _metrics.tightHeight + _decoration.padding.vertical,
+    );
+    return constraints.constrain(desiredSize);
+  }
+
+  @override
+  void performLayout() {
+    size = _computeSize(constraints);
+  }
+
+  @override
+  Size computeDryLayout(covariant BoxConstraints constraints) {
+    return _computeSize(constraints);
+  }
+
+  @override
+  double computeMinIntrinsicWidth(double height) {
+    return _textPainter.width + _decoration.padding.horizontal;
+  }
+
+  @override
+  double computeMaxIntrinsicWidth(double height) {
+    return _textPainter.width + _decoration.padding.horizontal;
+  }
+
+  @override
+  double computeMinIntrinsicHeight(double width) {
+    return _metrics.tightHeight + _decoration.padding.vertical;
+  }
+
+  @override
+  double computeMaxIntrinsicHeight(double width) {
+    return _metrics.tightHeight + _decoration.padding.vertical;
+  }
+
+  @override
+  double? computeDistanceToActualBaseline(TextBaseline baseline) {
+    if (baseline != TextBaseline.alphabetic) {
+      return super.computeDistanceToActualBaseline(baseline);
+    }
+    return _snapToPixel(
+      _metrics.tightBaseline + _decoration.padding.top + _opticalBaselineLift,
+    );
+  }
+
+  @override
+  double? computeDryBaseline(
+    covariant BoxConstraints constraints,
+    TextBaseline baseline,
+  ) {
+    if (baseline != TextBaseline.alphabetic) {
+      return super.computeDryBaseline(constraints, baseline);
+    }
+    return _snapToPixel(
+      _metrics.tightBaseline + _decoration.padding.top + _opticalBaselineLift,
+    );
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    final canvas = context.canvas;
+    final backgroundRect = offset & size;
+    canvas.drawRRect(
+      _decoration.borderRadius.toRRect(backgroundRect),
+      Paint()..color = _decoration.backgroundColor,
+    );
+    _textPainter.paint(
+      canvas,
+      offset +
+          Offset(
+            _decoration.padding.left,
+            _snapToPixel(_decoration.padding.top - _metrics.tightTop),
+          ),
+    );
+  }
+
+  @override
+  bool hitTestSelf(Offset position) => true;
+
+  double _snapToPixel(double value) {
+    final dpr = _devicePixelRatio <= 0 ? 1.0 : _devicePixelRatio;
+    return (value * dpr).roundToDouble() / dpr;
+  }
+
+  double get _opticalBaselineLift {
+    // Tight glyph bounds on monospace fonts often look slightly bottom-heavy
+    // even when the mathematical baseline is correct, so nudge the chip up a
+    // touch for optical alignment.
+    return _snapToPixel(math.min(_metrics.tightTop, 1.0));
   }
 }
 
@@ -1296,6 +1495,10 @@ double _measureLineHeight(
   double textScaleFactor, {
   EdgeInsets? padding,
 }) {
+  if (padding != null) {
+    final metrics = _measureTightTextMetrics(' ', style, textScaleFactor);
+    return metrics.tightHeight + padding.vertical;
+  }
   final textPainter = TextPainter(
     text: TextSpan(text: ' ', style: style),
     textDirection: TextDirection.ltr,
@@ -1303,6 +1506,71 @@ double _measureLineHeight(
     maxLines: 1,
   )..layout(maxWidth: double.infinity);
   return textPainter.preferredLineHeight + (padding?.vertical ?? 0);
+}
+
+@immutable
+class _TightTextMetrics {
+  const _TightTextMetrics({
+    required this.tightTop,
+    required this.tightBottom,
+    required this.tightBaseline,
+  });
+
+  final double tightTop;
+  final double tightBottom;
+  final double tightBaseline;
+
+  double get tightHeight => tightBottom - tightTop;
+
+  @override
+  bool operator ==(Object other) {
+    return other is _TightTextMetrics &&
+        other.tightTop == tightTop &&
+        other.tightBottom == tightBottom &&
+        other.tightBaseline == tightBaseline;
+  }
+
+  @override
+  int get hashCode => Object.hash(tightTop, tightBottom, tightBaseline);
+}
+
+_TightTextMetrics _measureTightTextMetrics(
+  String text,
+  TextStyle style,
+  double textScaleFactor,
+) {
+  final sampleText = text.isEmpty ? ' ' : text;
+  final textPainter = TextPainter(
+    text: TextSpan(text: sampleText, style: style),
+    textDirection: TextDirection.ltr,
+    textScaler: TextScaler.linear(textScaleFactor),
+    maxLines: 1,
+  )..layout(maxWidth: double.infinity);
+
+  final lineMetrics = textPainter.computeLineMetrics().first;
+  final boxes = textPainter.getBoxesForSelection(
+    TextSelection(baseOffset: 0, extentOffset: sampleText.length),
+  );
+  if (boxes.isEmpty) {
+    final top = lineMetrics.baseline - lineMetrics.ascent;
+    return _TightTextMetrics(
+      tightTop: top,
+      tightBottom: lineMetrics.baseline + lineMetrics.descent,
+      tightBaseline: lineMetrics.baseline - top,
+    );
+  }
+
+  var top = boxes.first.top;
+  var bottom = boxes.first.bottom;
+  for (final box in boxes.skip(1)) {
+    top = math.min(top, box.top);
+    bottom = math.max(bottom, box.bottom);
+  }
+  return _TightTextMetrics(
+    tightTop: top,
+    tightBottom: bottom,
+    tightBaseline: lineMetrics.baseline - top,
+  );
 }
 
 int _consumeVisibleText(String source, int startOffset, String visibleText) {

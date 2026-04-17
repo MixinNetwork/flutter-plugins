@@ -15,6 +15,22 @@ typedef MarkdownImageBuilder = Widget Function(
   ImageBlock block,
   MarkdownThemeData theme,
 );
+typedef MarkdownCodeBlockBuilder = Widget Function(
+  BuildContext context,
+  String code,
+  String? language,
+  MarkdownThemeData theme,
+);
+
+typedef MarkdownBulletBuilder = Widget Function(
+  BuildContext context,
+  int bulletIndex,
+  bool isOrdered,
+  int? orderedStart,
+  MarkdownTaskListItemState? taskState,
+  MarkdownThemeData theme,
+);
+
 typedef MarkdownContextMenuBuilder = Widget Function(
   BuildContext context,
   MarkdownSelectionController selectionController,

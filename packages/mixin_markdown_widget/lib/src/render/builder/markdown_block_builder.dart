@@ -32,6 +32,8 @@ class MarkdownBlockBuilder {
     required this.codeSyntaxHighlighter,
     required this.plainTextSerializer,
     this.imageBuilder,
+    this.codeBlockBuilder,
+    this.bulletBuilder,
     this.onTapLink,
     required this.onRequestContextMenu,
     required Map<String, CachedBlockRow> cachedBlockRows,
@@ -48,6 +50,8 @@ class MarkdownBlockBuilder {
   final MarkdownCodeSyntaxHighlighter codeSyntaxHighlighter;
   final MarkdownPlainTextSerializer plainTextSerializer;
   final MarkdownImageBuilder? imageBuilder;
+  final MarkdownCodeBlockBuilder? codeBlockBuilder;
+  final MarkdownBulletBuilder? bulletBuilder;
   final MarkdownTapLinkCallback? onTapLink;
   final void Function(Offset) onRequestContextMenu;
 
@@ -295,6 +299,7 @@ class MarkdownBlockBuilder {
                 _buildListItemContent(context, listBlock, index, item),
             itemRowKeyBuilder: (index) => itemRowKeys[index],
             itemContentKeyBuilder: (index) => itemContentKeys[index],
+            bulletBuilder: bulletBuilder,
           ),
           plainText: descriptor.plainText,
           selectionStructure: _matchingSelectionStructure(
@@ -362,6 +367,7 @@ class MarkdownBlockBuilder {
                   _buildListItemContent(context, orderedFootnotes, index, item),
               itemRowKeyBuilder: (index) => itemRowKeys[index],
               itemContentKeyBuilder: (index) => itemContentKeys[index],
+              bulletBuilder: bulletBuilder,
             ),
           ),
           plainText: footnoteDescriptor.plainText,
@@ -1006,7 +1012,7 @@ class MarkdownBlockBuilder {
       case MarkdownBlockKind.footnoteList:
         return _buildFootnoteList(context, block as FootnoteListBlock);
       case MarkdownBlockKind.codeBlock:
-        return _buildCodeBlock(block as CodeBlock);
+        return _buildCodeBlock(context, block as CodeBlock);
       case MarkdownBlockKind.table:
         return _buildTable(context, block as TableBlock);
       case MarkdownBlockKind.image:
@@ -1080,6 +1086,7 @@ class MarkdownBlockBuilder {
           _buildListItemContent(context, block, index, item),
       itemRowKeyBuilder: (index) => itemRowKeys[index],
       itemContentKeyBuilder: (index) => itemContentKeys[index],
+      bulletBuilder: bulletBuilder,
     );
   }
 
@@ -1103,6 +1110,7 @@ class MarkdownBlockBuilder {
             _buildListItemContent(context, orderedFootnotes, index, item),
         itemRowKeyBuilder: (index) => itemRowKeys[index],
         itemContentKeyBuilder: (index) => itemContentKeys[index],
+        bulletBuilder: bulletBuilder,
       ),
     );
   }
@@ -1156,6 +1164,12 @@ class MarkdownBlockBuilder {
       return child;
     }
 
+    final showDivider =
+        level == 1 ? theme.showHeading1Divider : theme.showHeading2Divider;
+    if (!showDivider) {
+      return child;
+    }
+
     final dividerSpacing = level == 1 ? 12.0 : 8.0;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1172,7 +1186,10 @@ class MarkdownBlockBuilder {
     );
   }
 
-  Widget _buildCodeBlock(CodeBlock block) {
+  Widget _buildCodeBlock(BuildContext context, CodeBlock block) {
+    if (codeBlockBuilder != null) {
+      return codeBlockBuilder!(context, block.code, block.language, theme);
+    }
     final scrollController = keysRegistry.codeBlockScrollControllers
         .putIfAbsent(block.id, ScrollController.new);
     return _buildDecoratedCodeBlock(

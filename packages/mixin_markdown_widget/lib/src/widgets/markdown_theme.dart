@@ -76,6 +76,8 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
     required this.selectionColor,
     required this.quoteBorderWidth,
     required this.imagePlaceholderBackgroundColor,
+    required this.showHeading1Divider,
+    required this.showHeading2Divider,
   });
 
   factory MarkdownThemeData.fallback(BuildContext context) {
@@ -108,7 +110,8 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
       listItemSpacing: 4,
       maxContentWidth: 920,
       quotePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      inlineCodePadding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+      inlineCodePadding:
+          const EdgeInsets.symmetric(horizontal: 5, vertical: 0.5),
       codeBlockPadding: const EdgeInsets.all(16),
       tableCellPadding:
           const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -165,6 +168,8 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
       selectionColor: colorScheme.primary.withOpacity(0.24),
       quoteBorderWidth: 4,
       imagePlaceholderBackgroundColor: colorScheme.surface.withOpacity(0.92),
+      showHeading1Divider: true,
+      showHeading2Divider: true,
     );
   }
 
@@ -197,7 +202,8 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
       listItemSpacing: 2,
       maxContentWidth: 920,
       quotePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      inlineCodePadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      inlineCodePadding:
+          const EdgeInsets.symmetric(horizontal: 4, vertical: 0.5),
       codeBlockPadding: const EdgeInsets.all(12),
       tableCellPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       inlineCodeBorderRadius: BorderRadius.circular(4),
@@ -253,6 +259,8 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
       selectionColor: colorScheme.primary.withOpacity(0.24),
       quoteBorderWidth: 4,
       imagePlaceholderBackgroundColor: colorScheme.surface.withOpacity(0.92),
+      showHeading1Divider: true,
+      showHeading2Divider: true,
     );
   }
 
@@ -294,6 +302,8 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
   final Color selectionColor;
   final double quoteBorderWidth;
   final Color imagePlaceholderBackgroundColor;
+  final bool showHeading1Divider;
+  final bool showHeading2Divider;
 
   TextStyle headingStyleForLevel(int level) {
     switch (level) {
@@ -353,6 +363,8 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
     Color? selectionColor,
     double? quoteBorderWidth,
     Color? imagePlaceholderBackgroundColor,
+    bool? showHeading1Divider,
+    bool? showHeading2Divider,
   }) {
     return MarkdownThemeData(
       padding: padding ?? this.padding,
@@ -401,6 +413,8 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
       quoteBorderWidth: quoteBorderWidth ?? this.quoteBorderWidth,
       imagePlaceholderBackgroundColor: imagePlaceholderBackgroundColor ??
           this.imagePlaceholderBackgroundColor,
+      showHeading1Divider: showHeading1Divider ?? this.showHeading1Divider,
+      showHeading2Divider: showHeading2Divider ?? this.showHeading2Divider,
     );
   }
 
@@ -543,6 +557,10 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
             t,
           ) ??
           imagePlaceholderBackgroundColor,
+      showHeading1Divider:
+          t < 0.5 ? showHeading1Divider : other.showHeading1Divider,
+      showHeading2Divider:
+          t < 0.5 ? showHeading2Divider : other.showHeading2Divider,
     );
   }
 
@@ -601,6 +619,8 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
       selectionColor,
       quoteBorderWidth,
       imagePlaceholderBackgroundColor,
+      showHeading1Divider,
+      showHeading2Divider,
     ]);
   }
 
@@ -648,6 +668,8 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
         other.selectionColor == selectionColor &&
         other.quoteBorderWidth == quoteBorderWidth &&
         other.imagePlaceholderBackgroundColor ==
-            imagePlaceholderBackgroundColor;
+            imagePlaceholderBackgroundColor &&
+        other.showHeading1Divider == showHeading1Divider &&
+        other.showHeading2Divider == showHeading2Divider;
   }
 }

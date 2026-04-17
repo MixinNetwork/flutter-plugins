@@ -47,6 +47,9 @@ jobs:
       # Setup Dart SDK with JWT token
       - uses: dart-lang/setup-dart@e51d8e571e22473a2ddebf0ef8a2123f0ab2c02c
 
+      - name: Install workspace dependencies
+        run: dart pub get
+
       # Parse package from tag, e.g.: ogg_opus_player-v1.0.0
       - name: Parse package name
         id: parse
@@ -62,11 +65,6 @@ jobs:
             }
             console.log(`No tag found, using input ${context.payload.inputs.package}`)
             return context.payload.inputs.package
-
-      # Minimal package setup and dry run checks.
-      - name: Install dependencies
-        run: flutter pub get
-        working-directory: 'packages/${{ steps.parse.outputs.result }}'
 
       - name: Publish - dry run
         run: flutter pub publish --dry-run

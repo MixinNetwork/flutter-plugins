@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../core/document.dart';
 import '../widgets/markdown_theme.dart';
+import '../widgets/markdown_types.dart';
 
 double markdownListMarkerWidth(ListBlock block, int index) {
   final item = block.items[index];
@@ -247,6 +248,7 @@ class MarkdownListBlockView extends StatelessWidget {
     required this.itemBuilder,
     this.itemRowKeyBuilder,
     this.itemContentKeyBuilder,
+    this.bulletBuilder,
   });
 
   final MarkdownThemeData theme;
@@ -254,6 +256,7 @@ class MarkdownListBlockView extends StatelessWidget {
   final Widget Function(int index, ListItemNode item) itemBuilder;
   final Key? Function(int index)? itemRowKeyBuilder;
   final Key? Function(int index)? itemContentKeyBuilder;
+  final MarkdownBulletBuilder? bulletBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -280,7 +283,7 @@ class MarkdownListBlockView extends StatelessWidget {
                         width: markerWidth,
                         child: Align(
                           alignment: AlignmentDirectional.topEnd,
-                          child: _buildMarker(index),
+                          child: _buildMarker(context, index),
                         ),
                       ),
                       SizedBox(width: markerGap),
@@ -300,8 +303,18 @@ class MarkdownListBlockView extends StatelessWidget {
     );
   }
 
-  Widget _buildMarker(int index) {
+  Widget _buildMarker(BuildContext context, int index) {
     final item = block.items[index];
+    if (bulletBuilder != null) {
+      return bulletBuilder!(
+        context,
+        index,
+        block.ordered,
+        block.ordered ? block.startIndex : null,
+        item.taskState,
+        theme,
+      );
+    }
     switch (item.taskState) {
       case MarkdownTaskListItemState.checked:
         return Padding(

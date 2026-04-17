@@ -15,6 +15,7 @@ class MarkdownWidget extends StatefulWidget {
     this.scrollController,
     this.physics,
     this.shrinkWrap = false,
+    this.useColumn = false,
     this.selectable = true,
     this.enableCopyFullDocumentShortcut = true,
     this.showCopyAllInContextMenu = true,
@@ -22,6 +23,8 @@ class MarkdownWidget extends StatefulWidget {
     this.padding,
     this.onTapLink,
     this.imageBuilder,
+    this.codeBlockBuilder,
+    this.bulletBuilder,
     this.contextMenuBuilder,
   }) : assert(
           (data == null) != (controller == null),
@@ -34,6 +37,7 @@ class MarkdownWidget extends StatefulWidget {
   final ScrollController? scrollController;
   final ScrollPhysics? physics;
   final bool shrinkWrap;
+  final bool useColumn;
   final bool selectable;
   final bool enableCopyFullDocumentShortcut;
   final bool showCopyAllInContextMenu;
@@ -41,6 +45,8 @@ class MarkdownWidget extends StatefulWidget {
   final EdgeInsetsGeometry? padding;
   final MarkdownTapLinkCallback? onTapLink;
   final MarkdownImageBuilder? imageBuilder;
+  final MarkdownCodeBlockBuilder? codeBlockBuilder;
+  final MarkdownBulletBuilder? bulletBuilder;
   final MarkdownContextMenuBuilder? contextMenuBuilder;
 
   @override
@@ -126,6 +132,7 @@ class _MarkdownWidgetState extends State<MarkdownWidget> {
                   scrollController: widget.scrollController,
                   physics: widget.physics,
                   shrinkWrap: widget.shrinkWrap,
+                  useColumn: widget.useColumn,
                   selectable: widget.selectable,
                   selectionController: selectionController,
                   onCopyPlainText: () {
@@ -136,6 +143,8 @@ class _MarkdownWidgetState extends State<MarkdownWidget> {
                   showCopyAllInContextMenu: widget.showCopyAllInContextMenu,
                   onTapLink: widget.onTapLink,
                   imageBuilder: widget.imageBuilder,
+                  codeBlockBuilder: widget.codeBlockBuilder,
+                  bulletBuilder: widget.bulletBuilder,
                   contextMenuBuilder: widget.contextMenuBuilder,
                 );
               },

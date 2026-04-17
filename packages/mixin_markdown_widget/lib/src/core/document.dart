@@ -520,5 +520,3 @@ class DocumentRange {
   @override
   int get hashCode => Object.hash(start, end);
 }
-
-
