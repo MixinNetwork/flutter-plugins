@@ -77,11 +77,11 @@ static void desktop_drop_plugin_init(DesktopDropPlugin *self) {
   }
 }
 
-static void on_focus_in_event(GtkWidget *widget, GdkEventFocus *event, gpointer user_data) {
+static gboolean on_focus_in_event(GtkWidget *widget, GdkEventFocus *event, gpointer user_data) {
   if (isKDE) {
     ignoreNext = TRUE;
   }
-  return;
+  return FALSE;
 }
 
 static void method_call_cb(FlMethodChannel *channel, FlMethodCall *method_call,
