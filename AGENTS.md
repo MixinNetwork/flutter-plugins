@@ -5,6 +5,7 @@
 This file describes repository-wide guidance for the `flutter-plugins` monorepo. Package-specific guidance may exist deeper in the tree and should be treated as higher-priority context for that subtree.
 
 Detailed guidance for `mixin_markdown_widget` lives in [packages/mixin_markdown_widget/AGENTS.md](packages/mixin_markdown_widget/AGENTS.md).
+Release preparation guidance for pub packages lives in [.codex/skills/flutter-pub-release/SKILL.md](.codex/skills/flutter-pub-release/SKILL.md).
 
 ## Repository Overview
 
