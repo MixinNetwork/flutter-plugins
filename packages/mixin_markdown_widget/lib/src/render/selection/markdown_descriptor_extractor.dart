@@ -894,7 +894,7 @@ class MarkdownDescriptorExtractor {
   TextStyle get imageCaptionStyle {
     return theme.bodyStyle.copyWith(
       fontSize: 13,
-      color: theme.bodyStyle.color?.withOpacity(0.72),
+      color: theme.bodyStyle.color?.withValues(alpha: 0.72),
     );
   }
 

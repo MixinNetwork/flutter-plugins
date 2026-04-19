@@ -140,7 +140,7 @@ class MarkdownCodeSyntaxHighlighter {
     final metaColor = Color.lerp(accent, const Color(0xFF006B6B), 0.45)!;
     final titleColor = Color.lerp(accent, const Color(0xFF8B5A00), 0.3)!;
     final mutedColor = Color.alphaBlend(
-      foreground.withOpacity(0.55),
+      foreground.withValues(alpha: 0.55),
       theme.codeBlockBackgroundColor,
     );
 
@@ -186,7 +186,7 @@ class MarkdownCodeSyntaxHighlighter {
       case 'link':
         return theme.linkStyle;
       case 'punctuation':
-        return TextStyle(color: foreground.withOpacity(0.78));
+        return TextStyle(color: foreground.withValues(alpha: 0.78));
       default:
         return const TextStyle();
     }

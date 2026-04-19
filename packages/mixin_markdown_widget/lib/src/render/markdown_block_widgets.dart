@@ -331,7 +331,7 @@ class MarkdownListBlockView extends StatelessWidget {
           child: Icon(
             Icons.check_box_outline_blank_rounded,
             size: 18,
-            color: theme.bodyStyle.color?.withOpacity(0.72),
+            color: theme.bodyStyle.color?.withValues(alpha: 0.72),
           ),
         );
       case null:
@@ -407,7 +407,7 @@ class MarkdownCodeBlockView extends StatelessWidget {
                   padding: EdgeInsets.zero,
                   style: IconButton.styleFrom(
                     backgroundColor: Colors.transparent,
-                    foregroundColor: theme.bodyStyle.color?.withOpacity(0.72),
+                    foregroundColor: theme.bodyStyle.color?.withValues(alpha: 0.72),
                   ),
                   icon: const Icon(Icons.copy_rounded, size: 18),
                   onPressed: onCopyCode,

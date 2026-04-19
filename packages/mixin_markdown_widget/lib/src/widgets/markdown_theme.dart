@@ -124,7 +124,7 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
       codeBlockToolbarPadding: const EdgeInsets.fromLTRB(12, 8, 8, 0),
       bodyStyle: bodyStyle,
       quoteStyle: bodyStyle.copyWith(
-        color: colorScheme.onSurface.withOpacity(0.82),
+        color: colorScheme.onSurface.withValues(alpha: 0.82),
         fontStyle: FontStyle.italic,
       ),
       linkStyle: bodyStyle.copyWith(
@@ -155,19 +155,19 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
       heading6Style:
           textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700) ??
               bodyStyle.copyWith(fontSize: 16, fontWeight: FontWeight.w700),
-      quoteBackgroundColor: colorScheme.surface.withOpacity(0.7),
-      quoteBorderColor: colorScheme.primary.withOpacity(0.4),
+      quoteBackgroundColor: colorScheme.surface.withValues(alpha: 0.7),
+      quoteBorderColor: colorScheme.primary.withValues(alpha: 0.4),
       inlineCodeBackgroundColor:
           Color.lerp(colorScheme.surface, colorScheme.onSurface, 0.06) ??
               colorScheme.surface,
-      codeBlockBackgroundColor: colorScheme.surface.withOpacity(0.92),
+      codeBlockBackgroundColor: colorScheme.surface.withValues(alpha: 0.92),
       dividerColor: borderColor,
       tableBorderColor: borderColor,
-      tableHeaderBackgroundColor: colorScheme.primary.withOpacity(0.08),
+      tableHeaderBackgroundColor: colorScheme.primary.withValues(alpha: 0.08),
       tableRowBackgroundColor: colorScheme.surface,
-      selectionColor: colorScheme.primary.withOpacity(0.24),
+      selectionColor: colorScheme.primary.withValues(alpha: 0.24),
       quoteBorderWidth: 4,
-      imagePlaceholderBackgroundColor: colorScheme.surface.withOpacity(0.92),
+      imagePlaceholderBackgroundColor: colorScheme.surface.withValues(alpha: 0.92),
       showHeading1Divider: true,
       showHeading2Divider: true,
     );
@@ -215,7 +215,7 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
       codeBlockToolbarPadding: const EdgeInsets.fromLTRB(12, 6, 6, 0),
       bodyStyle: bodyStyle,
       quoteStyle: bodyStyle.copyWith(
-        color: colorScheme.onSurface.withOpacity(0.82),
+        color: colorScheme.onSurface.withValues(alpha: 0.82),
         fontStyle: FontStyle.italic,
       ),
       linkStyle: bodyStyle.copyWith(
@@ -246,19 +246,19 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
       heading6Style:
           textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700) ??
               bodyStyle.copyWith(fontSize: 13, fontWeight: FontWeight.w700),
-      quoteBackgroundColor: colorScheme.surface.withOpacity(0.7),
-      quoteBorderColor: colorScheme.primary.withOpacity(0.4),
+      quoteBackgroundColor: colorScheme.surface.withValues(alpha: 0.7),
+      quoteBorderColor: colorScheme.primary.withValues(alpha: 0.4),
       inlineCodeBackgroundColor:
           Color.lerp(colorScheme.surface, colorScheme.onSurface, 0.06) ??
               colorScheme.surface,
-      codeBlockBackgroundColor: colorScheme.surface.withOpacity(0.92),
+      codeBlockBackgroundColor: colorScheme.surface.withValues(alpha: 0.92),
       dividerColor: borderColor,
       tableBorderColor: borderColor,
-      tableHeaderBackgroundColor: colorScheme.primary.withOpacity(0.08),
+      tableHeaderBackgroundColor: colorScheme.primary.withValues(alpha: 0.08),
       tableRowBackgroundColor: colorScheme.surface,
-      selectionColor: colorScheme.primary.withOpacity(0.24),
+      selectionColor: colorScheme.primary.withValues(alpha: 0.24),
       quoteBorderWidth: 4,
-      imagePlaceholderBackgroundColor: colorScheme.surface.withOpacity(0.92),
+      imagePlaceholderBackgroundColor: colorScheme.surface.withValues(alpha: 0.92),
       showHeading1Divider: true,
       showHeading2Divider: true,
     );

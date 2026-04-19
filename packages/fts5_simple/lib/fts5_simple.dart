@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 import 'package:sqlite3/open.dart';
 import 'package:sqlite3/sqlite3.dart';
 
+// ignore: library_private_types_in_public_api
 final _Binding binding = _Binding(open.openSqlite());
 
 extension Sqlite3FtsExtension on Database {

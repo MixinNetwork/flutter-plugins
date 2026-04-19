@@ -281,7 +281,7 @@ class MarkdownInlineBuilder {
   TextStyle highlightStyle(TextStyle baseStyle) {
     final accent = theme.linkStyle.color ?? theme.dividerColor;
     return baseStyle.copyWith(
-      backgroundColor: accent.withOpacity(0.18),
+      backgroundColor: accent.withValues(alpha: 0.18),
     );
   }
 

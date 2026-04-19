@@ -1617,10 +1617,10 @@ class MarkdownBlockBuilder {
 
   Color get _quoteSelectionColor {
     final opacity = math.min(
-      math.max(theme.selectionColor.opacity * 0.72, 0.14),
+      math.max(theme.selectionColor.a * 0.72, 0.14),
       0.2,
     );
-    return theme.selectionColor.withOpacity(opacity);
+    return theme.selectionColor.withValues(alpha: opacity);
   }
 
   StructuredBlockSelection? _matchingSelectionStructure(
