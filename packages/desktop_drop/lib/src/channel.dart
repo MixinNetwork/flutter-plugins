@@ -138,7 +138,14 @@ class DesktopDrop {
             .cast<double>();
         final paths = const LineSplitter().convert(text).map((e) {
           try {
-            return Uri.tryParse(e)?.toFilePath() ?? '';
+            final uri = Uri.tryParse(e);
+            if (uri == null) {
+              return '';
+            }
+            if (uri.scheme == 'file') {
+              return uri.toFilePath();
+            }
+            return e;
           } catch (error, stacktrace) {
             debugPrint('failed to parse linux path: $error $stacktrace');
           }
