@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.7.1
+
+* update worksapce
+* [desktop_drop_web] fix: loop readEntries() to retrieve all directory children on web [#473](https://github.com/MixinNetwork/flutter-plugins/pull/473)
+  by [TerryHuangHD](https://github.com/TerryHuangHD)
+* [desktop_drop]: `on_focus_in_event` should return `gboolean` [#472](https://github.com/MixinNetwork/flutter-plugins/pull/472)
+  by [imnotlxy](https://github.com/imnotlxy)
+* [worksapce]: fix foramt
+* Handle SMB URIs in Linux desktop_drop path parsing [#474](https://github.com/MixinNetwork/flutter-plugins/pull/474)
+  by [app/copilot-swe-agent](https://github.com/app/copilot-swe-agent)
+
 ## 0.7.0
 
 [Android] Upgrade Android compileSdk and Kotlin version. (#444) 
