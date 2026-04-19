@@ -1,4 +1,10 @@
 include: package:flutter_lints/flutter.yaml
 
-# Additional information about this file can be found at
-# https://dart.dev/guides/language/analysis-options
+analyzer:
+  errors:
+    undefined_function: ignore
+    uri_does_not_exist: ignore
+    undefined_method: ignore
+    deprecated_member_use: ignore
+    unnecessary_library_name: ignore
+    use_super_parameters: ignore

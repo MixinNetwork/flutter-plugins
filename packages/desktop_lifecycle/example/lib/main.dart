@@ -15,8 +15,8 @@ class MyApp extends StatelessWidget {
         appBar: AppBar(
           title: const Text('Plugin example app'),
         ),
-        body: Column(
-          children: const [
+        body: const Column(
+          children: [
             FocusLifecycleState(),
           ],
         ),

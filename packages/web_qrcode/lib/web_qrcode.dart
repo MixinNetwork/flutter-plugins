@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:js';
 import 'dart:js_util';
 
 import 'package:flutter/cupertino.dart';
@@ -15,10 +14,10 @@ typedef CameraNotAvaliableCallback = void Function(dynamic error);
 
 class QrCodeReader extends StatefulWidget {
   const QrCodeReader({
-    Key? key,
+    super.key,
     this.successCallback,
     this.cameraNotAvaliableCallback,
-  }) : super(key: key);
+  });
 
   final QrCodeScanSuccessCallback? successCallback;
   final CameraNotAvaliableCallback? cameraNotAvaliableCallback;

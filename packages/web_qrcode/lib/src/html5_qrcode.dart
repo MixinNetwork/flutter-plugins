@@ -1,5 +1,5 @@
 @JS()
-library html5_qrcode;
+library;
 
 import 'dart:async';
 import 'dart:js';

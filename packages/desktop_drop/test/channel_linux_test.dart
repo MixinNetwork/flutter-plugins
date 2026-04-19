@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:desktop_drop/src/events.dart';
@@ -29,7 +28,8 @@ void main() {
     final events = <DropEvent>[];
     void listener(DropEvent event) => events.add(event);
     DesktopDrop.instance.addRawDropEventListener(listener);
-    addTearDown(() => DesktopDrop.instance.removeRawDropEventListener(listener));
+    addTearDown(
+        () => DesktopDrop.instance.removeRawDropEventListener(listener));
 
     await _invokePlatformMethod(const MethodCall('performOperation_linux', [
       'smb://server/share/file.txt',
@@ -44,7 +44,8 @@ void main() {
     final events = <DropEvent>[];
     void listener(DropEvent event) => events.add(event);
     DesktopDrop.instance.addRawDropEventListener(listener);
-    addTearDown(() => DesktopDrop.instance.removeRawDropEventListener(listener));
+    addTearDown(
+        () => DesktopDrop.instance.removeRawDropEventListener(listener));
 
     await _invokePlatformMethod(const MethodCall('performOperation_linux', [
       'file:///tmp/file.txt',

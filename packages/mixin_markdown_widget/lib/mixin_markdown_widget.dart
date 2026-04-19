@@ -1,4 +1,4 @@
-library mixin_markdown_widget;
+library;
 
 export 'src/clipboard/copy_serializer.dart';
 export 'src/clipboard/plain_text_serializer.dart';

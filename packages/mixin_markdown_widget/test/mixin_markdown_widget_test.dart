@@ -2297,14 +2297,11 @@ const value = 42;
       const MaterialApp(
         home: Scaffold(
           body: MarkdownWidget(
-            data: '| Value |\n| --- |\n| `code` \(x^2\) |',
+            data: '| Value |\n| --- |\n| `code` (x^2) |',
           ),
         ),
       ),
     );
-
-    final context = tester.element(find.byType(MarkdownWidget));
-    final theme = MarkdownTheme.of(context);
 
     final tableFinder = find.byType(Table);
     expect(tableFinder, findsOneWidget);

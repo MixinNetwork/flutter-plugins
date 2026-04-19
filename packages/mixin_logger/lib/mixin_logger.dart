@@ -1,4 +1,4 @@
-library mixin_logger;
+library;
 
 import 'package:ansicolor/ansicolor.dart';
 import 'package:flutter/foundation.dart';

@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:data_detector/data_detector.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -9,9 +7,7 @@ void main() {
     const str = "text: https://mixin.one";
     final results = detector.matchesInString(str);
     for (final result in results) {
-      while (true) {
-        print('result: ${result.range.textInside(str)}');
-      }
+      expect(result.range.textInside(str), "https://mixin.one");
     }
   });
 }

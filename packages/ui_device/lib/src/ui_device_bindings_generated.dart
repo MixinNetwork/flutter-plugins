@@ -1,4 +1,4 @@
-// ignore_for_file: camel_case_types, non_constant_identifier_names, unused_element, unused_field, return_of_invalid_type, void_checks, annotate_overrides, no_leading_underscores_for_local_identifiers, library_private_types_in_public_api, constant_identifier_names
+// ignore_for_file: camel_case_types, non_constant_identifier_names, unused_element, unused_field, return_of_invalid_type, void_checks, annotate_overrides, no_leading_underscores_for_local_identifiers, library_private_types_in_public_api, constant_identifier_names, subtype_of_base_or_final_is_not_base_final_or_sealed
 
 // AUTO GENERATED FILE, DO NOT EDIT.
 //
@@ -1144,9 +1144,7 @@ class _ObjCWrapper implements ffi.Finalizable {
 }
 
 class UIDevice extends NSObject {
-  UIDevice._(ffi.Pointer<ObjCObject> id, UIDeviceBindings lib,
-      {bool retain = false, bool release = false})
-      : super._(id, lib, retain: retain, release: release);
+  UIDevice._(super.id, super.lib, {super.retain, super.release}) : super._();
 
   /// Returns a [UIDevice] that points to the same underlying object as [other].
   static UIDevice castFrom<T extends _ObjCWrapper>(T other) {
@@ -1308,9 +1306,7 @@ class ObjCSel extends ffi.Opaque {}
 class ObjCObject extends ffi.Opaque {}
 
 class NSObject extends _ObjCWrapper {
-  NSObject._(ffi.Pointer<ObjCObject> id, UIDeviceBindings lib,
-      {bool retain = false, bool release = false})
-      : super._(id, lib, retain: retain, release: release);
+  NSObject._(super.id, super.lib, {super.retain, super.release}) : super._();
 
   /// Returns a [NSObject] that points to the same underlying object as [other].
   static NSObject castFrom<T extends _ObjCWrapper>(T other) {
@@ -1501,9 +1497,7 @@ typedef instancetype = ffi.Pointer<ObjCObject>;
 class _NSZone extends ffi.Opaque {}
 
 class Protocol extends _ObjCWrapper {
-  Protocol._(ffi.Pointer<ObjCObject> id, UIDeviceBindings lib,
-      {bool retain = false, bool release = false})
-      : super._(id, lib, retain: retain, release: release);
+  Protocol._(super.id, super.lib, {super.retain, super.release}) : super._();
 
   /// Returns a [Protocol] that points to the same underlying object as [other].
   static Protocol castFrom<T extends _ObjCWrapper>(T other) {
@@ -1527,9 +1521,8 @@ class Protocol extends _ObjCWrapper {
 typedef IMP = ffi.Pointer<ffi.NativeFunction<ffi.Void Function()>>;
 
 class NSInvocation extends NSObject {
-  NSInvocation._(ffi.Pointer<ObjCObject> id, UIDeviceBindings lib,
-      {bool retain = false, bool release = false})
-      : super._(id, lib, retain: retain, release: release);
+  NSInvocation._(super.id, super.lib, {super.retain, super.release})
+      : super._();
 
   /// Returns a [NSInvocation] that points to the same underlying object as [other].
   static NSInvocation castFrom<T extends _ObjCWrapper>(T other) {
@@ -1628,9 +1621,8 @@ class NSInvocation extends NSObject {
 }
 
 class NSMethodSignature extends NSObject {
-  NSMethodSignature._(ffi.Pointer<ObjCObject> id, UIDeviceBindings lib,
-      {bool retain = false, bool release = false})
-      : super._(id, lib, retain: retain, release: release);
+  NSMethodSignature._(super.id, super.lib, {super.retain, super.release})
+      : super._();
 
   /// Returns a [NSMethodSignature] that points to the same underlying object as [other].
   static NSMethodSignature castFrom<T extends _ObjCWrapper>(T other) {
@@ -1699,9 +1691,7 @@ typedef NSUInteger = ffi.UnsignedLong;
 typedef NSInteger = ffi.Long;
 
 class NSString extends NSObject {
-  NSString._(ffi.Pointer<ObjCObject> id, UIDeviceBindings lib,
-      {bool retain = false, bool release = false})
-      : super._(id, lib, retain: retain, release: release);
+  NSString._(super.id, super.lib, {super.retain, super.release}) : super._();
 
   /// Returns a [NSString] that points to the same underlying object as [other].
   static NSString castFrom<T extends _ObjCWrapper>(T other) {
@@ -1779,9 +1769,7 @@ extension StringToNSString on String {
 typedef unichar = ffi.UnsignedShort;
 
 class NSCoder extends NSObject {
-  NSCoder._(ffi.Pointer<ObjCObject> id, UIDeviceBindings lib,
-      {bool retain = false, bool release = false})
-      : super._(id, lib, retain: retain, release: release);
+  NSCoder._(super.id, super.lib, {super.retain, super.release}) : super._();
 
   /// Returns a [NSCoder] that points to the same underlying object as [other].
   static NSCoder castFrom<T extends _ObjCWrapper>(T other) {
@@ -1840,9 +1828,7 @@ class NSCoder extends NSObject {
 }
 
 class NSData extends NSObject {
-  NSData._(ffi.Pointer<ObjCObject> id, UIDeviceBindings lib,
-      {bool retain = false, bool release = false})
-      : super._(id, lib, retain: retain, release: release);
+  NSData._(super.id, super.lib, {super.retain, super.release}) : super._();
 
   /// Returns a [NSData] that points to the same underlying object as [other].
   static NSData castFrom<T extends _ObjCWrapper>(T other) {
@@ -1904,9 +1890,7 @@ abstract class UIDeviceOrientation {
 }
 
 class NSUUID extends NSObject {
-  NSUUID._(ffi.Pointer<ObjCObject> id, UIDeviceBindings lib,
-      {bool retain = false, bool release = false})
-      : super._(id, lib, retain: retain, release: release);
+  NSUUID._(super.id, super.lib, {super.retain, super.release}) : super._();
 
   /// Returns a [NSUUID] that points to the same underlying object as [other].
   static NSUUID castFrom<T extends _ObjCWrapper>(T other) {
