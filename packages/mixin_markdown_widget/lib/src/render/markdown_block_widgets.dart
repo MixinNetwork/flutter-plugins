@@ -407,7 +407,8 @@ class MarkdownCodeBlockView extends StatelessWidget {
                   padding: EdgeInsets.zero,
                   style: IconButton.styleFrom(
                     backgroundColor: Colors.transparent,
-                    foregroundColor: theme.bodyStyle.color?.withValues(alpha: 0.72),
+                    foregroundColor:
+                        theme.bodyStyle.color?.withValues(alpha: 0.72),
                   ),
                   icon: const Icon(Icons.copy_rounded, size: 18),
                   onPressed: onCopyCode,
