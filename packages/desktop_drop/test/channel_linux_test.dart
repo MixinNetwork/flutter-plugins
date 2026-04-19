@@ -25,7 +25,7 @@ void main() {
     DesktopDrop.instance.init();
   });
 
-  test('linux drop keeps smb uri path', () async {
+  test('linux drop keeps non-file uri path', () async {
     final events = <DropEvent>[];
     void listener(DropEvent event) => events.add(event);
     DesktopDrop.instance.addRawDropEventListener(listener);

@@ -144,10 +144,10 @@ class DesktopDrop {
             if (uri == null) {
               return '';
             }
-            if (uri.scheme == 'smb') {
-              return e;
+            if (uri.scheme == 'file') {
+              return uri.toFilePath();
             }
-            return uri.toFilePath();
+            return e;
           } catch (error, stacktrace) {
             debugPrint('failed to parse linux path: $error $stacktrace');
           }
