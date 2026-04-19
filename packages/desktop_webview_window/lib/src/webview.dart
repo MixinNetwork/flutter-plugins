@@ -6,8 +6,8 @@ typedef JavaScriptMessageHandler = void Function(String name, dynamic body);
 
 typedef PromptHandler = String Function(String prompt, String defaultText);
 
-typedef OnHistoryChangedCallback =
-    void Function(bool canGoBack, bool canGoForward);
+typedef OnHistoryChangedCallback = void Function(
+    bool canGoBack, bool canGoForward);
 
 /// Callback when WebView start to load a URL.
 /// [url] is the URL string.

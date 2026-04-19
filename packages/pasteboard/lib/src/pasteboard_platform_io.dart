@@ -35,7 +35,10 @@ class PasteboardPlatformIO implements PasteboardPlatform {
     if (image == null) {
       return null;
     }
-    if (Platform.isMacOS || Platform.isLinux || Platform.isIOS || Platform.isAndroid) {
+    if (Platform.isMacOS ||
+        Platform.isLinux ||
+        Platform.isIOS ||
+        Platform.isAndroid) {
       return image as Uint8List;
     } else if (Platform.isWindows) {
       final file = File(image as String);

@@ -107,27 +107,25 @@ class DesktopDrop {
         _notifyEvent(
           DropDoneEvent(
             location: _offset ?? Offset.zero,
-            files: items
-                .map((raw) {
-                  final path = raw["path"] as String;
-                  final bookmark = raw["apple-bookmark"] as Uint8List?;
-                  final isDir = (raw["isDirectory"] as bool?) ?? false;
-                  final fromPromise = (raw["fromPromise"] as bool?) ?? false;
-                  if (isDir) {
-                    return DropItemDirectory(
-                      path,
-                      const [],
-                      extraAppleBookmark: bookmark,
-                      fromPromise: fromPromise,
-                    );
-                  }
-                  return DropItemFile(
-                    path,
-                    extraAppleBookmark: bookmark,
-                    fromPromise: fromPromise,
-                  );
-                })
-                .toList(),
+            files: items.map((raw) {
+              final path = raw["path"] as String;
+              final bookmark = raw["apple-bookmark"] as Uint8List?;
+              final isDir = (raw["isDirectory"] as bool?) ?? false;
+              final fromPromise = (raw["fromPromise"] as bool?) ?? false;
+              if (isDir) {
+                return DropItemDirectory(
+                  path,
+                  const [],
+                  extraAppleBookmark: bookmark,
+                  fromPromise: fromPromise,
+                );
+              }
+              return DropItemFile(
+                path,
+                extraAppleBookmark: bookmark,
+                fromPromise: fromPromise,
+              );
+            }).toList(),
           ),
         );
         _offset = null;

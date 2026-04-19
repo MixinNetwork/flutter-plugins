@@ -29,8 +29,7 @@ class _MyAppState extends State<MyApp> {
     // create table
     db.execute("CREATE VIRTUAL TABLE t1 USING fts5(x, tokenize = 'simple')");
     // insert some data
-    db.execute(
-        """
+    db.execute("""
 insert into t1(x) values
  ('周杰伦 Jay Chou:我已分不清，你是友情还是错过的爱情'), 
 ('周杰伦 Jay Chou:最美的不是下雨天，是曾与你躲过雨的屋檐'),

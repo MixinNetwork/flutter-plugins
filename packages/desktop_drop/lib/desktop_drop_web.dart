@@ -92,7 +92,6 @@ class DesktopDropWeb {
       type: file.type,
       children: [],
     );
-
   }
 
   void _registerEvents() {
