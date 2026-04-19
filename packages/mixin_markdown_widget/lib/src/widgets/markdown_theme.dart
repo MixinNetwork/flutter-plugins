@@ -167,7 +167,8 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
       tableRowBackgroundColor: colorScheme.surface,
       selectionColor: colorScheme.primary.withValues(alpha: 0.24),
       quoteBorderWidth: 4,
-      imagePlaceholderBackgroundColor: colorScheme.surface.withValues(alpha: 0.92),
+      imagePlaceholderBackgroundColor:
+          colorScheme.surface.withValues(alpha: 0.92),
       showHeading1Divider: true,
       showHeading2Divider: true,
     );
@@ -258,7 +259,8 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
       tableRowBackgroundColor: colorScheme.surface,
       selectionColor: colorScheme.primary.withValues(alpha: 0.24),
       quoteBorderWidth: 4,
-      imagePlaceholderBackgroundColor: colorScheme.surface.withValues(alpha: 0.92),
+      imagePlaceholderBackgroundColor:
+          colorScheme.surface.withValues(alpha: 0.92),
       showHeading1Divider: true,
       showHeading2Divider: true,
     );
