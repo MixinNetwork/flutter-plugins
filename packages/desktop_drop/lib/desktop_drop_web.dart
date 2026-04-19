@@ -27,18 +27,32 @@ class DesktopDropWeb {
     pluginInstance._registerEvents();
   }
 
+  // The FileSystemDirectoryReader.readEntries() Web API returns at most 100
+  // entries per call by spec. To retrieve all children of a directory, the
+  // caller must call readEntries() repeatedly until it returns an empty batch.
+  // Calling it only once silently truncates directories with >100 files.
+  // See: https://wicg.github.io/entries-api/#dom-filesystemdirectoryreader-readentries
+  Future<List<dynamic>> _readAllEntries(
+      web.FileSystemDirectoryReader reader) async {
+    final allEntries = <dynamic>[];
+    while (true) {
+      final completer = Completer<List<dynamic>>();
+      reader.readEntries((JSArray<web.FileSystemEntry> batch) {
+        completer.complete(batch.toDart);
+      }.toJS);
+      final batch = await completer.future;
+      if (batch.isEmpty) break;
+      allEntries.addAll(batch);
+    }
+    return allEntries;
+  }
+
   Future<WebDropItem> _entryToWebDropItem(web.FileSystemEntry entry) async {
     if (entry.isDirectory == true) {
       entry = entry as web.FileSystemDirectoryEntry;
       final web.FileSystemDirectoryReader reader = entry.createReader();
-      Completer entriesCompleter = Completer<List<dynamic>>();
-      entriesCallBack(JSArray<web.FileSystemEntry> sub) {
-        entriesCompleter.complete(sub.toDart);
-      }
 
-      reader.readEntries(entriesCallBack.toJS);
-
-      final List<dynamic> entries = await entriesCompleter.future;
+      final List<dynamic> entries = await _readAllEntries(reader);
 
       final children = await Future.wait(
         entries.map((e) => _entryToWebDropItem(e)),
