@@ -95,17 +95,28 @@ class MarkdownController extends ChangeNotifier {
     final previousData = _data;
     _data = data;
     _version += 1;
+    final parseStopwatch = Stopwatch()..start();
+    late final String parseMode;
     if (allowIncrementalAppend &&
         previousData.isNotEmpty &&
         _data.startsWith(previousData)) {
+      parseMode = 'appendChunk';
       _document = _parser.parseAppendingChunk(
         _data.substring(previousData.length),
         previousDocument: previousDocument,
         version: _version,
       );
     } else {
+      parseMode = 'full';
       _document = _parser.parse(_data, version: _version);
     }
+    parseStopwatch.stop();
+    debugPrint(
+      '[mixin_markdown_widget] parse mode=$parseMode '
+      'version=$_version chars=${_data.length} '
+      'blocks=${_document.blocks.length} '
+      'elapsed=${parseStopwatch.elapsedMicroseconds / 1000}ms',
+    );
     _syncStreamingState();
     _documentVersionNotifier.value = _version;
   }

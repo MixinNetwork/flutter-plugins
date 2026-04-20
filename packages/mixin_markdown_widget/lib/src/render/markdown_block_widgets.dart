@@ -44,6 +44,117 @@ typedef MarkdownTableWidgetBuilder = Widget Function(
   TableColumnWidth defaultColumnWidth,
 );
 
+enum MarkdownTableColumnSizing {
+  fixed,
+  flex,
+}
+
+class MarkdownTableLayoutPlanCache {
+  final Map<String, _CachedMarkdownTableLayoutPlan> _plans =
+      <String, _CachedMarkdownTableLayoutPlan>{};
+
+  MarkdownTableLayoutPlan planFor(TableBlock block) {
+    final cached = _plans[block.id];
+    if (cached != null && identical(cached.block, block)) {
+      return cached.plan;
+    }
+    final plan = MarkdownTableLayoutPlan.fromBlock(block);
+    _plans[block.id] = _CachedMarkdownTableLayoutPlan(
+      block: block,
+      plan: plan,
+    );
+    return plan;
+  }
+
+  void cleanup(Set<String> validIds) {
+    _plans.removeWhere((key, _) => !validIds.contains(key));
+  }
+}
+
+class _CachedMarkdownTableLayoutPlan {
+  const _CachedMarkdownTableLayoutPlan({
+    required this.block,
+    required this.plan,
+  });
+
+  final TableBlock block;
+  final MarkdownTableLayoutPlan plan;
+}
+
+class MarkdownTableLayoutPlan {
+  const MarkdownTableLayoutPlan({
+    required this.columnCount,
+    required this.columnSizing,
+    required this.fixedWidths,
+    required this.flexFactors,
+    required this.minimumWidth,
+  });
+
+  factory MarkdownTableLayoutPlan.fromBlock(TableBlock block) {
+    final columnCount = block.rows.fold<int>(
+      0,
+      (maxCount, row) =>
+          row.cells.length > maxCount ? row.cells.length : maxCount,
+    );
+    if (columnCount == 0) {
+      return const MarkdownTableLayoutPlan(
+        columnCount: 0,
+        columnSizing: <MarkdownTableColumnSizing>[],
+        fixedWidths: <double>[],
+        flexFactors: <double>[],
+        minimumWidth: 0,
+      );
+    }
+
+    final colMaxChars = List<int>.filled(columnCount, 0);
+    for (final row in block.rows) {
+      for (var index = 0;
+          index < row.cells.length && index < columnCount;
+          index++) {
+        final textLen = _estimateInlineTextLength(row.cells[index].inlines);
+        if (textLen > colMaxChars[index]) {
+          colMaxChars[index] = textLen;
+        }
+      }
+    }
+
+    final columnSizing = <MarkdownTableColumnSizing>[];
+    final fixedWidths = <double>[];
+    final flexFactors = <double>[];
+    var minimumWidth = 0.0;
+
+    for (final charCount in colMaxChars) {
+      if (charCount > 30) {
+        columnSizing.add(MarkdownTableColumnSizing.flex);
+        fixedWidths.add(0);
+        final factor = math.max(1, charCount).toDouble();
+        flexFactors.add(factor);
+        minimumWidth += 160.0;
+      } else {
+        columnSizing.add(MarkdownTableColumnSizing.fixed);
+        final width = math.min(math.max(charCount * 10.0 + 24.0, 72.0), 160.0);
+        fixedWidths.add(width);
+        flexFactors.add(0);
+        minimumWidth += width;
+      }
+    }
+
+    return MarkdownTableLayoutPlan(
+      columnCount: columnCount,
+      columnSizing: columnSizing,
+      fixedWidths: fixedWidths,
+      flexFactors: flexFactors,
+      minimumWidth: minimumWidth,
+    );
+  }
+
+  final int columnCount;
+  final List<MarkdownTableColumnSizing> columnSizing;
+  final List<double> fixedWidths;
+  final List<double> flexFactors;
+  final double minimumWidth;
+}
+
 int _estimateInlineTextLength(List<InlineNode> inlines) {
   int length = 0;
   for (final inline in inlines) {
@@ -78,11 +189,13 @@ class MarkdownAdaptiveTableLayout extends StatelessWidget {
   const MarkdownAdaptiveTableLayout({
     super.key,
     required this.block,
+    required this.layoutPlan,
     required this.tableBuilder,
     this.scrollController,
   });
 
   final TableBlock block;
+  final MarkdownTableLayoutPlan layoutPlan;
   final MarkdownTableWidgetBuilder tableBuilder;
   final ScrollController? scrollController;
 
@@ -91,54 +204,27 @@ class MarkdownAdaptiveTableLayout extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final availableWidth = math.max(constraints.maxWidth, 0.0);
-
-        final columnCount = block.rows.fold<int>(
-          0,
-          (maxCount, row) =>
-              row.cells.length > maxCount ? row.cells.length : maxCount,
-        );
+        final columnCount = layoutPlan.columnCount;
 
         if (columnCount == 0) {
           return const SizedBox.shrink();
         }
 
-        final colMaxChars = List.filled(columnCount, 0);
-        for (final row in block.rows) {
-          for (var i = 0; i < row.cells.length && i < columnCount; i++) {
-            final textLen = _estimateInlineTextLength(row.cells[i].inlines);
-            if (textLen > colMaxChars[i]) {
-              colMaxChars[i] = textLen;
-            }
-          }
-        }
-
         final Map<int, TableColumnWidth> customWidths = {};
-        double estimatedMins = 0;
-        bool hasFlex = false;
-
-        for (var i = 0; i < columnCount; i++) {
-          if (colMaxChars[i] > 30) {
-            customWidths[i] = FlexColumnWidth(colMaxChars[i].toDouble());
-            estimatedMins +=
-                80.0; // flex columns are given a generous minimum reasonable width before giving up and scrolling
-            hasFlex = true;
-          } else {
-            customWidths[i] = const IntrinsicColumnWidth();
-            // Estimate minimum required space for intrinsic columns to avoid horizontal squashing before scroll triggers
-            estimatedMins += math.min(colMaxChars[i] * 10.0 + 24.0, 100.0);
+        for (var index = 0; index < columnCount; index++) {
+          switch (layoutPlan.columnSizing[index]) {
+            case MarkdownTableColumnSizing.fixed:
+              customWidths[index] = FixedColumnWidth(
+                layoutPlan.fixedWidths[index],
+              );
+            case MarkdownTableColumnSizing.flex:
+              customWidths[index] = FlexColumnWidth(
+                layoutPlan.flexFactors[index],
+              );
           }
         }
 
-        if (!hasFlex) {
-          final table = tableBuilder(null, const IntrinsicColumnWidth());
-          return SingleChildScrollView(
-            controller: scrollController,
-            scrollDirection: Axis.horizontal,
-            child: table,
-          );
-        }
-
-        final idealWidth = math.max(availableWidth, estimatedMins);
+        final idealWidth = math.max(availableWidth, layoutPlan.minimumWidth);
         final table = tableBuilder(customWidths, const FlexColumnWidth());
 
         return SingleChildScrollView(
@@ -432,6 +518,7 @@ class MarkdownTableBlockView extends StatelessWidget {
     super.key,
     required this.theme,
     required this.block,
+    required this.layoutPlan,
     required this.textWidgetBuilder,
     this.cellKeyBuilder,
     this.cellTextKeyBuilder,
@@ -440,6 +527,7 @@ class MarkdownTableBlockView extends StatelessWidget {
 
   final MarkdownThemeData theme;
   final TableBlock block;
+  final MarkdownTableLayoutPlan layoutPlan;
   final MarkdownInlineTextWidgetBuilder textWidgetBuilder;
   final Key? Function(int rowIndex, int columnIndex)? cellKeyBuilder;
   final GlobalKey? Function(int rowIndex, int columnIndex)? cellTextKeyBuilder;
@@ -460,6 +548,7 @@ class MarkdownTableBlockView extends StatelessWidget {
       theme: theme,
       child: MarkdownAdaptiveTableLayout(
         block: block,
+        layoutPlan: layoutPlan,
         scrollController: scrollController,
         tableBuilder: (columnWidths, defaultColumnWidth) => Table(
           columnWidths: columnWidths,

@@ -1746,6 +1746,7 @@ return value;
         ),
       ),
     );
+    await tester.pump();
 
     final richTextFinder = find.byWidgetPredicate(
       (widget) =>
@@ -1759,6 +1760,84 @@ return value;
     final rootSpan = richText.text as TextSpan;
     expect(
         _countStyledDescendantSpans(rootSpan, rootSpan.style), greaterThan(0));
+  });
+
+  testWidgets(
+      'code blocks render plain text on the first frame, then highlight',
+      (tester) async {
+    const input = '''
+```dart
+const value = 42;
+return value;
+```
+''';
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(data: input),
+        ),
+      ),
+    );
+
+    final richTextFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is RichText &&
+          widget.text.toPlainText().contains('const value = 42;'),
+    );
+    expect(richTextFinder, findsOneWidget);
+
+    var richText = tester.widget<RichText>(richTextFinder);
+    var rootSpan = richText.text as TextSpan;
+    expect(_countStyledDescendantSpans(rootSpan, rootSpan.style), 0);
+
+    await tester.pump();
+    await tester.pump();
+
+    richText = tester.widget<RichText>(richTextFinder);
+    rootSpan = richText.text as TextSpan;
+    expect(
+        _countStyledDescendantSpans(rootSpan, rootSpan.style), greaterThan(0));
+  });
+
+  testWidgets(
+      'long code blocks can degrade to plain text above the configured line limit',
+      (tester) async {
+    const input = '''
+```dart
+final a = 1;
+final b = 2;
+final c = a + b;
+```
+''';
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: MarkdownWidget(
+              data: input,
+              theme: MarkdownThemeData.fallback(context).copyWith(
+                codeHighlightMaxLines: 2,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    final richTextFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is RichText &&
+          widget.text.toPlainText().contains('final c = a + b;'),
+    );
+    expect(richTextFinder, findsOneWidget);
+
+    final richText = tester.widget<RichText>(richTextFinder);
+    final rootSpan = richText.text as TextSpan;
+    expect(_countStyledDescendantSpans(rootSpan, rootSpan.style), 0);
   });
 
   testWidgets('renders inline code with rounded background and padding', (

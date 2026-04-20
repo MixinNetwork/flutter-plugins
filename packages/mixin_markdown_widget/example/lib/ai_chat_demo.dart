@@ -33,9 +33,8 @@ class _AIChatDemoPageState extends State<AIChatDemoPage> {
       ));
       final markdown = _presetMarkdown[random.nextInt(_presetMarkdown.length)];
       _messages.add(ChatMessage(
-        text: '',
+        text: markdown,
         isUser: false,
-        controller: MarkdownController(data: markdown),
       ));
     }
   }
@@ -376,30 +375,11 @@ Additionally, we support `<kbd>Ctrl</kbd> + <kbd>C</kbd>` and `<u>underlined</u>
         _presetMarkdown[random.nextInt(_presetMarkdown.length)];
 
     final aiMessage = ChatMessage(
-      text: '',
+      text: responseMarkdown,
       isUser: false,
-      controller: MarkdownController(data: ''),
     );
-
     setState(() {
       _messages.add(aiMessage);
-    });
-
-    // Simulate streaming output - slightly faster for massive content
-    const chunkSize = 50;
-    for (var i = 0; i < responseMarkdown.length; i += chunkSize) {
-      await Future.delayed(const Duration(milliseconds: 10));
-      if (!mounted) return;
-
-      final end = min(i + chunkSize, responseMarkdown.length);
-      final chunk = responseMarkdown.substring(i, end);
-      aiMessage.controller?.appendChunk(chunk);
-      _scrollToBottom();
-    }
-
-    aiMessage.controller?.commitStream();
-    setState(() {
-      _isTyping = false;
     });
   }
 
@@ -478,24 +458,50 @@ Additionally, we support `<kbd>Ctrl</kbd> + <kbd>C</kbd>` and `<u>underlined</u>
 class ChatMessage {
   final String text;
   final bool isUser;
-  final MarkdownController? controller;
 
-  ChatMessage({
-    required this.text,
-    required this.isUser,
-    this.controller,
-  });
+  ChatMessage({required this.text, required this.isUser});
 }
 
-class _MessageTile extends StatelessWidget {
+class _MessageTile extends StatefulWidget {
   const _MessageTile({required this.message});
 
   final ChatMessage message;
 
   @override
+  State<_MessageTile> createState() => _MessageTileState();
+}
+
+class _MessageTileState extends State<_MessageTile> {
+  final MarkdownController _controller = MarkdownController();
+
+  @override
+  void initState() {
+    super.initState();
+    if (!widget.message.isUser) {
+      _controller.setData(widget.message.text);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant _MessageTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.message.text != widget.message.text) {
+      if (!widget.message.isUser) {
+        _controller.setData(widget.message.text);
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isUser = message.isUser;
+    final isUser = widget.message.isUser;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12.0),
@@ -531,11 +537,11 @@ class _MessageTile extends StatelessWidget {
                 ],
               ),
               child: isUser
-                  ? Text(message.text,
+                  ? Text(widget.message.text,
                       style: const TextStyle(fontWeight: FontWeight.w500))
                   : MarkdownWidget(
-                      controller: message.controller!,
-                      selectable: true,
+                      controller: _controller,
+                      selectable: false,
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
                       theme: MarkdownThemeData.fallback(context).copyWith(

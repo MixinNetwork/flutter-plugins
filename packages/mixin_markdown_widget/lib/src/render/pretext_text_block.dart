@@ -1,5 +1,6 @@
 // ignore_for_file: implementation_imports
 
+import 'dart:collection';
 import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
@@ -196,6 +197,95 @@ class MarkdownPretextTextBlock extends StatelessWidget {
   }
 }
 
+final LinkedHashMap<_MarkdownPretextLayoutCacheKey, MarkdownPretextLayoutResult>
+    _markdownPretextLayoutCache = LinkedHashMap<_MarkdownPretextLayoutCacheKey,
+        MarkdownPretextLayoutResult>();
+
+const int _markdownPretextLayoutCacheLimit = 192;
+
+@immutable
+class _MarkdownPretextLayoutCacheKey {
+  const _MarkdownPretextLayoutCacheKey({
+    required this.runsSignature,
+    required this.fallbackStyleHash,
+    required this.maxWidth,
+    required this.textScaleFactor,
+    required this.textAlign,
+    required this.textDirection,
+  });
+
+  final int runsSignature;
+  final int fallbackStyleHash;
+  final int maxWidth;
+  final int textScaleFactor;
+  final TextAlign textAlign;
+  final TextDirection textDirection;
+
+  @override
+  bool operator ==(Object other) {
+    return other is _MarkdownPretextLayoutCacheKey &&
+        other.runsSignature == runsSignature &&
+        other.fallbackStyleHash == fallbackStyleHash &&
+        other.maxWidth == maxWidth &&
+        other.textScaleFactor == textScaleFactor &&
+        other.textAlign == textAlign &&
+        other.textDirection == textDirection;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+        runsSignature,
+        fallbackStyleHash,
+        maxWidth,
+        textScaleFactor,
+        textAlign,
+        textDirection,
+      );
+}
+
+int _markdownPretextRunsSignature(List<MarkdownPretextInlineRun> runs) {
+  return Object.hashAll(
+    runs.map((run) {
+      final decoration = run.decoration;
+      return Object.hash(
+        run.text,
+        run.style.hashCode,
+        run.mouseCursor?.hashCode,
+        run.allowCharacterWrap,
+        decoration?.backgroundColor,
+        decoration?.borderRadius,
+        decoration?.padding,
+        run.renderSpan?.runtimeType,
+        run.estimatedWidth,
+        run.estimatedLineHeight,
+      );
+    }),
+  );
+}
+
+MarkdownPretextLayoutResult? _getCachedMarkdownPretextLayout(
+  _MarkdownPretextLayoutCacheKey key,
+) {
+  final cached = _markdownPretextLayoutCache.remove(key);
+  if (cached != null) {
+    _markdownPretextLayoutCache[key] = cached;
+  }
+  return cached;
+}
+
+void _storeCachedMarkdownPretextLayout(
+  _MarkdownPretextLayoutCacheKey key,
+  MarkdownPretextLayoutResult result,
+) {
+  _markdownPretextLayoutCache[key] = result;
+  while (
+      _markdownPretextLayoutCache.length > _markdownPretextLayoutCacheLimit) {
+    _markdownPretextLayoutCache.remove(
+      _markdownPretextLayoutCache.keys.first,
+    );
+  }
+}
+
 bool _requiresDirectTextRichRendering(List<MarkdownPretextInlineRun> runs) {
   return runs.any((run) => run.renderSpan != null);
 }
@@ -352,6 +442,19 @@ MarkdownPretextLayoutResult computeMarkdownPretextLayoutFromRuns({
   TextAlign textAlign = TextAlign.start,
   TextDirection textDirection = TextDirection.ltr,
 }) {
+  final cacheKey = _MarkdownPretextLayoutCacheKey(
+    runsSignature: _markdownPretextRunsSignature(runs),
+    fallbackStyleHash: fallbackStyle.hashCode,
+    maxWidth: (maxWidth * 100).round(),
+    textScaleFactor: (textScaleFactor * 1000).round(),
+    textAlign: textAlign,
+    textDirection: textDirection,
+  );
+  final cached = _getCachedMarkdownPretextLayout(cacheKey);
+  if (cached != null) {
+    return cached;
+  }
+
   final plainText = runs.map((run) => run.text).join();
   final lineHeight = _measureMaxLineHeight(
     runs.isEmpty
@@ -362,12 +465,14 @@ MarkdownPretextLayoutResult computeMarkdownPretextLayoutFromRuns({
     textScaleFactor,
   );
   if (runs.isEmpty || plainText.isEmpty) {
-    return MarkdownPretextLayoutResult(
+    final emptyResult = MarkdownPretextLayoutResult(
       plainText: plainText,
       lines: const <MarkdownPretextLayoutLine>[],
       lineHeight: lineHeight,
       textScaleFactor: textScaleFactor,
     );
+    _storeCachedMarkdownPretextLayout(cacheKey, emptyResult);
+    return emptyResult;
   }
 
   final safeMaxWidth = maxWidth.isFinite ? math.max(maxWidth, 0.0) : 100000.0;
@@ -489,7 +594,7 @@ MarkdownPretextLayoutResult computeMarkdownPretextLayoutFromRuns({
     originalCursor = originalEndOffset;
   }
 
-  return MarkdownPretextLayoutResult(
+  final layoutResult = MarkdownPretextLayoutResult(
     plainText: plainText,
     lines: List<MarkdownPretextLayoutLine>.unmodifiable(lines),
     lineHeight: lines.fold<double>(
@@ -498,6 +603,8 @@ MarkdownPretextLayoutResult computeMarkdownPretextLayoutFromRuns({
     ),
     textScaleFactor: textScaleFactor,
   );
+  _storeCachedMarkdownPretextLayout(cacheKey, layoutResult);
+  return layoutResult;
 }
 
 @immutable

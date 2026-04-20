@@ -95,20 +95,176 @@ class ResolvedIndexedBlockEntry {
   final Rect rect;
 }
 
+class MarkdownDescriptorCache {
+  final Map<String, _CachedBlockDescriptor> _blockDescriptors =
+      <String, _CachedBlockDescriptor>{};
+  final Map<String, _CachedIndexedBlockDescriptors> _indexedBlockDescriptors =
+      <String, _CachedIndexedBlockDescriptors>{};
+  final Map<String, _CachedIndexedListDescriptors> _indexedListDescriptors =
+      <String, _CachedIndexedListDescriptors>{};
+
+  _CachedBlockDescriptor? blockDescriptor(String key) => _blockDescriptors[key];
+
+  void storeBlockDescriptor(
+    String key,
+    String blockId,
+    BlockNode block,
+    int indentLevel,
+    SelectableTextDescriptor descriptor,
+  ) {
+    _blockDescriptors[key] = _CachedBlockDescriptor(
+      blockId: blockId,
+      block: block,
+      indentLevel: indentLevel,
+      descriptor: descriptor,
+    );
+  }
+
+  _CachedIndexedBlockDescriptors? indexedBlockDescriptors(String key) =>
+      _indexedBlockDescriptors[key];
+
+  void storeIndexedBlockDescriptors(
+    String key,
+    String ownerId,
+    List<BlockNode> blocks,
+    int indentLevel,
+    String separator,
+    List<IndexedBlockDescriptor> descriptors,
+  ) {
+    _indexedBlockDescriptors[key] = _CachedIndexedBlockDescriptors(
+      ownerId: ownerId,
+      blocks: blocks,
+      indentLevel: indentLevel,
+      separator: separator,
+      descriptors: descriptors,
+    );
+  }
+
+  _CachedIndexedListDescriptors? indexedListDescriptors(String key) =>
+      _indexedListDescriptors[key];
+
+  void storeIndexedListDescriptors(
+    String key,
+    ListBlock block,
+    int indentLevel,
+    List<IndexedListSelectionDescriptor> descriptors,
+  ) {
+    _indexedListDescriptors[key] = _CachedIndexedListDescriptors(
+      block: block,
+      indentLevel: indentLevel,
+      descriptors: descriptors,
+    );
+  }
+
+  void cleanup(Set<String> validIds) {
+    _blockDescriptors.removeWhere(
+      (_, entry) => !validIds.contains(entry.blockId),
+    );
+    _indexedBlockDescriptors.removeWhere(
+      (_, entry) => !_ownerIdIsValid(entry.ownerId, validIds),
+    );
+    _indexedListDescriptors.removeWhere(
+      (_, entry) => !validIds.contains(entry.block.id),
+    );
+  }
+
+  bool _ownerIdIsValid(String ownerId, Set<String> validIds) {
+    for (final part in ownerId.split('|')) {
+      if (part.isEmpty || part == 'empty') {
+        continue;
+      }
+      if (!validIds.contains(part)) {
+        return false;
+      }
+    }
+    return true;
+  }
+}
+
+class _CachedBlockDescriptor {
+  const _CachedBlockDescriptor({
+    required this.blockId,
+    required this.block,
+    required this.indentLevel,
+    required this.descriptor,
+  });
+
+  final String blockId;
+  final BlockNode block;
+  final int indentLevel;
+  final SelectableTextDescriptor descriptor;
+}
+
+class _CachedIndexedBlockDescriptors {
+  const _CachedIndexedBlockDescriptors({
+    required this.ownerId,
+    required this.blocks,
+    required this.indentLevel,
+    required this.separator,
+    required this.descriptors,
+  });
+
+  final String ownerId;
+  final List<BlockNode> blocks;
+  final int indentLevel;
+  final String separator;
+  final List<IndexedBlockDescriptor> descriptors;
+}
+
+class _CachedIndexedListDescriptors {
+  const _CachedIndexedListDescriptors({
+    required this.block,
+    required this.indentLevel,
+    required this.descriptors,
+  });
+
+  final ListBlock block;
+  final int indentLevel;
+  final List<IndexedListSelectionDescriptor> descriptors;
+}
+
 class MarkdownDescriptorExtractor {
-  const MarkdownDescriptorExtractor({
+  MarkdownDescriptorExtractor({
     required this.theme,
     required this.plainTextSerializer,
     required this.inlineBuilder,
     required this.codeSyntaxHighlighter,
+    required this.cache,
   });
 
   final MarkdownThemeData theme;
   final MarkdownPlainTextSerializer plainTextSerializer;
   final MarkdownInlineBuilder inlineBuilder;
   final MarkdownCodeSyntaxHighlighter codeSyntaxHighlighter;
+  final MarkdownDescriptorCache cache;
 
   SelectableTextDescriptor buildSelectableDescriptorForBlock(
+    BlockNode block, {
+    int indentLevel = 0,
+  }) {
+    final cacheKey = '${block.id}:$indentLevel';
+    final cached = cache.blockDescriptor(cacheKey);
+    if (cached != null &&
+        identical(cached.block, block) &&
+        cached.indentLevel == indentLevel) {
+      return cached.descriptor;
+    }
+
+    final descriptor = _buildSelectableDescriptorForBlock(
+      block,
+      indentLevel: indentLevel,
+    );
+    cache.storeBlockDescriptor(
+      cacheKey,
+      block.id,
+      block,
+      indentLevel,
+      descriptor,
+    );
+    return descriptor;
+  }
+
+  SelectableTextDescriptor _buildSelectableDescriptorForBlock(
     BlockNode block, {
     int indentLevel = 0,
   }) {
@@ -247,6 +403,46 @@ class MarkdownDescriptorExtractor {
     List<BlockNode> blocks, {
     int indentLevel = 0,
     required String separator,
+    String? cacheOwnerId,
+  }) {
+    if (cacheOwnerId != null) {
+      final cacheKey = '$cacheOwnerId:$indentLevel:$separator';
+      final cached = cache.indexedBlockDescriptors(cacheKey);
+      if (cached != null &&
+          cached.ownerId == cacheOwnerId &&
+          cached.indentLevel == indentLevel &&
+          cached.separator == separator &&
+          _sameBlockList(cached.blocks, blocks)) {
+        return cached.descriptors;
+      }
+
+      final descriptors = _buildIndexedBlockDescriptors(
+        blocks,
+        indentLevel: indentLevel,
+        separator: separator,
+      );
+      cache.storeIndexedBlockDescriptors(
+        cacheKey,
+        cacheOwnerId,
+        blocks,
+        indentLevel,
+        separator,
+        descriptors,
+      );
+      return descriptors;
+    }
+
+    return _buildIndexedBlockDescriptors(
+      blocks,
+      indentLevel: indentLevel,
+      separator: separator,
+    );
+  }
+
+  List<IndexedBlockDescriptor> _buildIndexedBlockDescriptors(
+    List<BlockNode> blocks, {
+    int indentLevel = 0,
+    required String separator,
   }) {
     final entries = <IndexedBlockDescriptor>[];
     var offset = 0;
@@ -279,6 +475,14 @@ class MarkdownDescriptorExtractor {
     ListBlock block, {
     int indentLevel = 0,
   }) {
+    final cacheKey = '${block.id}:$indentLevel';
+    final cached = cache.indexedListDescriptors(cacheKey);
+    if (cached != null &&
+        identical(cached.block, block) &&
+        cached.indentLevel == indentLevel) {
+      return cached.descriptors;
+    }
+
     final entries = <IndexedListSelectionDescriptor>[];
     var offset = 0;
     for (var index = 0; index < block.items.length; index++) {
@@ -300,6 +504,7 @@ class MarkdownDescriptorExtractor {
       entries.add(entry);
       offset += entry.descriptor.plainText.length;
     }
+    cache.storeIndexedListDescriptors(cacheKey, block, indentLevel, entries);
     return entries;
   }
 
@@ -400,6 +605,7 @@ class MarkdownDescriptorExtractor {
           quoteBlock,
           indexedBlocks: buildIndexedBlockDescriptors(
             quoteBlock.children,
+            cacheOwnerId: quoteBlock.id,
             separator: '\n\n',
           ),
           baseOffset: baseOffset,
@@ -679,6 +885,7 @@ class MarkdownDescriptorExtractor {
       blocks,
       indentLevel: indentLevel,
       separator: '\n',
+      cacheOwnerId: _childBlockOwnerId(blocks),
     );
     if (indexedBlocks.isEmpty) {
       return null;
@@ -715,6 +922,28 @@ class MarkdownDescriptorExtractor {
       return childUnit;
     }
     return null;
+  }
+
+  bool _sameBlockList(List<BlockNode> left, List<BlockNode> right) {
+    if (identical(left, right)) {
+      return true;
+    }
+    if (left.length != right.length) {
+      return false;
+    }
+    for (var index = 0; index < left.length; index++) {
+      if (!identical(left[index], right[index])) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  String _childBlockOwnerId(List<BlockNode> blocks) {
+    if (blocks.isEmpty) {
+      return 'empty';
+    }
+    return blocks.map((block) => block.id).join('|');
   }
 
   bool _isLeadListTextBlock(BlockNode block) {
