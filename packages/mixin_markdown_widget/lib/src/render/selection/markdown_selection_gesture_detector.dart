@@ -86,13 +86,6 @@ class _MarkdownSelectionGestureDetectorState
     }
 
     if ((event.buttons & kSecondaryMouseButton) != 0) {
-      final selectionController = widget.selectionController;
-      if (!selectionController.hasSelection) {
-        final position = widget.hitTestPosition(event.position, clamp: true);
-        if (position != null) {
-          widget.selectBlockAt(position.blockIndex);
-        }
-      }
       widget.onRequestToolbar(event.position);
       return;
     }

@@ -2325,6 +2325,43 @@ const value = 42;
     expect(inlineCodeDecorationFinder, findsWidgets);
   });
 
+  testWidgets('table cells render inline math without baseline alignment', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: '| Formula |\n| --- |\n| value \$x^2\$ |',
+          ),
+        ),
+      ),
+    );
+
+    final tableFinder = find.byType(Table);
+    expect(tableFinder, findsOneWidget);
+
+    final cellRichText = tester.widget<RichText>(
+      find
+          .descendant(
+            of: tableFinder,
+            matching: find.byWidgetPredicate(
+              (widget) =>
+                  widget is RichText &&
+                  widget.text.toPlainText().contains(
+                        String.fromCharCode(0xFFFC),
+                      ),
+            ),
+          )
+          .first,
+    );
+    final widgetSpans = _collectWidgetSpans(cellRichText.text).toList();
+
+    expect(widgetSpans, hasLength(1));
+    expect(widgetSpans.single.alignment, PlaceholderAlignment.middle);
+    expect(widgetSpans.single.baseline, isNull);
+  });
+
   testWidgets('undecorated runs render as a single direct rich text block', (
     tester,
   ) async {

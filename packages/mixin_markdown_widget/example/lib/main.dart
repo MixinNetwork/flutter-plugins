@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
 
+import 'ai_chat_demo.dart';
+
 enum _DemoThemePreset {
   ocean,
   warm,
@@ -22,6 +24,7 @@ class DemoApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      showPerformanceOverlay: true,
       theme: ThemeData(
         useMaterial3: true,
         colorSchemeSeed: const Color(0xFF0B7A75),
@@ -244,6 +247,17 @@ This content was appended through `MarkdownController.appendChunk`.
       appBar: AppBar(
         title: const Text('mixin_markdown_widget'),
         actions: <Widget>[
+          IconButton(
+            tooltip: 'AI Chat Demo',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const AIChatDemoPage(),
+                ),
+              );
+            },
+            icon: const Icon(Icons.chat_outlined),
+          ),
           IconButton(
             key: const Key('toggle-editor-visibility'),
             tooltip: _layoutMode == _DemoLayoutMode.split

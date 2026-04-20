@@ -19,18 +19,21 @@ class MarkdownInlineBuilder {
   final MarkdownTapLinkCallback? onTapLink;
 
   List<MarkdownPretextInlineRun> buildPretextRuns(
-    TextStyle baseStyle,
-    List<InlineNode> inlines,
-  ) {
+      TextStyle baseStyle, List<InlineNode> inlines,
+      {bool alignInlineMathToBaseline = true}) {
     return <MarkdownPretextInlineRun>[
-      for (final inline in inlines) ..._buildPretextRun(baseStyle, inline),
+      for (final inline in inlines)
+        ..._buildPretextRun(
+          baseStyle,
+          inline,
+          alignInlineMathToBaseline: alignInlineMathToBaseline,
+        ),
     ];
   }
 
   List<MarkdownPretextInlineRun> _buildPretextRun(
-    TextStyle baseStyle,
-    InlineNode inline,
-  ) {
+      TextStyle baseStyle, InlineNode inline,
+      {required bool alignInlineMathToBaseline}) {
     switch (inline.kind) {
       case MarkdownInlineKind.text:
         return <MarkdownPretextInlineRun>[
@@ -42,27 +45,48 @@ class MarkdownInlineBuilder {
       case MarkdownInlineKind.emphasis:
         final emphasis = inline as EmphasisInline;
         final style = baseStyle.copyWith(fontStyle: FontStyle.italic);
-        return buildPretextRuns(style, emphasis.children);
+        return buildPretextRuns(
+          style,
+          emphasis.children,
+          alignInlineMathToBaseline: alignInlineMathToBaseline,
+        );
       case MarkdownInlineKind.strong:
         final strong = inline as StrongInline;
         final style = baseStyle.copyWith(fontWeight: FontWeight.w700);
-        return buildPretextRuns(style, strong.children);
+        return buildPretextRuns(
+          style,
+          strong.children,
+          alignInlineMathToBaseline: alignInlineMathToBaseline,
+        );
       case MarkdownInlineKind.strikethrough:
         final strike = inline as StrikethroughInline;
         final style =
             baseStyle.copyWith(decoration: TextDecoration.lineThrough);
-        return buildPretextRuns(style, strike.children);
+        return buildPretextRuns(
+          style,
+          strike.children,
+          alignInlineMathToBaseline: alignInlineMathToBaseline,
+        );
       case MarkdownInlineKind.highlight:
         final highlight = inline as HighlightInline;
-        return buildPretextRuns(highlightStyle(baseStyle), highlight.children);
+        return buildPretextRuns(
+          highlightStyle(baseStyle),
+          highlight.children,
+          alignInlineMathToBaseline: alignInlineMathToBaseline,
+        );
       case MarkdownInlineKind.subscript:
         final subscript = inline as SubscriptInline;
-        return buildPretextRuns(subscriptStyle(baseStyle), subscript.children);
+        return buildPretextRuns(
+          subscriptStyle(baseStyle),
+          subscript.children,
+          alignInlineMathToBaseline: alignInlineMathToBaseline,
+        );
       case MarkdownInlineKind.superscript:
         final superscript = inline as SuperscriptInline;
         return buildPretextRuns(
           superscriptStyle(baseStyle),
           superscript.children,
+          alignInlineMathToBaseline: alignInlineMathToBaseline,
         );
       case MarkdownInlineKind.link:
         final link = inline as LinkInline;
@@ -73,7 +97,11 @@ class MarkdownInlineBuilder {
                 onTapLink!(link.destination, link.title, label);
               });
         final style = baseStyle.merge(theme.linkStyle);
-        return buildPretextRuns(style, link.children)
+        return buildPretextRuns(
+          style,
+          link.children,
+          alignInlineMathToBaseline: alignInlineMathToBaseline,
+        )
             .map(
               (run) => MarkdownPretextInlineRun(
                 text: run.text,
@@ -96,7 +124,11 @@ class MarkdownInlineBuilder {
           MarkdownPretextInlineRun(
             text: math.tex,
             style: baseStyle.merge(theme.inlineCodeStyle),
-            renderSpan: _buildMathSpan(baseStyle, math),
+            renderSpan: _buildMathSpan(
+              baseStyle,
+              math,
+              alignToBaseline: alignInlineMathToBaseline,
+            ),
             estimatedWidth: _estimateMathWidth(baseStyle, math),
             estimatedLineHeight: _estimateMathLineHeight(baseStyle, math),
           ),
@@ -232,7 +264,7 @@ class MarkdownInlineBuilder {
       case MarkdownInlineKind.math:
         final math = inline as MathInline;
         return <InlineSpan>[
-          _buildMathSpan(baseStyle, math),
+          _buildMathSpan(baseStyle, math, alignToBaseline: true),
         ];
       case MarkdownInlineKind.inlineCode:
         final code = inline as InlineCode;
@@ -301,7 +333,11 @@ class MarkdownInlineBuilder {
     );
   }
 
-  WidgetSpan _buildMathSpan(TextStyle baseStyle, MathInline math) {
+  WidgetSpan _buildMathSpan(
+    TextStyle baseStyle,
+    MathInline math, {
+    required bool alignToBaseline,
+  }) {
     final child = Padding(
       padding: EdgeInsets.symmetric(
         horizontal: math.displayStyle ? 0 : 2,
@@ -317,11 +353,12 @@ class MarkdownInlineBuilder {
         ),
       ),
     );
+    final useBaselineAlignment = !math.displayStyle && alignToBaseline;
     return WidgetSpan(
-      alignment: math.displayStyle
-          ? PlaceholderAlignment.middle
-          : PlaceholderAlignment.baseline,
-      baseline: math.displayStyle ? null : TextBaseline.alphabetic,
+      alignment: useBaselineAlignment
+          ? PlaceholderAlignment.baseline
+          : PlaceholderAlignment.middle,
+      baseline: useBaselineAlignment ? TextBaseline.alphabetic : null,
       child: child,
     );
   }

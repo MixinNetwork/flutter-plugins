@@ -36,6 +36,7 @@ typedef MarkdownInlineTextWidgetBuilder = Widget Function(
   List<InlineNode> inlines,
   TextAlign textAlign, {
   GlobalKey? directTextKey,
+  bool alignInlineMathToBaseline,
 });
 
 typedef MarkdownTableWidgetBuilder = Widget Function(
@@ -78,10 +79,12 @@ class MarkdownAdaptiveTableLayout extends StatelessWidget {
     super.key,
     required this.block,
     required this.tableBuilder,
+    this.scrollController,
   });
 
   final TableBlock block;
   final MarkdownTableWidgetBuilder tableBuilder;
+  final ScrollController? scrollController;
 
   @override
   Widget build(BuildContext context) {
@@ -129,6 +132,7 @@ class MarkdownAdaptiveTableLayout extends StatelessWidget {
         if (!hasFlex) {
           final table = tableBuilder(null, const IntrinsicColumnWidth());
           return SingleChildScrollView(
+            controller: scrollController,
             scrollDirection: Axis.horizontal,
             child: table,
           );
@@ -138,6 +142,7 @@ class MarkdownAdaptiveTableLayout extends StatelessWidget {
         final table = tableBuilder(customWidths, const FlexColumnWidth());
 
         return SingleChildScrollView(
+          controller: scrollController,
           scrollDirection: Axis.horizontal,
           child: ConstrainedBox(
             constraints: BoxConstraints(
@@ -430,6 +435,7 @@ class MarkdownTableBlockView extends StatelessWidget {
     required this.textWidgetBuilder,
     this.cellKeyBuilder,
     this.cellTextKeyBuilder,
+    this.scrollController,
   });
 
   final MarkdownThemeData theme;
@@ -437,6 +443,7 @@ class MarkdownTableBlockView extends StatelessWidget {
   final MarkdownInlineTextWidgetBuilder textWidgetBuilder;
   final Key? Function(int rowIndex, int columnIndex)? cellKeyBuilder;
   final GlobalKey? Function(int rowIndex, int columnIndex)? cellTextKeyBuilder;
+  final ScrollController? scrollController;
 
   @override
   Widget build(BuildContext context) {
@@ -453,6 +460,7 @@ class MarkdownTableBlockView extends StatelessWidget {
       theme: theme,
       child: MarkdownAdaptiveTableLayout(
         block: block,
+        scrollController: scrollController,
         tableBuilder: (columnWidths, defaultColumnWidth) => Table(
           columnWidths: columnWidths,
           defaultColumnWidth: defaultColumnWidth,
@@ -510,6 +518,7 @@ class MarkdownTableBlockView extends StatelessWidget {
           cell.inlines,
           _textAlignFor(alignment),
           directTextKey: directTextKey,
+          alignInlineMathToBaseline: false,
         ),
       ),
     );

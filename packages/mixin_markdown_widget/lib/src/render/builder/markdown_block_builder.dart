@@ -466,6 +466,8 @@ class MarkdownBlockBuilder {
         final cellTextKeys = keysRegistry.tableCellTextKeysFor(tableBlock);
         final descriptor =
             descriptorExtractor.buildSelectableDescriptorForBlock(tableBlock);
+        final scrollController = keysRegistry.tableScrollControllers
+            .putIfAbsent(tableBlock.id, ScrollController.new);
         return SelectableBlockSpec(
           child: _buildTable(
             context,
@@ -474,6 +476,7 @@ class MarkdownBlockBuilder {
                 cellKeys[rowIndex][columnIndex],
             cellTextKeyBuilder: (rowIndex, columnIndex) =>
                 cellTextKeys[rowIndex][columnIndex],
+            scrollController: scrollController,
           ),
           plainText: descriptor.plainText,
           selectionStructure: _matchingSelectionStructure(
@@ -484,6 +487,7 @@ class MarkdownBlockBuilder {
           textSpan: descriptor.span,
           highlightBorderRadius: theme.tableBorderRadius,
           selectionPaintOrder: SelectableBlockSelectionPaintOrder.aboveChild,
+          repaintListenable: scrollController,
           selectionColor: theme.selectionColor,
           selectionRectResolver: (context, _, range) =>
               selectionResolver.resolveNestedBlockSelectionRects(
@@ -1232,6 +1236,7 @@ class MarkdownBlockBuilder {
     TableBlock block, {
     Key? Function(int rowIndex, int columnIndex)? cellKeyBuilder,
     GlobalKey? Function(int rowIndex, int columnIndex)? cellTextKeyBuilder,
+    ScrollController? scrollController,
   }) {
     return MarkdownTableBlockView(
       theme: theme,
@@ -1239,6 +1244,9 @@ class MarkdownBlockBuilder {
       textWidgetBuilder: _buildInlineTextWidget,
       cellKeyBuilder: cellKeyBuilder,
       cellTextKeyBuilder: cellTextKeyBuilder,
+      scrollController: scrollController ??
+          keysRegistry.tableScrollControllers
+              .putIfAbsent(block.id, ScrollController.new),
     );
   }
 
@@ -1248,9 +1256,14 @@ class MarkdownBlockBuilder {
     List<InlineNode> inlines,
     TextAlign textAlign, {
     GlobalKey? directTextKey,
+    bool alignInlineMathToBaseline = true,
   }) {
     return MarkdownPretextTextBlock.rich(
-      runs: inlineBuilder.buildPretextRuns(style, inlines),
+      runs: inlineBuilder.buildPretextRuns(
+        style,
+        inlines,
+        alignInlineMathToBaseline: alignInlineMathToBaseline,
+      ),
       fallbackStyle: style,
       textAlign: textAlign,
       intrinsicWidthSafe: true,
