@@ -5561,6 +5561,75 @@ return value;
     expect(selectionController.selectedPlainText, 'Inner quote');
   });
 
+  testWidgets(
+      'selection auto-scroll falls back to ancestor scrollables for shrink-wrapped markdown widgets',
+      (tester) async {
+    final selectionController = MarkdownSelectionController();
+    final outerScrollController = ScrollController();
+    const targetLabel = 'Target message paragraph 1';
+
+    String buildMessage(String label) => '''
+$label
+
+$label continued with more content for drag selection.
+
+- bullet a
+- bullet b
+''';
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            height: 320,
+            child: ListView(
+              controller: outerScrollController,
+              children: List<Widget>.generate(6, (index) {
+                final label = index == 1 ? targetLabel : 'Message ${index + 1}';
+                return Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  child: MarkdownWidget(
+                    data: buildMessage(label),
+                    selectionController:
+                        index == 1 ? selectionController : null,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                  ),
+                );
+              }),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final outerListFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is ListView && widget.controller == outerScrollController,
+    );
+    final start = tester.getCenter(find.text(targetLabel));
+    final viewport = tester.getRect(outerListFinder);
+    final end = Offset(start.dx, viewport.bottom + 80);
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: start);
+    await gesture.down(start);
+    await tester.pump();
+    await gesture.moveTo(end);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+
+    expect(outerScrollController.offset, greaterThan(0));
+    expect(selectionController.hasSelection, isTrue);
+    expect(selectionController.selectedPlainText, contains(targetLabel));
+
+    await gesture.up();
+    await tester.pump();
+  });
+
   testWidgets('dragging into a table selects the table block content', (
     tester,
   ) async {
