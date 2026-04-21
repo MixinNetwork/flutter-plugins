@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -541,7 +540,6 @@ class _MessageTileState extends State<_MessageTile> {
                       style: const TextStyle(fontWeight: FontWeight.w500))
                   : MarkdownWidget(
                       controller: _controller,
-                      selectable: false,
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
                       theme: MarkdownThemeData.fallback(context).copyWith(

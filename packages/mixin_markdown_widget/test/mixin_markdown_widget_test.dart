@@ -4276,6 +4276,110 @@ const veryLongValueName = 42;
     expect(selectionController.selectedPlainText, '42');
   });
 
+  testWidgets(
+      'triple click inside a table cell with inline math selects the whole cell',
+      (tester) async {
+    final selectionController = MarkdownSelectionController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: r'''
+| Feature | Description | Status |
+| :--- | :---: | ---: |
+| **Math** | Full LaTeX parsing & rendering (\( \alpha^2 \)) | ✅ |
+''',
+            selectionController: selectionController,
+          ),
+        ),
+      ),
+    );
+
+    final target = tester.getCenter(find.textContaining('LaTeX'));
+
+    await _tripleTapAt(tester, target);
+
+    expect(selectionController.hasSelection, isTrue);
+    expect(
+      selectionController.selectedPlainText,
+      contains('Full LaTeX parsing & rendering'),
+    );
+    expect(selectionController.selectedPlainText, contains(r'\alpha^2'));
+    expect(selectionController.selectedPlainText, isNot(contains('\t')));
+    expect(selectionController.selectedPlainText, isNot(contains('\n')));
+  });
+
+  testWidgets(
+      'table block refreshes cached selection visuals when the selection range changes',
+      (tester) async {
+    final selectionController = MarkdownSelectionController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: '''
+| Name | Value |
+| --- | --- |
+| row | 42 |
+''',
+            selectionController: selectionController,
+          ),
+        ),
+      ),
+    );
+
+    final tableBlockFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is SelectableMarkdownBlock &&
+          widget.spec.plainText == 'Name\tValue\nrow\t42',
+    );
+    expect(tableBlockFinder, findsOneWidget);
+
+    selectionController.setSelection(
+      const DocumentSelection(
+        base: DocumentPosition(
+          blockIndex: 0,
+          path: PathInBlock(<int>[0]),
+          textOffset: 0,
+        ),
+        extent: DocumentPosition(
+          blockIndex: 0,
+          path: PathInBlock(<int>[0]),
+          textOffset: 4,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    var tableBlock = tester.widget<SelectableMarkdownBlock>(tableBlockFinder);
+    expect(tableBlock.selectionRange, isNotNull);
+    expect(tableBlock.selectionRange!.start.textOffset, 0);
+    expect(tableBlock.selectionRange!.end.textOffset, 4);
+
+    selectionController.setSelection(
+      const DocumentSelection(
+        base: DocumentPosition(
+          blockIndex: 0,
+          path: PathInBlock(<int>[0]),
+          textOffset: 15,
+        ),
+        extent: DocumentPosition(
+          blockIndex: 0,
+          path: PathInBlock(<int>[0]),
+          textOffset: 17,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    tableBlock = tester.widget<SelectableMarkdownBlock>(tableBlockFinder);
+    expect(tableBlock.selectionRange, isNotNull);
+    expect(tableBlock.selectionRange!.start.textOffset, 15);
+    expect(tableBlock.selectionRange!.end.textOffset, 17);
+  });
+
   testWidgets('triple click inside wrapped paragraph selects the current line',
       (
     tester,
@@ -5532,6 +5636,93 @@ Intro
 
     expect(selectionController.hasSelection, isTrue);
     expect(selectionController.selectedPlainText, 'Intro\n\nName');
+  });
+
+  testWidgets(
+      'reverse dragging from following heading into a table keeps table selection rects visible',
+      (tester) async {
+    final selectionController = MarkdownSelectionController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: r'''
+## 4. Complex Tables
+
+Tables support varying alignments, complex cell contents, and inline styles.
+
+| Feature | Description | Status |
+| :--- | :---: | ---: |
+| **Parsing** | Fast incremental markdown parsing | ✅ |
+| **Selection** | Seamless multi-block text selection | ✅ |
+| **Math** | Full LaTeX parsing & rendering (\( \alpha^2 \)) | ✅ |
+| **Code** | Syntax highlighting with *re_highlight* | 🚀 Built |
+
+## 5. Media & Links
+''',
+            selectionController: selectionController,
+          ),
+        ),
+      ),
+    );
+
+    final start = tester.getCenter(find.textContaining('Media & Links')) +
+        const Offset(0, 4);
+    final end = tester.getCenter(find.text('Feature'));
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: start);
+    await gesture.down(start);
+    await tester.pump();
+    await gesture.moveTo(end);
+    await tester.pump();
+    await gesture.up();
+    await tester.pump();
+
+    expect(selectionController.hasSelection, isTrue);
+    expect(
+      selectionController.selectedPlainText,
+      contains('Description\tStatus'),
+    );
+    expect(
+      selectionController.selectedPlainText,
+      contains('Code\tSyntax highlighting with re_highlight\t🚀 Built'),
+    );
+
+    final tableBlockFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is SelectableMarkdownBlock &&
+          widget.spec.plainText.contains('Feature\tDescription\tStatus'),
+    );
+    expect(tableBlockFinder, findsOneWidget);
+
+    final tableBlock = tester.widget<SelectableMarkdownBlock>(tableBlockFinder);
+    final selectionRange = selectionController.normalizedRange!;
+    final blockRange = DocumentRange(
+      start: DocumentPosition(
+        blockIndex: tableBlock.blockIndex,
+        path: const PathInBlock(<int>[0]),
+        textOffset: selectionRange.start.blockIndex == tableBlock.blockIndex
+            ? selectionRange.start.textOffset
+            : 0,
+      ),
+      end: DocumentPosition(
+        blockIndex: tableBlock.blockIndex,
+        path: const PathInBlock(<int>[0]),
+        textOffset: selectionRange.end.blockIndex == tableBlock.blockIndex
+            ? selectionRange.end.textOffset
+            : tableBlock.spec.plainText.length,
+      ),
+    );
+
+    final renderBox = tester.renderObject<RenderBox>(tableBlockFinder);
+    final element = tester.element(tableBlockFinder);
+    final selectionRects = tableBlock.spec.selectionRectResolver!(
+      element,
+      renderBox.size,
+      blockRange,
+    );
+    expect(selectionRects, isNotEmpty);
   });
 
   testWidgets('footnote backreference markers are not rendered',

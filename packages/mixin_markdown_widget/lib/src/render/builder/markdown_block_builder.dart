@@ -1715,12 +1715,6 @@ class MarkdownBlockBuilder {
     final highlightSignature = block is CodeBlock
         ? ':${codeHighlightCache.cacheSignatureFor(block.id)}'
         : '';
-    if (block is TableBlock) {
-      return _isBlockCoveredByTextSelection(blockIndex, selectionRange)
-          ? 'table:text$highlightSignature'
-          : 'table:none$highlightSignature';
-    }
-
     if (selectionRange == null ||
         blockIndex < selectionRange.start.blockIndex ||
         blockIndex > selectionRange.end.blockIndex) {
