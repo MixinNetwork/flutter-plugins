@@ -1918,6 +1918,72 @@ final c = a + b;
     );
   });
 
+  testWidgets('standalone inline code keeps descenders inside the line box', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(data: '`popup`'),
+        ),
+      ),
+    );
+
+    final blockBox =
+        tester.renderObject<RenderBox>(find.byType(MarkdownPretextTextBlock));
+    final inlineCodeBox =
+        tester.renderObject<RenderBox>(_decoratedInlineTextFinder().first);
+    final theme = MarkdownTheme.of(tester.element(find.byType(MarkdownWidget)));
+    final textPainter = TextPainter(
+      text: TextSpan(text: 'popup', style: theme.bodyStyle),
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+    )..layout(maxWidth: double.infinity);
+    final blockRect = blockBox.localToGlobal(Offset.zero) & blockBox.size;
+    final inlineCodeRect =
+        inlineCodeBox.localToGlobal(Offset.zero) & inlineCodeBox.size;
+
+    expect(
+      blockBox.size.height,
+      greaterThanOrEqualTo(textPainter.preferredLineHeight),
+    );
+    expect(inlineCodeRect.top, greaterThanOrEqualTo(blockRect.top - 0.01));
+    expect(inlineCodeRect.bottom, lessThanOrEqualTo(blockRect.bottom + 0.01));
+  });
+
+  testWidgets('list inline code keeps descenders inside the line box', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(data: '- `popup`'),
+        ),
+      ),
+    );
+
+    final blockBox = tester
+        .renderObject<RenderBox>(find.byType(MarkdownPretextTextBlock).first);
+    final inlineCodeBox =
+        tester.renderObject<RenderBox>(_decoratedInlineTextFinder().first);
+    final theme = MarkdownTheme.of(tester.element(find.byType(MarkdownWidget)));
+    final textPainter = TextPainter(
+      text: TextSpan(text: 'popup', style: theme.bodyStyle),
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+    )..layout(maxWidth: double.infinity);
+    final blockRect = blockBox.localToGlobal(Offset.zero) & blockBox.size;
+    final inlineCodeRect =
+        inlineCodeBox.localToGlobal(Offset.zero) & inlineCodeBox.size;
+
+    expect(
+      blockBox.size.height,
+      greaterThanOrEqualTo(textPainter.preferredLineHeight),
+    );
+    expect(inlineCodeRect.top, greaterThanOrEqualTo(blockRect.top - 0.01));
+    expect(inlineCodeRect.bottom, lessThanOrEqualTo(blockRect.bottom + 0.01));
+  });
+
   testWidgets('code blocks prefer the default Mono font family',
       (tester) async {
     await tester.pumpWidget(

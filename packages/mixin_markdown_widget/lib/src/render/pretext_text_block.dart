@@ -1514,11 +1514,12 @@ double _measureRenderedFragmentLineHeight(
   required TextStyle fallbackStyle,
   required double textScaleFactor,
 }) {
+  final fallbackLineHeight = _measureLineHeight(fallbackStyle, textScaleFactor);
   if (fragments.isEmpty) {
-    return _measureLineHeight(fallbackStyle, textScaleFactor);
+    return fallbackLineHeight;
   }
 
-  var height = 0.0;
+  var height = fallbackLineHeight;
   for (final fragment in fragments) {
     final measured = fragment.renderSpan != null
         ? fragment.estimatedLineHeight ??
