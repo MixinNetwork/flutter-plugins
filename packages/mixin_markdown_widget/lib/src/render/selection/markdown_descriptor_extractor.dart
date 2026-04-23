@@ -103,9 +103,10 @@ class MarkdownDescriptorCache {
   final Map<String, _CachedIndexedListDescriptors> _indexedListDescriptors =
       <String, _CachedIndexedListDescriptors>{};
 
-  _CachedBlockDescriptor? blockDescriptor(String key) => _blockDescriptors[key];
+  _CachedBlockDescriptor? _blockDescriptor(String key) =>
+      _blockDescriptors[key];
 
-  void storeBlockDescriptor(
+  void _storeBlockDescriptor(
     String key,
     String blockId,
     BlockNode block,
@@ -120,10 +121,10 @@ class MarkdownDescriptorCache {
     );
   }
 
-  _CachedIndexedBlockDescriptors? indexedBlockDescriptors(String key) =>
+  _CachedIndexedBlockDescriptors? _indexedBlockDescriptorsFor(String key) =>
       _indexedBlockDescriptors[key];
 
-  void storeIndexedBlockDescriptors(
+  void _storeIndexedBlockDescriptors(
     String key,
     String ownerId,
     List<BlockNode> blocks,
@@ -140,10 +141,10 @@ class MarkdownDescriptorCache {
     );
   }
 
-  _CachedIndexedListDescriptors? indexedListDescriptors(String key) =>
+  _CachedIndexedListDescriptors? _indexedListDescriptorsFor(String key) =>
       _indexedListDescriptors[key];
 
-  void storeIndexedListDescriptors(
+  void _storeIndexedListDescriptors(
     String key,
     ListBlock block,
     int indentLevel,
@@ -243,7 +244,7 @@ class MarkdownDescriptorExtractor {
     int indentLevel = 0,
   }) {
     final cacheKey = '${block.id}:$indentLevel';
-    final cached = cache.blockDescriptor(cacheKey);
+    final cached = cache._blockDescriptor(cacheKey);
     if (cached != null &&
         identical(cached.block, block) &&
         cached.indentLevel == indentLevel) {
@@ -254,7 +255,7 @@ class MarkdownDescriptorExtractor {
       block,
       indentLevel: indentLevel,
     );
-    cache.storeBlockDescriptor(
+    cache._storeBlockDescriptor(
       cacheKey,
       block.id,
       block,
@@ -407,7 +408,7 @@ class MarkdownDescriptorExtractor {
   }) {
     if (cacheOwnerId != null) {
       final cacheKey = '$cacheOwnerId:$indentLevel:$separator';
-      final cached = cache.indexedBlockDescriptors(cacheKey);
+      final cached = cache._indexedBlockDescriptorsFor(cacheKey);
       if (cached != null &&
           cached.ownerId == cacheOwnerId &&
           cached.indentLevel == indentLevel &&
@@ -421,7 +422,7 @@ class MarkdownDescriptorExtractor {
         indentLevel: indentLevel,
         separator: separator,
       );
-      cache.storeIndexedBlockDescriptors(
+      cache._storeIndexedBlockDescriptors(
         cacheKey,
         cacheOwnerId,
         blocks,
@@ -476,7 +477,7 @@ class MarkdownDescriptorExtractor {
     int indentLevel = 0,
   }) {
     final cacheKey = '${block.id}:$indentLevel';
-    final cached = cache.indexedListDescriptors(cacheKey);
+    final cached = cache._indexedListDescriptorsFor(cacheKey);
     if (cached != null &&
         identical(cached.block, block) &&
         cached.indentLevel == indentLevel) {
@@ -504,7 +505,7 @@ class MarkdownDescriptorExtractor {
       entries.add(entry);
       offset += entry.descriptor.plainText.length;
     }
-    cache.storeIndexedListDescriptors(cacheKey, block, indentLevel, entries);
+    cache._storeIndexedListDescriptors(cacheKey, block, indentLevel, entries);
     return entries;
   }
 

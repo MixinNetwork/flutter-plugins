@@ -483,10 +483,8 @@ class ChatMessage {
       : contentStream = null;
 
   /// Creates an AI message that will be populated incrementally via a stream.
-  ChatMessage.streaming(
-      {required this.isUser, required Stream<String> contentStream})
-      : text = '',
-        contentStream = contentStream;
+  ChatMessage.streaming({required this.isUser, required this.contentStream})
+      : text = '';
 
   final String text;
   final bool isUser;

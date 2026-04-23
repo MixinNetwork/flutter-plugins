@@ -1729,15 +1729,6 @@ class MarkdownBlockBuilder {
     return 'text:$start:$end$highlightSignature';
   }
 
-  bool _isBlockCoveredByTextSelection(
-    int blockIndex,
-    DocumentRange? selectionRange,
-  ) {
-    return selectionRange != null &&
-        blockIndex >= selectionRange.start.blockIndex &&
-        blockIndex <= selectionRange.end.blockIndex;
-  }
-
   bool _canCacheBlockRow(BlockNode block) {
     switch (block.kind) {
       case MarkdownBlockKind.heading:
