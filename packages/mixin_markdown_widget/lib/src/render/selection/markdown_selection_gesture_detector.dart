@@ -71,6 +71,47 @@ class _MarkdownSelectionGestureDetectorState
   bool _clearSelectionOnPointerUp = false;
   Timer? _autoScrollTimer;
 
+  List<_AutoScrollCandidate> _autoScrollCandidates() {
+    if (!mounted) {
+      return const <_AutoScrollCandidate>[];
+    }
+    final candidates = <_AutoScrollCandidate>[];
+    final seenPositions = <ScrollPosition>{};
+
+    final explicitCandidate = _candidateForScrollable(
+      position: widget.scrollController.hasClients
+          ? widget.scrollController.position
+          : null,
+      renderObject: widget.scrollableKey.currentContext?.findRenderObject(),
+      depth: 0,
+    );
+    if (explicitCandidate != null) {
+      seenPositions.add(explicitCandidate.position);
+      candidates.add(explicitCandidate);
+    }
+
+    var depth = 1;
+    context.visitAncestorElements((element) {
+      if (element is StatefulElement && element.state is ScrollableState) {
+        final scrollableState = element.state as ScrollableState;
+        final position = scrollableState.position;
+        if (seenPositions.add(position)) {
+          final candidate = _candidateForScrollable(
+            position: position,
+            renderObject: scrollableState.context.findRenderObject(),
+            depth: depth,
+          );
+          if (candidate != null) {
+            candidates.add(candidate);
+          }
+          depth += 1;
+        }
+      }
+      return true;
+    });
+    return candidates;
+  }
+
   @override
   void dispose() {
     _stopAutoScroll();
@@ -78,6 +119,9 @@ class _MarkdownSelectionGestureDetectorState
   }
 
   void _handlePointerDown(PointerDownEvent event) {
+    if (!mounted) {
+      return;
+    }
     if (!widget.isSelectable) {
       return;
     }
@@ -86,13 +130,6 @@ class _MarkdownSelectionGestureDetectorState
     }
 
     if ((event.buttons & kSecondaryMouseButton) != 0) {
-      final selectionController = widget.selectionController;
-      if (!selectionController.hasSelection) {
-        final position = widget.hitTestPosition(event.position, clamp: true);
-        if (position != null) {
-          widget.selectBlockAt(position.blockIndex);
-        }
-      }
       widget.onRequestToolbar(event.position);
       return;
     }
@@ -140,6 +177,9 @@ class _MarkdownSelectionGestureDetectorState
   }
 
   void _handlePointerMove(PointerMoveEvent event) {
+    if (!mounted) {
+      return;
+    }
     if (!_isDraggingSelection) {
       return;
     }
@@ -159,6 +199,9 @@ class _MarkdownSelectionGestureDetectorState
   }
 
   void _handlePointerUp(PointerUpEvent event) {
+    if (!mounted) {
+      return;
+    }
     if (!_isDraggingSelection) {
       return;
     }
@@ -177,6 +220,9 @@ class _MarkdownSelectionGestureDetectorState
   }
 
   void _handlePointerCancel(PointerCancelEvent event) {
+    if (!mounted) {
+      return;
+    }
     _isDraggingSelection = false;
     _dragBasePosition = null;
     _dragStartPointerPosition = null;
@@ -186,7 +232,7 @@ class _MarkdownSelectionGestureDetectorState
   }
 
   void _updateDragSelectionAt(Offset globalPosition) {
-    if (_dragBasePosition == null) {
+    if (!mounted || _dragBasePosition == null) {
       return;
     }
     final position = widget.hitTestPosition(globalPosition, clamp: true);
@@ -199,6 +245,10 @@ class _MarkdownSelectionGestureDetectorState
   }
 
   void _updateAutoScroll() {
+    if (!mounted) {
+      _stopAutoScroll();
+      return;
+    }
     if (_autoScrollVelocity() == 0) {
       _stopAutoScroll();
       return;
@@ -210,21 +260,22 @@ class _MarkdownSelectionGestureDetectorState
   }
 
   void _handleAutoScrollTick() {
-    if (!_isDraggingSelection) {
+    if (!mounted || !_isDraggingSelection) {
       _stopAutoScroll();
       return;
     }
-    if (!widget.scrollController.hasClients) {
-      _stopAutoScroll();
-      return;
-    }
-    final velocity = _autoScrollVelocity();
-    if (velocity == 0) {
+    final autoScroll = _resolveAutoScroll();
+    if (autoScroll == null || autoScroll.velocity == 0) {
       _stopAutoScroll();
       return;
     }
 
-    final position = widget.scrollController.position;
+    final position = autoScroll.candidate.position;
+    if (!position.hasPixels) {
+      _stopAutoScroll();
+      return;
+    }
+    final velocity = autoScroll.velocity;
     final nextOffset = (position.pixels +
             velocity * _autoScrollTickInterval.inMilliseconds / 1000)
         .clamp(position.minScrollExtent, position.maxScrollExtent);
@@ -232,7 +283,7 @@ class _MarkdownSelectionGestureDetectorState
       _stopAutoScroll();
       return;
     }
-    widget.scrollController.jumpTo(nextOffset);
+    position.jumpTo(nextOffset);
     final globalPosition = _lastDragPointerPosition;
     if (globalPosition != null) {
       _updateDragSelectionAt(globalPosition);
@@ -245,18 +296,51 @@ class _MarkdownSelectionGestureDetectorState
   }
 
   double _autoScrollVelocity() {
+    return _resolveAutoScroll()?.velocity ?? 0;
+  }
+
+  _ResolvedAutoScroll? _resolveAutoScroll() {
+    if (!mounted) {
+      return null;
+    }
     final globalPosition = _lastDragPointerPosition;
-    final viewportRect = _scrollViewportRect;
-    if (globalPosition == null ||
-        viewportRect == null ||
-        !widget.scrollController.hasClients) {
+    if (globalPosition == null) {
+      return null;
+    }
+
+    _ResolvedAutoScroll? bestMatch;
+    for (final candidate in _autoScrollCandidates()) {
+      final velocity =
+          _autoScrollVelocityForCandidate(candidate, globalPosition);
+      if (velocity == 0) {
+        continue;
+      }
+      if (bestMatch == null ||
+          candidate.depth < bestMatch.candidate.depth ||
+          (candidate.depth == bestMatch.candidate.depth &&
+              candidate.viewportRect.size.longestSide <
+                  bestMatch.candidate.viewportRect.size.longestSide)) {
+        bestMatch =
+            _ResolvedAutoScroll(candidate: candidate, velocity: velocity);
+      }
+    }
+    return bestMatch;
+  }
+
+  double _autoScrollVelocityForCandidate(
+    _AutoScrollCandidate candidate,
+    Offset globalPosition,
+  ) {
+    final position = candidate.position;
+    if (!position.hasContentDimensions ||
+        position.maxScrollExtent <= position.minScrollExtent) {
       return 0;
     }
-    final position = widget.scrollController.position;
-    if (position.maxScrollExtent <= position.minScrollExtent) {
+    if (_shouldSuppressAncestorAutoScroll(candidate, globalPosition)) {
       return 0;
     }
 
+    final viewportRect = candidate.viewportRect;
     if (globalPosition.dy < viewportRect.top + _autoScrollActivationZone &&
         position.pixels > position.minScrollExtent) {
       final proximity = 1 -
@@ -282,7 +366,58 @@ class _MarkdownSelectionGestureDetectorState
     return math.max(80, proximity * proximity * _autoScrollMaxSpeed);
   }
 
-  Rect? get _scrollViewportRect {
+  bool _shouldSuppressAncestorAutoScroll(
+    _AutoScrollCandidate candidate,
+    Offset globalPosition,
+  ) {
+    if (candidate.depth == 0) {
+      return false;
+    }
+    final markdownRect = _markdownContentRect;
+    if (markdownRect == null) {
+      return false;
+    }
+    final viewportRect = candidate.viewportRect;
+    const epsilon = 0.5;
+    final isNearTop =
+        globalPosition.dy < viewportRect.top + _autoScrollActivationZone;
+    final isNearBottom =
+        globalPosition.dy > viewportRect.bottom - _autoScrollActivationZone;
+    if (isNearBottom) {
+      return markdownRect.bottom <= viewportRect.bottom + epsilon;
+    }
+    if (isNearTop) {
+      return markdownRect.top >= viewportRect.top - epsilon;
+    }
+    return false;
+  }
+
+  _AutoScrollCandidate? _candidateForScrollable({
+    required ScrollPosition? position,
+    required RenderObject? renderObject,
+    required int depth,
+  }) {
+    if (position == null) {
+      return null;
+    }
+    if (position.axis != Axis.vertical) {
+      return null;
+    }
+    if (renderObject is! RenderBox || !renderObject.hasSize) {
+      return null;
+    }
+    final origin = renderObject.localToGlobal(Offset.zero);
+    return _AutoScrollCandidate(
+      position: position,
+      viewportRect: origin & renderObject.size,
+      depth: depth,
+    );
+  }
+
+  Rect? get _markdownContentRect {
+    if (!mounted) {
+      return null;
+    }
     final renderObject =
         widget.scrollableKey.currentContext?.findRenderObject();
     if (renderObject is! RenderBox || !renderObject.hasSize) {
@@ -317,4 +452,26 @@ class _MarkdownSelectionGestureDetectorState
       child: widget.child,
     );
   }
+}
+
+class _AutoScrollCandidate {
+  const _AutoScrollCandidate({
+    required this.position,
+    required this.viewportRect,
+    required this.depth,
+  });
+
+  final ScrollPosition position;
+  final Rect viewportRect;
+  final int depth;
+}
+
+class _ResolvedAutoScroll {
+  const _ResolvedAutoScroll({
+    required this.candidate,
+    required this.velocity,
+  });
+
+  final _AutoScrollCandidate candidate;
+  final double velocity;
 }

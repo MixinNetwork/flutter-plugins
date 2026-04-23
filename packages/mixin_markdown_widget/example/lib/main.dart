@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
 
+import 'ai_chat_demo.dart';
+
 enum _DemoThemePreset {
   ocean,
   warm,
@@ -205,8 +207,7 @@ This content was appended through `MarkdownController.appendChunk`.
     super.initState();
     _controller = MarkdownController(data: _initialMarkdown);
     _selectionController = MarkdownSelectionController()
-      ..attachDocument(_controller.document)
-      ..addListener(_handleSelectionChanged);
+      ..attachDocument(_controller.document);
     _editorController = TextEditingController(text: _initialMarkdown)
       ..addListener(_handleEditorChanged);
   }
@@ -216,9 +217,7 @@ This content was appended through `MarkdownController.appendChunk`.
     _editorController
       ..removeListener(_handleEditorChanged)
       ..dispose();
-    _selectionController
-      ..removeListener(_handleSelectionChanged)
-      ..dispose();
+    _selectionController.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -244,6 +243,17 @@ This content was appended through `MarkdownController.appendChunk`.
       appBar: AppBar(
         title: const Text('mixin_markdown_widget'),
         actions: <Widget>[
+          IconButton(
+            tooltip: 'AI Chat Demo',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const AIChatDemoPage(),
+                ),
+              );
+            },
+            icon: const Icon(Icons.chat_outlined),
+          ),
           IconButton(
             key: const Key('toggle-editor-visibility'),
             tooltip: _layoutMode == _DemoLayoutMode.split
@@ -301,12 +311,15 @@ This content was appended through `MarkdownController.appendChunk`.
             onPressed: _selectAllModelText,
             icon: const Icon(Icons.select_all_rounded),
           ),
-          IconButton(
-            tooltip: 'Copy selected model text',
-            onPressed: _selectionController.hasSelection
-                ? _copySelectedModelText
-                : null,
-            icon: const Icon(Icons.content_copy_outlined),
+          AnimatedBuilder(
+            animation: _selectionController,
+            builder: (context, _) => IconButton(
+              tooltip: 'Copy selected model text',
+              onPressed: _selectionController.hasSelection
+                  ? _copySelectedModelText
+                  : null,
+              icon: const Icon(Icons.content_copy_outlined),
+            ),
           ),
           IconButton(
             tooltip: 'Commit stream draft',
@@ -347,7 +360,13 @@ This content was appended through `MarkdownController.appendChunk`.
           );
           final previewPanel = _PaneShell(
             title: 'Preview',
-            subtitle: _previewSubtitle(),
+            subtitleBuilder: (context) => AnimatedBuilder(
+              animation: _selectionController,
+              builder: (context, _) => Text(
+                _previewSubtitle(),
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ),
             child: MarkdownWidget(
               key: const Key('markdown-preview'),
               controller: _controller,
@@ -414,13 +433,6 @@ This content was appended through `MarkdownController.appendChunk`.
         _chunkIndex = 0;
       });
     }
-  }
-
-  void _handleSelectionChanged() {
-    if (!mounted) {
-      return;
-    }
-    setState(() {});
   }
 
   void _appendChunk() {
@@ -513,13 +525,15 @@ This content was appended through `MarkdownController.appendChunk`.
 class _PaneShell extends StatelessWidget {
   const _PaneShell({
     required this.title,
-    required this.subtitle,
     required this.child,
+    this.subtitle,
+    this.subtitleBuilder,
   });
 
   final String title;
-  final String subtitle;
   final Widget child;
+  final String? subtitle;
+  final WidgetBuilder? subtitleBuilder;
 
   @override
   Widget build(BuildContext context) {
@@ -544,7 +558,13 @@ class _PaneShell extends StatelessWidget {
           children: <Widget>[
             Text(title, style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 6),
-            Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
+            if (subtitleBuilder != null)
+              subtitleBuilder!(context)
+            else if (subtitle != null)
+              Text(
+                subtitle!,
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
             const SizedBox(height: 16),
             Expanded(child: child),
           ],

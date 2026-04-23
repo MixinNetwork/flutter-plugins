@@ -78,6 +78,7 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
     required this.imagePlaceholderBackgroundColor,
     required this.showHeading1Divider,
     required this.showHeading2Divider,
+    required this.codeHighlightMaxLines,
   });
 
   factory MarkdownThemeData.fallback(BuildContext context) {
@@ -171,6 +172,7 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
           colorScheme.surface.withValues(alpha: 0.92),
       showHeading1Divider: true,
       showHeading2Divider: true,
+      codeHighlightMaxLines: 120,
     );
   }
 
@@ -263,6 +265,7 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
           colorScheme.surface.withValues(alpha: 0.92),
       showHeading1Divider: true,
       showHeading2Divider: true,
+      codeHighlightMaxLines: 120,
     );
   }
 
@@ -306,6 +309,7 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
   final Color imagePlaceholderBackgroundColor;
   final bool showHeading1Divider;
   final bool showHeading2Divider;
+  final int? codeHighlightMaxLines;
 
   TextStyle headingStyleForLevel(int level) {
     switch (level) {
@@ -367,6 +371,7 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
     Color? imagePlaceholderBackgroundColor,
     bool? showHeading1Divider,
     bool? showHeading2Divider,
+    int? codeHighlightMaxLines,
   }) {
     return MarkdownThemeData(
       padding: padding ?? this.padding,
@@ -417,6 +422,8 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
           this.imagePlaceholderBackgroundColor,
       showHeading1Divider: showHeading1Divider ?? this.showHeading1Divider,
       showHeading2Divider: showHeading2Divider ?? this.showHeading2Divider,
+      codeHighlightMaxLines:
+          codeHighlightMaxLines ?? this.codeHighlightMaxLines,
     );
   }
 
@@ -563,6 +570,8 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
           t < 0.5 ? showHeading1Divider : other.showHeading1Divider,
       showHeading2Divider:
           t < 0.5 ? showHeading2Divider : other.showHeading2Divider,
+      codeHighlightMaxLines:
+          t < 0.5 ? codeHighlightMaxLines : other.codeHighlightMaxLines,
     );
   }
 
@@ -574,6 +583,7 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
     properties.add(DoubleProperty('maxContentWidth', maxContentWidth));
     properties.add(DoubleProperty('imageCaptionSpacing', imageCaptionSpacing));
     properties.add(DoubleProperty('quoteBorderWidth', quoteBorderWidth));
+    properties.add(IntProperty('codeHighlightMaxLines', codeHighlightMaxLines));
     properties.add(ColorProperty('selectionColor', selectionColor));
     properties.add(DiagnosticsProperty<TextStyle>('bodyStyle', bodyStyle));
     properties
@@ -623,6 +633,7 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
       imagePlaceholderBackgroundColor,
       showHeading1Divider,
       showHeading2Divider,
+      codeHighlightMaxLines,
     ]);
   }
 
@@ -672,6 +683,7 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
         other.imagePlaceholderBackgroundColor ==
             imagePlaceholderBackgroundColor &&
         other.showHeading1Divider == showHeading1Divider &&
-        other.showHeading2Divider == showHeading2Divider;
+        other.showHeading2Divider == showHeading2Divider &&
+        other.codeHighlightMaxLines == codeHighlightMaxLines;
   }
 }

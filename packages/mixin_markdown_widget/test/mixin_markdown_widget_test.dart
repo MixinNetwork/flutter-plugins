@@ -1,12 +1,13 @@
 import 'dart:math' as math;
 import 'dart:io';
-import 'dart:ui' show PointerDeviceKind;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
+import 'package:mixin_markdown_widget/src/render/builder/markdown_inline_builder.dart';
 import 'package:mixin_markdown_widget/src/render/local_image_provider_io.dart';
 import 'package:mixin_markdown_widget/src/render/markdown_block_widgets.dart';
 import 'package:mixin_markdown_widget/src/render/pretext_text_block.dart';
@@ -1746,6 +1747,7 @@ return value;
         ),
       ),
     );
+    await tester.pump();
 
     final richTextFinder = find.byWidgetPredicate(
       (widget) =>
@@ -1759,6 +1761,108 @@ return value;
     final rootSpan = richText.text as TextSpan;
     expect(
         _countStyledDescendantSpans(rootSpan, rootSpan.style), greaterThan(0));
+  });
+
+  testWidgets(
+      'code blocks render plain text on the first frame, then highlight',
+      (tester) async {
+    const input = '''
+```dart
+const value = 42;
+return value;
+```
+''';
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(data: input),
+        ),
+      ),
+    );
+
+    final richTextFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is RichText &&
+          widget.text.toPlainText().contains('const value = 42;'),
+    );
+    expect(richTextFinder, findsOneWidget);
+
+    var richText = tester.widget<RichText>(richTextFinder);
+    var rootSpan = richText.text as TextSpan;
+    expect(_countStyledDescendantSpans(rootSpan, rootSpan.style), 0);
+
+    await tester.pump();
+    await tester.pump();
+
+    richText = tester.widget<RichText>(richTextFinder);
+    rootSpan = richText.text as TextSpan;
+    expect(
+        _countStyledDescendantSpans(rootSpan, rootSpan.style), greaterThan(0));
+  });
+
+  testWidgets('disposing markdown view ignores pending code highlight results',
+      (tester) async {
+    const input = '''
+```dart
+const value = 42;
+return value;
+```
+''';
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(data: input),
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'long code blocks can degrade to plain text above the configured line limit',
+      (tester) async {
+    const input = '''
+```dart
+final a = 1;
+final b = 2;
+final c = a + b;
+```
+''';
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: MarkdownWidget(
+              data: input,
+              theme: MarkdownThemeData.fallback(context).copyWith(
+                codeHighlightMaxLines: 2,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    final richTextFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is RichText &&
+          widget.text.toPlainText().contains('final c = a + b;'),
+    );
+    expect(richTextFinder, findsOneWidget);
+
+    final richText = tester.widget<RichText>(richTextFinder);
+    final rootSpan = richText.text as TextSpan;
+    expect(_countStyledDescendantSpans(rootSpan, rootSpan.style), 0);
   });
 
   testWidgets('renders inline code with rounded background and padding', (
@@ -1811,6 +1915,72 @@ return value;
       inlineCodeStyle.fontFamilyFallback,
       containsAllInOrder(const <String>['SF Mono', 'Roboto Mono', 'Menlo']),
     );
+  });
+
+  testWidgets('standalone inline code keeps descenders inside the line box', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(data: '`popup`'),
+        ),
+      ),
+    );
+
+    final blockBox =
+        tester.renderObject<RenderBox>(find.byType(MarkdownPretextTextBlock));
+    final inlineCodeBox =
+        tester.renderObject<RenderBox>(_decoratedInlineTextFinder().first);
+    final theme = MarkdownTheme.of(tester.element(find.byType(MarkdownWidget)));
+    final textPainter = TextPainter(
+      text: TextSpan(text: 'popup', style: theme.bodyStyle),
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+    )..layout(maxWidth: double.infinity);
+    final blockRect = blockBox.localToGlobal(Offset.zero) & blockBox.size;
+    final inlineCodeRect =
+        inlineCodeBox.localToGlobal(Offset.zero) & inlineCodeBox.size;
+
+    expect(
+      blockBox.size.height,
+      greaterThanOrEqualTo(textPainter.preferredLineHeight),
+    );
+    expect(inlineCodeRect.top, greaterThanOrEqualTo(blockRect.top - 0.01));
+    expect(inlineCodeRect.bottom, lessThanOrEqualTo(blockRect.bottom + 0.01));
+  });
+
+  testWidgets('list inline code keeps descenders inside the line box', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(data: '- `popup`'),
+        ),
+      ),
+    );
+
+    final blockBox = tester
+        .renderObject<RenderBox>(find.byType(MarkdownPretextTextBlock).first);
+    final inlineCodeBox =
+        tester.renderObject<RenderBox>(_decoratedInlineTextFinder().first);
+    final theme = MarkdownTheme.of(tester.element(find.byType(MarkdownWidget)));
+    final textPainter = TextPainter(
+      text: TextSpan(text: 'popup', style: theme.bodyStyle),
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+    )..layout(maxWidth: double.infinity);
+    final blockRect = blockBox.localToGlobal(Offset.zero) & blockBox.size;
+    final inlineCodeRect =
+        inlineCodeBox.localToGlobal(Offset.zero) & inlineCodeBox.size;
+
+    expect(
+      blockBox.size.height,
+      greaterThanOrEqualTo(textPainter.preferredLineHeight),
+    );
+    expect(inlineCodeRect.top, greaterThanOrEqualTo(blockRect.top - 0.01));
+    expect(inlineCodeRect.bottom, lessThanOrEqualTo(blockRect.bottom + 0.01));
   });
 
   testWidgets('code blocks prefer the default Mono font family',
@@ -2325,6 +2495,43 @@ const value = 42;
     expect(inlineCodeDecorationFinder, findsWidgets);
   });
 
+  testWidgets('table cells render inline math without baseline alignment', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: '| Formula |\n| --- |\n| value \$x^2\$ |',
+          ),
+        ),
+      ),
+    );
+
+    final tableFinder = find.byType(Table);
+    expect(tableFinder, findsOneWidget);
+
+    final cellRichText = tester.widget<RichText>(
+      find
+          .descendant(
+            of: tableFinder,
+            matching: find.byWidgetPredicate(
+              (widget) =>
+                  widget is RichText &&
+                  widget.text.toPlainText().contains(
+                        String.fromCharCode(0xFFFC),
+                      ),
+            ),
+          )
+          .first,
+    );
+    final widgetSpans = _collectWidgetSpans(cellRichText.text).toList();
+
+    expect(widgetSpans, hasLength(1));
+    expect(widgetSpans.single.alignment, PlaceholderAlignment.middle);
+    expect(widgetSpans.single.baseline, isNull);
+  });
+
   testWidgets('undecorated runs render as a single direct rich text block', (
     tester,
   ) async {
@@ -2545,6 +2752,225 @@ const value = 42;
         );
         expect(actualWidth, lessThanOrEqualTo(width + 0.01));
       }
+    }
+  });
+
+  test('send_sol_for_rent wrap does not create an extra clipped line', () {
+    const padding = EdgeInsets.symmetric(horizontal: 6, vertical: 2);
+    const baseStyle = TextStyle(fontSize: 14, height: 1.2);
+    const expected =
+        '宅学长发布了一份InputFragment 余额与手续费校验说明文档，整理了Mixin安卓App账户租金（rent）场景，才会显示send_sol_for_rent提示。';
+    const runs = <MarkdownPretextInlineRun>[
+      MarkdownPretextInlineRun(
+        text:
+            '宅学长发布了一份InputFragment 余额与手续费校验说明文档，整理了Mixin安卓App账户租金（rent）场景，才会显示',
+        style: baseStyle,
+      ),
+      MarkdownPretextInlineRun(
+        text: 'send_sol_for_rent',
+        style: baseStyle,
+        allowCharacterWrap: true,
+        decoration: MarkdownPretextInlineDecoration(
+          backgroundColor: Color(0xFFE9EDF2),
+          borderRadius: BorderRadius.all(Radius.circular(6)),
+          padding: padding,
+        ),
+      ),
+      MarkdownPretextInlineRun(
+        text: '提示。',
+        style: baseStyle,
+      ),
+    ];
+
+    for (final width in <double>[232, 228, 224, 220, 216, 212, 208, 204]) {
+      final layout = computeMarkdownPretextLayoutFromRuns(
+        runs: runs,
+        fallbackStyle: baseStyle,
+        maxWidth: width,
+        textScaleFactor: 1,
+      );
+
+      expect(
+        layout.lines.map((line) => line.text).join().replaceAll(' ', ''),
+        expected.replaceAll(' ', ''),
+        reason: 'width=$width',
+      );
+      for (final line in layout.lines) {
+        final actualWidth = line.segments.fold<double>(
+          0,
+          (sum, segment) => sum + (segment.right - segment.left),
+        );
+        expect(actualWidth, lessThanOrEqualTo(width + 0.01));
+      }
+      final decoratedText = layout.lines
+          .expand((line) => line.segments)
+          .where((segment) => segment.decoration != null)
+          .map((segment) => segment.text)
+          .join();
+      expect(
+        decoratedText,
+        'send_sol_for_rent',
+        reason: 'width=$width',
+      );
+    }
+  });
+
+  test('trailing inline code does not shrink earlier line wrapping', () {
+    const padding = EdgeInsets.symmetric(horizontal: 6, vertical: 2);
+    const baseStyle = TextStyle(fontSize: 14, height: 1.2);
+    const prefix =
+        '宅学长发布了一份InputFragment 余额与手续费校验说明文档，整理了Mixin安卓App钱包转账页面的逻辑，区分了三种场景，重点明确：只有Solana真实账户租金场景，才会显示';
+    const suffix = '提示。';
+    const width = 232.0;
+
+    final plainLayout = computeMarkdownPretextLayoutFromRuns(
+      runs: const <MarkdownPretextInlineRun>[
+        MarkdownPretextInlineRun(
+          text: '$prefix send_sol_for_rent$suffix',
+          style: baseStyle,
+        ),
+      ],
+      fallbackStyle: baseStyle,
+      maxWidth: width,
+      textScaleFactor: 1,
+    );
+
+    final codeLayout = computeMarkdownPretextLayoutFromRuns(
+      runs: const <MarkdownPretextInlineRun>[
+        MarkdownPretextInlineRun(
+          text: '$prefix ',
+          style: baseStyle,
+        ),
+        MarkdownPretextInlineRun(
+          text: 'send_sol_for_rent',
+          style: baseStyle,
+          allowCharacterWrap: true,
+          decoration: MarkdownPretextInlineDecoration(
+            backgroundColor: Color(0xFFE9EDF2),
+            borderRadius: BorderRadius.all(Radius.circular(6)),
+            padding: padding,
+          ),
+        ),
+        MarkdownPretextInlineRun(
+          text: suffix,
+          style: baseStyle,
+        ),
+      ],
+      fallbackStyle: baseStyle,
+      maxWidth: width,
+      textScaleFactor: 1,
+    );
+
+    expect(plainLayout.lines, isNotEmpty);
+    expect(codeLayout.lines, isNotEmpty);
+    expect(
+      codeLayout.lines.first.text.replaceAll(' ', ''),
+      plainLayout.lines.first.text.replaceAll(' ', ''),
+    );
+  });
+
+  testWidgets(
+      'markdown inline code at paragraph tail does not shift the first line break',
+      (tester) async {
+    const inlineCodeMarkdown =
+        '某人发布了一份**《TEST 某功能校验说明》**文档，整理了某客户端转账页的逻辑，区分了三种场景，分别说明金额校验、可用余额计算、手续费校验规则，重点明确：只有某链真实租金场景，才会显示`rent_tip_token` 提示。';
+    late MarkdownThemeData theme;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) {
+            theme = MarkdownThemeData.fallback(context);
+            return const SizedBox.shrink();
+          },
+        ),
+      ),
+    );
+
+    List<String> layoutLinesFromMarkdown(String markdown, double width) {
+      final parser = MarkdownDocumentParser();
+      final document = parser.parse(markdown);
+      final paragraph = document.blocks.single as ParagraphBlock;
+      final builder = MarkdownInlineBuilder(
+        theme: theme,
+        recognizers: <TapGestureRecognizer>[],
+      );
+      final runs = builder.buildPretextRuns(theme.bodyStyle, paragraph.inlines);
+      final layout = computeMarkdownPretextLayoutFromRuns(
+        runs: runs,
+        fallbackStyle: theme.bodyStyle,
+        maxWidth: width,
+        textScaleFactor: 1,
+      );
+      return layout.lines.map((line) => line.text).toList(growable: false);
+    }
+
+    for (final width in <double>[500]) {
+      final inlineCodeLines =
+          layoutLinesFromMarkdown(inlineCodeMarkdown, width);
+
+      expect(inlineCodeLines, isNotEmpty, reason: 'width=$width');
+      expect(
+        inlineCodeLines.first,
+        isNot('某人发布了一份**《TEST'),
+        reason: 'width=$width first=${inlineCodeLines.first}',
+      );
+      expect(
+        inlineCodeLines.first,
+        contains('某功能'),
+        reason: 'width=$width first=${inlineCodeLines.first}',
+      );
+    }
+  });
+
+  testWidgets(
+      'widget rendering keeps the first list line stable with trailing inline code',
+      (tester) async {
+    const inlineCodeMarkdown =
+        '1. 某人发布了一份**《TEST 某功能校验说明》**文档，整理了某客户端转账页的逻辑，区分了三种场景，分别说明金额校验、可用余额计算、手续费校验规则，重点明确：只有某链真实租金场景，才会显示`rent_tip_token` 提示。';
+
+    Future<List<String>> renderedLines(String markdown, double width) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Align(
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: width,
+                child: MarkdownWidget(data: markdown),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final blockFinder = find.byType(MarkdownPretextTextBlock).first;
+      final blockWidget = tester.widget<MarkdownPretextTextBlock>(blockFinder);
+      final blockRenderBox = tester.renderObject<RenderBox>(blockFinder);
+      final layout = computeMarkdownPretextLayoutFromRuns(
+        runs: blockWidget.runs!,
+        fallbackStyle: blockWidget.fallbackStyle,
+        maxWidth: blockRenderBox.size.width,
+        textScaleFactor: 1,
+      );
+      return layout.lines.map((line) => line.text).toList(growable: false);
+    }
+
+    for (final width in <double>[500]) {
+      final inlineCodeLines = await renderedLines(inlineCodeMarkdown, width);
+
+      expect(inlineCodeLines, isNotEmpty, reason: 'width=$width');
+      expect(
+        inlineCodeLines.first,
+        isNot('某人发布了一份**《TEST'),
+        reason: 'width=$width first=${inlineCodeLines.first}',
+      );
+      expect(
+        inlineCodeLines.first,
+        contains('某功能'),
+        reason: 'width=$width first=${inlineCodeLines.first}',
+      );
     }
   });
 
@@ -4160,6 +4586,110 @@ const veryLongValueName = 42;
     expect(selectionController.selectedPlainText, '42');
   });
 
+  testWidgets(
+      'triple click inside a table cell with inline math selects the whole cell',
+      (tester) async {
+    final selectionController = MarkdownSelectionController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: r'''
+| Feature | Description | Status |
+| :--- | :---: | ---: |
+| **Math** | Full LaTeX parsing & rendering (\( \alpha^2 \)) | ✅ |
+''',
+            selectionController: selectionController,
+          ),
+        ),
+      ),
+    );
+
+    final target = tester.getCenter(find.textContaining('LaTeX'));
+
+    await _tripleTapAt(tester, target);
+
+    expect(selectionController.hasSelection, isTrue);
+    expect(
+      selectionController.selectedPlainText,
+      contains('Full LaTeX parsing & rendering'),
+    );
+    expect(selectionController.selectedPlainText, contains(r'\alpha^2'));
+    expect(selectionController.selectedPlainText, isNot(contains('\t')));
+    expect(selectionController.selectedPlainText, isNot(contains('\n')));
+  });
+
+  testWidgets(
+      'table block refreshes cached selection visuals when the selection range changes',
+      (tester) async {
+    final selectionController = MarkdownSelectionController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: '''
+| Name | Value |
+| --- | --- |
+| row | 42 |
+''',
+            selectionController: selectionController,
+          ),
+        ),
+      ),
+    );
+
+    final tableBlockFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is SelectableMarkdownBlock &&
+          widget.spec.plainText == 'Name\tValue\nrow\t42',
+    );
+    expect(tableBlockFinder, findsOneWidget);
+
+    selectionController.setSelection(
+      const DocumentSelection(
+        base: DocumentPosition(
+          blockIndex: 0,
+          path: PathInBlock(<int>[0]),
+          textOffset: 0,
+        ),
+        extent: DocumentPosition(
+          blockIndex: 0,
+          path: PathInBlock(<int>[0]),
+          textOffset: 4,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    var tableBlock = tester.widget<SelectableMarkdownBlock>(tableBlockFinder);
+    expect(tableBlock.selectionRange, isNotNull);
+    expect(tableBlock.selectionRange!.start.textOffset, 0);
+    expect(tableBlock.selectionRange!.end.textOffset, 4);
+
+    selectionController.setSelection(
+      const DocumentSelection(
+        base: DocumentPosition(
+          blockIndex: 0,
+          path: PathInBlock(<int>[0]),
+          textOffset: 15,
+        ),
+        extent: DocumentPosition(
+          blockIndex: 0,
+          path: PathInBlock(<int>[0]),
+          textOffset: 17,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    tableBlock = tester.widget<SelectableMarkdownBlock>(tableBlockFinder);
+    expect(tableBlock.selectionRange, isNotNull);
+    expect(tableBlock.selectionRange!.start.textOffset, 15);
+    expect(tableBlock.selectionRange!.end.textOffset, 17);
+  });
+
   testWidgets('triple click inside wrapped paragraph selects the current line',
       (
     tester,
@@ -5341,6 +5871,271 @@ return value;
     expect(selectionController.selectedPlainText, 'Inner quote');
   });
 
+  testWidgets(
+      'selection auto-scroll falls back to ancestor scrollables for shrink-wrapped markdown widgets',
+      (tester) async {
+    final selectionController = MarkdownSelectionController();
+    final outerScrollController = ScrollController();
+    const targetLabel = 'Target message paragraph 1';
+
+    String buildMessage(String label) => '''
+$label
+
+$label continued with more content for drag selection.
+
+- bullet a
+- bullet b
+''';
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            height: 320,
+            child: ListView(
+              controller: outerScrollController,
+              children: List<Widget>.generate(6, (index) {
+                final label = index == 1 ? targetLabel : 'Message ${index + 1}';
+                return Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  child: MarkdownWidget(
+                    data: buildMessage(label),
+                    selectionController:
+                        index == 1 ? selectionController : null,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                  ),
+                );
+              }),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final outerListFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is ListView && widget.controller == outerScrollController,
+    );
+    final start = tester.getCenter(find.text(targetLabel));
+    final viewport = tester.getRect(outerListFinder);
+    final end = Offset(start.dx, viewport.bottom + 80);
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: start);
+    await gesture.down(start);
+    await tester.pump();
+    await gesture.moveTo(end);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+
+    expect(outerScrollController.offset, greaterThan(0));
+    expect(selectionController.hasSelection, isTrue);
+    expect(selectionController.selectedPlainText, contains(targetLabel));
+
+    await gesture.up();
+    await tester.pump();
+  });
+
+  testWidgets(
+      'ancestor auto-scroll stops when the current shrink-wrapped markdown is already fully visible',
+      (tester) async {
+    final selectionController = MarkdownSelectionController();
+    final outerScrollController = ScrollController();
+    const targetLabel = 'Fully visible target';
+
+    String buildMessage(String label) => '''
+$label
+
+$label continued.
+''';
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            height: 320,
+            child: ListView(
+              controller: outerScrollController,
+              children: List<Widget>.generate(10, (index) {
+                final label = index == 1 ? targetLabel : 'Message ${index + 1}';
+                return Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  child: MarkdownWidget(
+                    data: buildMessage(label),
+                    selectionController:
+                        index == 1 ? selectionController : null,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                  ),
+                );
+              }),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final markdownFinder = find.ancestor(
+      of: find.text(targetLabel),
+      matching: find.byType(MarkdownWidget),
+    );
+    final markdownRect = tester.getRect(markdownFinder);
+    final outerListFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is ListView && widget.controller == outerScrollController,
+    );
+    final viewport = tester.getRect(outerListFinder);
+    expect(markdownRect.bottom, lessThan(viewport.bottom));
+
+    final start = tester.getCenter(find.text(targetLabel));
+    final end = Offset(start.dx, viewport.bottom - 8);
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: start);
+    await gesture.down(start);
+    await tester.pump();
+    await gesture.moveTo(end);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+
+    expect(outerScrollController.offset, 0);
+    expect(selectionController.hasSelection, isTrue);
+    expect(selectionController.selectedPlainText, contains(targetLabel));
+
+    await gesture.up();
+    await tester.pump();
+  });
+
+  testWidgets(
+      'ancestor auto-scroll stays idle for a fully visible chat-style markdown bubble',
+      (tester) async {
+    final outerScrollController = ScrollController();
+    final selectionController = MarkdownSelectionController();
+
+    Widget buildAssistantBubble(String text,
+        {MarkdownSelectionController? controller}) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const CircleAvatar(child: Icon(Icons.terminal_rounded)),
+            const SizedBox(width: 12),
+            Flexible(
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                child: MarkdownWidget(
+                  data: text,
+                  selectionController: controller,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            height: 420,
+            child: ListView.builder(
+              controller: outerScrollController,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+              itemCount: 8,
+              itemBuilder: (context, index) {
+                if (index == 1) {
+                  return buildAssistantBubble(
+                    'Visible bubble\n\nSecond paragraph.\n\n- bullet a\n- bullet b',
+                    controller: selectionController,
+                  );
+                }
+                return buildAssistantBubble('Message ${index + 1}');
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final outerListFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is ListView && widget.controller == outerScrollController,
+    );
+    final markdownFinder = find.ancestor(
+      of: find.text('Visible bubble'),
+      matching: find.byType(MarkdownWidget),
+    );
+    final markdownRect = tester.getRect(markdownFinder);
+    final viewportRect = tester.getRect(outerListFinder);
+    expect(markdownRect.bottom, lessThan(viewportRect.bottom));
+
+    final start = tester.getCenter(find.text('Visible bubble'));
+    final end = Offset(start.dx, viewportRect.bottom - 6);
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: start);
+    await gesture.down(start);
+    await tester.pump();
+    await gesture.moveTo(end);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+
+    expect(outerScrollController.offset, 0);
+    expect(selectionController.hasSelection, isTrue);
+
+    await gesture.up();
+    await tester.pump();
+  });
+
+  testWidgets('selection auto-scroll ignores pointer moves after unmount', (
+    tester,
+  ) async {
+    final selectionController = MarkdownSelectionController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: '''
+Line 1
+
+Line 2
+''',
+            selectionController: selectionController,
+          ),
+        ),
+      ),
+    );
+
+    final start = tester.getCenter(find.text('Line 1'));
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: start);
+    await gesture.down(start);
+    await tester.pump();
+
+    await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
+    await tester.pump();
+
+    await gesture.moveTo(start + const Offset(0, 120));
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+
+    await gesture.up();
+    await tester.pump();
+  });
+
   testWidgets('dragging into a table selects the table block content', (
     tester,
   ) async {
@@ -5416,6 +6211,93 @@ Intro
 
     expect(selectionController.hasSelection, isTrue);
     expect(selectionController.selectedPlainText, 'Intro\n\nName');
+  });
+
+  testWidgets(
+      'reverse dragging from following heading into a table keeps table selection rects visible',
+      (tester) async {
+    final selectionController = MarkdownSelectionController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: r'''
+## 4. Complex Tables
+
+Tables support varying alignments, complex cell contents, and inline styles.
+
+| Feature | Description | Status |
+| :--- | :---: | ---: |
+| **Parsing** | Fast incremental markdown parsing | ✅ |
+| **Selection** | Seamless multi-block text selection | ✅ |
+| **Math** | Full LaTeX parsing & rendering (\( \alpha^2 \)) | ✅ |
+| **Code** | Syntax highlighting with *re_highlight* | 🚀 Built |
+
+## 5. Media & Links
+''',
+            selectionController: selectionController,
+          ),
+        ),
+      ),
+    );
+
+    final start = tester.getCenter(find.textContaining('Media & Links')) +
+        const Offset(0, 4);
+    final end = tester.getCenter(find.text('Feature'));
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: start);
+    await gesture.down(start);
+    await tester.pump();
+    await gesture.moveTo(end);
+    await tester.pump();
+    await gesture.up();
+    await tester.pump();
+
+    expect(selectionController.hasSelection, isTrue);
+    expect(
+      selectionController.selectedPlainText,
+      contains('Description\tStatus'),
+    );
+    expect(
+      selectionController.selectedPlainText,
+      contains('Code\tSyntax highlighting with re_highlight\t🚀 Built'),
+    );
+
+    final tableBlockFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is SelectableMarkdownBlock &&
+          widget.spec.plainText.contains('Feature\tDescription\tStatus'),
+    );
+    expect(tableBlockFinder, findsOneWidget);
+
+    final tableBlock = tester.widget<SelectableMarkdownBlock>(tableBlockFinder);
+    final selectionRange = selectionController.normalizedRange!;
+    final blockRange = DocumentRange(
+      start: DocumentPosition(
+        blockIndex: tableBlock.blockIndex,
+        path: const PathInBlock(<int>[0]),
+        textOffset: selectionRange.start.blockIndex == tableBlock.blockIndex
+            ? selectionRange.start.textOffset
+            : 0,
+      ),
+      end: DocumentPosition(
+        blockIndex: tableBlock.blockIndex,
+        path: const PathInBlock(<int>[0]),
+        textOffset: selectionRange.end.blockIndex == tableBlock.blockIndex
+            ? selectionRange.end.textOffset
+            : tableBlock.spec.plainText.length,
+      ),
+    );
+
+    final renderBox = tester.renderObject<RenderBox>(tableBlockFinder);
+    final element = tester.element(tableBlockFinder);
+    final selectionRects = tableBlock.spec.selectionRectResolver!(
+      element,
+      renderBox.size,
+      blockRange,
+    );
+    expect(selectionRects, isNotEmpty);
   });
 
   testWidgets('footnote backreference markers are not rendered',

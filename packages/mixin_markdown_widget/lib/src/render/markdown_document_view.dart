@@ -7,6 +7,7 @@ import '../selection/selection_controller.dart';
 import '../widgets/markdown_theme.dart';
 import '../widgets/markdown_types.dart';
 import 'code_syntax_highlighter.dart';
+import 'markdown_block_widgets.dart';
 
 import 'builder/markdown_block_builder.dart';
 import 'builder/markdown_inline_builder.dart';
@@ -58,6 +59,8 @@ class MarkdownDocumentView extends StatefulWidget {
 }
 
 class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
+  static const double _slowBuildLogThresholdMs = 8;
+
   final List<TapGestureRecognizer> _recognizers = <TapGestureRecognizer>[];
   final ScrollController _fallbackScrollController = ScrollController();
   final FocusNode _selectionFocusNode =
@@ -69,8 +72,12 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       const MarkdownPlainTextSerializer();
   final MarkdownCodeSyntaxHighlighter _codeSyntaxHighlighter =
       const MarkdownCodeSyntaxHighlighter();
+  late final MarkdownCodeHighlightCache _codeHighlightCache;
 
   final Map<String, CachedBlockRow> _cachedBlockRows = {};
+  final MarkdownDescriptorCache _descriptorCache = MarkdownDescriptorCache();
+  final MarkdownTableLayoutPlanCache _tableLayoutPlanCache =
+      MarkdownTableLayoutPlanCache();
 
   late final MarkdownBlockKeysRegistry _keysRegistry;
   late MarkdownBlockBuilder _blockBuilder;
@@ -82,6 +89,9 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
   void initState() {
     super.initState();
     _keysRegistry = MarkdownBlockKeysRegistry();
+    _codeHighlightCache = MarkdownCodeHighlightCache(
+      highlighter: _codeSyntaxHighlighter,
+    )..addListener(_handleCodeHighlightCacheChanged);
   }
 
   Set<String> _collectBlockIds(List<BlockNode> blocks) {
@@ -134,22 +144,36 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     final validIds = _collectBlockIds(widget.document.blocks);
     _keysRegistry.cleanupKeys(validIds);
     _cachedBlockRows.removeWhere((key, _) => !validIds.contains(key));
+    _descriptorCache.cleanup(validIds);
+    _tableLayoutPlanCache.cleanup(validIds);
+    _codeHighlightCache.cleanup(validIds);
 
     if (oldWidget.theme != widget.theme ||
         oldWidget.onTapLink != widget.onTapLink ||
         oldWidget.imageBuilder != widget.imageBuilder ||
         oldWidget.selectable != widget.selectable) {
       _cachedBlockRows.clear();
+      _codeHighlightCache.clear();
     }
   }
 
   @override
   void dispose() {
     _disposeRecognizers();
+    _codeHighlightCache
+      ..removeListener(_handleCodeHighlightCacheChanged)
+      ..dispose();
     _fallbackScrollController.dispose();
     _selectionFocusNode.dispose();
     _contextMenuController.remove();
     super.dispose();
+  }
+
+  void _handleCodeHighlightCacheChanged() {
+    if (!mounted) {
+      return;
+    }
+    setState(() {});
   }
 
   void _disposeRecognizers() {
@@ -287,8 +311,28 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     return _keysRegistry.blockKeys[block.id]?.currentState as dynamic;
   }
 
+  Widget _finishBuildWithLog(
+    Stopwatch stopwatch,
+    Widget child, {
+    required int blockCount,
+  }) {
+    stopwatch.stop();
+    final elapsedMs = stopwatch.elapsedMicroseconds / 1000;
+    if (elapsedMs >= _slowBuildLogThresholdMs) {
+      debugPrint(
+        '[mixin_markdown_widget] view.build '
+        'blocks=$blockCount '
+        'selectable=${widget.selectable} '
+        'useColumn=${widget.useColumn} '
+        'elapsed=${elapsedMs.toStringAsFixed(3)}ms',
+      );
+    }
+    return child;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final buildStopwatch = Stopwatch()..start();
     _disposeRecognizers();
 
     final inlineBuilder = MarkdownInlineBuilder(
@@ -302,6 +346,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       plainTextSerializer: _plainTextSerializer,
       inlineBuilder: inlineBuilder,
       codeSyntaxHighlighter: _codeSyntaxHighlighter,
+      cache: _descriptorCache,
     );
 
     final selectionResolver = MarkdownSelectionResolver(
@@ -328,6 +373,8 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       onTapLink: widget.onTapLink,
       onRequestContextMenu: _showToolbar,
       cachedBlockRows: _cachedBlockRows,
+      tableLayoutPlanCache: _tableLayoutPlanCache,
+      codeHighlightCache: _codeHighlightCache,
     );
 
     final selectionRange = widget.selectionController?.normalizedRange;
@@ -377,7 +424,11 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     }
 
     if (!widget.selectable || widget.selectionController == null) {
-      return scrollable;
+      return _finishBuildWithLog(
+        buildStopwatch,
+        scrollable,
+        blockCount: widget.document.blocks.length,
+      );
     }
 
     final gestureDetectorWrap = MarkdownSelectionGestureDetector(
@@ -408,19 +459,23 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       ),
     );
 
-    return MarkdownShortcutsScope(
-      selectionController: widget.selectionController!,
-      document: widget.document,
-      onCopyPlainText: widget.onCopyPlainText,
-      child: Listener(
-        behavior: HitTestBehavior.translucent,
-        onPointerDown: (_) {
-          if (!_selectionFocusNode.hasFocus) {
-            _selectionFocusNode.requestFocus();
-          }
-        },
-        child: tapRegion,
+    return _finishBuildWithLog(
+      buildStopwatch,
+      MarkdownShortcutsScope(
+        selectionController: widget.selectionController!,
+        document: widget.document,
+        onCopyPlainText: widget.onCopyPlainText,
+        child: Listener(
+          behavior: HitTestBehavior.translucent,
+          onPointerDown: (_) {
+            if (!_selectionFocusNode.hasFocus) {
+              _selectionFocusNode.requestFocus();
+            }
+          },
+          child: tapRegion,
+        ),
       ),
+      blockCount: widget.document.blocks.length,
     );
   }
 }

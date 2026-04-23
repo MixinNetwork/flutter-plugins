@@ -1,4 +1,8 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:re_highlight/languages/all.dart';
 import 'package:re_highlight/re_highlight.dart';
 
@@ -8,8 +12,62 @@ import '../widgets/markdown_theme.dart';
 class MarkdownCodeSyntaxHighlighter {
   const MarkdownCodeSyntaxHighlighter();
 
+  static const int _autoDetectMaxChars = 4000;
+  static const int _backgroundIsolateMinLines = 80;
+  static const int _backgroundIsolateMinChars = 6000;
+
   static final Highlight _highlight = Highlight()
     ..registerLanguages(builtinAllLanguages);
+
+  MarkdownCodeHighlightPresentation buildPlainTextPresentation({
+    required String source,
+    required TextStyle baseStyle,
+  }) {
+    final span = TextSpan(style: baseStyle, text: source);
+    return MarkdownCodeHighlightPresentation(
+      span: span,
+      runs: <MarkdownPretextInlineRun>[
+        MarkdownPretextInlineRun(text: source, style: baseStyle),
+      ],
+      isHighlighted: false,
+    );
+  }
+
+  bool shouldDegradeHighlight({
+    required String source,
+    required MarkdownThemeData theme,
+  }) {
+    final maxLines = theme.codeHighlightMaxLines;
+    if (maxLines == null || maxLines <= 0) {
+      return false;
+    }
+    return lineCountOf(source) > maxLines;
+  }
+
+  Future<MarkdownCodeHighlightPresentation> buildPresentationAsync({
+    required String source,
+    required TextStyle baseStyle,
+    required MarkdownThemeData theme,
+    String? language,
+  }) async {
+    if (source.isEmpty ||
+        shouldDegradeHighlight(source: source, theme: theme)) {
+      return buildPlainTextPresentation(source: source, baseStyle: baseStyle);
+    }
+
+    final normalizedLanguage = _normalizeLanguage(language);
+    final segments = await _highlightSegmentsAsync(
+      source: source,
+      language: normalizedLanguage,
+    );
+    return _presentationFromSegments(
+      segments,
+      source: source,
+      baseStyle: baseStyle,
+      theme: theme,
+      isHighlighted: segments.isNotEmpty,
+    );
+  }
 
   TextSpan buildTextSpan({
     required String source,
@@ -17,35 +75,35 @@ class MarkdownCodeSyntaxHighlighter {
     required MarkdownThemeData theme,
     String? language,
   }) {
-    if (source.isEmpty) {
-      return TextSpan(style: baseStyle, text: '');
-    }
+    return buildPresentation(
+      source: source,
+      baseStyle: baseStyle,
+      theme: theme,
+      language: language,
+    ).span;
+  }
 
-    String? targetLanguage = language?.trim().toLowerCase();
-    if (targetLanguage != null && targetLanguage.isEmpty) {
-      targetLanguage = null;
+  MarkdownCodeHighlightPresentation buildPresentation({
+    required String source,
+    required TextStyle baseStyle,
+    required MarkdownThemeData theme,
+    String? language,
+  }) {
+    if (source.isEmpty ||
+        shouldDegradeHighlight(source: source, theme: theme)) {
+      return buildPlainTextPresentation(source: source, baseStyle: baseStyle);
     }
-
-    HighlightResult result;
-    try {
-      if (targetLanguage != null &&
-          _highlight.getLanguage(targetLanguage) != null) {
-        result = _highlight.highlight(code: source, language: targetLanguage);
-      } else {
-        if (source.length <= 4000) {
-          result = _highlight.highlightAuto(source);
-        } else {
-          result = _highlight.justTextHighlightResult(source);
-        }
-      }
-    } catch (_) {
-      result = _highlight.justTextHighlightResult(source);
-    }
-
-    final renderer = _MarkdownHighlightRenderer(
-        baseStyle: baseStyle, theme: theme, highlighter: this);
-    result.render(renderer);
-    return renderer.span ?? TextSpan(style: baseStyle, text: source);
+    final segments = _highlightSegmentsSync(
+      source: source,
+      language: _normalizeLanguage(language),
+    );
+    return _presentationFromSegments(
+      segments,
+      source: source,
+      baseStyle: baseStyle,
+      theme: theme,
+      isHighlighted: segments.isNotEmpty,
+    );
   }
 
   List<MarkdownPretextInlineRun> buildPretextRuns({
@@ -54,61 +112,155 @@ class MarkdownCodeSyntaxHighlighter {
     required MarkdownThemeData theme,
     String? language,
   }) {
-    final span = buildTextSpan(
+    return buildPresentation(
       source: source,
       baseStyle: baseStyle,
       theme: theme,
       language: language,
-    );
-    final runs = <MarkdownPretextInlineRun>[];
-    _collectPretextRuns(
-      span,
-      inheritedStyle: baseStyle,
-      runs: runs,
-    );
-    return runs.isEmpty
-        ? <MarkdownPretextInlineRun>[
-            MarkdownPretextInlineRun(text: source, style: baseStyle),
-          ]
-        : runs;
+    ).runs;
   }
 
-  void _collectPretextRuns(
-    InlineSpan span, {
-    required TextStyle inheritedStyle,
-    required List<MarkdownPretextInlineRun> runs,
-  }) {
-    if (span is! TextSpan) {
-      return;
+  int lineCountOf(String source) {
+    if (source.isEmpty) {
+      return 0;
     }
+    return '\n'.allMatches(source).length + 1;
+  }
 
-    final effectiveStyle = inheritedStyle.merge(span.style);
-    final text = span.text;
-    if (text != null && text.isNotEmpty) {
-      if (runs.isNotEmpty &&
-          runs.last.renderSpan == null &&
-          runs.last.decoration == null &&
-          runs.last.mouseCursor == null &&
-          runs.last.recognizer == null &&
-          runs.last.style == effectiveStyle) {
-        final last = runs.removeLast();
-        runs.add(last.copyWithText(last.text + text));
-      } else {
-        runs.add(MarkdownPretextInlineRun(text: text, style: effectiveStyle));
-      }
-    }
-
-    final children = span.children;
-    if (children == null) {
-      return;
-    }
-    for (final child in children) {
-      _collectPretextRuns(
-        child,
-        inheritedStyle: effectiveStyle,
-        runs: runs,
+  Future<List<_MarkdownHighlightSegment>> _highlightSegmentsAsync({
+    required String source,
+    required String? language,
+  }) async {
+    if (_shouldUseBackgroundIsolate(source: source, language: language)) {
+      final response =
+          await compute<Map<String, Object?>, List<Map<String, Object?>>>(
+        _highlightSegmentsInBackground,
+        <String, Object?>{
+          'source': source,
+          'language': language,
+        },
       );
+      return response
+          .map(_MarkdownHighlightSegment.fromMessage)
+          .toList(growable: false);
     }
+    return Future<List<_MarkdownHighlightSegment>>.value(
+      _highlightSegmentsSync(source: source, language: language),
+    );
+  }
+
+  bool _shouldUseBackgroundIsolate({
+    required String source,
+    required String? language,
+  }) {
+    if (kIsWeb) {
+      return false;
+    }
+    if (source.length < _backgroundIsolateMinChars &&
+        lineCountOf(source) < _backgroundIsolateMinLines) {
+      return false;
+    }
+    return language != null || source.length <= _autoDetectMaxChars;
+  }
+
+  List<_MarkdownHighlightSegment> _highlightSegmentsSync({
+    required String source,
+    required String? language,
+  }) {
+    if (source.isEmpty) {
+      return const <_MarkdownHighlightSegment>[];
+    }
+    final result = _runHighlight(
+      _highlight,
+      source: source,
+      language: language,
+    );
+    final renderer = _MarkdownHighlightSegmentRenderer();
+    result.render(renderer);
+    return renderer.segments;
+  }
+
+  String? _normalizeLanguage(String? language) {
+    final normalized = language?.trim().toLowerCase();
+    if (normalized == null || normalized.isEmpty) {
+      return null;
+    }
+    return normalized;
+  }
+
+  HighlightResult _runHighlight(
+    Highlight highlighter, {
+    required String source,
+    required String? language,
+  }) {
+    try {
+      if (language != null && highlighter.getLanguage(language) != null) {
+        return highlighter.highlight(code: source, language: language);
+      }
+      if (source.length <= _autoDetectMaxChars) {
+        return highlighter.highlightAuto(source);
+      }
+    } catch (_) {
+      return highlighter.justTextHighlightResult(source);
+    }
+    return highlighter.justTextHighlightResult(source);
+  }
+
+  MarkdownCodeHighlightPresentation _presentationFromSegments(
+    List<_MarkdownHighlightSegment> segments, {
+    required String source,
+    required TextStyle baseStyle,
+    required MarkdownThemeData theme,
+    required bool isHighlighted,
+  }) {
+    if (segments.isEmpty) {
+      return buildPlainTextPresentation(source: source, baseStyle: baseStyle);
+    }
+
+    final runs = <MarkdownPretextInlineRun>[];
+    final children = <InlineSpan>[];
+
+    for (final segment in segments) {
+      if (segment.text.isEmpty) {
+        continue;
+      }
+      var effectiveStyle = baseStyle;
+      for (final scope in segment.scopes) {
+        effectiveStyle = effectiveStyle
+            .merge(_styleFor(scope, baseStyle: effectiveStyle, theme: theme));
+      }
+      if (runs.isNotEmpty && runs.last.style == effectiveStyle) {
+        final last = runs.removeLast();
+        runs.add(last.copyWithText(last.text + segment.text));
+      } else {
+        runs.add(MarkdownPretextInlineRun(
+            text: segment.text, style: effectiveStyle));
+      }
+
+      if (children.isNotEmpty) {
+        final last = children.last;
+        if (last is TextSpan &&
+            last.style == effectiveStyle &&
+            last.children == null) {
+          children[children.length - 1] = TextSpan(
+            text: (last.text ?? '') + segment.text,
+            style: effectiveStyle,
+          );
+          continue;
+        }
+      }
+      children.add(TextSpan(text: segment.text, style: effectiveStyle));
+    }
+
+    if (runs.isEmpty || children.isEmpty) {
+      return buildPlainTextPresentation(source: source, baseStyle: baseStyle);
+    }
+
+    return MarkdownCodeHighlightPresentation(
+      span: TextSpan(style: baseStyle, children: children),
+      runs: runs,
+      isHighlighted: isHighlighted,
+    );
   }
 
   TextStyle _styleFor(
@@ -193,60 +345,283 @@ class MarkdownCodeSyntaxHighlighter {
   }
 }
 
-class _RendererNode {
-  final String? scope;
-  final TextStyle style;
-  final List<InlineSpan> children = [];
+class MarkdownCodeHighlightPresentation {
+  const MarkdownCodeHighlightPresentation({
+    required this.span,
+    required this.runs,
+    required this.isHighlighted,
+  });
 
-  _RendererNode({this.scope, required this.style});
+  final TextSpan span;
+  final List<MarkdownPretextInlineRun> runs;
+  final bool isHighlighted;
 }
 
-class _MarkdownHighlightRenderer implements HighlightRenderer {
-  final TextStyle baseStyle;
-  final MarkdownThemeData theme;
-  final MarkdownCodeSyntaxHighlighter highlighter;
+class MarkdownCodeHighlightCache extends ChangeNotifier {
+  MarkdownCodeHighlightCache({
+    required MarkdownCodeSyntaxHighlighter highlighter,
+  }) : _highlighter = highlighter;
 
-  final List<_RendererNode> _stack = [];
-  final List<InlineSpan> _results = [];
+  final MarkdownCodeSyntaxHighlighter _highlighter;
+  final Map<String, _MarkdownCodeHighlightCacheEntry> _entries =
+      <String, _MarkdownCodeHighlightCacheEntry>{};
+  int _nextRequestId = 0;
+  bool _isDisposed = false;
 
-  _MarkdownHighlightRenderer({
-    required this.baseStyle,
-    required this.theme,
-    required this.highlighter,
+  MarkdownCodeHighlightPresentation resolve({
+    required String blockId,
+    required String source,
+    required TextStyle baseStyle,
+    required MarkdownThemeData theme,
+    String? language,
+  }) {
+    final signature = Object.hash(source, language);
+    final existing = _entries[blockId];
+    if (existing != null && existing.signature == signature) {
+      return existing.presentation;
+    }
+
+    final plainPresentation = _highlighter.buildPlainTextPresentation(
+      source: source,
+      baseStyle: baseStyle,
+    );
+    if (_isDisposed) {
+      return plainPresentation;
+    }
+
+    final requestId = ++_nextRequestId;
+    if (_highlighter.shouldDegradeHighlight(source: source, theme: theme)) {
+      _entries[blockId] = _MarkdownCodeHighlightCacheEntry(
+        signature: signature,
+        requestId: requestId,
+        presentation: plainPresentation,
+        isPending: false,
+      );
+      return plainPresentation;
+    }
+
+    _entries[blockId] = _MarkdownCodeHighlightCacheEntry(
+      signature: signature,
+      requestId: requestId,
+      presentation: plainPresentation,
+      isPending: true,
+    );
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (_isDisposed) {
+        return;
+      }
+      unawaited(
+        _startHighlight(
+          blockId: blockId,
+          requestId: requestId,
+          signature: signature,
+          source: source,
+          baseStyle: baseStyle,
+          theme: theme,
+          language: language,
+        ),
+      );
+    });
+    return plainPresentation;
+  }
+
+  String cacheSignatureFor(String blockId) {
+    final entry = _entries[blockId];
+    if (entry == null) {
+      return 'highlight:unresolved';
+    }
+    final state = entry.presentation.isHighlighted ? 'ready' : 'plain';
+    final pending = entry.isPending ? 'pending' : 'stable';
+    return 'highlight:$state:$pending:${entry.signature}';
+  }
+
+  Future<void> _startHighlight({
+    required String blockId,
+    required int requestId,
+    required int signature,
+    required String source,
+    required TextStyle baseStyle,
+    required MarkdownThemeData theme,
+    required String? language,
+  }) async {
+    if (_isDisposed) {
+      return;
+    }
+    final current = _entries[blockId];
+    if (current == null ||
+        current.requestId != requestId ||
+        current.signature != signature ||
+        !current.isPending) {
+      return;
+    }
+
+    final presentation = await _highlighter.buildPresentationAsync(
+      source: source,
+      baseStyle: baseStyle,
+      theme: theme,
+      language: language,
+    );
+    if (_isDisposed) {
+      return;
+    }
+    final latest = _entries[blockId];
+    if (latest == null ||
+        latest.requestId != requestId ||
+        latest.signature != signature) {
+      return;
+    }
+
+    _entries[blockId] = _MarkdownCodeHighlightCacheEntry(
+      signature: signature,
+      requestId: requestId,
+      presentation: presentation,
+      isPending: false,
+    );
+    if (!_isDisposed) {
+      notifyListeners();
+    }
+  }
+
+  void clear() {
+    if (_entries.isEmpty) {
+      return;
+    }
+    _entries.clear();
+  }
+
+  void cleanup(Set<String> validIds) {
+    _entries.removeWhere((key, _) => !validIds.contains(key));
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    _entries.clear();
+    super.dispose();
+  }
+}
+
+class _MarkdownCodeHighlightCacheEntry {
+  const _MarkdownCodeHighlightCacheEntry({
+    required this.signature,
+    required this.requestId,
+    required this.presentation,
+    required this.isPending,
   });
+
+  final int signature;
+  final int requestId;
+  final MarkdownCodeHighlightPresentation presentation;
+  final bool isPending;
+}
+
+@immutable
+class _MarkdownHighlightSegment {
+  const _MarkdownHighlightSegment({
+    required this.text,
+    required this.scopes,
+  });
+
+  factory _MarkdownHighlightSegment.fromMessage(Map<String, Object?> message) {
+    final scopes = (message['scopes'] as List<Object?>)
+        .map((scope) => scope! as String)
+        .toList(growable: false);
+    return _MarkdownHighlightSegment(
+      text: message['text']! as String,
+      scopes: scopes,
+    );
+  }
+
+  final String text;
+  final List<String> scopes;
+
+  Map<String, Object?> toMessage() => <String, Object?>{
+        'text': text,
+        'scopes': scopes,
+      };
+}
+
+class _MarkdownHighlightSegmentRenderer implements HighlightRenderer {
+  final List<String> _scopeStack = <String>[];
+  final List<_MarkdownHighlightSegment> _segments =
+      <_MarkdownHighlightSegment>[];
+
+  List<_MarkdownHighlightSegment> get segments =>
+      List<_MarkdownHighlightSegment>.unmodifiable(_segments);
 
   @override
   void addText(String text) {
-    if (_stack.isEmpty) {
-      _results.add(TextSpan(text: text, style: baseStyle));
-    } else {
-      final top = _stack.last;
-      top.children.add(TextSpan(text: text, style: top.style));
+    if (text.isEmpty) {
+      return;
     }
+    if (_segments.isNotEmpty &&
+        listEquals(_segments.last.scopes, _scopeStack)) {
+      final previous = _segments.removeLast();
+      _segments.add(
+        _MarkdownHighlightSegment(
+          text: previous.text + text,
+          scopes: previous.scopes,
+        ),
+      );
+      return;
+    }
+    _segments.add(
+      _MarkdownHighlightSegment(
+        text: text,
+        scopes: List<String>.unmodifiable(_scopeStack),
+      ),
+    );
   }
 
   @override
   void openNode(DataNode node) {
-    final parentStyle = _stack.isEmpty ? baseStyle : _stack.last.style;
-    final style =
-        highlighter._styleFor(node.scope, baseStyle: parentStyle, theme: theme);
-    _stack.add(_RendererNode(scope: node.scope, style: style));
+    final scope = node.scope;
+    if (scope != null && scope.isNotEmpty) {
+      _scopeStack.add(scope);
+    }
   }
 
   @override
   void closeNode(DataNode node) {
-    final top = _stack.removeLast();
-    final span = TextSpan(
-        style: top.style, children: top.children.isEmpty ? null : top.children);
-    if (_stack.isEmpty) {
-      _results.add(span);
-    } else {
-      _stack.last.children.add(span);
+    final scope = node.scope;
+    if (scope != null && scope.isNotEmpty && _scopeStack.isNotEmpty) {
+      _scopeStack.removeLast();
     }
   }
+}
 
-  TextSpan? get span {
-    if (_results.isEmpty) return null;
-    return TextSpan(style: baseStyle, children: _results);
+List<Map<String, Object?>> _highlightSegmentsInBackground(
+  Map<String, Object?> request,
+) {
+  final highlighter = Highlight()..registerLanguages(builtinAllLanguages);
+  final source = request['source']! as String;
+  final language = request['language'] as String?;
+  final result = _runHighlightInBackground(
+    highlighter,
+    source: source,
+    language: language,
+  );
+  final renderer = _MarkdownHighlightSegmentRenderer();
+  result.render(renderer);
+  return renderer.segments
+      .map((segment) => segment.toMessage())
+      .toList(growable: false);
+}
+
+HighlightResult _runHighlightInBackground(
+  Highlight highlighter, {
+  required String source,
+  required String? language,
+}) {
+  try {
+    if (language != null && highlighter.getLanguage(language) != null) {
+      return highlighter.highlight(code: source, language: language);
+    }
+    if (source.length <= MarkdownCodeSyntaxHighlighter._autoDetectMaxChars) {
+      return highlighter.highlightAuto(source);
+    }
+  } catch (_) {
+    return highlighter.justTextHighlightResult(source);
   }
+  return highlighter.justTextHighlightResult(source);
 }

@@ -20,6 +20,8 @@ import '../local_image_provider_stub.dart'
     if (dart.library.io) '../local_image_provider_io.dart';
 
 class MarkdownBlockBuilder {
+  static const double _slowBlockBuildLogThresholdMs = 2;
+
   MarkdownBlockBuilder({
     required this.theme,
     required this.selectionController,
@@ -37,6 +39,8 @@ class MarkdownBlockBuilder {
     this.onTapLink,
     required this.onRequestContextMenu,
     required Map<String, CachedBlockRow> cachedBlockRows,
+    required this.tableLayoutPlanCache,
+    required this.codeHighlightCache,
   }) : _cachedBlockRows = cachedBlockRows;
 
   final MarkdownThemeData theme;
@@ -54,6 +58,8 @@ class MarkdownBlockBuilder {
   final MarkdownBulletBuilder? bulletBuilder;
   final MarkdownTapLinkCallback? onTapLink;
   final void Function(Offset) onRequestContextMenu;
+  final MarkdownTableLayoutPlanCache tableLayoutPlanCache;
+  final MarkdownCodeHighlightCache codeHighlightCache;
 
   final Map<String, CachedBlockRow> _cachedBlockRows;
 
@@ -63,6 +69,7 @@ class MarkdownBlockBuilder {
     required int blockIndex,
     required DocumentRange? selectionRange,
   }) {
+    final buildStopwatch = Stopwatch()..start();
     final cacheable = _canCacheBlockRow(block);
     final selectionSignature = _selectionSignatureForBlock(
       block: block,
@@ -100,10 +107,24 @@ class MarkdownBlockBuilder {
     );
 
     if (!cacheable) {
+      _logSlowBlockBuild(
+        stopwatch: buildStopwatch,
+        block: block,
+        blockIndex: blockIndex,
+        cacheable: cacheable,
+        fromCache: false,
+      );
       _cachedBlockRows.remove(block.id);
       return widget;
     }
 
+    _logSlowBlockBuild(
+      stopwatch: buildStopwatch,
+      block: block,
+      blockIndex: blockIndex,
+      cacheable: cacheable,
+      fromCache: false,
+    );
     _cachedBlockRows[block.id] = CachedBlockRow(
       block: block,
       blockIndex: blockIndex,
@@ -111,6 +132,28 @@ class MarkdownBlockBuilder {
       widget: widget,
     );
     return widget;
+  }
+
+  void _logSlowBlockBuild({
+    required Stopwatch stopwatch,
+    required BlockNode block,
+    required int blockIndex,
+    required bool cacheable,
+    required bool fromCache,
+  }) {
+    stopwatch.stop();
+    final elapsedMs = stopwatch.elapsedMicroseconds / 1000;
+    if (elapsedMs < _slowBlockBuildLogThresholdMs) {
+      return;
+    }
+    debugPrint(
+      '[mixin_markdown_widget] block.build '
+      'index=$blockIndex '
+      'kind=${block.kind.name} '
+      'cacheable=$cacheable '
+      'fromCache=$fromCache '
+      'elapsed=${elapsedMs.toStringAsFixed(3)}ms',
+    );
   }
 
   Widget _buildBlockView(
@@ -235,7 +278,7 @@ class MarkdownBlockBuilder {
       case MarkdownBlockKind.quote:
         final quoteBlock = block as QuoteBlock;
         final descriptor =
-            descriptorExtractor.buildQuoteSelectableDescriptor(quoteBlock);
+            descriptorExtractor.buildSelectableDescriptorForBlock(quoteBlock);
         return SelectableBlockSpec(
           child: MarkdownQuoteBlockView(
             theme: theme,
@@ -288,7 +331,7 @@ class MarkdownBlockBuilder {
       case MarkdownBlockKind.unorderedList:
         final listBlock = block as ListBlock;
         final descriptor =
-            descriptorExtractor.buildListSelectableDescriptor(listBlock);
+            descriptorExtractor.buildSelectableDescriptorForBlock(listBlock);
         final itemRowKeys = keysRegistry.listItemKeysFor(listBlock);
         final itemContentKeys = keysRegistry.listItemContentKeysFor(listBlock);
         return SelectableBlockSpec(
@@ -409,13 +452,15 @@ class MarkdownBlockBuilder {
         );
       case MarkdownBlockKind.codeBlock:
         final codeBlock = block as CodeBlock;
-        final codeRuns = codeSyntaxHighlighter.buildPretextRuns(
+        final codeHighlightPresentation = codeHighlightCache.resolve(
+          blockId: codeBlock.id,
           source: codeBlock.code,
           baseStyle: theme.codeBlockStyle,
           theme: theme,
           language: codeBlock.language,
         );
-        final codeSpan = _buildCodeTextSpan(codeBlock);
+        final codeRuns = codeHighlightPresentation.runs;
+        final codeSpan = codeHighlightPresentation.span;
         final directTextKey = _createDirectTextKeyIfNeeded(codeRuns);
         final scrollController = keysRegistry.codeBlockScrollControllers
             .putIfAbsent(codeBlock.id, ScrollController.new);
@@ -466,6 +511,8 @@ class MarkdownBlockBuilder {
         final cellTextKeys = keysRegistry.tableCellTextKeysFor(tableBlock);
         final descriptor =
             descriptorExtractor.buildSelectableDescriptorForBlock(tableBlock);
+        final scrollController = keysRegistry.tableScrollControllers
+            .putIfAbsent(tableBlock.id, ScrollController.new);
         return SelectableBlockSpec(
           child: _buildTable(
             context,
@@ -474,6 +521,7 @@ class MarkdownBlockBuilder {
                 cellKeys[rowIndex][columnIndex],
             cellTextKeyBuilder: (rowIndex, columnIndex) =>
                 cellTextKeys[rowIndex][columnIndex],
+            scrollController: scrollController,
           ),
           plainText: descriptor.plainText,
           selectionStructure: _matchingSelectionStructure(
@@ -484,6 +532,7 @@ class MarkdownBlockBuilder {
           textSpan: descriptor.span,
           highlightBorderRadius: theme.tableBorderRadius,
           selectionPaintOrder: SelectableBlockSelectionPaintOrder.aboveChild,
+          repaintListenable: scrollController,
           selectionColor: theme.selectionColor,
           selectionRectResolver: (context, _, range) =>
               selectionResolver.resolveNestedBlockSelectionRects(
@@ -492,8 +541,8 @@ class MarkdownBlockBuilder {
             block: tableBlock,
             descriptor: descriptor,
             range: range,
-            renderObject: context.findRenderObject() as RenderBox, // Ignored
-            origin: Offset.zero, // Ignored
+            renderObject: context.findRenderObject() as RenderBox,
+            origin: Offset.zero,
             textDirection: Directionality.of(context),
           ),
           textOffsetResolver: (context, _, localPosition) =>
@@ -502,9 +551,9 @@ class MarkdownBlockBuilder {
             rootRenderObject: context.findRenderObject() as RenderBox,
             block: tableBlock,
             descriptor: descriptor,
-            renderObject: context.findRenderObject() as RenderBox, // Ignored
+            renderObject: context.findRenderObject() as RenderBox,
             globalPosition: (context.findRenderObject() as RenderBox)
-                .localToGlobal(localPosition), // Ignored
+                .localToGlobal(localPosition),
             textDirection: Directionality.of(context),
           ),
           selectionUnitRangeResolver: (_, __, ___, position) =>
@@ -1190,11 +1239,18 @@ class MarkdownBlockBuilder {
     if (codeBlockBuilder != null) {
       return codeBlockBuilder!(context, block.code, block.language, theme);
     }
+    final codeHighlightPresentation = codeHighlightCache.resolve(
+      blockId: block.id,
+      source: block.code,
+      baseStyle: theme.codeBlockStyle,
+      theme: theme,
+      language: block.language,
+    );
     final scrollController = keysRegistry.codeBlockScrollControllers
         .putIfAbsent(block.id, ScrollController.new);
     return _buildDecoratedCodeBlock(
       block,
-      codeSpan: _buildCodeTextSpan(block),
+      codeSpan: codeHighlightPresentation.span,
       scrollController: scrollController,
     );
   }
@@ -1218,27 +1274,23 @@ class MarkdownBlockBuilder {
     );
   }
 
-  InlineSpan _buildCodeTextSpan(CodeBlock block) {
-    return codeSyntaxHighlighter.buildTextSpan(
-      source: block.code,
-      baseStyle: theme.codeBlockStyle,
-      theme: theme,
-      language: block.language,
-    );
-  }
-
   Widget _buildTable(
     BuildContext context,
     TableBlock block, {
     Key? Function(int rowIndex, int columnIndex)? cellKeyBuilder,
     GlobalKey? Function(int rowIndex, int columnIndex)? cellTextKeyBuilder,
+    ScrollController? scrollController,
   }) {
     return MarkdownTableBlockView(
       theme: theme,
       block: block,
+      layoutPlan: tableLayoutPlanCache.planFor(block),
       textWidgetBuilder: _buildInlineTextWidget,
       cellKeyBuilder: cellKeyBuilder,
       cellTextKeyBuilder: cellTextKeyBuilder,
+      scrollController: scrollController ??
+          keysRegistry.tableScrollControllers
+              .putIfAbsent(block.id, ScrollController.new),
     );
   }
 
@@ -1248,9 +1300,14 @@ class MarkdownBlockBuilder {
     List<InlineNode> inlines,
     TextAlign textAlign, {
     GlobalKey? directTextKey,
+    bool alignInlineMathToBaseline = true,
   }) {
     return MarkdownPretextTextBlock.rich(
-      runs: inlineBuilder.buildPretextRuns(style, inlines),
+      runs: inlineBuilder.buildPretextRuns(
+        style,
+        inlines,
+        alignInlineMathToBaseline: alignInlineMathToBaseline,
+      ),
       fallbackStyle: style,
       textAlign: textAlign,
       intrinsicWidthSafe: true,
@@ -1655,16 +1712,13 @@ class MarkdownBlockBuilder {
     required int blockIndex,
     required DocumentRange? selectionRange,
   }) {
-    if (block is TableBlock) {
-      return _isBlockCoveredByTextSelection(blockIndex, selectionRange)
-          ? 'table:text'
-          : 'table:none';
-    }
-
+    final highlightSignature = block is CodeBlock
+        ? ':${codeHighlightCache.cacheSignatureFor(block.id)}'
+        : '';
     if (selectionRange == null ||
         blockIndex < selectionRange.start.blockIndex ||
         blockIndex > selectionRange.end.blockIndex) {
-      return 'text:none';
+      return 'text:none$highlightSignature';
     }
     final start = blockIndex == selectionRange.start.blockIndex
         ? selectionRange.start.textOffset
@@ -1672,16 +1726,7 @@ class MarkdownBlockBuilder {
     final end = blockIndex == selectionRange.end.blockIndex
         ? selectionRange.end.textOffset
         : plainTextSerializer.serializeBlockText(block).length;
-    return 'text:$start:$end';
-  }
-
-  bool _isBlockCoveredByTextSelection(
-    int blockIndex,
-    DocumentRange? selectionRange,
-  ) {
-    return selectionRange != null &&
-        blockIndex >= selectionRange.start.blockIndex &&
-        blockIndex <= selectionRange.end.blockIndex;
+    return 'text:$start:$end$highlightSignature';
   }
 
   bool _canCacheBlockRow(BlockNode block) {
@@ -1690,18 +1735,17 @@ class MarkdownBlockBuilder {
         return !_inlinesContainLinks((block as HeadingBlock).inlines);
       case MarkdownBlockKind.paragraph:
         return !_inlinesContainLinks((block as ParagraphBlock).inlines);
-      case MarkdownBlockKind.definitionList:
-      case MarkdownBlockKind.footnoteList:
-        return false;
       case MarkdownBlockKind.codeBlock:
       case MarkdownBlockKind.image:
       case MarkdownBlockKind.table:
       case MarkdownBlockKind.thematicBreak:
+      case MarkdownBlockKind.definitionList:
+      case MarkdownBlockKind.footnoteList:
         return true;
       case MarkdownBlockKind.quote:
       case MarkdownBlockKind.orderedList:
       case MarkdownBlockKind.unorderedList:
-        return false;
+        return true;
     }
   }
 
