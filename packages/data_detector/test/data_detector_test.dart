@@ -1,4 +1,5 @@
 import 'package:data_detector/data_detector.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -9,5 +10,5 @@ void main() {
     for (final result in results) {
       expect(result.range.textInside(str), "https://mixin.one");
     }
-  });
+  }, skip: defaultTargetPlatform != TargetPlatform.macOS);
 }
