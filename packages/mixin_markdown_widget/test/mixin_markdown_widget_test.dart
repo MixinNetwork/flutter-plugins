@@ -5630,6 +5630,202 @@ $label continued with more content for drag selection.
     await tester.pump();
   });
 
+  testWidgets(
+      'ancestor auto-scroll stops when the current shrink-wrapped markdown is already fully visible',
+      (tester) async {
+    final selectionController = MarkdownSelectionController();
+    final outerScrollController = ScrollController();
+    const targetLabel = 'Fully visible target';
+
+    String buildMessage(String label) => '''
+$label
+
+$label continued.
+''';
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            height: 320,
+            child: ListView(
+              controller: outerScrollController,
+              children: List<Widget>.generate(10, (index) {
+                final label = index == 1 ? targetLabel : 'Message ${index + 1}';
+                return Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  child: MarkdownWidget(
+                    data: buildMessage(label),
+                    selectionController:
+                        index == 1 ? selectionController : null,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                  ),
+                );
+              }),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final markdownFinder = find.ancestor(
+      of: find.text(targetLabel),
+      matching: find.byType(MarkdownWidget),
+    );
+    final markdownRect = tester.getRect(markdownFinder);
+    final outerListFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is ListView && widget.controller == outerScrollController,
+    );
+    final viewport = tester.getRect(outerListFinder);
+    expect(markdownRect.bottom, lessThan(viewport.bottom));
+
+    final start = tester.getCenter(find.text(targetLabel));
+    final end = Offset(start.dx, viewport.bottom - 8);
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: start);
+    await gesture.down(start);
+    await tester.pump();
+    await gesture.moveTo(end);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+
+    expect(outerScrollController.offset, 0);
+    expect(selectionController.hasSelection, isTrue);
+    expect(selectionController.selectedPlainText, contains(targetLabel));
+
+    await gesture.up();
+    await tester.pump();
+  });
+
+  testWidgets(
+      'ancestor auto-scroll stays idle for a fully visible chat-style markdown bubble',
+      (tester) async {
+    final outerScrollController = ScrollController();
+    final selectionController = MarkdownSelectionController();
+
+    Widget buildAssistantBubble(String text,
+        {MarkdownSelectionController? controller}) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const CircleAvatar(child: Icon(Icons.terminal_rounded)),
+            const SizedBox(width: 12),
+            Flexible(
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                child: MarkdownWidget(
+                  data: text,
+                  selectionController: controller,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            height: 420,
+            child: ListView.builder(
+              controller: outerScrollController,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+              itemCount: 8,
+              itemBuilder: (context, index) {
+                if (index == 1) {
+                  return buildAssistantBubble(
+                    'Visible bubble\n\nSecond paragraph.\n\n- bullet a\n- bullet b',
+                    controller: selectionController,
+                  );
+                }
+                return buildAssistantBubble('Message ${index + 1}');
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final outerListFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is ListView && widget.controller == outerScrollController,
+    );
+    final markdownFinder = find.ancestor(
+      of: find.text('Visible bubble'),
+      matching: find.byType(MarkdownWidget),
+    );
+    final markdownRect = tester.getRect(markdownFinder);
+    final viewportRect = tester.getRect(outerListFinder);
+    expect(markdownRect.bottom, lessThan(viewportRect.bottom));
+
+    final start = tester.getCenter(find.text('Visible bubble'));
+    final end = Offset(start.dx, viewportRect.bottom - 6);
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: start);
+    await gesture.down(start);
+    await tester.pump();
+    await gesture.moveTo(end);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+
+    expect(outerScrollController.offset, 0);
+    expect(selectionController.hasSelection, isTrue);
+
+    await gesture.up();
+    await tester.pump();
+  });
+
+  testWidgets('selection auto-scroll ignores pointer moves after unmount', (
+    tester,
+  ) async {
+    final selectionController = MarkdownSelectionController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: '''
+Line 1
+
+Line 2
+''',
+            selectionController: selectionController,
+          ),
+        ),
+      ),
+    );
+
+    final start = tester.getCenter(find.text('Line 1'));
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: start);
+    await gesture.down(start);
+    await tester.pump();
+
+    await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
+    await tester.pump();
+
+    await gesture.moveTo(start + const Offset(0, 120));
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+
+    await gesture.up();
+    await tester.pump();
+  });
+
   testWidgets('dragging into a table selects the table block content', (
     tester,
   ) async {

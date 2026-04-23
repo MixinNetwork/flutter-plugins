@@ -72,6 +72,9 @@ class _MarkdownSelectionGestureDetectorState
   Timer? _autoScrollTimer;
 
   List<_AutoScrollCandidate> _autoScrollCandidates() {
+    if (!mounted) {
+      return const <_AutoScrollCandidate>[];
+    }
     final candidates = <_AutoScrollCandidate>[];
     final seenPositions = <ScrollPosition>{};
 
@@ -116,6 +119,9 @@ class _MarkdownSelectionGestureDetectorState
   }
 
   void _handlePointerDown(PointerDownEvent event) {
+    if (!mounted) {
+      return;
+    }
     if (!widget.isSelectable) {
       return;
     }
@@ -171,6 +177,9 @@ class _MarkdownSelectionGestureDetectorState
   }
 
   void _handlePointerMove(PointerMoveEvent event) {
+    if (!mounted) {
+      return;
+    }
     if (!_isDraggingSelection) {
       return;
     }
@@ -190,6 +199,9 @@ class _MarkdownSelectionGestureDetectorState
   }
 
   void _handlePointerUp(PointerUpEvent event) {
+    if (!mounted) {
+      return;
+    }
     if (!_isDraggingSelection) {
       return;
     }
@@ -208,6 +220,9 @@ class _MarkdownSelectionGestureDetectorState
   }
 
   void _handlePointerCancel(PointerCancelEvent event) {
+    if (!mounted) {
+      return;
+    }
     _isDraggingSelection = false;
     _dragBasePosition = null;
     _dragStartPointerPosition = null;
@@ -217,7 +232,7 @@ class _MarkdownSelectionGestureDetectorState
   }
 
   void _updateDragSelectionAt(Offset globalPosition) {
-    if (_dragBasePosition == null) {
+    if (!mounted || _dragBasePosition == null) {
       return;
     }
     final position = widget.hitTestPosition(globalPosition, clamp: true);
@@ -230,6 +245,10 @@ class _MarkdownSelectionGestureDetectorState
   }
 
   void _updateAutoScroll() {
+    if (!mounted) {
+      _stopAutoScroll();
+      return;
+    }
     if (_autoScrollVelocity() == 0) {
       _stopAutoScroll();
       return;
@@ -241,7 +260,7 @@ class _MarkdownSelectionGestureDetectorState
   }
 
   void _handleAutoScrollTick() {
-    if (!_isDraggingSelection) {
+    if (!mounted || !_isDraggingSelection) {
       _stopAutoScroll();
       return;
     }
@@ -281,6 +300,9 @@ class _MarkdownSelectionGestureDetectorState
   }
 
   _ResolvedAutoScroll? _resolveAutoScroll() {
+    if (!mounted) {
+      return null;
+    }
     final globalPosition = _lastDragPointerPosition;
     if (globalPosition == null) {
       return null;
@@ -314,6 +336,9 @@ class _MarkdownSelectionGestureDetectorState
         position.maxScrollExtent <= position.minScrollExtent) {
       return 0;
     }
+    if (_shouldSuppressAncestorAutoScroll(candidate, globalPosition)) {
+      return 0;
+    }
 
     final viewportRect = candidate.viewportRect;
     if (globalPosition.dy < viewportRect.top + _autoScrollActivationZone &&
@@ -341,6 +366,32 @@ class _MarkdownSelectionGestureDetectorState
     return math.max(80, proximity * proximity * _autoScrollMaxSpeed);
   }
 
+  bool _shouldSuppressAncestorAutoScroll(
+    _AutoScrollCandidate candidate,
+    Offset globalPosition,
+  ) {
+    if (candidate.depth == 0) {
+      return false;
+    }
+    final markdownRect = _markdownContentRect;
+    if (markdownRect == null) {
+      return false;
+    }
+    final viewportRect = candidate.viewportRect;
+    const epsilon = 0.5;
+    final isNearTop =
+        globalPosition.dy < viewportRect.top + _autoScrollActivationZone;
+    final isNearBottom =
+        globalPosition.dy > viewportRect.bottom - _autoScrollActivationZone;
+    if (isNearBottom) {
+      return markdownRect.bottom <= viewportRect.bottom + epsilon;
+    }
+    if (isNearTop) {
+      return markdownRect.top >= viewportRect.top - epsilon;
+    }
+    return false;
+  }
+
   _AutoScrollCandidate? _candidateForScrollable({
     required ScrollPosition? position,
     required RenderObject? renderObject,
@@ -361,6 +412,19 @@ class _MarkdownSelectionGestureDetectorState
       viewportRect: origin & renderObject.size,
       depth: depth,
     );
+  }
+
+  Rect? get _markdownContentRect {
+    if (!mounted) {
+      return null;
+    }
+    final renderObject =
+        widget.scrollableKey.currentContext?.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.hasSize) {
+      return null;
+    }
+    final origin = renderObject.localToGlobal(Offset.zero);
+    return origin & renderObject.size;
   }
 
   void _updateTapCount(PointerDownEvent event) {
