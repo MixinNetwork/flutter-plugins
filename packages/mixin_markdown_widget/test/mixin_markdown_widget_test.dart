@@ -2,11 +2,13 @@ import 'dart:math' as math;
 import 'dart:io';
 import 'dart:ui' show PointerDeviceKind;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
+import 'package:mixin_markdown_widget/src/render/builder/markdown_inline_builder.dart';
 import 'package:mixin_markdown_widget/src/render/local_image_provider_io.dart';
 import 'package:mixin_markdown_widget/src/render/markdown_block_widgets.dart';
 import 'package:mixin_markdown_widget/src/render/pretext_text_block.dart';
@@ -1800,6 +1802,30 @@ return value;
         _countStyledDescendantSpans(rootSpan, rootSpan.style), greaterThan(0));
   });
 
+  testWidgets('disposing markdown view ignores pending code highlight results',
+      (tester) async {
+    const input = '''
+```dart
+const value = 42;
+return value;
+```
+''';
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(data: input),
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
       'long code blocks can degrade to plain text above the configured line limit',
       (tester) async {
@@ -2661,6 +2687,225 @@ const value = 42;
         );
         expect(actualWidth, lessThanOrEqualTo(width + 0.01));
       }
+    }
+  });
+
+  test('send_sol_for_rent wrap does not create an extra clipped line', () {
+    const padding = EdgeInsets.symmetric(horizontal: 6, vertical: 2);
+    const baseStyle = TextStyle(fontSize: 14, height: 1.2);
+    const expected =
+        '宅学长发布了一份InputFragment 余额与手续费校验说明文档，整理了Mixin安卓App账户租金（rent）场景，才会显示send_sol_for_rent提示。';
+    const runs = <MarkdownPretextInlineRun>[
+      MarkdownPretextInlineRun(
+        text:
+            '宅学长发布了一份InputFragment 余额与手续费校验说明文档，整理了Mixin安卓App账户租金（rent）场景，才会显示',
+        style: baseStyle,
+      ),
+      MarkdownPretextInlineRun(
+        text: 'send_sol_for_rent',
+        style: baseStyle,
+        allowCharacterWrap: true,
+        decoration: MarkdownPretextInlineDecoration(
+          backgroundColor: Color(0xFFE9EDF2),
+          borderRadius: BorderRadius.all(Radius.circular(6)),
+          padding: padding,
+        ),
+      ),
+      MarkdownPretextInlineRun(
+        text: '提示。',
+        style: baseStyle,
+      ),
+    ];
+
+    for (final width in <double>[232, 228, 224, 220, 216, 212, 208, 204]) {
+      final layout = computeMarkdownPretextLayoutFromRuns(
+        runs: runs,
+        fallbackStyle: baseStyle,
+        maxWidth: width,
+        textScaleFactor: 1,
+      );
+
+      expect(
+        layout.lines.map((line) => line.text).join().replaceAll(' ', ''),
+        expected.replaceAll(' ', ''),
+        reason: 'width=$width',
+      );
+      for (final line in layout.lines) {
+        final actualWidth = line.segments.fold<double>(
+          0,
+          (sum, segment) => sum + (segment.right - segment.left),
+        );
+        expect(actualWidth, lessThanOrEqualTo(width + 0.01));
+      }
+      final decoratedText = layout.lines
+          .expand((line) => line.segments)
+          .where((segment) => segment.decoration != null)
+          .map((segment) => segment.text)
+          .join();
+      expect(
+        decoratedText,
+        'send_sol_for_rent',
+        reason: 'width=$width',
+      );
+    }
+  });
+
+  test('trailing inline code does not shrink earlier line wrapping', () {
+    const padding = EdgeInsets.symmetric(horizontal: 6, vertical: 2);
+    const baseStyle = TextStyle(fontSize: 14, height: 1.2);
+    const prefix =
+        '宅学长发布了一份InputFragment 余额与手续费校验说明文档，整理了Mixin安卓App钱包转账页面的逻辑，区分了三种场景，重点明确：只有Solana真实账户租金场景，才会显示';
+    const suffix = '提示。';
+    const width = 232.0;
+
+    final plainLayout = computeMarkdownPretextLayoutFromRuns(
+      runs: const <MarkdownPretextInlineRun>[
+        MarkdownPretextInlineRun(
+          text: '$prefix send_sol_for_rent$suffix',
+          style: baseStyle,
+        ),
+      ],
+      fallbackStyle: baseStyle,
+      maxWidth: width,
+      textScaleFactor: 1,
+    );
+
+    final codeLayout = computeMarkdownPretextLayoutFromRuns(
+      runs: const <MarkdownPretextInlineRun>[
+        MarkdownPretextInlineRun(
+          text: '$prefix ',
+          style: baseStyle,
+        ),
+        MarkdownPretextInlineRun(
+          text: 'send_sol_for_rent',
+          style: baseStyle,
+          allowCharacterWrap: true,
+          decoration: MarkdownPretextInlineDecoration(
+            backgroundColor: Color(0xFFE9EDF2),
+            borderRadius: BorderRadius.all(Radius.circular(6)),
+            padding: padding,
+          ),
+        ),
+        MarkdownPretextInlineRun(
+          text: suffix,
+          style: baseStyle,
+        ),
+      ],
+      fallbackStyle: baseStyle,
+      maxWidth: width,
+      textScaleFactor: 1,
+    );
+
+    expect(plainLayout.lines, isNotEmpty);
+    expect(codeLayout.lines, isNotEmpty);
+    expect(
+      codeLayout.lines.first.text.replaceAll(' ', ''),
+      plainLayout.lines.first.text.replaceAll(' ', ''),
+    );
+  });
+
+  testWidgets(
+      'markdown inline code at paragraph tail does not shift the first line break',
+      (tester) async {
+    const inlineCodeMarkdown =
+        '某人发布了一份**《TEST 某功能校验说明》**文档，整理了某客户端转账页的逻辑，区分了三种场景，分别说明金额校验、可用余额计算、手续费校验规则，重点明确：只有某链真实租金场景，才会显示`rent_tip_token` 提示。';
+    late MarkdownThemeData theme;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) {
+            theme = MarkdownThemeData.fallback(context);
+            return const SizedBox.shrink();
+          },
+        ),
+      ),
+    );
+
+    List<String> layoutLinesFromMarkdown(String markdown, double width) {
+      final parser = MarkdownDocumentParser();
+      final document = parser.parse(markdown);
+      final paragraph = document.blocks.single as ParagraphBlock;
+      final builder = MarkdownInlineBuilder(
+        theme: theme,
+        recognizers: <TapGestureRecognizer>[],
+      );
+      final runs = builder.buildPretextRuns(theme.bodyStyle, paragraph.inlines);
+      final layout = computeMarkdownPretextLayoutFromRuns(
+        runs: runs,
+        fallbackStyle: theme.bodyStyle,
+        maxWidth: width,
+        textScaleFactor: 1,
+      );
+      return layout.lines.map((line) => line.text).toList(growable: false);
+    }
+
+    for (final width in <double>[500]) {
+      final inlineCodeLines =
+          layoutLinesFromMarkdown(inlineCodeMarkdown, width);
+
+      expect(inlineCodeLines, isNotEmpty, reason: 'width=$width');
+      expect(
+        inlineCodeLines.first,
+        isNot('某人发布了一份**《TEST'),
+        reason: 'width=$width first=${inlineCodeLines.first}',
+      );
+      expect(
+        inlineCodeLines.first,
+        contains('某功能'),
+        reason: 'width=$width first=${inlineCodeLines.first}',
+      );
+    }
+  });
+
+  testWidgets(
+      'widget rendering keeps the first list line stable with trailing inline code',
+      (tester) async {
+    const inlineCodeMarkdown =
+        '1. 某人发布了一份**《TEST 某功能校验说明》**文档，整理了某客户端转账页的逻辑，区分了三种场景，分别说明金额校验、可用余额计算、手续费校验规则，重点明确：只有某链真实租金场景，才会显示`rent_tip_token` 提示。';
+
+    Future<List<String>> renderedLines(String markdown, double width) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Align(
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: width,
+                child: MarkdownWidget(data: markdown),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final blockFinder = find.byType(MarkdownPretextTextBlock).first;
+      final blockWidget = tester.widget<MarkdownPretextTextBlock>(blockFinder);
+      final blockRenderBox = tester.renderObject<RenderBox>(blockFinder);
+      final layout = computeMarkdownPretextLayoutFromRuns(
+        runs: blockWidget.runs!,
+        fallbackStyle: blockWidget.fallbackStyle,
+        maxWidth: blockRenderBox.size.width,
+        textScaleFactor: 1,
+      );
+      return layout.lines.map((line) => line.text).toList(growable: false);
+    }
+
+    for (final width in <double>[500]) {
+      final inlineCodeLines = await renderedLines(inlineCodeMarkdown, width);
+
+      expect(inlineCodeLines, isNotEmpty, reason: 'width=$width');
+      expect(
+        inlineCodeLines.first,
+        isNot('某人发布了一份**《TEST'),
+        reason: 'width=$width first=${inlineCodeLines.first}',
+      );
+      expect(
+        inlineCodeLines.first,
+        contains('某功能'),
+        reason: 'width=$width first=${inlineCodeLines.first}',
+      );
     }
   });
 

@@ -477,12 +477,6 @@ MarkdownPretextLayoutResult computeMarkdownPretextLayoutFromRuns({
 
   final safeMaxWidth = maxWidth.isFinite ? math.max(maxWidth, 0.0) : 100000.0;
   final alignmentWidth = maxWidth.isFinite ? math.max(maxWidth, 0.0) : 0.0;
-  final reservedDecoratedWrapPadding = runs
-      .where((run) => run.decoration != null && run.allowCharacterWrap)
-      .fold<double>(
-        0,
-        (current, run) => current + run.decoration!.padding.horizontal,
-      );
   final segmentBuilder = _MarkdownPretextSegmentBuilder(
     textScaleFactor: textScaleFactor,
   );
@@ -500,7 +494,7 @@ MarkdownPretextLayoutResult computeMarkdownPretextLayoutFromRuns({
   );
   final result = layoutWithLines(
     prepared,
-    math.max(safeMaxWidth - reservedDecoratedWrapPadding, 0),
+    safeMaxWidth,
     lineHeight,
   );
 
@@ -592,6 +586,80 @@ MarkdownPretextLayoutResult computeMarkdownPretextLayoutFromRuns({
     );
     cursor = endOffset;
     originalCursor = originalEndOffset;
+  }
+
+  while (cursor < plainText.length) {
+    final fittedVisibleTextLength =
+        _fitVisibleTextLengthToRenderedWidthFromOffset(
+      segments: segments,
+      startOffset: cursor,
+      endSegmentIndex: segments.length,
+      visibleTextLength: plainText.length - cursor,
+      maxRenderedWidth: safeMaxWidth,
+      textScaleFactor: textScaleFactor,
+    );
+    final lineFragments = _buildLineFragmentsFromOffset(
+      segments: segments,
+      startOffset: cursor,
+      endSegmentIndex: segments.length,
+      visibleTextLength: fittedVisibleTextLength,
+      maxRenderedWidth: safeMaxWidth,
+      textScaleFactor: textScaleFactor,
+    );
+    if (lineFragments.isEmpty) {
+      break;
+    }
+    final renderedLineText =
+        lineFragments.map((fragment) => fragment.text).join();
+    final startOffset = cursor;
+    final visibleEndOffset =
+        _consumeVisibleText(plainText, cursor, renderedLineText);
+    if (visibleEndOffset <= cursor) {
+      break;
+    }
+    var endOffset = visibleEndOffset;
+    while (endOffset < plainText.length && plainText[endOffset] == ' ') {
+      endOffset += 1;
+    }
+    if (endOffset < plainText.length && plainText[endOffset] == '\n') {
+      endOffset += 1;
+    }
+    final renderedWidth = math.min(
+      _measureRenderedFragmentWidth(
+        lineFragments,
+        textScaleFactor: textScaleFactor,
+      ),
+      safeMaxWidth,
+    );
+    lines.add(
+      MarkdownPretextLayoutLine(
+        text: renderedLineText,
+        span: _buildLineSpanFromFragments(
+          lineFragments,
+          fallbackStyle: fallbackStyle,
+        ),
+        segments: _buildLineSegmentsFromFragments(
+          lineFragments,
+          textScaleFactor: textScaleFactor,
+        ),
+        width: renderedWidth,
+        height: _measureRenderedFragmentLineHeight(
+          lineFragments,
+          fallbackStyle: fallbackStyle,
+          textScaleFactor: textScaleFactor,
+        ),
+        leadingOffset: _resolveLineLeadingOffset(
+          lineWidth: renderedWidth,
+          maxWidth: alignmentWidth,
+          textAlign: textAlign,
+          textDirection: textDirection,
+        ),
+        startOffset: startOffset,
+        endOffset: endOffset,
+        visibleEndOffset: visibleEndOffset,
+      ),
+    );
+    cursor = endOffset;
   }
 
   final layoutResult = MarkdownPretextLayoutResult(
@@ -1894,6 +1962,35 @@ class _MarkdownPretextSegmentBuilder {
           break;
         }
 
+        final characterLength = _textCharacterLengthAt(text, index);
+        final codePoint = _textCodePointAt(text, index);
+        if (_isCjkBreakableCodePoint(codePoint)) {
+          final displayText = text.substring(index, index + characterLength);
+          segments.add(
+            _MarkdownPretextMeasuredSegment(
+              displayText: displayText,
+              kind: pretext_segment.SegmentKind.word,
+              width: _measurer.measure(
+                displayText,
+                run.style,
+                textScaleFactor,
+              ),
+              style: run.style,
+              mouseCursor: run.mouseCursor,
+              recognizer: run.recognizer,
+              renderSpan: run.renderSpan,
+              decoration: run.decoration,
+              startOffset: plainTextOffset,
+              endOffset: plainTextOffset + characterLength,
+              startsDecoratedChunk: false,
+              endsDecoratedChunk: false,
+            ),
+          );
+          index += characterLength;
+          plainTextOffset += characterLength;
+          continue;
+        }
+
         final isWhitespace = character.trim().isEmpty;
         final buffer = StringBuffer();
         final startOffset = plainTextOffset;
@@ -1902,13 +1999,22 @@ class _MarkdownPretextSegmentBuilder {
           if (nextCharacter == '\n') {
             break;
           }
+          final nextCharacterLength = _textCharacterLengthAt(text, index);
+          final nextCodePoint = _textCodePointAt(text, index);
           final nextIsWhitespace = nextCharacter.trim().isEmpty;
+          if (_isCjkBreakableCodePoint(nextCodePoint)) {
+            break;
+          }
           if (nextIsWhitespace != isWhitespace) {
             break;
           }
-          buffer.write(nextCharacter == '\t' ? ' ' : nextCharacter);
-          index += 1;
-          plainTextOffset += 1;
+          buffer.write(
+            nextCharacter == '\t'
+                ? ' '
+                : text.substring(index, index + nextCharacterLength),
+          );
+          index += nextCharacterLength;
+          plainTextOffset += nextCharacterLength;
         }
         final displayText = buffer.toString();
         if (displayText.isEmpty) {
@@ -1942,6 +2048,48 @@ class _MarkdownPretextSegmentBuilder {
 
     return segments;
   }
+}
+
+int _textCharacterLengthAt(String text, int index) {
+  final codeUnit = text.codeUnitAt(index);
+  if (codeUnit >= 0xD800 && codeUnit <= 0xDBFF && index + 1 < text.length) {
+    final nextCodeUnit = text.codeUnitAt(index + 1);
+    if (nextCodeUnit >= 0xDC00 && nextCodeUnit <= 0xDFFF) {
+      return 2;
+    }
+  }
+  return 1;
+}
+
+int _textCodePointAt(String text, int index) {
+  final codeUnit = text.codeUnitAt(index);
+  if (codeUnit >= 0xD800 && codeUnit <= 0xDBFF && index + 1 < text.length) {
+    final nextCodeUnit = text.codeUnitAt(index + 1);
+    if (nextCodeUnit >= 0xDC00 && nextCodeUnit <= 0xDFFF) {
+      return 0x10000 + ((codeUnit - 0xD800) << 10) + (nextCodeUnit - 0xDC00);
+    }
+  }
+  return codeUnit;
+}
+
+bool _isCjkBreakableCodePoint(int codePoint) {
+  return (codePoint >= 0x2E80 && codePoint <= 0x2EFF) ||
+      (codePoint >= 0x3000 && codePoint <= 0x303F) ||
+      (codePoint >= 0x3040 && codePoint <= 0x30FF) ||
+      (codePoint >= 0x31F0 && codePoint <= 0x31FF) ||
+      (codePoint >= 0x3400 && codePoint <= 0x4DBF) ||
+      (codePoint >= 0x4E00 && codePoint <= 0x9FFF) ||
+      (codePoint >= 0xAC00 && codePoint <= 0xD7AF) ||
+      (codePoint >= 0xF900 && codePoint <= 0xFAFF) ||
+      (codePoint >= 0xFE10 && codePoint <= 0xFE1F) ||
+      (codePoint >= 0xFE30 && codePoint <= 0xFE4F) ||
+      (codePoint >= 0xFF00 && codePoint <= 0xFFEF) ||
+      (codePoint >= 0x20000 && codePoint <= 0x2A6DF) ||
+      (codePoint >= 0x2A700 && codePoint <= 0x2B73F) ||
+      (codePoint >= 0x2B740 && codePoint <= 0x2B81F) ||
+      (codePoint >= 0x2B820 && codePoint <= 0x2CEAF) ||
+      (codePoint >= 0x2CEB0 && codePoint <= 0x2EBEF) ||
+      (codePoint >= 0x30000 && codePoint <= 0x3134F);
 }
 
 @immutable
