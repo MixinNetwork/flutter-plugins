@@ -365,6 +365,8 @@ class MarkdownCodeHighlightCache extends ChangeNotifier {
   final MarkdownCodeSyntaxHighlighter _highlighter;
   final Map<String, _MarkdownCodeHighlightCacheEntry> _entries =
       <String, _MarkdownCodeHighlightCacheEntry>{};
+  int _nextRequestId = 0;
+  bool _isDisposed = false;
 
   MarkdownCodeHighlightPresentation resolve({
     required String blockId,
@@ -383,9 +385,15 @@ class MarkdownCodeHighlightCache extends ChangeNotifier {
       source: source,
       baseStyle: baseStyle,
     );
+    if (_isDisposed) {
+      return plainPresentation;
+    }
+
+    final requestId = ++_nextRequestId;
     if (_highlighter.shouldDegradeHighlight(source: source, theme: theme)) {
       _entries[blockId] = _MarkdownCodeHighlightCacheEntry(
         signature: signature,
+        requestId: requestId,
         presentation: plainPresentation,
         isPending: false,
       );
@@ -394,13 +402,18 @@ class MarkdownCodeHighlightCache extends ChangeNotifier {
 
     _entries[blockId] = _MarkdownCodeHighlightCacheEntry(
       signature: signature,
+      requestId: requestId,
       presentation: plainPresentation,
       isPending: true,
     );
     SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (_isDisposed) {
+        return;
+      }
       unawaited(
         _startHighlight(
           blockId: blockId,
+          requestId: requestId,
           signature: signature,
           source: source,
           baseStyle: baseStyle,
@@ -424,14 +437,19 @@ class MarkdownCodeHighlightCache extends ChangeNotifier {
 
   Future<void> _startHighlight({
     required String blockId,
+    required int requestId,
     required int signature,
     required String source,
     required TextStyle baseStyle,
     required MarkdownThemeData theme,
     required String? language,
   }) async {
+    if (_isDisposed) {
+      return;
+    }
     final current = _entries[blockId];
     if (current == null ||
+        current.requestId != requestId ||
         current.signature != signature ||
         !current.isPending) {
       return;
@@ -443,17 +461,25 @@ class MarkdownCodeHighlightCache extends ChangeNotifier {
       theme: theme,
       language: language,
     );
+    if (_isDisposed) {
+      return;
+    }
     final latest = _entries[blockId];
-    if (latest == null || latest.signature != signature) {
+    if (latest == null ||
+        latest.requestId != requestId ||
+        latest.signature != signature) {
       return;
     }
 
     _entries[blockId] = _MarkdownCodeHighlightCacheEntry(
       signature: signature,
+      requestId: requestId,
       presentation: presentation,
       isPending: false,
     );
-    notifyListeners();
+    if (!_isDisposed) {
+      notifyListeners();
+    }
   }
 
   void clear() {
@@ -466,16 +492,25 @@ class MarkdownCodeHighlightCache extends ChangeNotifier {
   void cleanup(Set<String> validIds) {
     _entries.removeWhere((key, _) => !validIds.contains(key));
   }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    _entries.clear();
+    super.dispose();
+  }
 }
 
 class _MarkdownCodeHighlightCacheEntry {
   const _MarkdownCodeHighlightCacheEntry({
     required this.signature,
+    required this.requestId,
     required this.presentation,
     required this.isPending,
   });
 
   final int signature;
+  final int requestId;
   final MarkdownCodeHighlightPresentation presentation;
   final bool isPending;
 }
