@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -24,14 +25,14 @@ class _AIChatDemoPageState extends State<AIChatDemoPage> {
 
   void _prePopulateMessages() {
     final random = Random();
-    // Pre-populate 20 messages (20 pairs) from the rich 5 presets
+    // Pre-populate 20 messages (20 pairs) from the rich 5 presets.
     for (var i = 0; i < 20; i++) {
-      _messages.add(ChatMessage(
+      _messages.add(ChatMessage.static(
         text: 'Detailed Inquiry regarding technical specification #${i + 1}',
         isUser: true,
       ));
       final markdown = _presetMarkdown[random.nextInt(_presetMarkdown.length)];
-      _messages.add(ChatMessage(
+      _messages.add(ChatMessage.static(
         text: markdown,
         isUser: false,
       ));
@@ -358,7 +359,7 @@ Additionally, we support `<kbd>Ctrl</kbd> + <kbd>C</kbd>` and `<u>underlined</u>
     if (text.trim().isEmpty) return;
     _textController.clear();
     setState(() {
-      _messages.add(ChatMessage(
+      _messages.add(ChatMessage.static(
         text: text,
         isUser: true,
       ));
@@ -373,13 +374,34 @@ Additionally, we support `<kbd>Ctrl</kbd> + <kbd>C</kbd>` and `<u>underlined</u>
     final responseMarkdown =
         _presetMarkdown[random.nextInt(_presetMarkdown.length)];
 
-    final aiMessage = ChatMessage(
-      text: responseMarkdown,
+    final streamController = StreamController<String>();
+    final aiMessage = ChatMessage.streaming(
       isUser: false,
+      contentStream: streamController.stream,
     );
     setState(() {
       _messages.add(aiMessage);
     });
+    _scrollToBottom();
+
+    // Emit chunks to simulate LLM token streaming.
+    var offset = 0;
+    while (offset < responseMarkdown.length) {
+      await Future.delayed(Duration(milliseconds: random.nextInt(30) + 10));
+      if (!mounted) break;
+      final chunkSize = random.nextInt(8) + 3;
+      final end = min(offset + chunkSize, responseMarkdown.length);
+      streamController.add(responseMarkdown.substring(offset, end));
+      offset = end;
+      _scrollToBottom();
+    }
+
+    await streamController.close();
+    if (mounted) {
+      setState(() {
+        _isTyping = false;
+      });
+    }
   }
 
   void _scrollToBottom() {
@@ -455,10 +477,22 @@ Additionally, we support `<kbd>Ctrl</kbd> + <kbd>C</kbd>` and `<u>underlined</u>
 }
 
 class ChatMessage {
+  /// Creates a message whose full text is known up front (user messages and
+  /// pre-populated AI messages).
+  ChatMessage.static({required this.text, required this.isUser})
+      : contentStream = null;
+
+  /// Creates an AI message that will be populated incrementally via a stream.
+  ChatMessage.streaming(
+      {required this.isUser, required Stream<String> contentStream})
+      : text = '',
+        contentStream = contentStream;
+
   final String text;
   final bool isUser;
 
-  ChatMessage({required this.text, required this.isUser});
+  /// Emits successive text chunks for streaming AI responses; null otherwise.
+  final Stream<String>? contentStream;
 }
 
 class _MessageTile extends StatefulWidget {
@@ -472,17 +506,29 @@ class _MessageTile extends StatefulWidget {
 
 class _MessageTileState extends State<_MessageTile> {
   final MarkdownController _controller = MarkdownController();
+  StreamSubscription<String>? _streamSub;
 
   @override
   void initState() {
     super.initState();
     if (!widget.message.isUser) {
-      _controller.setData(widget.message.text);
+      final stream = widget.message.contentStream;
+      if (stream != null) {
+        // Streaming AI message: subscribe and feed chunks incrementally.
+        _streamSub = stream.listen(
+          (chunk) => _controller.appendChunk(chunk),
+          onDone: () => _controller.commitStream(),
+        );
+      } else {
+        // Pre-populated static message: load all at once.
+        _controller.setData(widget.message.text);
+      }
     }
   }
 
   @override
   void dispose() {
+    _streamSub?.cancel();
     _controller.dispose();
     super.dispose();
   }
@@ -490,8 +536,17 @@ class _MessageTileState extends State<_MessageTile> {
   @override
   void didUpdateWidget(covariant _MessageTile oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.message.text != widget.message.text) {
-      if (!widget.message.isUser) {
+    if (oldWidget.message != widget.message && !widget.message.isUser) {
+      _streamSub?.cancel();
+      _streamSub = null;
+      final stream = widget.message.contentStream;
+      if (stream != null) {
+        _controller.clear();
+        _streamSub = stream.listen(
+          (chunk) => _controller.appendChunk(chunk),
+          onDone: () => _controller.commitStream(),
+        );
+      } else {
         _controller.setData(widget.message.text);
       }
     }
