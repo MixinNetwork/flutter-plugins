@@ -67,11 +67,18 @@ python3 .codex/skills/flutter-pub-release/scripts/release_helper.py apply <packa
   - `packages/<package>/CHANGELOG.md`
   - `packages/<package>/example/pubspec.lock` when present
 
+- Then run dependency resolution from the package directory so lock/state stays consistent with the new version:
+
+```bash
+cd packages/<package>
+dart pub get
+```
+
 4. Validate narrowly.
 - Run package-scoped checks only when they are fast and relevant.
 - Do not expand into repo-wide validation unless the change genuinely spans packages.
 
-5. Commit and push before drafting the release.
+5. Commit and run publish dry-run before drafting the release.
 - Use an English commit message such as:
 
 ```text
@@ -79,6 +86,13 @@ chore(release): prepare <package> <version>
 ```
 
 - Commit the release changes directly on `main`.
+- After commit, run a publish dry-run from the package directory and fix any reported errors before pushing:
+
+```bash
+cd packages/<package>
+dart pub publish --dry-run
+```
+
 - Push `main`.
 
 6. Draft the GitHub release.
