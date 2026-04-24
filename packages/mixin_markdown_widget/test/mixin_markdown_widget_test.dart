@@ -8,6 +8,7 @@ import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
 import 'package:mixin_markdown_widget/src/render/builder/markdown_inline_builder.dart';
+import 'package:mixin_markdown_widget/src/render/code_syntax_highlighter.dart';
 import 'package:mixin_markdown_widget/src/render/local_image_provider_io.dart';
 import 'package:mixin_markdown_widget/src/render/markdown_block_widgets.dart';
 import 'package:mixin_markdown_widget/src/render/pretext_text_block.dart';
@@ -1823,6 +1824,74 @@ return value;
     await tester.pump();
 
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'code highlight cache keeps highlighted presentation visible while theme changes refresh styles',
+      (tester) async {
+    late MarkdownThemeData fallbackTheme;
+    late MarkdownThemeData tightTheme;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) {
+            fallbackTheme = MarkdownThemeData.fallback(context);
+            tightTheme = MarkdownThemeData.tight(context);
+            return const SizedBox.shrink();
+          },
+        ),
+      ),
+    );
+
+    final cache = MarkdownCodeHighlightCache(
+      highlighter: const MarkdownCodeSyntaxHighlighter(),
+    );
+    addTearDown(cache.dispose);
+
+    const source = 'const value = 42;\nreturn value;';
+
+    var presentation = cache.resolve(
+      blockId: 'block-1',
+      source: source,
+      baseStyle: fallbackTheme.codeBlockStyle,
+      theme: fallbackTheme,
+      language: 'dart',
+    );
+    expect(presentation.isHighlighted, isFalse);
+
+    await tester.pump();
+    await tester.pump();
+
+    presentation = cache.resolve(
+      blockId: 'block-1',
+      source: source,
+      baseStyle: fallbackTheme.codeBlockStyle,
+      theme: fallbackTheme,
+      language: 'dart',
+    );
+    expect(presentation.isHighlighted, isTrue);
+
+    presentation = cache.resolve(
+      blockId: 'block-1',
+      source: source,
+      baseStyle: tightTheme.codeBlockStyle,
+      theme: tightTheme,
+      language: 'dart',
+    );
+    expect(presentation.isHighlighted, isTrue);
+
+    await tester.pump();
+    await tester.pump();
+
+    presentation = cache.resolve(
+      blockId: 'block-1',
+      source: source,
+      baseStyle: tightTheme.codeBlockStyle,
+      theme: tightTheme,
+      language: 'dart',
+    );
+    expect(presentation.isHighlighted, isTrue);
   });
 
   testWidgets(

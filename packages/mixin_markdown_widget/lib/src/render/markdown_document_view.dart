@@ -153,7 +153,6 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
         oldWidget.imageBuilder != widget.imageBuilder ||
         oldWidget.selectable != widget.selectable) {
       _cachedBlockRows.clear();
-      _codeHighlightCache.clear();
     }
   }
 

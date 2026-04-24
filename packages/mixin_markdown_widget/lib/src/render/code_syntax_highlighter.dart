@@ -375,9 +375,12 @@ class MarkdownCodeHighlightCache extends ChangeNotifier {
     required MarkdownThemeData theme,
     String? language,
   }) {
-    final signature = Object.hash(source, language);
+    final contentSignature = Object.hash(source, language);
+    final presentationSignature =
+        Object.hash(contentSignature, baseStyle, theme);
     final existing = _entries[blockId];
-    if (existing != null && existing.signature == signature) {
+    if (existing != null &&
+        existing.presentationSignature == presentationSignature) {
       return existing.presentation;
     }
 
@@ -392,7 +395,8 @@ class MarkdownCodeHighlightCache extends ChangeNotifier {
     final requestId = ++_nextRequestId;
     if (_highlighter.shouldDegradeHighlight(source: source, theme: theme)) {
       _entries[blockId] = _MarkdownCodeHighlightCacheEntry(
-        signature: signature,
+        contentSignature: contentSignature,
+        presentationSignature: presentationSignature,
         requestId: requestId,
         presentation: plainPresentation,
         isPending: false,
@@ -400,10 +404,16 @@ class MarkdownCodeHighlightCache extends ChangeNotifier {
       return plainPresentation;
     }
 
+    final placeholderPresentation = existing != null &&
+            existing.contentSignature == contentSignature &&
+            existing.presentation.isHighlighted
+        ? existing.presentation
+        : plainPresentation;
     _entries[blockId] = _MarkdownCodeHighlightCacheEntry(
-      signature: signature,
+      contentSignature: contentSignature,
+      presentationSignature: presentationSignature,
       requestId: requestId,
-      presentation: plainPresentation,
+      presentation: placeholderPresentation,
       isPending: true,
     );
     SchedulerBinding.instance.addPostFrameCallback((_) {
@@ -414,7 +424,8 @@ class MarkdownCodeHighlightCache extends ChangeNotifier {
         _startHighlight(
           blockId: blockId,
           requestId: requestId,
-          signature: signature,
+          contentSignature: contentSignature,
+          presentationSignature: presentationSignature,
           source: source,
           baseStyle: baseStyle,
           theme: theme,
@@ -422,7 +433,7 @@ class MarkdownCodeHighlightCache extends ChangeNotifier {
         ),
       );
     });
-    return plainPresentation;
+    return placeholderPresentation;
   }
 
   String cacheSignatureFor(String blockId) {
@@ -432,13 +443,14 @@ class MarkdownCodeHighlightCache extends ChangeNotifier {
     }
     final state = entry.presentation.isHighlighted ? 'ready' : 'plain';
     final pending = entry.isPending ? 'pending' : 'stable';
-    return 'highlight:$state:$pending:${entry.signature}';
+    return 'highlight:$state:$pending:${entry.presentationSignature}';
   }
 
   Future<void> _startHighlight({
     required String blockId,
     required int requestId,
-    required int signature,
+    required int contentSignature,
+    required int presentationSignature,
     required String source,
     required TextStyle baseStyle,
     required MarkdownThemeData theme,
@@ -450,7 +462,7 @@ class MarkdownCodeHighlightCache extends ChangeNotifier {
     final current = _entries[blockId];
     if (current == null ||
         current.requestId != requestId ||
-        current.signature != signature ||
+        current.presentationSignature != presentationSignature ||
         !current.isPending) {
       return;
     }
@@ -467,12 +479,13 @@ class MarkdownCodeHighlightCache extends ChangeNotifier {
     final latest = _entries[blockId];
     if (latest == null ||
         latest.requestId != requestId ||
-        latest.signature != signature) {
+        latest.presentationSignature != presentationSignature) {
       return;
     }
 
     _entries[blockId] = _MarkdownCodeHighlightCacheEntry(
-      signature: signature,
+      contentSignature: contentSignature,
+      presentationSignature: presentationSignature,
       requestId: requestId,
       presentation: presentation,
       isPending: false,
@@ -503,13 +516,15 @@ class MarkdownCodeHighlightCache extends ChangeNotifier {
 
 class _MarkdownCodeHighlightCacheEntry {
   const _MarkdownCodeHighlightCacheEntry({
-    required this.signature,
+    required this.contentSignature,
+    required this.presentationSignature,
     required this.requestId,
     required this.presentation,
     required this.isPending,
   });
 
-  final int signature;
+  final int contentSignature;
+  final int presentationSignature;
   final int requestId;
   final MarkdownCodeHighlightPresentation presentation;
   final bool isPending;
