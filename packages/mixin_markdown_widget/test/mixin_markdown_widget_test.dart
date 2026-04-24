@@ -2320,6 +2320,74 @@ const value = 42;
     }
   });
 
+  test('plain text wrap keeps short word on the next line when possible', () {
+    final wrapped = computeMarkdownPretextLayout(
+      text: 'xxxx to o xxxx',
+      style: const TextStyle(fontSize: 14, height: 1.2),
+      maxWidth: 42,
+      textScaleFactor: 1,
+    );
+
+    expect(
+      wrapped.lines.map((line) => line.text).toList(growable: false),
+      <String>['xxx', 'x ', 'to ', 'o ', 'xxx', 'x'],
+    );
+    expect(
+      wrapped.lines.map((line) => line.text).join(),
+      'xxxx to o xxxx',
+    );
+  });
+
+  test(
+      'breakable decorated inline prefers identifier boundaries before character fallback',
+      () {
+    const baseStyle = TextStyle(fontSize: 14, height: 1.2);
+
+    double measureWidth(String text) {
+      final textPainter = TextPainter(
+        text: TextSpan(text: text, style: baseStyle),
+        textDirection: TextDirection.ltr,
+        maxLines: 1,
+      )..layout(maxWidth: double.infinity);
+      return textPainter.width;
+    }
+
+    final width = (measureWidth('send_sol') + measureWidth('send_sol_')) / 2;
+    final layout = computeMarkdownPretextLayoutFromRuns(
+      runs: const <MarkdownPretextInlineRun>[
+        MarkdownPretextInlineRun(
+          text: 'send_sol_for_rent',
+          style: baseStyle,
+          allowCharacterWrap: true,
+          decoration: MarkdownPretextInlineDecoration(
+            backgroundColor: Color(0xFFE9EDF2),
+            borderRadius: BorderRadius.all(Radius.circular(6)),
+            padding: EdgeInsets.zero,
+          ),
+        ),
+      ],
+      fallbackStyle: baseStyle,
+      maxWidth: width,
+      textScaleFactor: 1,
+    );
+
+    expect(layout.lines.length, greaterThan(1));
+    expect(layout.lines.map((line) => line.text).join(), 'send_sol_for_rent');
+    expect(layout.lines.first.text, 'send_');
+    expect(layout.lines[1].text, 'sol_for_');
+    expect(
+      layout.lines.every(
+        (line) =>
+            !line.text.startsWith('_') &&
+            !line.text.startsWith('-') &&
+            !line.text.startsWith('.') &&
+            !line.text.startsWith('/') &&
+            !line.text.startsWith(':'),
+      ),
+      isTrue,
+    );
+  });
+
   test('render-span pretext layout keeps per-line heights local', () {
     const baseStyle = TextStyle(fontSize: 14, height: 1.2);
     final layout = computeMarkdownPretextLayoutFromRuns(
@@ -2436,9 +2504,7 @@ const value = 42;
           ),
         ],
       ),
-      '${String.fromCharCode(0xFFFC)}${String.fromCharCodes(
-        List<int>.filled('inline_code'.length, 0xFFFC),
-      )}',
+      String.fromCharCodes(List<int>.filled(6, 0xFFFC)),
     );
 
     expect(

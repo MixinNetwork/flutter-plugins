@@ -316,10 +316,9 @@ String markdownPretextRenderText(List<MarkdownPretextInlineRun> runs) {
         buffer.writeCharCode(0xFFFC);
         continue;
       }
-      for (var index = 0; index < run.text.length; index++) {
-        final character = run.text[index];
-        if (character == '\n') {
-          buffer.write(character);
+      for (final slice in _breakableDecoratedSlices(run.text)) {
+        if (slice.isNewline) {
+          buffer.write(slice.text);
         } else {
           buffer.writeCharCode(0xFFFC);
         }
@@ -337,6 +336,9 @@ int _markdownPretextRenderLengthForRun(MarkdownPretextInlineRun run) {
   }
   if (run.decoration != null && !run.allowCharacterWrap) {
     return 1;
+  }
+  if (run.decoration != null) {
+    return _breakableDecoratedSlices(run.text).length;
   }
   return run.text.length;
 }
@@ -364,6 +366,14 @@ int markdownPretextRenderOffsetForPlainOffset(
       if (run.renderSpan != null ||
           (run.decoration != null && renderLength == 1)) {
         return preferEnd ? renderEnd : renderStart;
+      }
+      if (run.decoration != null && run.allowCharacterWrap) {
+        return renderStart +
+            _renderOffsetForBreakableDecoratedPlainOffset(
+              run.text,
+              clampedPlainOffset - plainStart,
+              preferEnd: preferEnd,
+            );
       }
       return renderStart + (clampedPlainOffset - plainStart);
     }
@@ -400,6 +410,13 @@ int markdownPretextPlainOffsetForRenderOffset(
       if (run.renderSpan != null ||
           (run.decoration != null && renderLength == 1)) {
         return plainStart;
+      }
+      if (run.decoration != null && run.allowCharacterWrap) {
+        return plainStart +
+            _plainOffsetForBreakableDecoratedRenderOffset(
+              run.text,
+              clampedRenderOffset - renderStart,
+            );
       }
       return plainStart + (clampedRenderOffset - renderStart);
     }
@@ -980,57 +997,45 @@ InlineSpan _buildFullSpan({
 List<InlineSpan> _buildBreakableDecoratedFullSpans(
   MarkdownPretextInlineRun run,
 ) {
-  final text = run.text;
-  if (text.isEmpty) {
+  if (run.text.isEmpty) {
     return const <InlineSpan>[];
   }
 
   final spans = <InlineSpan>[];
-  var chunkStart = 0;
-  while (chunkStart < text.length) {
-    final newlineIndex = text.indexOf('\n', chunkStart);
-    final chunkEnd = newlineIndex == -1 ? text.length : newlineIndex;
-    if (chunkEnd > chunkStart) {
-      final chunk = text.substring(chunkStart, chunkEnd);
-      final baseBorderRadius = run.decoration!.borderRadius;
-      for (var index = 0; index < chunk.length; index++) {
-        final character = chunk[index];
-        final isFirst = index == 0;
-        final isLast = index == chunk.length - 1;
-        spans.add(
-          WidgetSpan(
-            alignment: PlaceholderAlignment.baseline,
-            baseline: TextBaseline.alphabetic,
-            child: _DecoratedInlineText(
-              text: character,
-              style: run.style,
-              decoration: run.decoration!.copyWith(
-                borderRadius: BorderRadius.only(
-                  topLeft: isFirst ? baseBorderRadius.topLeft : Radius.zero,
-                  bottomLeft:
-                      isFirst ? baseBorderRadius.bottomLeft : Radius.zero,
-                  topRight: isLast ? baseBorderRadius.topRight : Radius.zero,
-                  bottomRight:
-                      isLast ? baseBorderRadius.bottomRight : Radius.zero,
-                ),
-                padding: EdgeInsets.only(
-                  left: isFirst ? run.decoration!.padding.left : 0,
-                  right: isLast ? run.decoration!.padding.right : 0,
-                  top: run.decoration!.padding.top,
-                  bottom: run.decoration!.padding.bottom,
-                ),
-              ),
+  final baseBorderRadius = run.decoration!.borderRadius;
+  for (final slice in _breakableDecoratedSlices(run.text)) {
+    if (slice.isNewline) {
+      spans.add(const TextSpan(text: '\n'));
+      continue;
+    }
+    spans.add(
+      WidgetSpan(
+        alignment: PlaceholderAlignment.baseline,
+        baseline: TextBaseline.alphabetic,
+        child: _DecoratedInlineText(
+          text: slice.text,
+          style: run.style,
+          decoration: run.decoration!.copyWith(
+            borderRadius: BorderRadius.only(
+              topLeft:
+                  slice.startsChunk ? baseBorderRadius.topLeft : Radius.zero,
+              bottomLeft:
+                  slice.startsChunk ? baseBorderRadius.bottomLeft : Radius.zero,
+              topRight:
+                  slice.endsChunk ? baseBorderRadius.topRight : Radius.zero,
+              bottomRight:
+                  slice.endsChunk ? baseBorderRadius.bottomRight : Radius.zero,
+            ),
+            padding: EdgeInsets.only(
+              left: slice.startsChunk ? run.decoration!.padding.left : 0,
+              right: slice.endsChunk ? run.decoration!.padding.right : 0,
+              top: run.decoration!.padding.top,
+              bottom: run.decoration!.padding.bottom,
             ),
           ),
-        );
-      }
-    }
-    if (newlineIndex != -1) {
-      spans.add(const TextSpan(text: '\n'));
-      chunkStart = newlineIndex + 1;
-    } else {
-      chunkStart = text.length;
-    }
+        ),
+      ),
+    );
   }
 
   return spans;
@@ -1485,9 +1490,117 @@ int _fitVisibleTextLengthToRenderedWidthFromOffset({
     if (renderedWidth <= maxRenderedWidth + 0.01) {
       return fittedLength;
     }
-    fittedLength -= 1;
+    final previousBoundaryLength = _previousBreakBoundaryVisibleLength(
+      segments: segments,
+      startOffset: startOffset,
+      endSegmentIndex: endSegmentIndex,
+      currentVisibleLength: fittedLength,
+    );
+    if (previousBoundaryLength > 0 && previousBoundaryLength < fittedLength) {
+      fittedLength = previousBoundaryLength;
+      continue;
+    }
+    fittedLength = _previousCharacterVisibleLength(
+      segments: segments,
+      startOffset: startOffset,
+      currentVisibleLength: fittedLength,
+    );
   }
   return visibleTextLength > 0 ? 1 : 0;
+}
+
+int _previousBreakBoundaryVisibleLength({
+  required List<_MarkdownPretextMeasuredSegment> segments,
+  required int startOffset,
+  required int endSegmentIndex,
+  required int currentVisibleLength,
+}) {
+  if (currentVisibleLength <= 0) {
+    return 0;
+  }
+
+  final currentEndOffset = startOffset + currentVisibleLength;
+  var previousBoundaryOffset = -1;
+
+  for (var index = _segmentIndexForOffset(segments, startOffset);
+      index < endSegmentIndex && index < segments.length;
+      index++) {
+    final segment = segments[index];
+    if (segment.kind == pretext_segment.SegmentKind.hardBreak ||
+        segment.displayText.isEmpty) {
+      continue;
+    }
+    if (segment.startOffset > startOffset &&
+        segment.startOffset < currentEndOffset) {
+      previousBoundaryOffset =
+          math.max(previousBoundaryOffset, segment.startOffset);
+    }
+    if (segment.endOffset >= currentEndOffset) {
+      break;
+    }
+  }
+
+  if (previousBoundaryOffset <= startOffset) {
+    return 0;
+  }
+  return previousBoundaryOffset - startOffset;
+}
+
+int _previousCharacterVisibleLength({
+  required List<_MarkdownPretextMeasuredSegment> segments,
+  required int startOffset,
+  required int currentVisibleLength,
+}) {
+  if (currentVisibleLength <= 1) {
+    return 0;
+  }
+
+  final currentEndOffset = startOffset + currentVisibleLength;
+  final previousOffset = _previousCharacterBoundaryOffset(
+    segments,
+    currentEndOffset,
+  );
+  return math.max(previousOffset - startOffset, 0);
+}
+
+int _previousCharacterBoundaryOffset(
+  List<_MarkdownPretextMeasuredSegment> segments,
+  int offset,
+) {
+  for (final segment in segments) {
+    if (offset <= segment.startOffset) {
+      break;
+    }
+    if (offset <= segment.endOffset) {
+      final localOffset = offset - segment.startOffset;
+      if (localOffset <= 0) {
+        return segment.startOffset;
+      }
+      final previousLocalOffset = _previousCharacterBoundaryInText(
+        segment.displayText,
+        localOffset,
+      );
+      return segment.startOffset + previousLocalOffset;
+    }
+  }
+  return math.max(offset - 1, 0);
+}
+
+int _previousCharacterBoundaryInText(String text, int offset) {
+  final clampedOffset = offset.clamp(0, text.length).toInt();
+  if (clampedOffset <= 0) {
+    return 0;
+  }
+
+  final previousIndex = clampedOffset - 1;
+  final codeUnit = text.codeUnitAt(previousIndex);
+  if (codeUnit >= 0xDC00 && codeUnit <= 0xDFFF && previousIndex > 0) {
+    final previousCodeUnit = text.codeUnitAt(previousIndex - 1);
+    if (previousCodeUnit >= 0xD800 && previousCodeUnit <= 0xDBFF) {
+      return previousIndex - 1;
+    }
+  }
+  return previousIndex;
 }
 
 double _measureRenderedFragmentWidth(
@@ -1860,6 +1973,37 @@ class _MarkdownPretextSegmentBuilder {
         plainTextOffset += text.length;
         continue;
       }
+      if (run.decoration != null && run.allowCharacterWrap) {
+        final runStartOffset = plainTextOffset;
+        for (final slice in _breakableDecoratedSlices(text)) {
+          segments.add(
+            _MarkdownPretextMeasuredSegment(
+              displayText: slice.text,
+              kind: slice.isNewline
+                  ? pretext_segment.SegmentKind.hardBreak
+                  : pretext_segment.SegmentKind.word,
+              width: slice.isNewline
+                  ? 0
+                  : _measurer.measure(
+                      slice.text,
+                      run.style,
+                      textScaleFactor,
+                    ),
+              style: run.style,
+              mouseCursor: run.mouseCursor,
+              recognizer: run.recognizer,
+              renderSpan: run.renderSpan,
+              decoration: run.decoration,
+              startOffset: runStartOffset + slice.startOffset,
+              endOffset: runStartOffset + slice.endOffset,
+              startsDecoratedChunk: slice.startsChunk,
+              endsDecoratedChunk: slice.endsChunk,
+            ),
+          );
+        }
+        plainTextOffset = runStartOffset + text.length;
+        continue;
+      }
       var index = 0;
       while (index < text.length) {
         final character = text[index];
@@ -1882,57 +2026,6 @@ class _MarkdownPretextSegmentBuilder {
           );
           index += 1;
           plainTextOffset += 1;
-          continue;
-        }
-
-        if (run.decoration != null && run.allowCharacterWrap) {
-          final chunkStartOffset = plainTextOffset;
-          while (index < text.length && text[index] != '\n') {
-            final displayText = text[index];
-            final isChunkStart = plainTextOffset == chunkStartOffset;
-            segments.add(
-              _MarkdownPretextMeasuredSegment(
-                displayText: displayText,
-                kind: pretext_segment.SegmentKind.word,
-                width: _measurer.measure(
-                  displayText,
-                  run.style,
-                  textScaleFactor,
-                ),
-                style: run.style,
-                mouseCursor: run.mouseCursor,
-                recognizer: run.recognizer,
-                renderSpan: run.renderSpan,
-                decoration: run.decoration,
-                startOffset: plainTextOffset,
-                endOffset: plainTextOffset + displayText.length,
-                startsDecoratedChunk: isChunkStart,
-                endsDecoratedChunk: false,
-              ),
-            );
-            index += 1;
-            plainTextOffset += displayText.length;
-          }
-          if (plainTextOffset > chunkStartOffset) {
-            final last = segments.removeLast();
-            segments.add(
-              _MarkdownPretextMeasuredSegment(
-                displayText: last.displayText,
-                kind: last.kind,
-                width: last.width,
-                style: last.style,
-                startOffset: last.startOffset,
-                endOffset: last.endOffset,
-                mouseCursor: last.mouseCursor,
-                recognizer: last.recognizer,
-                renderSpan: last.renderSpan,
-                estimatedLineHeight: last.estimatedLineHeight,
-                decoration: last.decoration,
-                startsDecoratedChunk: last.startsDecoratedChunk,
-                endsDecoratedChunk: true,
-              ),
-            );
-          }
           continue;
         }
 
@@ -2061,6 +2154,190 @@ int _textCharacterLengthAt(String text, int index) {
   }
   return 1;
 }
+
+@immutable
+class _BreakableDecoratedSlice {
+  const _BreakableDecoratedSlice({
+    required this.text,
+    required this.startOffset,
+    required this.endOffset,
+    required this.isNewline,
+    required this.startsChunk,
+    required this.endsChunk,
+  });
+
+  final String text;
+  final int startOffset;
+  final int endOffset;
+  final bool isNewline;
+  final bool startsChunk;
+  final bool endsChunk;
+}
+
+List<_BreakableDecoratedSlice> _breakableDecoratedSlices(String text) {
+  if (text.isEmpty) {
+    return const <_BreakableDecoratedSlice>[];
+  }
+
+  final slices = <_BreakableDecoratedSlice>[];
+  var index = 0;
+  while (index < text.length) {
+    if (text[index] == '\n') {
+      slices.add(
+        _BreakableDecoratedSlice(
+          text: '\n',
+          startOffset: index,
+          endOffset: index + 1,
+          isNewline: true,
+          startsChunk: false,
+          endsChunk: false,
+        ),
+      );
+      index += 1;
+      continue;
+    }
+
+    final chunkStart = index;
+    final newlineIndex = text.indexOf('\n', chunkStart);
+    final chunkEnd = newlineIndex == -1 ? text.length : newlineIndex;
+    while (index < chunkEnd) {
+      final segmentEnd = _nextBreakableDecoratedSegmentEnd(text, index);
+      slices.add(
+        _BreakableDecoratedSlice(
+          text: text.substring(index, segmentEnd),
+          startOffset: index,
+          endOffset: segmentEnd,
+          isNewline: false,
+          startsChunk: index == chunkStart,
+          endsChunk: segmentEnd == chunkEnd,
+        ),
+      );
+      index = segmentEnd;
+    }
+  }
+
+  return List<_BreakableDecoratedSlice>.unmodifiable(slices);
+}
+
+int _renderOffsetForBreakableDecoratedPlainOffset(
+  String text,
+  int plainOffset, {
+  required bool preferEnd,
+}) {
+  final clampedPlainOffset = plainOffset.clamp(0, text.length).toInt();
+  var renderCursor = 0;
+  for (final slice in _breakableDecoratedSlices(text)) {
+    final renderStart = renderCursor;
+    final renderEnd = renderStart + 1;
+    if (clampedPlainOffset <= slice.startOffset) {
+      return renderStart;
+    }
+    if (clampedPlainOffset < slice.endOffset) {
+      if (slice.isNewline) {
+        return renderStart + (clampedPlainOffset - slice.startOffset);
+      }
+      return preferEnd ? renderEnd : renderStart;
+    }
+    if (clampedPlainOffset == slice.endOffset) {
+      return renderEnd;
+    }
+    renderCursor = renderEnd;
+  }
+  return renderCursor;
+}
+
+int _plainOffsetForBreakableDecoratedRenderOffset(
+  String text,
+  int renderOffset,
+) {
+  final clampedRenderOffset = math.max(renderOffset, 0);
+  var renderCursor = 0;
+  for (final slice in _breakableDecoratedSlices(text)) {
+    final renderStart = renderCursor;
+    final renderEnd = renderStart + 1;
+    if (clampedRenderOffset <= renderStart) {
+      return slice.startOffset;
+    }
+    if (clampedRenderOffset < renderEnd) {
+      if (slice.isNewline) {
+        return slice.startOffset + (clampedRenderOffset - renderStart);
+      }
+      return slice.startOffset;
+    }
+    if (clampedRenderOffset == renderEnd) {
+      return slice.endOffset;
+    }
+    renderCursor = renderEnd;
+  }
+  return text.length;
+}
+
+int _nextBreakableDecoratedSegmentEnd(String text, int startIndex) {
+  final firstLength = _textCharacterLengthAt(text, startIndex);
+  var previousIndex = startIndex;
+  var index = startIndex + firstLength;
+  while (index < text.length) {
+    if (text[index] == '\n') {
+      break;
+    }
+    if (_isPreferredInlineCodeBoundary(text, previousIndex, index)) {
+      return index;
+    }
+    previousIndex = index;
+    index += _textCharacterLengthAt(text, index);
+  }
+  return index == text.length
+      ? firstLength + startIndex
+      : startIndex + firstLength;
+}
+
+bool _isPreferredInlineCodeBoundary(
+  String text,
+  int previousIndex,
+  int nextIndex,
+) {
+  final previousCodePoint = _textCodePointAt(text, previousIndex);
+  final nextCodePoint = _textCodePointAt(text, nextIndex);
+  final previousIsSeparator = _isInlineCodeSeparator(previousCodePoint);
+  final nextIsSeparator = _isInlineCodeSeparator(nextCodePoint);
+  if (previousIsSeparator && !nextIsSeparator) {
+    return true;
+  }
+
+  final previousIsLower = _isAsciiLower(previousCodePoint);
+  final previousIsUpper = _isAsciiUpper(previousCodePoint);
+  final previousIsDigit = _isAsciiDigit(previousCodePoint);
+  final nextIsLower = _isAsciiLower(nextCodePoint);
+  final nextIsUpper = _isAsciiUpper(nextCodePoint);
+  final nextIsDigit = _isAsciiDigit(nextCodePoint);
+
+  if ((previousIsLower || previousIsDigit) && nextIsUpper) {
+    return true;
+  }
+  if ((previousIsLower || previousIsUpper) && nextIsDigit) {
+    return true;
+  }
+  if (previousIsDigit && (nextIsLower || nextIsUpper)) {
+    return true;
+  }
+
+  return false;
+}
+
+bool _isInlineCodeSeparator(int codePoint) {
+  return codePoint == 0x5F ||
+      codePoint == 0x2D ||
+      codePoint == 0x2E ||
+      codePoint == 0x2F ||
+      codePoint == 0x3A ||
+      codePoint == 0x5C;
+}
+
+bool _isAsciiLower(int codePoint) => codePoint >= 0x61 && codePoint <= 0x7A;
+
+bool _isAsciiUpper(int codePoint) => codePoint >= 0x41 && codePoint <= 0x5A;
+
+bool _isAsciiDigit(int codePoint) => codePoint >= 0x30 && codePoint <= 0x39;
 
 int _textCodePointAt(String text, int index) {
   final codeUnit = text.codeUnitAt(index);
