@@ -107,10 +107,10 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
     );
     return MarkdownThemeData(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      blockSpacing: 16,
-      listItemSpacing: 4,
+      blockSpacing: 14,
+      listItemSpacing: 3,
       maxContentWidth: 920,
-      quotePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      quotePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       inlineCodePadding:
           const EdgeInsets.symmetric(horizontal: 5, vertical: 0.5),
       codeBlockPadding: const EdgeInsets.all(16),
@@ -201,10 +201,10 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
     );
     return MarkdownThemeData(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-      blockSpacing: 10,
+      blockSpacing: 8,
       listItemSpacing: 2,
       maxContentWidth: 920,
-      quotePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      quotePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       inlineCodePadding:
           const EdgeInsets.symmetric(horizontal: 4, vertical: 0.5),
       codeBlockPadding: const EdgeInsets.all(12),

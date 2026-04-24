@@ -89,8 +89,7 @@ class MarkdownBlockBuilder {
 
     final widget = Padding(
       padding: EdgeInsets.only(
-        bottom:
-            blockIndex == document.blocks.length - 1 ? 0 : theme.blockSpacing,
+        bottom: _spacingAfterTopLevelBlock(blockIndex),
       ),
       child: Align(
         alignment: AlignmentDirectional.topStart,
@@ -154,6 +153,122 @@ class MarkdownBlockBuilder {
       'fromCache=$fromCache '
       'elapsed=${elapsedMs.toStringAsFixed(3)}ms',
     );
+  }
+
+  double _spacingAfterTopLevelBlock(int blockIndex) {
+    if (blockIndex >= document.blocks.length - 1) {
+      return 0;
+    }
+    return _blockSpacingBetween(
+      document.blocks[blockIndex],
+      document.blocks[blockIndex + 1],
+      nested: false,
+    );
+  }
+
+  double _blockSpacingBetween(
+    BlockNode current,
+    BlockNode? next, {
+    required bool nested,
+  }) {
+    if (next == null) {
+      return 0;
+    }
+
+    final base = nested ? theme.blockSpacing * 0.72 : theme.blockSpacing;
+    final currentHeading = current is HeadingBlock ? current : null;
+    final nextHeading = next is HeadingBlock ? next : null;
+
+    if (nested && _isListTransitionWithinListItem(current, next)) {
+      return theme.listItemSpacing;
+    }
+    if (currentHeading != null) {
+      return _headingTrailingSpacing(currentHeading.level, base);
+    }
+    if (nextHeading != null) {
+      return _headingLeadingSpacing(nextHeading.level, base);
+    }
+    if (_isThematicBreakLike(current) || _isThematicBreakLike(next)) {
+      return base * (nested ? 0.95 : 1.1);
+    }
+    if (_isDecoratedBlock(current) || _isDecoratedBlock(next)) {
+      return base * 0.85;
+    }
+    if (_isListLikeBlock(current) || _isListLikeBlock(next)) {
+      return base * 0.9;
+    }
+    return base;
+  }
+
+  double _headingLeadingSpacing(int level, double base) {
+    switch (level) {
+      case 1:
+        return base * 1.45;
+      case 2:
+        return base * 1.25;
+      case 3:
+        return base * 1.1;
+      default:
+        return base;
+    }
+  }
+
+  double _headingTrailingSpacing(int level, double base) {
+    switch (level) {
+      case 1:
+        return base * 0.85;
+      case 2:
+        return base * 0.8;
+      case 3:
+        return base * 0.75;
+      default:
+        return base * 0.7;
+    }
+  }
+
+  bool _isDecoratedBlock(BlockNode block) {
+    switch (block.kind) {
+      case MarkdownBlockKind.quote:
+      case MarkdownBlockKind.codeBlock:
+      case MarkdownBlockKind.table:
+      case MarkdownBlockKind.image:
+        return true;
+      case MarkdownBlockKind.heading:
+      case MarkdownBlockKind.paragraph:
+      case MarkdownBlockKind.orderedList:
+      case MarkdownBlockKind.unorderedList:
+      case MarkdownBlockKind.definitionList:
+      case MarkdownBlockKind.footnoteList:
+      case MarkdownBlockKind.thematicBreak:
+        return false;
+    }
+  }
+
+  bool _isListLikeBlock(BlockNode block) {
+    switch (block.kind) {
+      case MarkdownBlockKind.orderedList:
+      case MarkdownBlockKind.unorderedList:
+      case MarkdownBlockKind.definitionList:
+      case MarkdownBlockKind.footnoteList:
+        return true;
+      case MarkdownBlockKind.heading:
+      case MarkdownBlockKind.paragraph:
+      case MarkdownBlockKind.quote:
+      case MarkdownBlockKind.codeBlock:
+      case MarkdownBlockKind.table:
+      case MarkdownBlockKind.image:
+      case MarkdownBlockKind.thematicBreak:
+        return false;
+    }
+  }
+
+  bool _isThematicBreakLike(BlockNode block) =>
+      block.kind == MarkdownBlockKind.thematicBreak;
+
+  bool _isListTransitionWithinListItem(BlockNode current, BlockNode next) {
+    return (current.kind == MarkdownBlockKind.paragraph &&
+            _isListLikeBlock(next)) ||
+        (_isListLikeBlock(current) && _isListLikeBlock(next));
   }
 
   Widget _buildBlockView(
@@ -1116,8 +1231,13 @@ class MarkdownBlockBuilder {
           key: blockKeyBuilder?.call(index),
           child: Padding(
             padding: EdgeInsets.only(
-              bottom:
-                  index == blocks.length - 1 ? 0 : theme.blockSpacing * 0.65,
+              bottom: index == blocks.length - 1
+                  ? 0
+                  : _blockSpacingBetween(
+                      blocks[index],
+                      blocks[index + 1],
+                      nested: true,
+                    ),
             ),
             child: _buildNestedBlockContent(context, blocks[index]),
           ),
