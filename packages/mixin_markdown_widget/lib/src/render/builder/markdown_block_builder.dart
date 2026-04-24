@@ -579,25 +579,38 @@ class MarkdownBlockBuilder {
         final directTextKey = _createDirectTextKeyIfNeeded(codeRuns);
         final scrollController = keysRegistry.codeBlockScrollControllers
             .putIfAbsent(codeBlock.id, ScrollController.new);
+        final viewportKey = keysRegistry.codeBlockViewportKeys.putIfAbsent(
+          codeBlock.id,
+          () => GlobalKey(debugLabel: 'code-viewport-${codeBlock.id}'),
+        );
         return _buildPretextTextSpec(
           child: _buildDecoratedCodeBlock(
             codeBlock,
             codeSpan: codeSpan,
             directTextKey: directTextKey,
             scrollController: scrollController,
+            viewportKey: viewportKey,
           ),
           plainText: codeBlock.code,
           runs: codeRuns,
           fallbackStyle: theme.codeBlockStyle,
           directTextKey: directTextKey,
+          selectionClipRectResolver: (context, _) =>
+              _resolveChildViewportRect(context, viewportKey),
           measurementPadding: EdgeInsets.fromLTRB(
             theme.codeBlockPadding.resolve(Directionality.of(context)).left,
             math.max(
               0,
               theme.codeBlockPadding.resolve(Directionality.of(context)).top,
             ),
-            theme.codeBlockPadding.resolve(Directionality.of(context)).right +
-                32,
+            math.max(
+                  8,
+                  theme.codeBlockPadding
+                          .resolve(Directionality.of(context))
+                          .right -
+                      4,
+                ) +
+                24,
             math.max(
               0,
               theme.codeBlockPadding.resolve(Directionality.of(context)).top,
@@ -609,8 +622,14 @@ class MarkdownBlockBuilder {
               0,
               theme.codeBlockPadding.resolve(Directionality.of(context)).top,
             ),
-            theme.codeBlockPadding.resolve(Directionality.of(context)).right +
-                32,
+            math.max(
+                  8,
+                  theme.codeBlockPadding
+                          .resolve(Directionality.of(context))
+                          .right -
+                      4,
+                ) +
+                24,
             math.max(
               0,
               theme.codeBlockPadding.resolve(Directionality.of(context)).top,
@@ -628,6 +647,10 @@ class MarkdownBlockBuilder {
             descriptorExtractor.buildSelectableDescriptorForBlock(tableBlock);
         final scrollController = keysRegistry.tableScrollControllers
             .putIfAbsent(tableBlock.id, ScrollController.new);
+        final viewportKey = keysRegistry.tableViewportKeys.putIfAbsent(
+          tableBlock.id,
+          () => GlobalKey(debugLabel: 'table-viewport-${tableBlock.id}'),
+        );
         return SelectableBlockSpec(
           child: _buildTable(
             context,
@@ -637,6 +660,7 @@ class MarkdownBlockBuilder {
             cellTextKeyBuilder: (rowIndex, columnIndex) =>
                 cellTextKeys[rowIndex][columnIndex],
             scrollController: scrollController,
+            viewportKey: viewportKey,
           ),
           plainText: descriptor.plainText,
           selectionStructure: _matchingSelectionStructure(
@@ -710,6 +734,7 @@ class MarkdownBlockBuilder {
     Listenable? repaintListenable,
     EdgeInsets? selectionClipPadding,
     StructuredBlockSelection? selectionStructure,
+    Rect? Function(BuildContext context, Size size)? selectionClipRectResolver,
   }) {
     final hasInlineSurface = runs.any(
       (run) => run.decoration != null || run.renderSpan != null,
@@ -734,6 +759,7 @@ class MarkdownBlockBuilder {
               : SelectableBlockSelectionPaintOrder.behindChild),
       repaintListenable: repaintListenable,
       selectionClipPadding: selectionClipPadding,
+      selectionClipRectResolver: selectionClipRectResolver,
       selectionRectResolver: (context, constraints, range) {
         if (directTextKey != null) {
           final directRects = _resolveDirectRichTextSelectionRects(
@@ -1380,11 +1406,13 @@ class MarkdownBlockBuilder {
     required InlineSpan codeSpan,
     ScrollController? scrollController,
     GlobalKey? directTextKey,
+    GlobalKey? viewportKey,
   }) {
     return MarkdownCodeBlockView(
       theme: theme,
       codeSpan: codeSpan,
       directTextKey: directTextKey,
+      viewportKey: viewportKey,
       scrollController: scrollController ??
           keysRegistry.codeBlockScrollControllers
               .putIfAbsent(block.id, ScrollController.new),
@@ -1394,12 +1422,28 @@ class MarkdownBlockBuilder {
     );
   }
 
+  Rect? _resolveChildViewportRect(BuildContext context, GlobalKey viewportKey) {
+    final blockRenderObject = context.findRenderObject();
+    final viewportRenderObject = viewportKey.currentContext?.findRenderObject();
+    if (blockRenderObject is! RenderBox ||
+        !blockRenderObject.hasSize ||
+        viewportRenderObject is! RenderBox ||
+        !viewportRenderObject.hasSize) {
+      return null;
+    }
+    final origin = blockRenderObject.globalToLocal(
+      viewportRenderObject.localToGlobal(Offset.zero),
+    );
+    return origin & viewportRenderObject.size;
+  }
+
   Widget _buildTable(
     BuildContext context,
     TableBlock block, {
     Key? Function(int rowIndex, int columnIndex)? cellKeyBuilder,
     GlobalKey? Function(int rowIndex, int columnIndex)? cellTextKeyBuilder,
     ScrollController? scrollController,
+    GlobalKey? viewportKey,
   }) {
     return MarkdownTableBlockView(
       theme: theme,
@@ -1408,6 +1452,7 @@ class MarkdownBlockBuilder {
       textWidgetBuilder: _buildInlineTextWidget,
       cellKeyBuilder: cellKeyBuilder,
       cellTextKeyBuilder: cellTextKeyBuilder,
+      viewportKey: viewportKey,
       scrollController: scrollController ??
           keysRegistry.tableScrollControllers
               .putIfAbsent(block.id, ScrollController.new),

@@ -20,7 +20,9 @@ class MarkdownBlockKeysRegistry {
   final Map<String, List<List<GlobalKey>>> tableCellTextKeysByBlock = {};
   final Map<String, GlobalKey<State<StatefulWidget>>> tableBlockKeys = {};
   final Map<String, ScrollController> tableScrollControllers = {};
+  final Map<String, GlobalKey> tableViewportKeys = {};
   final Map<String, ScrollController> codeBlockScrollControllers = {};
+  final Map<String, GlobalKey> codeBlockViewportKeys = {};
   final Map<String, ValueNotifier<bool>> imageErrorNotifiers = {};
 
   List<List<GlobalKey>> tableCellKeysFor(TableBlock block) {
@@ -130,12 +132,14 @@ class MarkdownBlockKeysRegistry {
     for (final blockId in staleCodeBlockIds) {
       codeBlockScrollControllers.remove(blockId)?.dispose();
     }
+    codeBlockViewportKeys.removeWhere((key, _) => !validIds.contains(key));
     final staleTableIds = tableScrollControllers.keys
         .where((key) => !validIds.contains(key))
         .toList(growable: false);
     for (final blockId in staleTableIds) {
       tableScrollControllers.remove(blockId)?.dispose();
     }
+    tableViewportKeys.removeWhere((key, _) => !validIds.contains(key));
     final staleImageNotifierIds = imageErrorNotifiers.keys
         .where((key) => !validIds.contains(key))
         .toList(growable: false);

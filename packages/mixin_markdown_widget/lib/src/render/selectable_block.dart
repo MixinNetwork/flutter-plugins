@@ -33,6 +33,7 @@ class SelectableBlockSpec {
     this.selectionColor,
     this.repaintListenable,
     this.selectionClipPadding,
+    this.selectionClipRectResolver,
   });
 
   final Widget child;
@@ -63,6 +64,8 @@ class SelectableBlockSpec {
   final Color? selectionColor;
   final Listenable? repaintListenable;
   final EdgeInsets? selectionClipPadding;
+  final Rect? Function(BuildContext context, Size size)?
+      selectionClipRectResolver;
 }
 
 class SelectableMarkdownBlock extends StatefulWidget {
@@ -352,6 +355,10 @@ class SelectableMarkdownBlockState extends State<SelectableMarkdownBlock> {
           selectionColor: widget.spec.selectionColor ?? widget.selectionColor,
           textDirection: Directionality.of(context),
           selectionRects: selectionRects,
+          selectionClipRect: widget.spec.selectionClipRectResolver?.call(
+            context,
+            constraints.biggest,
+          ),
         );
         final paintedChild = CustomPaint(
           painter: widget.spec.selectionPaintOrder ==
@@ -628,6 +635,7 @@ class _BlockSelectionPainter extends CustomPainter {
     required this.selectionColor,
     required this.textDirection,
     this.selectionRects,
+    this.selectionClipRect,
   });
 
   final DocumentRange? range;
@@ -635,6 +643,7 @@ class _BlockSelectionPainter extends CustomPainter {
   final Color selectionColor;
   final TextDirection textDirection;
   final List<Rect>? selectionRects;
+  final Rect? selectionClipRect;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -643,14 +652,8 @@ class _BlockSelectionPainter extends CustomPainter {
       return;
     }
     final paint = Paint()..color = selectionColor;
-    final clipPadding = spec.selectionClipPadding;
-    if (clipPadding != null) {
-      final clipRect = Rect.fromLTRB(
-        clipPadding.left,
-        clipPadding.top,
-        math.max(clipPadding.left, size.width - clipPadding.right),
-        math.max(clipPadding.top, size.height - clipPadding.bottom),
-      );
+    final clipRect = selectionClipRect ?? _clipRectFromPadding(size);
+    if (clipRect != null) {
       canvas.save();
       canvas.clipRect(clipRect);
     }
@@ -658,7 +661,7 @@ class _BlockSelectionPainter extends CustomPainter {
     final selectionRects = this.selectionRects;
     if (selectionRects != null) {
       _paintSelectionRects(canvas, paint, selectionRects);
-      if (clipPadding != null) {
+      if (clipRect != null) {
         canvas.restore();
       }
       return;
@@ -696,7 +699,7 @@ class _BlockSelectionPainter extends CustomPainter {
             )
             .toList(growable: false),
       );
-      if (clipPadding != null) {
+      if (clipRect != null) {
         canvas.restore();
       }
       return;
@@ -705,9 +708,22 @@ class _BlockSelectionPainter extends CustomPainter {
     final borderRadius =
         spec.highlightBorderRadius ?? BorderRadius.circular(12);
     canvas.drawRRect(borderRadius.toRRect(Offset.zero & size), paint);
-    if (clipPadding != null) {
+    if (clipRect != null) {
       canvas.restore();
     }
+  }
+
+  Rect? _clipRectFromPadding(Size size) {
+    final clipPadding = spec.selectionClipPadding;
+    if (clipPadding == null) {
+      return null;
+    }
+    return Rect.fromLTRB(
+      clipPadding.left,
+      clipPadding.top,
+      math.max(clipPadding.left, size.width - clipPadding.right),
+      math.max(clipPadding.top, size.height - clipPadding.bottom),
+    );
   }
 
   @override

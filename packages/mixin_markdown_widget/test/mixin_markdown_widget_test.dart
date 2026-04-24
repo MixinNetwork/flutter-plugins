@@ -1555,40 +1555,74 @@ copy me
     expect(tableBlock.spec.highlightBorderRadius, theme.tableBorderRadius);
   });
 
-  testWidgets('table frame paints border above the clipped table content', (
+  testWidgets('table content clips itself with the table border radius', (
+    tester,
+  ) async {
+    const input = '''
+| A | B |
+| --- | --- |
+| 1 | 2 |
+''';
+
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(data: input),
+        ),
+      ),
+    );
+
+    final context = tester.element(find.byType(MarkdownWidget));
+    final theme = MarkdownTheme.of(context);
+    final tableBlockFinder = find.byType(MarkdownTableBlockView);
+    expect(tableBlockFinder, findsOneWidget);
+
+    final clipFinder = find.descendant(
+      of: tableBlockFinder,
+      matching: find.byType(ClipRRect),
+    );
+    expect(clipFinder, findsOneWidget);
+    expect(
+      tester.widget<ClipRRect>(clipFinder).borderRadius,
+      theme.tableBorderRadius,
+    );
+
+    final paintedFrameFinder = find.descendant(
+      of: tableBlockFinder,
+      matching: find.byWidgetPredicate(
+        (widget) => widget is CustomPaint && widget.foregroundPainter != null,
+      ),
+    );
+    expect(paintedFrameFinder, findsOneWidget);
+  });
+
+  testWidgets(
+      'table uses only internal grid lines and leaves outer frame to the content shell',
+      (
     tester,
   ) async {
     await tester.pumpWidget(
-      MaterialApp(
-        home: Builder(
-          builder: (context) => Scaffold(
-            body: MarkdownTableFrame(
-              theme: MarkdownThemeData.fallback(context),
-              child: const ColoredBox(color: Colors.white),
-            ),
+      const MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: '''
+| A | B | C | D | E |
+| --- | --- | --- | --- | --- |
+| alpha | beta | gamma | delta | epsilon |
+''',
           ),
         ),
       ),
     );
 
-    final frameFinder = find.byType(MarkdownTableFrame);
-    expect(frameFinder, findsOneWidget);
-
-    final customPaintFinder = find.descendant(
-      of: frameFinder,
-      matching: find.byType(CustomPaint),
-    );
-    expect(customPaintFinder, findsOneWidget);
-    expect(
-      tester.widget<CustomPaint>(customPaintFinder).foregroundPainter,
-      isNotNull,
-    );
-
-    final clipFinder = find.descendant(
-      of: frameFinder,
-      matching: find.byType(ClipRRect),
-    );
-    expect(clipFinder, findsOneWidget);
+    final table = tester.widget<Table>(find.byType(Table));
+    final border = table.border!;
+    expect(border.top.style, BorderStyle.none);
+    expect(border.bottom.style, BorderStyle.none);
+    expect(border.left.style, BorderStyle.none);
+    expect(border.right.style, BorderStyle.none);
+    expect(border.horizontalInside.style, BorderStyle.solid);
+    expect(border.verticalInside.style, BorderStyle.solid);
   });
 
   testWidgets(
@@ -3494,6 +3528,130 @@ const value = 42;
     expect(selectionController.hasSelection, isTrue);
     expect(selectionController.selectedPlainText, contains('Paragraph 0'));
     expect(selectionController.selectedPlainText, contains('Paragraph'));
+  });
+
+  testWidgets('drag selection auto-scrolls horizontally inside code blocks', (
+    tester,
+  ) async {
+    final selectionController = MarkdownSelectionController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 180,
+            child: MarkdownWidget(
+              data: '''
+```dart
+const scrollTargetIdentifierWithVeryLongSuffixAndExtraCharactersForAutoScroll = 42;
+```
+''',
+              selectionController: selectionController,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final horizontalScrollViewFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is SingleChildScrollView &&
+          widget.scrollDirection == Axis.horizontal,
+    );
+    final horizontalScrollView = tester.widget<SingleChildScrollView>(
+      horizontalScrollViewFinder,
+    );
+    final richTextFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is RichText &&
+          widget.text.toPlainText().contains(
+                'const scrollTargetIdentifierWithVeryLongSuffixAndExtraCharactersForAutoScroll = 42;',
+              ),
+    );
+    final richText = tester.widget<RichText>(richTextFinder);
+    final renderBox = tester.renderObject<RenderBox>(richTextFinder);
+    final painter = TextPainter(
+      text: richText.text,
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: renderBox.size.width);
+
+    final startOffset = painter.getOffsetForCaret(
+      const TextPosition(offset: 6),
+      Rect.zero,
+    );
+    final start = renderBox.localToGlobal(startOffset + const Offset(1, 8));
+    final viewportRect = tester.getRect(horizontalScrollViewFinder);
+    final edgeTarget = Offset(viewportRect.right - 3, viewportRect.center.dy);
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: start);
+    await gesture.down(start);
+    await tester.pump();
+    await gesture.moveTo(edgeTarget);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(horizontalScrollView.controller!.offset, greaterThan(0));
+    expect(selectionController.hasSelection, isTrue);
+    expect(selectionController.selectedPlainText, startsWith('scrollTarget'));
+    expect(selectionController.selectedPlainText.length, greaterThan(48));
+  });
+
+  testWidgets('drag selection auto-scrolls horizontally inside tables', (
+    tester,
+  ) async {
+    final selectionController = MarkdownSelectionController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 220,
+            child: MarkdownWidget(
+              data: '''
+| A | B | C | D | E |
+| --- | --- | --- | --- | --- |
+| alpha | beta | gamma | delta | epsilon |
+''',
+              selectionController: selectionController,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final horizontalScrollViewFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is SingleChildScrollView &&
+          widget.scrollDirection == Axis.horizontal,
+    );
+    final horizontalScrollView = tester.widget<SingleChildScrollView>(
+      horizontalScrollViewFinder,
+    );
+    final start =
+        tester.getRect(find.text('A')).centerLeft + const Offset(-1, 0);
+    final viewportRect = tester.getRect(horizontalScrollViewFinder);
+    final edgeTarget = Offset(viewportRect.right - 3, viewportRect.center.dy);
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: start);
+    await gesture.down(start);
+    await tester.pump();
+    await gesture.moveTo(edgeTarget);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 300));
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(horizontalScrollView.controller!.offset, greaterThan(0));
+    expect(selectionController.hasSelection, isTrue);
+    expect(selectionController.selectedPlainText, contains('epsi'));
   });
 
   testWidgets('copy and select-all shortcuts use the custom selection', (

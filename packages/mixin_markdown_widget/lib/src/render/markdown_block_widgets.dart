@@ -191,13 +191,17 @@ class MarkdownAdaptiveTableLayout extends StatelessWidget {
     required this.block,
     required this.layoutPlan,
     required this.tableBuilder,
+    required this.borderRadius,
     this.scrollController,
+    this.viewportKey,
   });
 
   final TableBlock block;
   final MarkdownTableLayoutPlan layoutPlan;
   final MarkdownTableWidgetBuilder tableBuilder;
+  final BorderRadius borderRadius;
   final ScrollController? scrollController;
+  final GlobalKey? viewportKey;
 
   @override
   Widget build(BuildContext context) {
@@ -228,17 +232,47 @@ class MarkdownAdaptiveTableLayout extends StatelessWidget {
         final table = tableBuilder(customWidths, const FlexColumnWidth());
 
         return SingleChildScrollView(
+          key: viewportKey,
           controller: scrollController,
           scrollDirection: Axis.horizontal,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              minWidth: idealWidth,
-              maxWidth: idealWidth,
+          child: MarkdownTableContentFrame(
+            borderRadius: borderRadius,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minWidth: idealWidth,
+                maxWidth: idealWidth,
+              ),
+              child: table,
             ),
-            child: table,
           ),
         );
       },
+    );
+  }
+}
+
+class MarkdownTableContentFrame extends StatelessWidget {
+  const MarkdownTableContentFrame({
+    super.key,
+    required this.borderRadius,
+    required this.child,
+  });
+
+  final BorderRadius borderRadius;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = MarkdownTheme.of(context);
+    return CustomPaint(
+      foregroundPainter: _MarkdownTableBorderPainter(
+        borderColor: theme.tableBorderColor,
+        borderRadius: borderRadius,
+      ),
+      child: ClipRRect(
+        borderRadius: borderRadius,
+        child: child,
+      ),
     );
   }
 }
@@ -299,34 +333,6 @@ class MarkdownQuoteBlockView extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class MarkdownTableFrame extends StatelessWidget {
-  const MarkdownTableFrame({
-    super.key,
-    required this.theme,
-    required this.child,
-    this.selectionOverlayColor,
-  });
-
-  final MarkdownThemeData theme;
-  final Widget child;
-  final Color? selectionOverlayColor;
-
-  @override
-  Widget build(BuildContext context) {
-    return CustomPaint(
-      foregroundPainter: _MarkdownTableFramePainter(
-        borderColor: theme.tableBorderColor,
-        borderRadius: theme.tableBorderRadius,
-        selectionOverlayColor: selectionOverlayColor,
-      ),
-      child: ClipRRect(
-        borderRadius: theme.tableBorderRadius,
-        child: child,
-      ),
     );
   }
 }
@@ -442,6 +448,7 @@ class MarkdownCodeBlockView extends StatelessWidget {
     required this.onCopyCode,
     required this.scrollController,
     this.directTextKey,
+    this.viewportKey,
   });
 
   final MarkdownThemeData theme;
@@ -449,6 +456,7 @@ class MarkdownCodeBlockView extends StatelessWidget {
   final VoidCallback onCopyCode;
   final ScrollController scrollController;
   final GlobalKey? directTextKey;
+  final GlobalKey? viewportKey;
 
   @override
   Widget build(BuildContext context) {
@@ -474,6 +482,7 @@ class MarkdownCodeBlockView extends StatelessWidget {
             children: <Widget>[
               Expanded(
                 child: ClipRect(
+                  key: viewportKey,
                   child: SingleChildScrollView(
                     controller: scrollController,
                     scrollDirection: Axis.horizontal,
@@ -523,6 +532,7 @@ class MarkdownTableBlockView extends StatelessWidget {
     this.cellKeyBuilder,
     this.cellTextKeyBuilder,
     this.scrollController,
+    this.viewportKey,
   });
 
   final MarkdownThemeData theme;
@@ -532,6 +542,7 @@ class MarkdownTableBlockView extends StatelessWidget {
   final Key? Function(int rowIndex, int columnIndex)? cellKeyBuilder;
   final GlobalKey? Function(int rowIndex, int columnIndex)? cellTextKeyBuilder;
   final ScrollController? scrollController;
+  final GlobalKey? viewportKey;
 
   @override
   Widget build(BuildContext context) {
@@ -544,43 +555,42 @@ class MarkdownTableBlockView extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    return MarkdownTableFrame(
-      theme: theme,
-      child: MarkdownAdaptiveTableLayout(
-        block: block,
-        layoutPlan: layoutPlan,
-        scrollController: scrollController,
-        tableBuilder: (columnWidths, defaultColumnWidth) => Table(
-          columnWidths: columnWidths,
-          defaultColumnWidth: defaultColumnWidth,
-          border: TableBorder(
-            horizontalInside: BorderSide(color: theme.tableBorderColor),
-            verticalInside: BorderSide(color: theme.tableBorderColor),
-          ),
-          children: <TableRow>[
-            for (var rowIndex = 0; rowIndex < block.rows.length; rowIndex++)
-              TableRow(
-                decoration: BoxDecoration(
-                  color: block.rows[rowIndex].isHeader
-                      ? theme.tableHeaderBackgroundColor
-                      : theme.tableRowBackgroundColor,
-                ),
-                children: <Widget>[
-                  for (var index = 0; index < columnCount; index++)
-                    _buildCell(
-                      context: context,
-                      row: block.rows[rowIndex],
-                      rowIndex: rowIndex,
-                      cellIndex: index,
-                      alignment: index < block.alignments.length
-                          ? block.alignments[index]
-                          : MarkdownTableColumnAlignment.none,
-                      directTextKey: cellTextKeyBuilder?.call(rowIndex, index),
-                    ),
-                ],
-              ),
-          ],
+    return MarkdownAdaptiveTableLayout(
+      block: block,
+      layoutPlan: layoutPlan,
+      borderRadius: theme.tableBorderRadius,
+      scrollController: scrollController,
+      viewportKey: viewportKey,
+      tableBuilder: (columnWidths, defaultColumnWidth) => Table(
+        columnWidths: columnWidths,
+        defaultColumnWidth: defaultColumnWidth,
+        border: TableBorder(
+          horizontalInside: BorderSide(color: theme.tableBorderColor),
+          verticalInside: BorderSide(color: theme.tableBorderColor),
         ),
+        children: <TableRow>[
+          for (var rowIndex = 0; rowIndex < block.rows.length; rowIndex++)
+            TableRow(
+              decoration: BoxDecoration(
+                color: block.rows[rowIndex].isHeader
+                    ? theme.tableHeaderBackgroundColor
+                    : theme.tableRowBackgroundColor,
+              ),
+              children: <Widget>[
+                for (var index = 0; index < columnCount; index++)
+                  _buildCell(
+                    context: context,
+                    row: block.rows[rowIndex],
+                    rowIndex: rowIndex,
+                    cellIndex: index,
+                    alignment: index < block.alignments.length
+                        ? block.alignments[index]
+                        : MarkdownTableColumnAlignment.none,
+                    directTextKey: cellTextKeyBuilder?.call(rowIndex, index),
+                  ),
+              ],
+            ),
+        ],
       ),
     );
   }
@@ -725,27 +735,18 @@ class MarkdownImageBlockView extends StatelessWidget {
   }
 }
 
-class _MarkdownTableFramePainter extends CustomPainter {
-  const _MarkdownTableFramePainter({
+class _MarkdownTableBorderPainter extends CustomPainter {
+  const _MarkdownTableBorderPainter({
     required this.borderColor,
     required this.borderRadius,
-    this.selectionOverlayColor,
   });
 
   final Color borderColor;
   final BorderRadius borderRadius;
-  final Color? selectionOverlayColor;
 
   @override
   void paint(Canvas canvas, Size size) {
     final rect = Offset.zero & size;
-    final rrect = borderRadius.toRRect(rect);
-
-    final overlayColor = selectionOverlayColor;
-    if (overlayColor != null) {
-      canvas.drawRRect(rrect, Paint()..color = overlayColor);
-    }
-
     canvas.drawRRect(
       borderRadius.toRRect(rect.deflate(0.5)),
       Paint()
@@ -756,9 +757,8 @@ class _MarkdownTableFramePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _MarkdownTableFramePainter oldDelegate) {
+  bool shouldRepaint(covariant _MarkdownTableBorderPainter oldDelegate) {
     return oldDelegate.borderColor != borderColor ||
-        oldDelegate.borderRadius != borderRadius ||
-        oldDelegate.selectionOverlayColor != selectionOverlayColor;
+        oldDelegate.borderRadius != borderRadius;
   }
 }

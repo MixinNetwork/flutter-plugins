@@ -147,6 +147,16 @@ Tables support varying alignments, complex cell contents, and inline styles.
 | **Math** | Full LaTeX parsing & rendering (\( \alpha^2 \)) | ✅ |
 | **Code** | Syntax highlighting with *re_highlight* | 🚀 Built |
 
+### Wide table for horizontal scrolling
+
+The table below is intentionally wider than the preview pane. In split mode, it should trigger horizontal scrolling so you can inspect every column without shrinking the content.
+
+| Release train | Rendering pipeline | Selection engine | Clipboard export | Incremental parser tail window | Nested quote layout | Syntax highlighter | Platform notes |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 2026.04 desktop preview | Pretext paragraph and block renderer | Path-based structured range selection | Plain-text serializer with table-aware export | Append-only reparsing of unstable trailing blocks | Multi-depth quote border and overlay painting | re_highlight with fenced code theming | macOS and Windows tuned for pointer-heavy interactions |
+| 2026.04 mobile fallback | Shared markdown block widgets with adaptive spacing | Gesture-driven selection anchors with drag auto-scroll | Whole-document copy and visible-range copy actions | Draft chunk merge before commit to stable document nodes | Nested block measurement through real child subtree geometry | Inline code plus fenced language classification | Android and iOS remain functional but the package is optimized for desktop |
+| Experimental branch | Stress-test layout using intentionally long cells_that_do_not_wrap_easily | Table text selection stays separate from cell selection semantics | Serializer preserves row and column ordering in exported plain text | Stable prefix block identity reduces rebuild churn during streaming | Quote selection follows rendered descendants instead of flattened synthetic text | Large code blocks keep decoration and selection overlays in sync | Useful for validating horizontal overflow behavior inside the example app |
+
 ## 5. Media & Links
 
 Images are responsive and support border radiuses based on your specific `MarkdownThemeData`. They can also act as image links!
