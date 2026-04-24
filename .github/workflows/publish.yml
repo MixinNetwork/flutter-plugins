@@ -16,6 +16,7 @@ on:
           - win_toast
           - pasteboard
           - desktop_multi_window
+          - mixin_markdown_widget
   push:
     tags:
       - 'ogg_opus_player-v[0-9]+.[0-9]+.[0-9]+*'
@@ -26,6 +27,7 @@ on:
       - 'win_toast-v[0-9]+.[0-9]+.[0-9]+*'
       - 'pasteboard-v[0-9]+.[0-9]+.[0-9]+*'
       - 'desktop_multi_window-v[0-9]+.[0-9]+.[0-9]+*'
+      - 'mixin_markdown_widget-v[0-9]+.[0-9]+.[0-9]+*'
 jobs:
   publish:
 
