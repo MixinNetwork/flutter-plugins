@@ -37,6 +37,39 @@ class MarkdownShortcutsScope extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final shortcuts = <ShortcutActivator, Intent>{
+      const SingleActivator(
+        LogicalKeyboardKey.keyC,
+        control: true,
+      ): const CopySelectionPlainTextIntent(),
+      const SingleActivator(
+        LogicalKeyboardKey.keyC,
+        meta: true,
+      ): const CopySelectionPlainTextIntent(),
+      const SingleActivator(
+        LogicalKeyboardKey.keyA,
+        control: true,
+      ): const SelectAllMarkdownIntent(),
+      const SingleActivator(
+        LogicalKeyboardKey.keyA,
+        meta: true,
+      ): const SelectAllMarkdownIntent(),
+      const SingleActivator(
+        LogicalKeyboardKey.keyC,
+        control: true,
+        shift: true,
+      ): const CopyFullDocumentPlainTextIntent(),
+      const SingleActivator(
+        LogicalKeyboardKey.keyC,
+        meta: true,
+        shift: true,
+      ): const CopyFullDocumentPlainTextIntent(),
+      if (selectionController.hasSelection)
+        const SingleActivator(
+          LogicalKeyboardKey.escape,
+        ): const ClearMarkdownSelectionIntent(),
+    };
+
     return Actions(
       actions: <Type, Action<Intent>>{
         CopySelectionPlainTextIntent:
@@ -70,37 +103,7 @@ class MarkdownShortcutsScope extends StatelessWidget {
         ),
       },
       child: Shortcuts(
-        shortcuts: const <ShortcutActivator, Intent>{
-          SingleActivator(
-            LogicalKeyboardKey.keyC,
-            control: true,
-          ): CopySelectionPlainTextIntent(),
-          SingleActivator(
-            LogicalKeyboardKey.keyC,
-            meta: true,
-          ): CopySelectionPlainTextIntent(),
-          SingleActivator(
-            LogicalKeyboardKey.keyA,
-            control: true,
-          ): SelectAllMarkdownIntent(),
-          SingleActivator(
-            LogicalKeyboardKey.keyA,
-            meta: true,
-          ): SelectAllMarkdownIntent(),
-          SingleActivator(
-            LogicalKeyboardKey.keyC,
-            control: true,
-            shift: true,
-          ): CopyFullDocumentPlainTextIntent(),
-          SingleActivator(
-            LogicalKeyboardKey.keyC,
-            meta: true,
-            shift: true,
-          ): CopyFullDocumentPlainTextIntent(),
-          SingleActivator(
-            LogicalKeyboardKey.escape,
-          ): ClearMarkdownSelectionIntent(),
-        },
+        shortcuts: shortcuts,
         child: child,
       ),
     );

@@ -15,6 +15,10 @@ import 'package:mixin_markdown_widget/src/render/pretext_text_block.dart';
 import 'package:mixin_markdown_widget/src/render/selectable_block.dart';
 import 'package:mixin_markdown_widget/src/selection/structured_block_selection.dart';
 
+class _EscapeIntent extends Intent {
+  const _EscapeIntent();
+}
+
 int _countStyledDescendantSpans(InlineSpan span, TextStyle? rootStyle) {
   if (span is! TextSpan) {
     return 0;
@@ -3846,6 +3850,61 @@ const scrollTargetIdentifierWithVeryLongSuffixAndExtraCharactersForAutoScroll = 
 
     expect(selectionController.selectedPlainText, 'Hello\n\nWorld');
     expect(copiedText, 'Hello\n\nWorld');
+  });
+
+  testWidgets('escape shortcut only handles active markdown selection', (
+    tester,
+  ) async {
+    var outerEscapeCount = 0;
+    final selectionController = MarkdownSelectionController();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Shortcuts(
+          shortcuts: const <ShortcutActivator, Intent>{
+            SingleActivator(LogicalKeyboardKey.escape): _EscapeIntent(),
+          },
+          child: Actions(
+            actions: <Type, Action<Intent>>{
+              _EscapeIntent: CallbackAction<_EscapeIntent>(
+                onInvoke: (intent) {
+                  outerEscapeCount += 1;
+                  return null;
+                },
+              ),
+            },
+            child: Scaffold(
+              body: MarkdownWidget(
+                data: '# Hello\n\nWorld',
+                selectionController: selectionController,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Hello'));
+    await tester.pump();
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+
+    expect(outerEscapeCount, 1);
+    expect(selectionController.hasSelection, isFalse);
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyA);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+
+    expect(selectionController.hasSelection, isTrue);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+
+    expect(selectionController.hasSelection, isFalse);
+    expect(outerEscapeCount, 1);
   });
 
   testWidgets('dragging inside a code block selects characters only', (
