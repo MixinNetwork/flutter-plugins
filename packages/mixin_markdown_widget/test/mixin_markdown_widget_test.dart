@@ -420,6 +420,16 @@ Before <b>bold</b> <i>italic</i> <s>strike</s> <kbd>cmd</kbd> <span data-x="1">s
     );
   });
 
+  test('uses collapsed details blocks by default', () {
+    const block = DetailsBlock(
+      id: 'details-1',
+      summary: <InlineNode>[TextInline(text: 'Details')],
+      children: <BlockNode>[],
+    );
+
+    expect(block.initiallyExpanded, isFalse);
+  });
+
   test('parses allowlisted html blocks into markdown blocks', () {
     const input = '''
 <details>
@@ -501,6 +511,34 @@ You can trigger Dependabot actions by commenting on this PR:
     final firstItem = list.items.first.children.single as ParagraphBlock;
     expect(_inlinePlainText(firstItem.inlines),
         '@dependabot rebase will rebase this PR');
+  });
+
+  test('preserves indented markdown inside html details', () {
+    const input = '''
+<details>
+<summary>Code</summary>
+
+    const value = 42;
+    return value;
+
+</details>
+''';
+
+    final document = const MarkdownDocumentParser().parse(input);
+    final details = document.blocks.single as DetailsBlock;
+
+    expect(details.children.single, isA<CodeBlock>());
+    final codeBlock = details.children.single as CodeBlock;
+    expect(codeBlock.code, 'const value = 42;\nreturn value;');
+  });
+
+  test('preserves simple spaces between html block inline tags', () {
+    const input = '<p><b>bold</b> <i>italic</i></p>';
+
+    final document = const MarkdownDocumentParser().parse(input);
+    final paragraph = document.blocks.single as ParagraphBlock;
+
+    expect(_inlinePlainText(paragraph.inlines), 'bold italic');
   });
 
   test('keeps inline html br as a hard line break', () {
@@ -4870,7 +4908,8 @@ const veryLongValueName = 42;
     );
   });
 
-  testWidgets('quote uses square border when background is transparent', (
+  testWidgets(
+      'quote uses a separate rounded side bar with transparent background', (
     tester,
   ) async {
     late MarkdownThemeData theme;
@@ -4894,15 +4933,43 @@ const veryLongValueName = 42;
       ),
     );
 
-    final decoratedBox = tester.widget<DecoratedBox>(
+    final backgroundBox = tester.widget<DecoratedBox>(
+      find
+          .ancestor(
+            of: find.text('Quoted line'),
+            matching: find.byType(DecoratedBox),
+          )
+          .last,
+    );
+    final backgroundDecoration = backgroundBox.decoration as BoxDecoration;
+    expect(backgroundDecoration.color, theme.quoteBackgroundColor);
+    expect(backgroundDecoration.borderRadius, theme.quoteBorderRadius);
+    expect(backgroundDecoration.border, isNull);
+
+    final sideBar = tester.widget<DecoratedBox>(
       find.descendant(
         of: find.byType(MarkdownQuoteBlockView),
-        matching: find.byType(DecoratedBox),
+        matching: find.byWidgetPredicate((widget) {
+          if (widget is! DecoratedBox) {
+            return false;
+          }
+          final decoration = widget.decoration;
+          return decoration is BoxDecoration &&
+              decoration.color == theme.quoteBorderColor;
+        }),
       ),
     );
-    final decoration = decoratedBox.decoration as BoxDecoration;
-    expect(decoration.color, theme.quoteBackgroundColor);
-    expect(decoration.borderRadius, BorderRadius.zero);
+    final sideBarDecoration = sideBar.decoration as BoxDecoration;
+    expect(sideBarDecoration.borderRadius,
+        BorderRadius.horizontal(left: theme.quoteBorderRadius.topLeft));
+
+    final sideBarSize = tester.widget<SizedBox>(
+      find.descendant(
+        of: find.byWidget(sideBar),
+        matching: find.byType(SizedBox),
+      ),
+    );
+    expect(sideBarSize.width, theme.quoteBorderWidth);
   });
 
   testWidgets('quote style applies to nested heading list and inline code', (

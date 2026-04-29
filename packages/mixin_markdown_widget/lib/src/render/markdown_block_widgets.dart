@@ -293,23 +293,31 @@ class MarkdownQuoteBlockView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final borderRadius = theme.quoteBackgroundColor.a == 0
-        ? BorderRadius.zero
-        : theme.quoteBorderRadius;
     return DecoratedBox(
       decoration: BoxDecoration(
         color: theme.quoteBackgroundColor,
-        borderRadius: borderRadius,
-        border: Border(
-          left: BorderSide(
-            color: theme.quoteBorderColor,
-            width: theme.quoteBorderWidth,
-          ),
-        ),
+        borderRadius: theme.quoteBorderRadius,
       ),
-      child: Padding(
-        padding: theme.quotePadding,
-        child: _buildContent(),
+      child: Stack(
+        children: <Widget>[
+          Positioned(
+            left: 0,
+            top: 0,
+            bottom: 0,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: theme.quoteBorderColor,
+                borderRadius: BorderRadius.horizontal(
+                    left: theme.quoteBorderRadius.topLeft),
+              ),
+              child: SizedBox(width: theme.quoteBorderWidth),
+            ),
+          ),
+          Padding(
+            padding: theme.quotePadding,
+            child: _buildContent(),
+          ),
+        ],
       ),
     );
   }

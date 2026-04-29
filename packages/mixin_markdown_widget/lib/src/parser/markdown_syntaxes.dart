@@ -192,17 +192,43 @@ class MarkdownHtmlBlockSyntax extends md.BlockSyntax {
   }
 
   String _normalizeMarkdownFragmentSource(String source) {
-    return source.trim().replaceAllMapped(
-          RegExp(r'([^\n])\n([ \t]*(?:[-+*]|\d+[.)])\s+)', multiLine: true),
-          (match) => '${match.group(1)}\n\n${match.group(2)}',
-        );
+    return _trimSurroundingBlankLines(source).replaceAllMapped(
+      RegExp(r'([^\n])\n([ \t]*(?:[-+*]|\d+[.)])\s+)', multiLine: true),
+      (match) => '${match.group(1)}\n\n${match.group(2)}',
+    );
+  }
+
+  String _trimSurroundingBlankLines(String source) {
+    final lines = source.split('\n');
+    var start = 0;
+    var end = lines.length;
+    while (start < end && lines[start].trim().isEmpty) {
+      start += 1;
+    }
+    while (end > start && lines[end - 1].trim().isEmpty) {
+      end -= 1;
+    }
+    return lines.sublist(start, end).join('\n');
+  }
+
+  bool _shouldPreserveHtmlWhitespaceText(String text) {
+    if (text.isEmpty || text.trim().isNotEmpty) {
+      return false;
+    }
+    if (text.contains('\n') || text.contains('\r')) {
+      return false;
+    }
+    return text.contains(RegExp(r'[ \t]'));
   }
 
   Iterable<md.Node> _convertHtmlNode(html_dom.Node node) sync* {
     if (node is html_dom.Text) {
-      final text = _normalizeHtmlText(node.text);
+      final originalText = node.text;
+      final text = _normalizeHtmlText(originalText);
       if (text.trim().isNotEmpty) {
         yield md.Text(text);
+      } else if (_shouldPreserveHtmlWhitespaceText(originalText)) {
+        yield md.Text(' ');
       }
       return;
     }

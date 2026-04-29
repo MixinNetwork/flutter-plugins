@@ -433,7 +433,7 @@ class MarkdownBlockBuilder {
           ),
           hitTestBehavior: SelectableBlockHitTestBehavior.text,
           textSpan: descriptor.span,
-          highlightBorderRadius: BorderRadius.circular(16),
+          highlightBorderRadius: theme.quoteBorderRadius,
           selectionPaintOrder: SelectableBlockSelectionPaintOrder.aboveChild,
           selectionColor: _quoteSelectionColor,
           repaintListenable:

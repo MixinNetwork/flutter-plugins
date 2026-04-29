@@ -191,7 +191,7 @@ class DetailsBlock extends BlockNode {
     required super.id,
     required this.summary,
     required this.children,
-    this.initiallyExpanded = true,
+    this.initiallyExpanded = false,
     super.sourceRange,
   }) : super(kind: MarkdownBlockKind.details);
 
