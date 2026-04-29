@@ -1,0 +1,8 @@
+<svg width="640" height="240" viewBox="0 0 640 240" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="640" height="240" rx="32" fill="#F8FAFC"/>
+  <rect x="1" y="1" width="638" height="238" rx="31" stroke="#CBD5E1" stroke-width="2"/>
+  <circle cx="120" cy="120" r="64" fill="#0B7A75"/>
+  <path d="M88 152V88L120 120L152 88V152H136V126L120 142L104 126V152H88Z" fill="white"/>
+  <text x="224" y="106" fill="#0F172A" font-family="Arial, Helvetica, sans-serif" font-size="40" font-weight="700">SVG image</text>
+  <text x="224" y="154" fill="#475569" font-family="Arial, Helvetica, sans-serif" font-size="24">Rendered by a custom imageBuilder</text>
+</svg>

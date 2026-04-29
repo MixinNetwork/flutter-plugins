@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
 
 import 'ai_chat_demo.dart';
@@ -183,6 +184,10 @@ The table below is intentionally wider than the preview pane. In split mode, it 
 Images are responsive and support border radiuses based on your specific `MarkdownThemeData`. They can also act as image links!
 
 [![Spectacular mountain landscape](https://picsum.photos/id/1011/960/400)](https://picsum.photos)
+
+SVG files can be rendered by the host app through `imageBuilder`:
+
+![Mixin Markdown SVG asset](assets/mixin_markdown.svg?w=360&h=135)
 
 ## 6. The Edge Cases & Formatting
 
@@ -419,6 +424,7 @@ This content was appended through `MarkdownController.appendChunk`.
                         controller: _controller,
                         selectionController: _selectionController,
                         theme: markdownTheme,
+                        imageBuilder: _buildMarkdownImage,
                         onTapLink: (destination, _, __) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
@@ -759,6 +765,62 @@ This content was appended through `MarkdownController.appendChunk`.
     setState(() {
       _chunkIndex = 0;
     });
+  }
+
+  Widget _buildMarkdownImage(
+    BuildContext context,
+    ImageBlock block,
+    MarkdownThemeData theme,
+  ) {
+    final uri = Uri.tryParse(block.url);
+    final path = uri?.path ?? block.url;
+    final width =
+        _dimensionFromQuery(uri, 'w') ?? _dimensionFromQuery(uri, 'width');
+    final height =
+        _dimensionFromQuery(uri, 'h') ?? _dimensionFromQuery(uri, 'height');
+    final isNetwork =
+        uri != null && (uri.scheme == 'http' || uri.scheme == 'https');
+    final isSvg = path.toLowerCase().endsWith('.svg');
+
+    final image = isSvg
+        ? isNetwork
+            ? SvgPicture.network(
+                block.url,
+                width: width,
+                height: height,
+                fit: BoxFit.contain,
+              )
+            : SvgPicture.asset(
+                path,
+                width: width,
+                height: height,
+                fit: BoxFit.contain,
+              )
+        : isNetwork
+            ? Image.network(
+                block.url,
+                width: width,
+                height: height,
+                fit: BoxFit.cover,
+              )
+            : Image.asset(
+                path,
+                width: width,
+                height: height,
+                fit: BoxFit.cover,
+              );
+
+    return ClipRRect(
+      borderRadius: theme.imageBorderRadius,
+      child: image,
+    );
+  }
+
+  double? _dimensionFromQuery(Uri? uri, String key) {
+    if (uri == null) {
+      return null;
+    }
+    return double.tryParse(uri.queryParameters[key] ?? '');
   }
 
   String _previewSubtitle() {
