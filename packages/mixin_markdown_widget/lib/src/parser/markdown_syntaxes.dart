@@ -94,7 +94,10 @@ class MarkdownHtmlBlockSyntax extends md.BlockSyntax {
       }
     }
 
-    final nodes = _convertHtmlFragment(lines.join('\n'));
+    final source = lines.join('\n');
+    final nodes = tag == 'details'
+        ? _convertDetailsFragment(source)
+        : _convertHtmlFragment(source);
     if (nodes.isEmpty) {
       return null;
     }
@@ -128,9 +131,76 @@ class MarkdownHtmlBlockSyntax extends md.BlockSyntax {
     return fragment.nodes.expand(_convertHtmlNode).toList(growable: false);
   }
 
+  List<md.Node> _convertDetailsFragment(String source) {
+    final match = RegExp(
+      r'^\s{0,3}<details([^>]*)>([\s\S]*)</details>\s*$',
+      caseSensitive: false,
+    ).firstMatch(source);
+    if (match == null) {
+      return _convertHtmlFragment(source);
+    }
+
+    final attributesSource = match.group(1) ?? '';
+    var bodySource = match.group(2) ?? '';
+    final summaryMatch = RegExp(
+      r'<summary(?:\s+[^>]*)?>([\s\S]*?)</summary>',
+      caseSensitive: false,
+    ).firstMatch(bodySource);
+
+    md.Element? summary;
+    if (summaryMatch != null) {
+      final summaryNodes = _convertHtmlFragment(summaryMatch.group(0)!);
+      for (final node in summaryNodes) {
+        if (node is md.Element && node.tag == 'summary') {
+          summary = node;
+          break;
+        }
+      }
+      bodySource = bodySource.replaceRange(
+        summaryMatch.start,
+        summaryMatch.end,
+        '',
+      );
+    }
+
+    final details = md.Element(
+      'details',
+      <md.Node>[
+        if (summary != null) summary,
+        ..._parseMarkdownFragment(bodySource),
+      ],
+    );
+    if (RegExp(r'(^|\s)open(?:\s|=|$)', caseSensitive: false)
+        .hasMatch(attributesSource)) {
+      details.attributes['open'] = '';
+    }
+    return <md.Node>[details];
+  }
+
+  List<md.Node> _parseMarkdownFragment(String source) {
+    final normalizedSource = _normalizeMarkdownFragmentSource(source);
+    if (normalizedSource.isEmpty) {
+      return const <md.Node>[];
+    }
+    final document = md.Document(
+      extensionSet: md.ExtensionSet.none,
+      blockSyntaxes: buildMarkdownBlockSyntaxes(),
+      inlineSyntaxes: buildMarkdownInlineSyntaxes(),
+      encodeHtml: false,
+    );
+    return document.parseLines(normalizedSource.split('\n'));
+  }
+
+  String _normalizeMarkdownFragmentSource(String source) {
+    return source.trim().replaceAllMapped(
+          RegExp(r'([^\n])\n([ \t]*(?:[-+*]|\d+[.)])\s+)', multiLine: true),
+          (match) => '${match.group(1)}\n\n${match.group(2)}',
+        );
+  }
+
   Iterable<md.Node> _convertHtmlNode(html_dom.Node node) sync* {
     if (node is html_dom.Text) {
-      final text = node.text;
+      final text = _normalizeHtmlText(node.text);
       if (text.trim().isNotEmpty) {
         yield md.Text(text);
       }
@@ -182,6 +252,10 @@ class MarkdownHtmlBlockSyntax extends md.BlockSyntax {
       element.attributes[entry.key.toString().toLowerCase()] = entry.value;
     }
     return element;
+  }
+
+  String _normalizeHtmlText(String text) {
+    return text.replaceAll(RegExp(r'[ \t\r\n]+'), ' ');
   }
 }
 

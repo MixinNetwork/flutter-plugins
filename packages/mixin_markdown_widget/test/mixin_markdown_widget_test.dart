@@ -428,7 +428,8 @@ Before <b>bold</b> <i>italic</i> <s>strike</s> <kbd>cmd</kbd> <span data-x="1">s
 <h2>package:build_runner v2.14.1</h2>
 <br />
 <ul>
-<li>Bug fix: fix stale <code>workspace.ref</code> files.</li>
+<li>Bug fix: fix crash if a package used to belong to a workspace but was removed
+from the workspace leaving a stale <code>workspace.ref</code> file.</li>
 <li>Performance: faster incremental builds.</li>
 </ul>
 </blockquote>
@@ -454,6 +455,11 @@ Before <b>bold</b> <i>italic</i> <s>strike</s> <kbd>cmd</kbd> <span data-x="1">s
       _flattenInlineNodes(firstItem.inlines).whereType<InlineCode>(),
       isNotEmpty,
     );
+    expect(
+      _inlinePlainText(firstItem.inlines),
+      'Bug fix: fix crash if a package used to belong to a workspace but was '
+      'removed from the workspace leaving a stale workspace.ref file.',
+    );
 
     final controller = MarkdownController(data: input);
     addTearDown(controller.dispose);
@@ -461,8 +467,40 @@ Before <b>bold</b> <i>italic</i> <s>strike</s> <kbd>cmd</kbd> <span data-x="1">s
       controller.plainText,
       contains('Release notes\n\npackage:build_runner v2.14.1'),
     );
+    expect(controller.plainText,
+        contains('was removed from the workspace leaving a stale'));
+  });
+
+  test('parses markdown blocks nested inside html details', () {
+    const input = '''
+<details>
+<summary>Dependabot commands and options</summary>
+<br />
+
+You can trigger Dependabot actions by commenting on this PR:
+- `@dependabot rebase` will rebase this PR
+- `@dependabot recreate` will recreate this PR
+</details>
+''';
+
+    final document = const MarkdownDocumentParser().parse(input);
+    final details = document.blocks.single as DetailsBlock;
+
     expect(
-        controller.plainText, contains('- Bug fix: fix stale workspace.ref'));
+        _inlinePlainText(details.summary), 'Dependabot commands and options');
+    expect(details.children, hasLength(3));
+    expect(details.children[0], isA<ParagraphBlock>());
+    expect((details.children[0] as ParagraphBlock).inlines.single,
+        isA<HardBreakInline>());
+    expect(details.children[1], isA<ParagraphBlock>());
+    expect(details.children[2], isA<ListBlock>());
+
+    final list = details.children[2] as ListBlock;
+    expect(list.ordered, isFalse);
+    expect(list.items, hasLength(2));
+    final firstItem = list.items.first.children.single as ParagraphBlock;
+    expect(_inlinePlainText(firstItem.inlines),
+        '@dependabot rebase will rebase this PR');
   });
 
   test('keeps inline html br as a hard line break', () {
@@ -1448,9 +1486,11 @@ Term
             data: '''
 <details>
 <summary>Dependabot commands and options</summary>
-<ul>
-<li><code>@dependabot rebase</code> will rebase this PR</li>
-</ul>
+<br />
+
+You can trigger Dependabot actions by commenting on this PR:
+- `@dependabot rebase` will rebase this PR
+- `@dependabot recreate` will recreate this PR
 </details>
 ''',
           ),
