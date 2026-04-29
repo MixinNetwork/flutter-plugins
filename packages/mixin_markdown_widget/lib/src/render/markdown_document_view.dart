@@ -105,6 +105,12 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
         }
         return;
       }
+      if (block is DetailsBlock) {
+        for (final child in block.children) {
+          visit(child);
+        }
+        return;
+      }
       if (block is ListBlock) {
         for (final item in block.items) {
           for (final child in item.children) {

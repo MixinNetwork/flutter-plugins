@@ -20,20 +20,26 @@ class MarkdownInlineBuilder {
 
   List<MarkdownPretextInlineRun> buildPretextRuns(
       TextStyle baseStyle, List<InlineNode> inlines,
-      {bool alignInlineMathToBaseline = true}) {
+      {bool alignInlineMathToBaseline = true,
+      TextStyle? inlineCodeStyle,
+      TextStyle? linkStyle}) {
     return <MarkdownPretextInlineRun>[
       for (final inline in inlines)
         ..._buildPretextRun(
           baseStyle,
           inline,
           alignInlineMathToBaseline: alignInlineMathToBaseline,
+          inlineCodeStyle: inlineCodeStyle,
+          linkStyle: linkStyle,
         ),
     ];
   }
 
   List<MarkdownPretextInlineRun> _buildPretextRun(
       TextStyle baseStyle, InlineNode inline,
-      {required bool alignInlineMathToBaseline}) {
+      {required bool alignInlineMathToBaseline,
+      TextStyle? inlineCodeStyle,
+      TextStyle? linkStyle}) {
     switch (inline.kind) {
       case MarkdownInlineKind.text:
         return <MarkdownPretextInlineRun>[
@@ -49,6 +55,8 @@ class MarkdownInlineBuilder {
           style,
           emphasis.children,
           alignInlineMathToBaseline: alignInlineMathToBaseline,
+          inlineCodeStyle: inlineCodeStyle,
+          linkStyle: linkStyle,
         );
       case MarkdownInlineKind.strong:
         final strong = inline as StrongInline;
@@ -57,6 +65,8 @@ class MarkdownInlineBuilder {
           style,
           strong.children,
           alignInlineMathToBaseline: alignInlineMathToBaseline,
+          inlineCodeStyle: inlineCodeStyle,
+          linkStyle: linkStyle,
         );
       case MarkdownInlineKind.strikethrough:
         final strike = inline as StrikethroughInline;
@@ -65,6 +75,8 @@ class MarkdownInlineBuilder {
           style,
           strike.children,
           alignInlineMathToBaseline: alignInlineMathToBaseline,
+          inlineCodeStyle: inlineCodeStyle,
+          linkStyle: linkStyle,
         );
       case MarkdownInlineKind.highlight:
         final highlight = inline as HighlightInline;
@@ -72,6 +84,8 @@ class MarkdownInlineBuilder {
           highlightStyle(baseStyle),
           highlight.children,
           alignInlineMathToBaseline: alignInlineMathToBaseline,
+          inlineCodeStyle: inlineCodeStyle,
+          linkStyle: linkStyle,
         );
       case MarkdownInlineKind.subscript:
         final subscript = inline as SubscriptInline;
@@ -79,6 +93,8 @@ class MarkdownInlineBuilder {
           subscriptStyle(baseStyle),
           subscript.children,
           alignInlineMathToBaseline: alignInlineMathToBaseline,
+          inlineCodeStyle: inlineCodeStyle,
+          linkStyle: linkStyle,
         );
       case MarkdownInlineKind.superscript:
         final superscript = inline as SuperscriptInline;
@@ -86,6 +102,8 @@ class MarkdownInlineBuilder {
           superscriptStyle(baseStyle),
           superscript.children,
           alignInlineMathToBaseline: alignInlineMathToBaseline,
+          inlineCodeStyle: inlineCodeStyle,
+          linkStyle: linkStyle,
         );
       case MarkdownInlineKind.link:
         final link = inline as LinkInline;
@@ -95,11 +113,13 @@ class MarkdownInlineBuilder {
             : _registerLink(() {
                 onTapLink!(link.destination, link.title, label);
               });
-        final style = baseStyle.merge(theme.linkStyle);
+        final style = baseStyle.merge(linkStyle ?? theme.linkStyle);
         return buildPretextRuns(
           style,
           link.children,
           alignInlineMathToBaseline: alignInlineMathToBaseline,
+          inlineCodeStyle: inlineCodeStyle,
+          linkStyle: linkStyle,
         )
             .map(
               (run) => MarkdownPretextInlineRun(
@@ -122,7 +142,7 @@ class MarkdownInlineBuilder {
         return <MarkdownPretextInlineRun>[
           MarkdownPretextInlineRun(
             text: math.tex,
-            style: baseStyle.merge(theme.inlineCodeStyle),
+            style: baseStyle.merge(inlineCodeStyle ?? theme.inlineCodeStyle),
             renderSpan: _buildMathSpan(
               baseStyle,
               math,
@@ -137,7 +157,7 @@ class MarkdownInlineBuilder {
         return <MarkdownPretextInlineRun>[
           MarkdownPretextInlineRun(
             text: code.text,
-            style: baseStyle.merge(theme.inlineCodeStyle),
+            style: baseStyle.merge(inlineCodeStyle ?? theme.inlineCodeStyle),
             allowCharacterWrap: true,
             decoration: MarkdownPretextInlineDecoration(
               backgroundColor: theme.inlineCodeBackgroundColor,
@@ -162,22 +182,32 @@ class MarkdownInlineBuilder {
         return <MarkdownPretextInlineRun>[
           MarkdownPretextInlineRun(
             text: label,
-            style: baseStyle.merge(theme.linkStyle),
+            style: baseStyle.merge(linkStyle ?? theme.linkStyle),
           ),
         ];
     }
   }
 
   List<InlineSpan> buildInlineSpans(
-    TextStyle baseStyle,
-    List<InlineNode> inlines,
-  ) {
+      TextStyle baseStyle, List<InlineNode> inlines,
+      {TextStyle? inlineCodeStyle, TextStyle? linkStyle}) {
     return <InlineSpan>[
-      for (final inline in inlines) ..._buildInlineSpan(baseStyle, inline),
+      for (final inline in inlines)
+        ..._buildInlineSpan(
+          baseStyle,
+          inline,
+          inlineCodeStyle: inlineCodeStyle,
+          linkStyle: linkStyle,
+        ),
     ];
   }
 
-  List<InlineSpan> _buildInlineSpan(TextStyle baseStyle, InlineNode inline) {
+  List<InlineSpan> _buildInlineSpan(
+    TextStyle baseStyle,
+    InlineNode inline, {
+    TextStyle? inlineCodeStyle,
+    TextStyle? linkStyle,
+  }) {
     switch (inline.kind) {
       case MarkdownInlineKind.text:
         return <InlineSpan>[TextSpan(text: (inline as TextInline).text)];
@@ -189,6 +219,8 @@ class MarkdownInlineBuilder {
             children: buildInlineSpans(
               baseStyle.copyWith(fontStyle: FontStyle.italic),
               emphasis.children,
+              inlineCodeStyle: inlineCodeStyle,
+              linkStyle: linkStyle,
             ),
           ),
         ];
@@ -200,6 +232,8 @@ class MarkdownInlineBuilder {
             children: buildInlineSpans(
               baseStyle.copyWith(fontWeight: FontWeight.w700),
               strong.children,
+              inlineCodeStyle: inlineCodeStyle,
+              linkStyle: linkStyle,
             ),
           ),
         ];
@@ -212,6 +246,8 @@ class MarkdownInlineBuilder {
             children: buildInlineSpans(
               style,
               strike.children,
+              inlineCodeStyle: inlineCodeStyle,
+              linkStyle: linkStyle,
             ),
           ),
         ];
@@ -221,7 +257,12 @@ class MarkdownInlineBuilder {
         return <InlineSpan>[
           TextSpan(
             style: style,
-            children: buildInlineSpans(style, highlight.children),
+            children: buildInlineSpans(
+              style,
+              highlight.children,
+              inlineCodeStyle: inlineCodeStyle,
+              linkStyle: linkStyle,
+            ),
           ),
         ];
       case MarkdownInlineKind.subscript:
@@ -230,7 +271,12 @@ class MarkdownInlineBuilder {
         return <InlineSpan>[
           TextSpan(
             style: style,
-            children: buildInlineSpans(style, subscript.children),
+            children: buildInlineSpans(
+              style,
+              subscript.children,
+              inlineCodeStyle: inlineCodeStyle,
+              linkStyle: linkStyle,
+            ),
           ),
         ];
       case MarkdownInlineKind.superscript:
@@ -239,7 +285,12 @@ class MarkdownInlineBuilder {
         return <InlineSpan>[
           TextSpan(
             style: style,
-            children: buildInlineSpans(style, superscript.children),
+            children: buildInlineSpans(
+              style,
+              superscript.children,
+              inlineCodeStyle: inlineCodeStyle,
+              linkStyle: linkStyle,
+            ),
           ),
         ];
       case MarkdownInlineKind.link:
@@ -250,7 +301,7 @@ class MarkdownInlineBuilder {
             : _registerLink(() {
                 onTapLink!(link.destination, link.title, label);
               });
-        final style = baseStyle.merge(theme.linkStyle);
+        final style = baseStyle.merge(linkStyle ?? theme.linkStyle);
         return <InlineSpan>[
           TextSpan(
             style: style,
@@ -258,7 +309,12 @@ class MarkdownInlineBuilder {
                 ? SystemMouseCursors.click
                 : MouseCursor.defer,
             recognizer: recognizer,
-            children: buildInlineSpans(style, link.children),
+            children: buildInlineSpans(
+              style,
+              link.children,
+              inlineCodeStyle: inlineCodeStyle,
+              linkStyle: linkStyle,
+            ),
           ),
         ];
       case MarkdownInlineKind.math:
@@ -281,7 +337,8 @@ class MarkdownInlineBuilder {
                 padding: theme.inlineCodePadding,
                 child: Text(
                   code.text,
-                  style: baseStyle.merge(theme.inlineCodeStyle),
+                  style:
+                      baseStyle.merge(inlineCodeStyle ?? theme.inlineCodeStyle),
                 ),
               ),
             ),
@@ -298,7 +355,7 @@ class MarkdownInlineBuilder {
         return <InlineSpan>[
           TextSpan(
             text: label,
-            style: baseStyle.merge(theme.linkStyle),
+            style: baseStyle.merge(linkStyle ?? theme.linkStyle),
           ),
         ];
     }

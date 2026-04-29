@@ -217,6 +217,13 @@ class MarkdownDocumentParser {
       return;
     }
 
+    if (block is DetailsBlock) {
+      for (final child in block.children) {
+        _countBlockKindsInBlock(child, counts);
+      }
+      return;
+    }
+
     if (block is DefinitionListBlock) {
       for (final item in block.items) {
         for (final definition in item.definitions) {
@@ -275,6 +282,15 @@ class MarkdownDocumentParser {
         return FootnoteListBlock(
           id: footnoteList.id,
           items: footnoteList.items,
+          sourceRange: sourceRange,
+        );
+      case MarkdownBlockKind.details:
+        final details = block as DetailsBlock;
+        return DetailsBlock(
+          id: details.id,
+          summary: details.summary,
+          children: details.children,
+          initiallyExpanded: details.initiallyExpanded,
           sourceRange: sourceRange,
         );
       case MarkdownBlockKind.codeBlock:
@@ -644,6 +660,10 @@ class _MarkdownAstBuilder {
   List<BlockNode> buildBlocks(List<md.Node> nodes) {
     final blocks = <BlockNode>[];
     for (final node in nodes) {
+      if (node is md.Element && node.tag == 'html-fragment') {
+        blocks.addAll(buildBlocks(node.children ?? const <md.Node>[]));
+        continue;
+      }
       final block = _buildBlock(node);
       if (block != null) {
         blocks.add(block);
@@ -716,6 +736,18 @@ class _MarkdownAstBuilder {
           return _buildFootnoteList(node);
         }
         break;
+      case 'details':
+        return _buildDetailsBlock(node);
+      case 'summary':
+        return ParagraphBlock(
+          id: _nextId(MarkdownBlockKind.paragraph, node.textContent),
+          inlines: _buildInlines(node.children),
+        );
+      case 'br':
+        return ParagraphBlock(
+          id: _nextId(MarkdownBlockKind.paragraph, 'br'),
+          inlines: const <InlineNode>[HardBreakInline()],
+        );
       case 'pre':
         return _buildCodeBlock(node);
       case 'table':
@@ -967,6 +999,34 @@ class _MarkdownAstBuilder {
     return FootnoteListBlock(
       id: _nextId(MarkdownBlockKind.footnoteList, node.textContent),
       items: List<ListItemNode>.unmodifiable(items),
+    );
+  }
+
+  DetailsBlock _buildDetailsBlock(md.Element node) {
+    final children = <BlockNode>[];
+    List<InlineNode> summary = const <InlineNode>[];
+
+    for (final child in node.children ?? const <md.Node>[]) {
+      if (child is md.Element && child.tag == 'summary') {
+        if (summary.isEmpty) {
+          summary =
+              List<InlineNode>.unmodifiable(_buildInlines(child.children));
+        }
+        continue;
+      }
+      final block = _buildBlock(child);
+      if (block != null) {
+        children.add(block);
+      }
+    }
+
+    return DetailsBlock(
+      id: _nextId(MarkdownBlockKind.details, node.textContent),
+      summary: summary.isEmpty
+          ? const <InlineNode>[TextInline(text: 'Details')]
+          : summary,
+      children: List<BlockNode>.unmodifiable(children),
+      initiallyExpanded: node.attributes.containsKey('open'),
     );
   }
 

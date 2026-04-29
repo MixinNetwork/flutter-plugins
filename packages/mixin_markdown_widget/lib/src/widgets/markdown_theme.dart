@@ -216,12 +216,7 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
         secondaryForeground: colorScheme.onSurface.withValues(alpha: 0.82),
         headingForeground: colorScheme.onSurface,
         linkForeground: colorScheme.primary,
-        quoteBackgroundColor: MarkdownThemeData._tintedOverlay(
-          colorScheme.onSurface,
-          colorScheme.primary,
-          mix: 0.72,
-          alpha: 0.08,
-        ),
+        quoteBackgroundColor: Colors.transparent,
         quoteBorderColor: colorScheme.primary.withValues(alpha: 0.4),
         inlineCodeBackgroundColor: MarkdownThemeData._tintedOverlay(
           colorScheme.onSurface,
@@ -271,12 +266,7 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
         secondaryForeground: secondaryForeground,
         headingForeground: headingForeground,
         linkForeground: linkForeground,
-        quoteBackgroundColor: MarkdownThemeData._tintedOverlay(
-          raisedSurface,
-          linkForeground,
-          mix: 0.18,
-          alpha: 0.82,
-        ),
+        quoteBackgroundColor: Colors.transparent,
         quoteBorderColor: const Color(0xFF4CA7D8),
         inlineCodeBackgroundColor: MarkdownThemeData._tintedOverlay(
           mutedSurface,
@@ -313,7 +303,7 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
   }) {
     final textTheme = Theme.of(context).textTheme;
     final bodyStyle = (textTheme.bodyMedium ?? const TextStyle()).copyWith(
-      fontSize: 16,
+      fontSize: 15,
       color: palette.foreground,
     );
     final mono = bodyStyle.copyWith(
@@ -350,8 +340,8 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
       codeBlockToolbarPadding: const EdgeInsets.fromLTRB(12, 8, 8, 0),
       bodyStyle: bodyStyle,
       quoteStyle: bodyStyle.copyWith(
-        color: palette.secondaryForeground,
-        fontStyle: FontStyle.italic,
+        fontSize: 15,
+        color: palette.foreground.withValues(alpha: 0.72),
       ),
       linkStyle: bodyStyle.copyWith(
         color: palette.linkForeground,
@@ -438,6 +428,7 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
   static MarkdownThemeData _applyTightDensity(MarkdownThemeData baseTheme) {
     final bodySize = baseTheme.bodyStyle.fontSize ?? 16;
     final codeSize = (bodySize - 1).clamp(14.0, bodySize).toDouble();
+    final quoteSize = (bodySize - 1).clamp(14.0, bodySize).toDouble();
     return baseTheme.copyWith(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       blockSpacing: 9,
@@ -452,7 +443,7 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
       tableBorderRadius: BorderRadius.circular(5),
       imageCaptionSpacing: 6,
       codeBlockToolbarPadding: const EdgeInsets.fromLTRB(10, 6, 8, 0),
-      quoteStyle: baseTheme.quoteStyle.copyWith(fontSize: bodySize),
+      quoteStyle: baseTheme.quoteStyle.copyWith(fontSize: quoteSize),
       linkStyle: baseTheme.linkStyle.copyWith(fontSize: bodySize),
       inlineCodeStyle: baseTheme.inlineCodeStyle.copyWith(fontSize: codeSize),
       codeBlockStyle: baseTheme.codeBlockStyle.copyWith(fontSize: codeSize),

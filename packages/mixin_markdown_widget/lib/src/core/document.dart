@@ -8,6 +8,7 @@ enum MarkdownBlockKind {
   unorderedList,
   definitionList,
   footnoteList,
+  details,
   codeBlock,
   table,
   image,
@@ -182,6 +183,21 @@ class FootnoteListBlock extends BlockNode {
   }) : super(kind: MarkdownBlockKind.footnoteList);
 
   final List<ListItemNode> items;
+}
+
+@immutable
+class DetailsBlock extends BlockNode {
+  const DetailsBlock({
+    required super.id,
+    required this.summary,
+    required this.children,
+    this.initiallyExpanded = true,
+    super.sourceRange,
+  }) : super(kind: MarkdownBlockKind.details);
+
+  final List<InlineNode> summary;
+  final List<BlockNode> children;
+  final bool initiallyExpanded;
 }
 
 @immutable

@@ -41,6 +41,28 @@ int _countStyledDescendantSpans(InlineSpan span, TextStyle? rootStyle) {
   return count;
 }
 
+TextStyle? _styleForText(InlineSpan span, String text, [TextStyle? inherited]) {
+  if (span is! TextSpan) {
+    return null;
+  }
+  final style = span.style ?? inherited;
+  final spanText = span.text;
+  if (spanText != null && spanText.contains(text)) {
+    return style;
+  }
+  final children = span.children;
+  if (children == null) {
+    return null;
+  }
+  for (final child in children) {
+    final childStyle = _styleForText(child, text, style);
+    if (childStyle != null) {
+      return childStyle;
+    }
+  }
+  return null;
+}
+
 Iterable<WidgetSpan> _collectWidgetSpans(InlineSpan span) sync* {
   if (span is WidgetSpan) {
     yield span;
@@ -396,6 +418,99 @@ Before <b>bold</b> <i>italic</i> <s>strike</s> <kbd>cmd</kbd> <span data-x="1">s
       _inlinePlainText(paragraph.inlines),
       'Before bold italic strike cmd span text small text underlined inserted after',
     );
+  });
+
+  test('parses allowlisted html blocks into markdown blocks', () {
+    const input = '''
+<details>
+<summary>Release notes</summary>
+<blockquote>
+<h2>package:build_runner v2.14.1</h2>
+<br />
+<ul>
+<li>Bug fix: fix stale <code>workspace.ref</code> files.</li>
+<li>Performance: faster incremental builds.</li>
+</ul>
+</blockquote>
+</details>
+''';
+
+    final document = const MarkdownDocumentParser().parse(input);
+    final details = document.blocks.single as DetailsBlock;
+
+    expect(_inlinePlainText(details.summary), 'Release notes');
+    expect(details.initiallyExpanded, isFalse);
+    expect(details.children.single, isA<QuoteBlock>());
+
+    final quote = details.children.single as QuoteBlock;
+    expect(quote.children.first, isA<HeadingBlock>());
+    expect(quote.children, hasLength(3));
+    final breakParagraph = quote.children[1] as ParagraphBlock;
+    expect(breakParagraph.inlines.single, isA<HardBreakInline>());
+    final list = quote.children[2] as ListBlock;
+    expect(list.items, hasLength(2));
+    final firstItem = list.items.first.children.single as ParagraphBlock;
+    expect(
+      _flattenInlineNodes(firstItem.inlines).whereType<InlineCode>(),
+      isNotEmpty,
+    );
+
+    final controller = MarkdownController(data: input);
+    addTearDown(controller.dispose);
+    expect(
+      controller.plainText,
+      contains('Release notes\n\npackage:build_runner v2.14.1'),
+    );
+    expect(
+        controller.plainText, contains('- Bug fix: fix stale workspace.ref'));
+  });
+
+  test('keeps inline html br as a hard line break', () {
+    const input = '<p>Before<br />After</p>';
+
+    final document = const MarkdownDocumentParser().parse(input);
+    final paragraph = document.blocks.single as ParagraphBlock;
+
+    expect(paragraph.inlines, hasLength(3));
+    expect(paragraph.inlines[0], isA<TextInline>());
+    expect(paragraph.inlines[1], isA<HardBreakInline>());
+    expect(paragraph.inlines[2], isA<TextInline>());
+    expect(_inlinePlainText(paragraph.inlines), 'Before\nAfter');
+  });
+
+  testWidgets('renders standalone html br without paragraph block spacing',
+      (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) {
+            final theme = MarkdownThemeData.fallback(context).copyWith(
+              blockSpacing: 80,
+              padding: EdgeInsets.zero,
+            );
+            return Scaffold(
+              body: MarkdownWidget(
+                data: '''
+<p>Before</p>
+<br />
+<p>After</p>
+''',
+                theme: theme,
+                selectable: false,
+                shrinkWrap: true,
+              ),
+            );
+          },
+        ),
+      ),
+    );
+
+    final beforeRect = tester.getRect(find.text('Before'));
+    final afterRect = tester.getRect(find.text('After'));
+    final gap = afterRect.top - beforeRect.bottom;
+
+    expect(gap, greaterThan(0));
+    expect(gap, lessThan(30));
   });
 
   test('does not treat footnote references as custom superscript spans', () {
@@ -1323,6 +1438,158 @@ Term
 
     expect(tappedDestination, 'https://example.com');
     expect(tappedLabel, 'Example');
+  });
+
+  testWidgets('renders html details as a collapsible block', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: '''
+<details>
+<summary>Dependabot commands and options</summary>
+<ul>
+<li><code>@dependabot rebase</code> will rebase this PR</li>
+</ul>
+</details>
+''',
+          ),
+        ),
+      ),
+    );
+
+    expect(find.textContaining('Dependabot commands and options'), findsOne);
+    expect(find.byType(MarkdownListBlockView), findsNothing);
+
+    await tester.tap(find.byIcon(Icons.chevron_right_rounded));
+    await tester.pumpAndSettle();
+    await tester.pump(kDoubleTapTimeout + const Duration(milliseconds: 1));
+
+    expect(find.byIcon(Icons.expand_more_rounded), findsOne);
+    expect(find.byType(MarkdownListBlockView), findsOne);
+  });
+
+  testWidgets('details paints selection backgrounds for nested quote and list',
+      (tester) async {
+    final selectionController = MarkdownSelectionController();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: '''
+<details>
+<summary>Release notes</summary>
+<blockquote>
+Quoted line
+</blockquote>
+<br />
+<ul>
+<li>List item</li>
+</ul>
+</details>
+''',
+            selectionController: selectionController,
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.byIcon(Icons.chevron_right_rounded));
+    await tester.pumpAndSettle();
+
+    final detailsFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is SelectableMarkdownBlock &&
+          widget.spec.plainText.contains('Release notes') &&
+          widget.spec.plainText.contains('Quoted line') &&
+          widget.spec.plainText.contains('List item'),
+    );
+    final detailsBlock = tester.widget<SelectableMarkdownBlock>(detailsFinder);
+    expect(detailsBlock.spec.selectionStructure, isNotNull);
+    expect(detailsBlock.spec.selectionColor, isNull);
+    final globalSelectionRects = _globalSelectionRectsForBlock(
+      tester,
+      detailsFinder,
+      start: 0,
+      end: detailsBlock.spec.plainText.length,
+    );
+    final quotedTextRect = tester.getRect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is RichText &&
+            widget.text.toPlainText().contains('Quoted line'),
+      ),
+    );
+    final listTextRect = tester.getRect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is RichText &&
+            widget.text.toPlainText().contains('List item'),
+      ),
+    );
+
+    expect(
+      globalSelectionRects.any((rect) => rect.overlaps(quotedTextRect)),
+      isTrue,
+    );
+    expect(
+      globalSelectionRects.any((rect) => rect.overlaps(listTextRect)),
+      isTrue,
+    );
+
+    final detailsElement = tester.element(detailsFinder);
+    final detailsRenderBox = tester.renderObject<RenderBox>(detailsFinder);
+    final listOffset = detailsBlock.spec.textOffsetResolver!(
+      detailsElement,
+      detailsRenderBox.size,
+      detailsRenderBox.globalToLocal(listTextRect.center),
+    );
+    expect(
+      listOffset,
+      greaterThan(detailsBlock.spec.plainText.indexOf('List item')),
+    );
+
+    final listEnd =
+        detailsBlock.spec.plainText.indexOf('List item') + 'List item'.length;
+    selectionController.setSelection(
+      DocumentSelection(
+        base: detailsBlock.spec.selectionStructure!.startPosition(
+          blockIndex: 0,
+        ),
+        extent:
+            detailsBlock.spec.selectionStructure!.positionForDisplayedOffset(
+          blockIndex: 0,
+          displayedOffset: listEnd,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final detailsAfterSelection =
+        tester.widget<SelectableMarkdownBlock>(detailsFinder);
+    final selectedGlobalRects = _globalSelectionRectsForBlock(
+      tester,
+      detailsFinder,
+      start: 0,
+      end: detailsAfterSelection.spec.plainText.indexOf('List item') +
+          'List item'.length,
+    );
+    expect(
+      selectedGlobalRects.any((rect) => rect.overlaps(quotedTextRect)),
+      isTrue,
+    );
+    expect(
+      selectedGlobalRects.any((rect) => rect.overlaps(listTextRect)),
+      isTrue,
+    );
+    expect(tester.takeException(), isNull);
+
+    final paintFinder = find.ancestor(
+      of: detailsFinder,
+      matching: find.byType(CustomPaint),
+    );
+    final detailsPaint = tester.widget<CustomPaint>(paintFinder.first);
+    expect(detailsPaint.foregroundPainter, isNotNull);
   });
 
   testWidgets('tap on inline html anchor tags triggers onTapLink',
@@ -4519,6 +4786,11 @@ const veryLongValueName = 42;
     expect(rawMarkdownFinder, findsNothing);
 
     final richText = tester.widget<RichText>(richTextFinder);
+    final theme = MarkdownTheme.of(tester.element(find.byType(MarkdownWidget)));
+    final quotedStyle = _styleForText(richText.text, 'Quoted line');
+    expect(quotedStyle?.fontSize, theme.quoteStyle.fontSize);
+    expect(quotedStyle?.color, theme.quoteStyle.color);
+
     final renderBox = tester.renderObject<RenderBox>(richTextFinder);
     final painter = TextPainter(
       text: richText.text,
@@ -4556,6 +4828,90 @@ const veryLongValueName = 42;
       tester.widget<CustomPaint>(paintFinder.first).foregroundPainter,
       isNotNull,
     );
+  });
+
+  testWidgets('quote uses square border when background is transparent', (
+    tester,
+  ) async {
+    late MarkdownThemeData theme;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) {
+              theme = MarkdownThemeData.fallback(context).copyWith(
+                quoteBackgroundColor: Colors.transparent,
+                quoteBorderRadius: BorderRadius.circular(4),
+              );
+              return MarkdownWidget(
+                data: '> Quoted line',
+                theme: theme,
+              );
+            },
+          ),
+        ),
+      ),
+    );
+
+    final decoratedBox = tester.widget<DecoratedBox>(
+      find.descendant(
+        of: find.byType(MarkdownQuoteBlockView),
+        matching: find.byType(DecoratedBox),
+      ),
+    );
+    final decoration = decoratedBox.decoration as BoxDecoration;
+    expect(decoration.color, theme.quoteBackgroundColor);
+    expect(decoration.borderRadius, BorderRadius.zero);
+  });
+
+  testWidgets('quote style applies to nested heading list and inline code', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: '''
+> ## Quoted heading
+>
+> - Quoted `code`
+''',
+          ),
+        ),
+      ),
+    );
+
+    final theme = MarkdownTheme.of(tester.element(find.byType(MarkdownWidget)));
+
+    final headingTextBlock = tester.widget<MarkdownPretextTextBlock>(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is MarkdownPretextTextBlock &&
+            widget.runs?.any((run) => run.text == 'Quoted heading') == true,
+      ),
+    );
+    final headingStyle = headingTextBlock.runs!
+        .singleWhere((run) => run.text == 'Quoted heading')
+        .style;
+    expect(headingStyle.color, theme.quoteStyle.color);
+    expect(headingStyle.fontStyle, theme.quoteStyle.fontStyle);
+
+    final marker = tester.widget<Text>(find.text('•'));
+    expect(marker.style?.color, theme.quoteStyle.color);
+    expect(marker.style?.fontStyle, theme.quoteStyle.fontStyle);
+
+    final listTextBlock = tester.widget<MarkdownPretextTextBlock>(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is MarkdownPretextTextBlock &&
+            widget.runs?.any((run) => run.text == 'code') == true,
+      ),
+    );
+    final codeStyle =
+        listTextBlock.runs!.singleWhere((run) => run.text == 'code').style;
+    expect(codeStyle.color, theme.quoteStyle.color);
+    expect(codeStyle.fontStyle, theme.quoteStyle.fontStyle);
   });
 
   testWidgets('nested quotes with headings remain selectable', (tester) async {

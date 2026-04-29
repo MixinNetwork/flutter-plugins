@@ -16,6 +16,7 @@ class MarkdownBlockKeysRegistry {
   final Map<String, List<GlobalKey>> listItemContentKeysByBlock = {};
   final Map<String, List<List<GlobalKey>>> listItemChildKeysByBlock = {};
   final Map<String, List<GlobalKey>> quoteChildKeysByBlock = {};
+  final Map<String, List<GlobalKey>> detailsChildKeysByBlock = {};
   final Map<String, List<List<GlobalKey>>> tableCellKeysByBlock = {};
   final Map<String, List<List<GlobalKey>>> tableCellTextKeysByBlock = {};
   final Map<String, GlobalKey<State<StatefulWidget>>> tableBlockKeys = {};
@@ -117,12 +118,26 @@ class MarkdownBlockKeysRegistry {
     return keys;
   }
 
+  List<GlobalKey> detailsChildKeysFor(DetailsBlock block) {
+    final keys =
+        detailsChildKeysByBlock.putIfAbsent(block.id, () => <GlobalKey>[]);
+    final childCount = block.children.length + 1;
+    while (keys.length < childCount) {
+      keys.add(GlobalKey(debugLabel: 'details-${block.id}-${keys.length}'));
+    }
+    if (keys.length > childCount) {
+      keys.removeRange(childCount, keys.length);
+    }
+    return keys;
+  }
+
   void cleanupKeys(Set<String> validIds) {
     blockKeys.removeWhere((key, _) => !validIds.contains(key));
     listItemKeysByBlock.removeWhere((key, _) => !validIds.contains(key));
     listItemContentKeysByBlock.removeWhere((key, _) => !validIds.contains(key));
     listItemChildKeysByBlock.removeWhere((key, _) => !validIds.contains(key));
     quoteChildKeysByBlock.removeWhere((key, _) => !validIds.contains(key));
+    detailsChildKeysByBlock.removeWhere((key, _) => !validIds.contains(key));
     tableCellKeysByBlock.removeWhere((key, _) => !validIds.contains(key));
     tableCellTextKeysByBlock.removeWhere((key, _) => !validIds.contains(key));
     tableBlockKeys.removeWhere((key, _) => !validIds.contains(key));
@@ -212,6 +227,26 @@ class MarkdownSelectionResolver {
     }
 
     return _resolveQuoteSelectionUnitRangeInRoot(
+      context,
+      rootRenderObject: rootRenderObject,
+      block: block,
+      globalPosition: rootRenderObject.localToGlobal(localPosition),
+      blockIndex: position.blockIndex,
+    );
+  }
+
+  DocumentRange? resolveDetailsSelectionUnitRange(
+    BuildContext context,
+    DetailsBlock block,
+    Offset localPosition,
+    DocumentPosition position,
+  ) {
+    final rootRenderObject = context.findRenderObject();
+    if (rootRenderObject is! RenderBox || !rootRenderObject.hasSize) {
+      return null;
+    }
+
+    return _resolveDetailsSelectionUnitRangeInRoot(
       context,
       rootRenderObject: rootRenderObject,
       block: block,
@@ -509,6 +544,7 @@ class MarkdownSelectionResolver {
     final entries = extractor.buildIndexedBlockDescriptors(
       block.children,
       separator: '\n\n',
+      paragraphStyle: theme.quoteStyle,
     );
     if (entries.isEmpty) {
       return null;
@@ -519,6 +555,50 @@ class MarkdownSelectionResolver {
       rootRenderObject: rootRenderObject,
       entries: entries,
       childKeys: keysRegistry.quoteChildKeysFor(block),
+      globalPosition: globalPosition,
+    );
+    if (childHit == null) {
+      return null;
+    }
+
+    final childUnit = _resolveNestedBlockSelectionUnitRangeInRoot(
+      context,
+      rootRenderObject: rootRenderObject,
+      hit: childHit,
+      globalPosition: globalPosition,
+      textDirection: Directionality.of(context),
+    );
+    if (childUnit == null) {
+      return null;
+    }
+
+    return _mapIndexedChildRangeToParentRange(
+      blockIndex: blockIndex,
+      childEntry: childHit.entry,
+      childRange: childUnit,
+    );
+  }
+
+  DocumentRange? _resolveDetailsSelectionUnitRangeInRoot(
+    BuildContext context, {
+    required RenderBox rootRenderObject,
+    required DetailsBlock block,
+    required Offset globalPosition,
+    required int blockIndex,
+  }) {
+    final entries = extractor.buildIndexedBlockDescriptors(
+      MarkdownDescriptorExtractor.detailsSelectionBlocks(block),
+      separator: '\n\n',
+    );
+    if (entries.isEmpty) {
+      return null;
+    }
+
+    final childHit = _resolveIndexedBlockHitInRoot(
+      context,
+      rootRenderObject: rootRenderObject,
+      entries: entries,
+      childKeys: keysRegistry.detailsChildKeysFor(block),
       globalPosition: globalPosition,
     );
     if (childHit == null) {
@@ -611,6 +691,20 @@ class MarkdownSelectionResolver {
       case MarkdownBlockKind.heading:
       case MarkdownBlockKind.paragraph:
       case MarkdownBlockKind.definitionList:
+        if (_isStandaloneLineBreakBlock(hit.entry.block)) {
+          return DocumentRange(
+            start: const DocumentPosition(
+              blockIndex: 0,
+              path: PathInBlock(<int>[0]),
+              textOffset: 0,
+            ),
+            end: DocumentPosition(
+              blockIndex: 0,
+              path: const PathInBlock(<int>[0]),
+              textOffset: hit.entry.descriptor.plainText.length,
+            ),
+          );
+        }
         return _resolveDescriptorLineRange(
           context,
           descriptor: hit.entry.descriptor,
@@ -653,6 +747,14 @@ class MarkdownSelectionResolver {
           context,
           rootRenderObject: rootRenderObject,
           block: hit.entry.block as QuoteBlock,
+          globalPosition: globalPosition,
+          blockIndex: 0,
+        );
+      case MarkdownBlockKind.details:
+        return _resolveDetailsSelectionUnitRangeInRoot(
+          context,
+          rootRenderObject: rootRenderObject,
+          block: hit.entry.block as DetailsBlock,
           globalPosition: globalPosition,
           blockIndex: 0,
         );
@@ -1013,6 +1115,7 @@ class MarkdownSelectionResolver {
       case MarkdownBlockKind.unorderedList:
       case MarkdownBlockKind.definitionList:
       case MarkdownBlockKind.footnoteList:
+      case MarkdownBlockKind.details:
       case MarkdownBlockKind.codeBlock:
       case MarkdownBlockKind.table:
       case MarkdownBlockKind.image:
@@ -1084,6 +1187,23 @@ class MarkdownSelectionResolver {
     final pretext = descriptor.pretext;
     return pretext != null &&
         markdownPretextCanUseDirectRichTextGeometry(pretext.runs);
+  }
+
+  bool _isStandaloneLineBreakBlock(BlockNode block) {
+    if (block is! ParagraphBlock || block.inlines.length != 1) {
+      return false;
+    }
+    return block.inlines.single.kind == MarkdownInlineKind.hardBreak;
+  }
+
+  List<Rect> _placeholderBlockSelectionRects(
+    RenderBox renderObject,
+    Offset origin,
+  ) {
+    final rect = origin & renderObject.size;
+    return <Rect>[
+      Rect.fromLTRB(rect.left - 1.5, rect.top, rect.right + 1.5, rect.bottom),
+    ];
   }
 
   RenderParagraph? _findDirectRenderParagraphForRuns(
@@ -2045,6 +2165,7 @@ class MarkdownSelectionResolver {
     final entries = extractor.buildIndexedBlockDescriptors(
       block.children,
       separator: '\n\n',
+      paragraphStyle: theme.quoteStyle,
     );
     if (entries.isEmpty) {
       return const <Rect>[];
@@ -2084,6 +2205,7 @@ class MarkdownSelectionResolver {
     final entries = extractor.buildIndexedBlockDescriptors(
       block.children,
       separator: '\n\n',
+      paragraphStyle: theme.quoteStyle,
     );
     if (entries.isEmpty) {
       return null;
@@ -2093,6 +2215,84 @@ class MarkdownSelectionResolver {
       rootRenderObject: rootRenderObject,
       entries: entries,
       childKeys: keysRegistry.quoteChildKeysFor(block),
+      globalPosition: globalPosition,
+    );
+  }
+
+  List<Rect> resolveDetailsSelectionRects(
+    BuildContext context,
+    DetailsBlock block,
+    DocumentRange range,
+  ) {
+    final rootRenderObject = context.findRenderObject();
+    if (rootRenderObject is! RenderBox || !rootRenderObject.hasSize) {
+      return const <Rect>[];
+    }
+    return _resolveDetailsSelectionRectsInRoot(
+      context,
+      rootRenderObject: rootRenderObject,
+      block: block,
+      range: range,
+    );
+  }
+
+  int? resolveDetailsTextOffset(
+    BuildContext context,
+    DetailsBlock block,
+    Offset localPosition,
+  ) {
+    final rootRenderObject = context.findRenderObject();
+    if (rootRenderObject is! RenderBox || !rootRenderObject.hasSize) {
+      return null;
+    }
+    return _resolveDetailsTextOffsetInRoot(
+      context,
+      rootRenderObject: rootRenderObject,
+      block: block,
+      globalPosition: rootRenderObject.localToGlobal(localPosition),
+    );
+  }
+
+  List<Rect> _resolveDetailsSelectionRectsInRoot(
+    BuildContext context, {
+    required RenderBox rootRenderObject,
+    required DetailsBlock block,
+    required DocumentRange range,
+  }) {
+    final entries = extractor.buildIndexedBlockDescriptors(
+      MarkdownDescriptorExtractor.detailsSelectionBlocks(block),
+      separator: '\n\n',
+    );
+    if (entries.isEmpty) {
+      return const <Rect>[];
+    }
+    return resolveIndexedBlockSelectionRectsInRoot(
+      context,
+      rootRenderObject: rootRenderObject,
+      entries: entries,
+      childKeys: keysRegistry.detailsChildKeysFor(block),
+      range: range,
+    );
+  }
+
+  int? _resolveDetailsTextOffsetInRoot(
+    BuildContext context, {
+    required RenderBox rootRenderObject,
+    required DetailsBlock block,
+    required Offset globalPosition,
+  }) {
+    final entries = extractor.buildIndexedBlockDescriptors(
+      MarkdownDescriptorExtractor.detailsSelectionBlocks(block),
+      separator: '\n\n',
+    );
+    if (entries.isEmpty) {
+      return null;
+    }
+    return resolveIndexedBlockTextOffsetInRoot(
+      context,
+      rootRenderObject: rootRenderObject,
+      entries: entries,
+      childKeys: keysRegistry.detailsChildKeysFor(block),
       globalPosition: globalPosition,
     );
   }
@@ -2272,6 +2472,9 @@ class MarkdownSelectionResolver {
       case MarkdownBlockKind.heading:
       case MarkdownBlockKind.paragraph:
       case MarkdownBlockKind.definitionList:
+        if (_isStandaloneLineBreakBlock(block)) {
+          return _placeholderBlockSelectionRects(renderObject, origin);
+        }
         if (_descriptorUsesDirectRichTextMetrics(descriptor)) {
           final directRects = _resolveDirectRenderParagraphSelectionRects(
             renderObject,
@@ -2315,6 +2518,13 @@ class MarkdownSelectionResolver {
           context,
           rootRenderObject: rootRenderObject,
           block: block as QuoteBlock,
+          range: range,
+        );
+      case MarkdownBlockKind.details:
+        return _resolveDetailsSelectionRectsInRoot(
+          context,
+          rootRenderObject: rootRenderObject,
+          block: block as DetailsBlock,
           range: range,
         );
       case MarkdownBlockKind.codeBlock:
@@ -2392,6 +2602,12 @@ class MarkdownSelectionResolver {
       case MarkdownBlockKind.heading:
       case MarkdownBlockKind.paragraph:
       case MarkdownBlockKind.definitionList:
+        if (_isStandaloneLineBreakBlock(block)) {
+          return localPosition.dy > renderObject.size.height / 2 ||
+                  localPosition.dx > renderObject.size.width / 2
+              ? descriptor.plainText.length
+              : 0;
+        }
         if (_descriptorUsesDirectRichTextMetrics(descriptor)) {
           final directOffset = _resolveDirectRenderParagraphTextOffset(
             renderObject,
@@ -2435,6 +2651,14 @@ class MarkdownSelectionResolver {
               context,
               rootRenderObject: rootRenderObject,
               block: block as QuoteBlock,
+              globalPosition: globalPosition,
+            ) ??
+            0;
+      case MarkdownBlockKind.details:
+        return _resolveDetailsTextOffsetInRoot(
+              context,
+              rootRenderObject: rootRenderObject,
+              block: block as DetailsBlock,
               globalPosition: globalPosition,
             ) ??
             0;

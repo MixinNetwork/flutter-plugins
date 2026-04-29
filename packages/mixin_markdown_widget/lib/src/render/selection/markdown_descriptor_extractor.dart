@@ -242,7 +242,16 @@ class MarkdownDescriptorExtractor {
   SelectableTextDescriptor buildSelectableDescriptorForBlock(
     BlockNode block, {
     int indentLevel = 0,
+    TextStyle? paragraphStyle,
   }) {
+    if (paragraphStyle != null) {
+      return _buildSelectableDescriptorForBlock(
+        block,
+        indentLevel: indentLevel,
+        paragraphStyle: paragraphStyle,
+      );
+    }
+
     final cacheKey = '${block.id}:$indentLevel';
     final cached = cache._blockDescriptor(cacheKey);
     if (cached != null &&
@@ -268,23 +277,38 @@ class MarkdownDescriptorExtractor {
   SelectableTextDescriptor _buildSelectableDescriptorForBlock(
     BlockNode block, {
     int indentLevel = 0,
+    TextStyle? paragraphStyle,
   }) {
+    final effectiveParagraphStyle = paragraphStyle ?? theme.bodyStyle;
+    final effectiveInlineCodeStyle = _styleForContext(
+      theme.inlineCodeStyle,
+      paragraphStyle,
+    );
+    final effectiveLinkStyle = _linkStyleForContext(paragraphStyle);
     switch (block.kind) {
       case MarkdownBlockKind.heading:
         final heading = block as HeadingBlock;
-        return descriptorFromInlines(
+        final style = _styleForContext(
           theme.headingStyleForLevel(heading.level),
+          paragraphStyle,
+        );
+        return descriptorFromInlines(
+          style,
           heading.inlines,
           textAlign:
               MarkdownInlineBuilder.resolvedInlineTextAlign(heading.inlines),
+          inlineCodeStyle: effectiveInlineCodeStyle,
+          linkStyle: effectiveLinkStyle,
         );
       case MarkdownBlockKind.paragraph:
         final paragraph = block as ParagraphBlock;
         return descriptorFromInlines(
-          theme.bodyStyle,
+          effectiveParagraphStyle,
           paragraph.inlines,
           textAlign:
               MarkdownInlineBuilder.resolvedInlineTextAlign(paragraph.inlines),
+          inlineCodeStyle: effectiveInlineCodeStyle,
+          linkStyle: effectiveLinkStyle,
         );
       case MarkdownBlockKind.quote:
         return buildQuoteSelectableDescriptor(block as QuoteBlock);
@@ -293,6 +317,7 @@ class MarkdownDescriptorExtractor {
         return buildListSelectableDescriptor(
           block as ListBlock,
           indentLevel: indentLevel,
+          paragraphStyle: paragraphStyle,
         );
       case MarkdownBlockKind.definitionList:
         return buildDefinitionListSelectableDescriptor(
@@ -302,6 +327,8 @@ class MarkdownDescriptorExtractor {
         return buildFootnoteListSelectableDescriptor(
           block as FootnoteListBlock,
         );
+      case MarkdownBlockKind.details:
+        return buildDetailsSelectableDescriptor(block as DetailsBlock);
       case MarkdownBlockKind.codeBlock:
         final codeBlock = block as CodeBlock;
         return descriptorFromRuns(
@@ -315,7 +342,10 @@ class MarkdownDescriptorExtractor {
           fallbackStyle: theme.codeBlockStyle,
         );
       case MarkdownBlockKind.table:
-        return buildTableSelectableDescriptor(block as TableBlock);
+        return buildTableSelectableDescriptor(
+          block as TableBlock,
+          textStyleContext: paragraphStyle,
+        );
       case MarkdownBlockKind.image:
         final imageBlock = block as ImageBlock;
         final caption = imageCaptionText(imageBlock);
@@ -331,15 +361,17 @@ class MarkdownDescriptorExtractor {
   SelectableTextDescriptor buildListSelectableDescriptor(
     ListBlock block, {
     int indentLevel = 0,
+    TextStyle? paragraphStyle,
   }) {
     final itemDescriptors = buildIndexedListSelectionDescriptors(
       block,
       indentLevel: indentLevel,
+      paragraphStyle: paragraphStyle,
     ).map((entry) => entry.descriptor).toList(growable: false);
     return joinSelectableTextDescriptors(
       itemDescriptors,
       separator: '\n',
-      separatorStyle: theme.bodyStyle,
+      separatorStyle: paragraphStyle ?? theme.bodyStyle,
     );
   }
 
@@ -400,13 +432,28 @@ class MarkdownDescriptorExtractor {
     return buildListSelectableDescriptor(footnoteListAsOrderedList(block));
   }
 
+  SelectableTextDescriptor buildDetailsSelectableDescriptor(
+    DetailsBlock block,
+  ) {
+    final descriptors = buildIndexedBlockDescriptors(
+      detailsSelectionBlocks(block),
+      separator: '\n\n',
+    ).map((entry) => entry.descriptor).toList(growable: false);
+    return joinSelectableTextDescriptors(
+      descriptors,
+      separator: '\n\n',
+      separatorStyle: theme.bodyStyle,
+    );
+  }
+
   List<IndexedBlockDescriptor> buildIndexedBlockDescriptors(
     List<BlockNode> blocks, {
     int indentLevel = 0,
     required String separator,
     String? cacheOwnerId,
+    TextStyle? paragraphStyle,
   }) {
-    if (cacheOwnerId != null) {
+    if (cacheOwnerId != null && paragraphStyle == null) {
       final cacheKey = '$cacheOwnerId:$indentLevel:$separator';
       final cached = cache._indexedBlockDescriptorsFor(cacheKey);
       if (cached != null &&
@@ -437,6 +484,7 @@ class MarkdownDescriptorExtractor {
       blocks,
       indentLevel: indentLevel,
       separator: separator,
+      paragraphStyle: paragraphStyle,
     );
   }
 
@@ -444,6 +492,7 @@ class MarkdownDescriptorExtractor {
     List<BlockNode> blocks, {
     int indentLevel = 0,
     required String separator,
+    TextStyle? paragraphStyle,
   }) {
     final entries = <IndexedBlockDescriptor>[];
     var offset = 0;
@@ -451,6 +500,7 @@ class MarkdownDescriptorExtractor {
       final descriptor = buildSelectableDescriptorForBlock(
         blocks[index],
         indentLevel: indentLevel,
+        paragraphStyle: paragraphStyle,
       );
       if (descriptor.isEmpty) {
         continue;
@@ -475,7 +525,16 @@ class MarkdownDescriptorExtractor {
   List<IndexedListSelectionDescriptor> buildIndexedListSelectionDescriptors(
     ListBlock block, {
     int indentLevel = 0,
+    TextStyle? paragraphStyle,
   }) {
+    if (paragraphStyle != null) {
+      return _buildIndexedListSelectionDescriptors(
+        block,
+        indentLevel: indentLevel,
+        paragraphStyle: paragraphStyle,
+      );
+    }
+
     final cacheKey = '${block.id}:$indentLevel';
     final cached = cache._indexedListDescriptorsFor(cacheKey);
     if (cached != null &&
@@ -484,6 +543,19 @@ class MarkdownDescriptorExtractor {
       return cached.descriptors;
     }
 
+    final entries = _buildIndexedListSelectionDescriptors(
+      block,
+      indentLevel: indentLevel,
+    );
+    cache._storeIndexedListDescriptors(cacheKey, block, indentLevel, entries);
+    return entries;
+  }
+
+  List<IndexedListSelectionDescriptor> _buildIndexedListSelectionDescriptors(
+    ListBlock block, {
+    int indentLevel = 0,
+    TextStyle? paragraphStyle,
+  }) {
     final entries = <IndexedListSelectionDescriptor>[];
     var offset = 0;
     for (var index = 0; index < block.items.length; index++) {
@@ -495,6 +567,7 @@ class MarkdownDescriptorExtractor {
         index,
         startOffset: offset,
         indentLevel: indentLevel,
+        paragraphStyle: paragraphStyle,
       );
       if (entry == null) {
         if (entries.isNotEmpty) {
@@ -505,7 +578,6 @@ class MarkdownDescriptorExtractor {
       entries.add(entry);
       offset += entry.descriptor.plainText.length;
     }
-    cache._storeIndexedListDescriptors(cacheKey, block, indentLevel, entries);
     return entries;
   }
 
@@ -514,7 +586,9 @@ class MarkdownDescriptorExtractor {
     int index, {
     required int startOffset,
     int indentLevel = 0,
+    TextStyle? paragraphStyle,
   }) {
+    final effectiveParagraphStyle = paragraphStyle ?? theme.bodyStyle;
     final prefix = listItemPrefixText(
       block,
       index,
@@ -523,6 +597,7 @@ class MarkdownDescriptorExtractor {
     final contentDescriptor = buildListItemSelectableDescriptor(
       block.items[index],
       indentLevel: indentLevel + 1,
+      paragraphStyle: paragraphStyle,
     );
     if (contentDescriptor.isEmpty && block.items[index].taskState == null) {
       return null;
@@ -534,8 +609,8 @@ class MarkdownDescriptorExtractor {
         startOffset: startOffset,
         prefixLength: prefixOnly.length,
         contentIndentLevel: indentLevel + 1,
-        descriptor: plainTextDescriptor(prefixOnly, theme.bodyStyle),
-        contentDescriptor: plainTextDescriptor('', theme.bodyStyle),
+        descriptor: plainTextDescriptor(prefixOnly, effectiveParagraphStyle),
+        contentDescriptor: plainTextDescriptor('', effectiveParagraphStyle),
       );
     }
     final continuationPrefix = ' ' * prefix.length;
@@ -543,7 +618,7 @@ class MarkdownDescriptorExtractor {
       contentDescriptor,
       firstPrefix: prefix,
       continuationPrefix: continuationPrefix,
-      style: theme.bodyStyle,
+      style: effectiveParagraphStyle,
     );
     return IndexedListSelectionDescriptor(
       itemIndex: index,
@@ -558,12 +633,14 @@ class MarkdownDescriptorExtractor {
   SelectableTextDescriptor buildListItemSelectableDescriptor(
     ListItemNode item, {
     required int indentLevel,
+    TextStyle? paragraphStyle,
   }) {
     final childDescriptors = <SelectableTextDescriptor>[];
     for (final child in item.children) {
       final descriptor = buildSelectableDescriptorForBlock(
         child,
         indentLevel: indentLevel,
+        paragraphStyle: paragraphStyle,
       );
       if (!descriptor.isEmpty) {
         childDescriptors.add(descriptor);
@@ -572,14 +649,17 @@ class MarkdownDescriptorExtractor {
     return joinSelectableTextDescriptors(
       childDescriptors,
       separator: '\n',
-      separatorStyle: theme.bodyStyle,
+      separatorStyle: paragraphStyle ?? theme.bodyStyle,
     );
   }
 
   SelectableTextDescriptor buildQuoteSelectableDescriptor(QuoteBlock block) {
     final childDescriptors = <SelectableTextDescriptor>[];
     for (final child in block.children) {
-      final descriptor = buildSelectableDescriptorForBlock(child);
+      final descriptor = buildSelectableDescriptorForBlock(
+        child,
+        paragraphStyle: theme.quoteStyle,
+      );
       if (!descriptor.isEmpty) {
         childDescriptors.add(descriptor);
       }
@@ -590,6 +670,34 @@ class MarkdownDescriptorExtractor {
       separatorStyle: theme.quoteStyle,
     );
     return joined;
+  }
+
+  TextStyle _styleForContext(TextStyle style, TextStyle? textStyleContext) {
+    if (textStyleContext == null) {
+      return style;
+    }
+    final bodyFontSize = theme.bodyStyle.fontSize;
+    final contextFontSize = textStyleContext.fontSize;
+    final styleFontSize = style.fontSize;
+    final scaledFontSize =
+        bodyFontSize == null || contextFontSize == null || styleFontSize == null
+            ? styleFontSize ?? contextFontSize
+            : styleFontSize * contextFontSize / bodyFontSize;
+    return style.copyWith(
+      color: textStyleContext.color,
+      fontSize: scaledFontSize,
+      fontStyle: textStyleContext.fontStyle,
+    );
+  }
+
+  TextStyle? _linkStyleForContext(TextStyle? textStyleContext) {
+    if (textStyleContext == null) {
+      return null;
+    }
+    return _styleForContext(theme.linkStyle, textStyleContext).copyWith(
+      decoration: theme.linkStyle.decoration,
+      decorationColor: textStyleContext.color,
+    );
   }
 
   DocumentRange? resolveSelectionUnitRange(
@@ -607,6 +715,23 @@ class MarkdownDescriptorExtractor {
           indexedBlocks: buildIndexedBlockDescriptors(
             quoteBlock.children,
             cacheOwnerId: quoteBlock.id,
+            separator: '\n\n',
+            paragraphStyle: theme.quoteStyle,
+          ),
+          baseOffset: baseOffset,
+        );
+      case MarkdownBlockKind.details:
+        final detailsBlock = block as DetailsBlock;
+        return _resolveQuoteBlockSelectionRange(
+          position,
+          QuoteBlock(
+            id: detailsBlock.id,
+            children: MarkdownDescriptorExtractor.detailsSelectionBlocks(
+              detailsBlock,
+            ),
+          ),
+          indexedBlocks: buildIndexedBlockDescriptors(
+            MarkdownDescriptorExtractor.detailsSelectionBlocks(detailsBlock),
             separator: '\n\n',
           ),
           baseOffset: baseOffset,
@@ -665,32 +790,46 @@ class MarkdownDescriptorExtractor {
     return plainTextDescriptor(caption, imageCaptionStyle);
   }
 
-  SelectableTextDescriptor buildTableSelectableDescriptor(TableBlock block) {
+  SelectableTextDescriptor buildTableSelectableDescriptor(
+    TableBlock block, {
+    TextStyle? textStyleContext,
+  }) {
+    final bodyStyle = _styleForContext(theme.bodyStyle, textStyleContext);
+    final tableHeaderStyle = _styleForContext(
+      theme.tableHeaderStyle,
+      textStyleContext,
+    );
+    final inlineCodeStyle = _styleForContext(
+      theme.inlineCodeStyle,
+      textStyleContext,
+    );
+    final linkStyle = _linkStyleForContext(textStyleContext);
     final rowDescriptors = <SelectableTextDescriptor>[];
     for (final row in block.rows) {
       final cellDescriptors = <SelectableTextDescriptor>[];
       for (final cell in row.cells) {
         cellDescriptors.add(descriptorFromInlines(
-          row.isHeader ? theme.tableHeaderStyle : theme.bodyStyle,
+          row.isHeader ? tableHeaderStyle : bodyStyle,
           cell.inlines,
           textAlign: MarkdownInlineBuilder.resolvedInlineTextAlign(
             cell.inlines,
           ),
+          inlineCodeStyle: inlineCodeStyle,
+          linkStyle: linkStyle,
         ));
       }
       rowDescriptors.add(
         joinSelectableTextDescriptors(
           cellDescriptors,
           separator: '\t',
-          separatorStyle:
-              row.isHeader ? theme.tableHeaderStyle : theme.bodyStyle,
+          separatorStyle: row.isHeader ? tableHeaderStyle : bodyStyle,
         ),
       );
     }
     return joinSelectableTextDescriptors(
       rowDescriptors,
       separator: '\n',
-      separatorStyle: theme.bodyStyle,
+      separatorStyle: bodyStyle,
     );
   }
 
@@ -718,8 +857,15 @@ class MarkdownDescriptorExtractor {
     TextStyle style,
     List<InlineNode> inlines, {
     TextAlign textAlign = TextAlign.start,
+    TextStyle? inlineCodeStyle,
+    TextStyle? linkStyle,
   }) {
-    final runs = inlineBuilder.buildPretextRuns(style, inlines);
+    final runs = inlineBuilder.buildPretextRuns(
+      style,
+      inlines,
+      inlineCodeStyle: inlineCodeStyle,
+      linkStyle: linkStyle,
+    );
     return descriptorFromRuns(
       runs,
       plainText: MarkdownInlineBuilder.flattenInlineText(inlines),
@@ -957,6 +1103,7 @@ class MarkdownDescriptorExtractor {
       case MarkdownBlockKind.unorderedList:
       case MarkdownBlockKind.definitionList:
       case MarkdownBlockKind.footnoteList:
+      case MarkdownBlockKind.details:
       case MarkdownBlockKind.codeBlock:
       case MarkdownBlockKind.table:
       case MarkdownBlockKind.image:
@@ -1058,6 +1205,13 @@ class MarkdownDescriptorExtractor {
 
   static String imageCaptionText(ImageBlock block) {
     return (block.alt ?? block.title ?? '').trim();
+  }
+
+  static List<BlockNode> detailsSelectionBlocks(DetailsBlock block) {
+    return <BlockNode>[
+      ParagraphBlock(id: '${block.id}:summary', inlines: block.summary),
+      ...block.children,
+    ];
   }
 
   _PrefixedPretextRuns _prefixPretextRuns(

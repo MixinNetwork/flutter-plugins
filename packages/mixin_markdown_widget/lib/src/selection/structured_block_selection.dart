@@ -439,6 +439,35 @@ class _StructuredBlockSelectionBuilder {
             exportText: exportText,
           ),
         ];
+      case MarkdownBlockKind.details:
+        final details = block as DetailsBlock;
+        final leaves = <_LeafBlueprint>[];
+        final summaryLeaves = _buildBlock(
+          ParagraphBlock(id: '${details.id}:summary', inlines: details.summary),
+          pathPrefix: <int>[...pathPrefix, 0],
+          firstLinePrefix: firstLinePrefix,
+          continuationPrefix: continuationPrefix,
+          listIndentLevel: listIndentLevel,
+        );
+        leaves.addAll(summaryLeaves);
+        for (var index = 0; index < details.children.length; index++) {
+          final childLeaves = _buildBlock(
+            details.children[index],
+            pathPrefix: <int>[...pathPrefix, index + 1],
+            firstLinePrefix:
+                leaves.isEmpty ? firstLinePrefix : continuationPrefix,
+            continuationPrefix: continuationPrefix,
+            listIndentLevel: listIndentLevel,
+          );
+          if (childLeaves.isEmpty) {
+            continue;
+          }
+          if (leaves.isNotEmpty) {
+            _prependLeadingText(childLeaves, '\n\n');
+          }
+          leaves.addAll(childLeaves);
+        }
+        return leaves;
       case MarkdownBlockKind.quote:
         final quote = block as QuoteBlock;
         final leaves = <_LeafBlueprint>[];
@@ -615,6 +644,7 @@ class _StructuredBlockSelectionBuilder {
       case MarkdownBlockKind.orderedList:
       case MarkdownBlockKind.unorderedList:
       case MarkdownBlockKind.footnoteList:
+      case MarkdownBlockKind.details:
       case MarkdownBlockKind.table:
         return '';
     }
@@ -638,6 +668,7 @@ class _StructuredBlockSelectionBuilder {
       case MarkdownBlockKind.orderedList:
       case MarkdownBlockKind.unorderedList:
       case MarkdownBlockKind.footnoteList:
+      case MarkdownBlockKind.details:
       case MarkdownBlockKind.table:
         return '';
     }
@@ -687,6 +718,8 @@ class _StructuredBlockSelectionBuilder {
         return _visibleListText(block as ListBlock);
       case MarkdownBlockKind.definitionList:
         return _visibleDefinitionListText(block as DefinitionListBlock);
+      case MarkdownBlockKind.details:
+        return _visibleDetailsText(block as DetailsBlock);
       case MarkdownBlockKind.footnoteList:
         return _visibleListText(
             _footnoteListAsOrderedList(block as FootnoteListBlock));
@@ -733,6 +766,36 @@ class _StructuredBlockSelectionBuilder {
     return items.join('\n');
   }
 
+  String _visibleDetailsText(DetailsBlock block) {
+    final summary = _flattenVisibleInlines(block.summary).trimRight();
+    final content = block.children
+        .map(_visibleBlockText)
+        .where((value) => value.trim().isNotEmpty)
+        .join('\n\n');
+    if (summary.isEmpty) {
+      return content;
+    }
+    if (content.isEmpty) {
+      return summary;
+    }
+    return '$summary\n\n$content';
+  }
+
+  String _exportDetailsText(DetailsBlock block) {
+    final summary = _flattenExportInlines(block.summary).trimRight();
+    final content = block.children
+        .map(_exportBlockText)
+        .where((value) => value.trim().isNotEmpty)
+        .join('\n\n');
+    if (summary.isEmpty) {
+      return content;
+    }
+    if (content.isEmpty) {
+      return summary;
+    }
+    return '$summary\n\n$content';
+  }
+
   String _exportBlockText(BlockNode block) {
     switch (block.kind) {
       case MarkdownBlockKind.heading:
@@ -750,6 +813,8 @@ class _StructuredBlockSelectionBuilder {
         return _exportListText(block as ListBlock);
       case MarkdownBlockKind.definitionList:
         return _exportDefinitionListText(block as DefinitionListBlock);
+      case MarkdownBlockKind.details:
+        return _exportDetailsText(block as DetailsBlock);
       case MarkdownBlockKind.footnoteList:
         return _exportListText(
             _footnoteListAsOrderedList(block as FootnoteListBlock));

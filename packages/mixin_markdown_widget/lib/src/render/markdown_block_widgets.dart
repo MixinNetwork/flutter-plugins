@@ -37,6 +37,8 @@ typedef MarkdownInlineTextWidgetBuilder = Widget Function(
   TextAlign textAlign, {
   GlobalKey? directTextKey,
   bool alignInlineMathToBaseline,
+  TextStyle? inlineCodeStyle,
+  TextStyle? linkStyle,
 });
 
 typedef MarkdownTableWidgetBuilder = Widget Function(
@@ -291,10 +293,13 @@ class MarkdownQuoteBlockView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final borderRadius = theme.quoteBackgroundColor.a == 0
+        ? BorderRadius.zero
+        : theme.quoteBorderRadius;
     return DecoratedBox(
       decoration: BoxDecoration(
         color: theme.quoteBackgroundColor,
-        borderRadius: theme.quoteBorderRadius,
+        borderRadius: borderRadius,
         border: Border(
           left: BorderSide(
             color: theme.quoteBorderColor,
@@ -337,6 +342,78 @@ class MarkdownQuoteBlockView extends StatelessWidget {
   }
 }
 
+class MarkdownDetailsBlockView extends StatefulWidget {
+  const MarkdownDetailsBlockView({
+    super.key,
+    required this.theme,
+    required this.summary,
+    required this.content,
+    this.initiallyExpanded = false,
+  });
+
+  final MarkdownThemeData theme;
+  final Widget summary;
+  final Widget content;
+  final bool initiallyExpanded;
+
+  @override
+  State<MarkdownDetailsBlockView> createState() =>
+      _MarkdownDetailsBlockViewState();
+}
+
+class _MarkdownDetailsBlockViewState extends State<MarkdownDetailsBlockView> {
+  late bool _expanded = widget.initiallyExpanded;
+
+  @override
+  void didUpdateWidget(covariant MarkdownDetailsBlockView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initiallyExpanded != widget.initiallyExpanded) {
+      _expanded = widget.initiallyExpanded;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = widget.theme;
+    final foregroundColor = theme.bodyStyle.color;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        InkWell(
+          borderRadius: BorderRadius.circular(6),
+          onTap: () {
+            setState(() {
+              _expanded = !_expanded;
+            });
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Icon(
+                  _expanded
+                      ? Icons.expand_more_rounded
+                      : Icons.chevron_right_rounded,
+                  size: 20,
+                  color: foregroundColor?.withValues(alpha: 0.72),
+                ),
+                const SizedBox(width: 4),
+                Expanded(child: widget.summary),
+              ],
+            ),
+          ),
+        ),
+        if (_expanded) ...<Widget>[
+          SizedBox(height: theme.blockSpacing * 0.72),
+          widget.content,
+        ],
+      ],
+    );
+  }
+}
+
 class MarkdownListBlockView extends StatelessWidget {
   const MarkdownListBlockView({
     super.key,
@@ -345,6 +422,7 @@ class MarkdownListBlockView extends StatelessWidget {
     required this.itemBuilder,
     this.itemRowKeyBuilder,
     this.itemContentKeyBuilder,
+    this.markerStyle,
     this.bulletBuilder,
   });
 
@@ -353,6 +431,7 @@ class MarkdownListBlockView extends StatelessWidget {
   final Widget Function(int index, ListItemNode item) itemBuilder;
   final Key? Function(int index)? itemRowKeyBuilder;
   final Key? Function(int index)? itemContentKeyBuilder;
+  final TextStyle? markerStyle;
   final MarkdownBulletBuilder? bulletBuilder;
 
   @override
@@ -402,6 +481,7 @@ class MarkdownListBlockView extends StatelessWidget {
 
   Widget _buildMarker(BuildContext context, int index) {
     final item = block.items[index];
+    final effectiveMarkerStyle = markerStyle ?? theme.bodyStyle;
     if (bulletBuilder != null) {
       return bulletBuilder!(
         context,
@@ -419,7 +499,7 @@ class MarkdownListBlockView extends StatelessWidget {
           child: Icon(
             Icons.check_box_rounded,
             size: 18,
-            color: theme.linkStyle.color ?? theme.bodyStyle.color,
+            color: effectiveMarkerStyle.color ?? theme.linkStyle.color,
           ),
         );
       case MarkdownTaskListItemState.unchecked:
@@ -428,13 +508,13 @@ class MarkdownListBlockView extends StatelessWidget {
           child: Icon(
             Icons.check_box_outline_blank_rounded,
             size: 18,
-            color: theme.bodyStyle.color?.withValues(alpha: 0.72),
+            color: effectiveMarkerStyle.color?.withValues(alpha: 0.72),
           ),
         );
       case null:
         return Text(
           block.ordered ? '${block.startIndex + index}.' : '•',
-          style: theme.bodyStyle.copyWith(height: 1.45),
+          style: effectiveMarkerStyle.copyWith(height: 1.45),
         );
     }
   }
@@ -529,6 +609,10 @@ class MarkdownTableBlockView extends StatelessWidget {
     required this.block,
     required this.layoutPlan,
     required this.textWidgetBuilder,
+    this.bodyStyle,
+    this.tableHeaderStyle,
+    this.inlineCodeStyle,
+    this.linkStyle,
     this.cellKeyBuilder,
     this.cellTextKeyBuilder,
     this.scrollController,
@@ -539,6 +623,10 @@ class MarkdownTableBlockView extends StatelessWidget {
   final TableBlock block;
   final MarkdownTableLayoutPlan layoutPlan;
   final MarkdownInlineTextWidgetBuilder textWidgetBuilder;
+  final TextStyle? bodyStyle;
+  final TextStyle? tableHeaderStyle;
+  final TextStyle? inlineCodeStyle;
+  final TextStyle? linkStyle;
   final Key? Function(int rowIndex, int columnIndex)? cellKeyBuilder;
   final GlobalKey? Function(int rowIndex, int columnIndex)? cellTextKeyBuilder;
   final ScrollController? scrollController;
@@ -606,7 +694,9 @@ class MarkdownTableBlockView extends StatelessWidget {
     final cell = cellIndex < row.cells.length
         ? row.cells[cellIndex]
         : const TableCellNode(inlines: <InlineNode>[]);
-    final textStyle = row.isHeader ? theme.tableHeaderStyle : theme.bodyStyle;
+    final textStyle = row.isHeader
+        ? tableHeaderStyle ?? theme.tableHeaderStyle
+        : bodyStyle ?? theme.bodyStyle;
     Widget child = Padding(
       padding: theme.tableCellPadding.resolve(Directionality.of(context)),
       child: Align(
@@ -618,6 +708,8 @@ class MarkdownTableBlockView extends StatelessWidget {
           _textAlignFor(alignment),
           directTextKey: directTextKey,
           alignInlineMathToBaseline: false,
+          inlineCodeStyle: inlineCodeStyle,
+          linkStyle: linkStyle,
         ),
       ),
     );

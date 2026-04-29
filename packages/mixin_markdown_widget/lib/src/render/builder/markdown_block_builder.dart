@@ -182,6 +182,10 @@ class MarkdownBlockBuilder {
     final currentHeading = current is HeadingBlock ? current : null;
     final nextHeading = next is HeadingBlock ? next : null;
 
+    if (_isStandaloneLineBreakBlock(current) ||
+        _isStandaloneLineBreakBlock(next)) {
+      return 0;
+    }
     if (nested && _isListTransitionWithinListItem(current, next)) {
       return theme.listItemSpacing;
     }
@@ -232,6 +236,7 @@ class MarkdownBlockBuilder {
   bool _isDecoratedBlock(BlockNode block) {
     switch (block.kind) {
       case MarkdownBlockKind.quote:
+      case MarkdownBlockKind.details:
       case MarkdownBlockKind.codeBlock:
       case MarkdownBlockKind.table:
       case MarkdownBlockKind.image:
@@ -257,6 +262,7 @@ class MarkdownBlockBuilder {
       case MarkdownBlockKind.heading:
       case MarkdownBlockKind.paragraph:
       case MarkdownBlockKind.quote:
+      case MarkdownBlockKind.details:
       case MarkdownBlockKind.codeBlock:
       case MarkdownBlockKind.table:
       case MarkdownBlockKind.image:
@@ -267,6 +273,13 @@ class MarkdownBlockBuilder {
 
   bool _isThematicBreakLike(BlockNode block) =>
       block.kind == MarkdownBlockKind.thematicBreak;
+
+  bool _isStandaloneLineBreakBlock(BlockNode block) {
+    if (block is! ParagraphBlock || block.inlines.length != 1) {
+      return false;
+    }
+    return block.inlines.single.kind == MarkdownInlineKind.hardBreak;
+  }
 
   bool _isListTransitionWithinListItem(BlockNode current, BlockNode next) {
     return (current.kind == MarkdownBlockKind.paragraph &&
@@ -380,6 +393,13 @@ class MarkdownBlockBuilder {
         final paragraph = block as ParagraphBlock;
         final plainText =
             MarkdownInlineBuilder.flattenInlineText(paragraph.inlines);
+        if (_isStandaloneLineBreakBlock(paragraph)) {
+          return SelectableBlockSpec(
+            child: _buildStandaloneLineBreak(context),
+            plainText: plainText,
+            hitTestBehavior: SelectableBlockHitTestBehavior.block,
+          );
+        }
         final runs = inlineBuilder.buildPretextRuns(
           theme.bodyStyle,
           paragraph.inlines,
@@ -573,6 +593,58 @@ class MarkdownBlockBuilder {
                         orderedFootnotes,
                       ),
           highlightBorderRadius: BorderRadius.circular(8),
+        );
+      case MarkdownBlockKind.details:
+        final detailsBlock = block as DetailsBlock;
+        final descriptor =
+            descriptorExtractor.buildDetailsSelectableDescriptor(detailsBlock);
+        final childKeys = keysRegistry.detailsChildKeysFor(detailsBlock);
+        return SelectableBlockSpec(
+          child: _buildDetails(
+            context,
+            detailsBlock,
+            childKeys: childKeys,
+          ),
+          plainText: descriptor.plainText,
+          selectionStructure: _matchingSelectionStructure(
+            detailsBlock,
+            descriptor.plainText,
+          ),
+          hitTestBehavior: SelectableBlockHitTestBehavior.text,
+          textSpan: descriptor.span,
+          highlightBorderRadius: theme.quoteBorderRadius,
+          selectionPaintOrder: SelectableBlockSelectionPaintOrder.aboveChild,
+          repaintListenable: _nestedScrollableRepaintListenableForBlocks(
+            detailsBlock.children,
+          ),
+          selectionRectResolver: (context, _, range) =>
+              selectionResolver.resolveDetailsSelectionRects(
+            context,
+            detailsBlock,
+            range,
+          ),
+          textOffsetResolver: (context, _, localPosition) =>
+              selectionResolver.resolveDetailsTextOffset(
+            context,
+            detailsBlock,
+            localPosition,
+          ),
+          selectionUnitRangeResolver: (context, _, localPosition, position) =>
+              localPosition == null
+                  ? descriptorExtractor.resolveSelectionUnitRange(
+                      position,
+                      detailsBlock,
+                    )
+                  : selectionResolver.resolveDetailsSelectionUnitRange(
+                        context,
+                        detailsBlock,
+                        localPosition,
+                        position,
+                      ) ??
+                      descriptorExtractor.resolveSelectionUnitRange(
+                        position,
+                        detailsBlock,
+                      ),
         );
       case MarkdownBlockKind.codeBlock:
         final codeBlock = block as CodeBlock;
@@ -1184,36 +1256,102 @@ class MarkdownBlockBuilder {
     return paragraph;
   }
 
-  Widget _buildNestedBlockContent(BuildContext context, BlockNode block) {
+  TextStyle _styleForContext(TextStyle style, TextStyle? textStyleContext) {
+    if (textStyleContext == null) {
+      return style;
+    }
+    final bodyFontSize = theme.bodyStyle.fontSize;
+    final contextFontSize = textStyleContext.fontSize;
+    final styleFontSize = style.fontSize;
+    final scaledFontSize =
+        bodyFontSize == null || contextFontSize == null || styleFontSize == null
+            ? styleFontSize ?? contextFontSize
+            : styleFontSize * contextFontSize / bodyFontSize;
+    return style.copyWith(
+      color: textStyleContext.color,
+      fontSize: scaledFontSize,
+      fontStyle: textStyleContext.fontStyle,
+    );
+  }
+
+  TextStyle? _linkStyleForContext(TextStyle? textStyleContext) {
+    if (textStyleContext == null) {
+      return null;
+    }
+    return _styleForContext(theme.linkStyle, textStyleContext).copyWith(
+      decoration: theme.linkStyle.decoration,
+      decorationColor: textStyleContext.color,
+    );
+  }
+
+  Widget _buildNestedBlockContent(
+    BuildContext context,
+    BlockNode block, {
+    TextStyle? paragraphStyle,
+  }) {
+    final effectiveParagraphStyle = paragraphStyle ?? theme.bodyStyle;
+    final effectiveInlineCodeStyle = _styleForContext(
+      theme.inlineCodeStyle,
+      paragraphStyle,
+    );
+    final effectiveLinkStyle = _linkStyleForContext(paragraphStyle);
     switch (block.kind) {
       case MarkdownBlockKind.heading:
         final heading = block as HeadingBlock;
+        final style = _styleForContext(
+          theme.headingStyleForLevel(heading.level),
+          paragraphStyle,
+        );
         return _wrapHeadingBlock(
           level: heading.level,
           child: _buildTextBlock(
-            style: theme.headingStyleForLevel(heading.level),
+            style: style,
             inlines: heading.inlines,
+            inlineCodeStyle: effectiveInlineCodeStyle,
+            linkStyle: effectiveLinkStyle,
           ),
         );
       case MarkdownBlockKind.paragraph:
         final paragraph = block as ParagraphBlock;
+        if (_isStandaloneLineBreakBlock(paragraph)) {
+          return _buildStandaloneLineBreak(
+            context,
+            style: effectiveParagraphStyle,
+          );
+        }
         return _buildTextBlock(
-          style: theme.bodyStyle,
+          style: effectiveParagraphStyle,
           inlines: paragraph.inlines,
+          inlineCodeStyle: effectiveInlineCodeStyle,
+          linkStyle: effectiveLinkStyle,
         );
       case MarkdownBlockKind.quote:
         return _buildQuote(context, block as QuoteBlock);
       case MarkdownBlockKind.orderedList:
       case MarkdownBlockKind.unorderedList:
-        return _buildList(context, block as ListBlock);
+        return _buildList(
+          context,
+          block as ListBlock,
+          paragraphStyle: paragraphStyle,
+        );
       case MarkdownBlockKind.definitionList:
         return _buildDefinitionList(context, block as DefinitionListBlock);
       case MarkdownBlockKind.footnoteList:
         return _buildFootnoteList(context, block as FootnoteListBlock);
+      case MarkdownBlockKind.details:
+        return _buildDetails(
+          context,
+          block as DetailsBlock,
+          paragraphStyle: paragraphStyle,
+        );
       case MarkdownBlockKind.codeBlock:
         return _buildCodeBlock(context, block as CodeBlock);
       case MarkdownBlockKind.table:
-        return _buildTable(context, block as TableBlock);
+        return _buildTable(
+          context,
+          block as TableBlock,
+          textStyleContext: paragraphStyle,
+        );
       case MarkdownBlockKind.image:
         return _buildImage(context, block as ImageBlock);
       case MarkdownBlockKind.thematicBreak:
@@ -1248,6 +1386,7 @@ class MarkdownBlockBuilder {
         children: _buildNestedBlocks(
           context,
           block.children,
+          paragraphStyle: theme.quoteStyle,
           blockKeyBuilder:
               childKeys == null ? null : (index) => childKeys[index],
         ),
@@ -1258,6 +1397,7 @@ class MarkdownBlockBuilder {
   List<Widget> _buildNestedBlocks(
     BuildContext context,
     List<BlockNode> blocks, {
+    TextStyle? paragraphStyle,
     Key? Function(int index)? blockKeyBuilder,
   }) {
     return <Widget>[
@@ -1274,22 +1414,36 @@ class MarkdownBlockBuilder {
                       nested: true,
                     ),
             ),
-            child: _buildNestedBlockContent(context, blocks[index]),
+            child: _buildNestedBlockContent(
+              context,
+              blocks[index],
+              paragraphStyle: paragraphStyle,
+            ),
           ),
         ),
     ];
   }
 
-  Widget _buildList(BuildContext context, ListBlock block) {
+  Widget _buildList(
+    BuildContext context,
+    ListBlock block, {
+    TextStyle? paragraphStyle,
+  }) {
     final itemRowKeys = keysRegistry.listItemKeysFor(block);
     final itemContentKeys = keysRegistry.listItemContentKeysFor(block);
     return MarkdownListBlockView(
       theme: theme,
       block: block,
-      itemBuilder: (index, item) =>
-          _buildListItemContent(context, block, index, item),
+      itemBuilder: (index, item) => _buildListItemContent(
+        context,
+        block,
+        index,
+        item,
+        paragraphStyle: paragraphStyle,
+      ),
       itemRowKeyBuilder: (index) => itemRowKeys[index],
       itemContentKeyBuilder: (index) => itemContentKeys[index],
+      markerStyle: _styleForContext(theme.bodyStyle, paragraphStyle),
       bulletBuilder: bulletBuilder,
     );
   }
@@ -1319,12 +1473,50 @@ class MarkdownBlockBuilder {
     );
   }
 
+  Widget _buildDetails(
+    BuildContext context,
+    DetailsBlock block, {
+    List<GlobalKey>? childKeys,
+    TextStyle? paragraphStyle,
+  }) {
+    final resolvedKeys = childKeys ?? keysRegistry.detailsChildKeysFor(block);
+    final summaryStyle = (paragraphStyle ?? theme.bodyStyle).copyWith(
+      fontWeight: FontWeight.w600,
+    );
+    return MarkdownDetailsBlockView(
+      theme: theme,
+      initiallyExpanded: block.initiallyExpanded,
+      summary: KeyedSubtree(
+        key: resolvedKeys.first,
+        child: _buildTextBlock(
+          style: summaryStyle,
+          inlines: block.summary,
+          inlineCodeStyle:
+              _styleForContext(theme.inlineCodeStyle, paragraphStyle),
+          linkStyle: _linkStyleForContext(paragraphStyle),
+        ),
+      ),
+      content: block.children.isEmpty
+          ? const SizedBox.shrink()
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: _buildNestedBlocks(
+                context,
+                block.children,
+                paragraphStyle: paragraphStyle,
+                blockKeyBuilder: (index) => resolvedKeys[index + 1],
+              ),
+            ),
+    );
+  }
+
   Widget _buildListItemContent(
     BuildContext context,
     ListBlock block,
     int itemIndex,
-    ListItemNode item,
-  ) {
+    ListItemNode item, {
+    TextStyle? paragraphStyle,
+  }) {
     if (item.children.isEmpty) {
       return const SizedBox.shrink();
     }
@@ -1333,7 +1525,11 @@ class MarkdownBlockBuilder {
     if (item.children.length == 1) {
       return KeyedSubtree(
         key: childKeys.first,
-        child: _buildNestedBlockContent(context, item.children.first),
+        child: _buildNestedBlockContent(
+          context,
+          item.children.first,
+          paragraphStyle: paragraphStyle,
+        ),
       );
     }
     return Column(
@@ -1341,6 +1537,7 @@ class MarkdownBlockBuilder {
       children: _buildNestedBlocks(
         context,
         item.children,
+        paragraphStyle: paragraphStyle,
         blockKeyBuilder: (index) => childKeys[index],
       ),
     );
@@ -1350,14 +1547,45 @@ class MarkdownBlockBuilder {
     required TextStyle style,
     required List<InlineNode> inlines,
     TextAlign textAlign = TextAlign.start,
+    TextStyle? inlineCodeStyle,
+    TextStyle? linkStyle,
   }) {
-    final runs = inlineBuilder.buildPretextRuns(style, inlines);
+    final runs = inlineBuilder.buildPretextRuns(
+      style,
+      inlines,
+      inlineCodeStyle: inlineCodeStyle,
+      linkStyle: linkStyle,
+    );
     return MarkdownPretextTextBlock.rich(
       runs: runs,
       fallbackStyle: style,
       textAlign: textAlign,
       preferDirectRichText: markdownPretextCanUseDirectRichTextGeometry(runs),
     );
+  }
+
+  Widget _buildStandaloneLineBreak(
+    BuildContext context, {
+    TextStyle? style,
+  }) {
+    final textScaler =
+        MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling;
+    return SizedBox(
+      height: _preferredLineHeight(
+        style ?? theme.bodyStyle,
+        textScaler.scale(1.0),
+      ),
+    );
+  }
+
+  double _preferredLineHeight(TextStyle style, double textScaleFactor) {
+    final textPainter = TextPainter(
+      text: TextSpan(text: ' ', style: style),
+      textDirection: TextDirection.ltr,
+      textScaler: TextScaler.linear(textScaleFactor),
+      maxLines: 1,
+    )..layout(maxWidth: double.infinity);
+    return textPainter.preferredLineHeight;
   }
 
   Widget _wrapHeadingBlock({
@@ -1481,6 +1709,12 @@ class MarkdownBlockBuilder {
             collect(child);
           }
           return;
+        case MarkdownBlockKind.details:
+          final detailsBlock = block as DetailsBlock;
+          for (final child in detailsBlock.children) {
+            collect(child);
+          }
+          return;
         case MarkdownBlockKind.orderedList:
         case MarkdownBlockKind.unorderedList:
           final listBlock = block as ListBlock;
@@ -1522,6 +1756,7 @@ class MarkdownBlockBuilder {
   Widget _buildTable(
     BuildContext context,
     TableBlock block, {
+    TextStyle? textStyleContext,
     Key? Function(int rowIndex, int columnIndex)? cellKeyBuilder,
     GlobalKey? Function(int rowIndex, int columnIndex)? cellTextKeyBuilder,
     ScrollController? scrollController,
@@ -1539,6 +1774,16 @@ class MarkdownBlockBuilder {
       block: block,
       layoutPlan: tableLayoutPlanCache.planFor(block),
       textWidgetBuilder: _buildInlineTextWidget,
+      bodyStyle: _styleForContext(theme.bodyStyle, textStyleContext),
+      tableHeaderStyle: _styleForContext(
+        theme.tableHeaderStyle,
+        textStyleContext,
+      ),
+      inlineCodeStyle: _styleForContext(
+        theme.inlineCodeStyle,
+        textStyleContext,
+      ),
+      linkStyle: _linkStyleForContext(textStyleContext),
       cellKeyBuilder: cellKeyBuilder ??
           (rowIndex, columnIndex) => resolvedCellKeys[rowIndex][columnIndex],
       cellTextKeyBuilder: cellTextKeyBuilder ??
@@ -1558,12 +1803,16 @@ class MarkdownBlockBuilder {
     TextAlign textAlign, {
     GlobalKey? directTextKey,
     bool alignInlineMathToBaseline = true,
+    TextStyle? inlineCodeStyle,
+    TextStyle? linkStyle,
   }) {
     return MarkdownPretextTextBlock.rich(
       runs: inlineBuilder.buildPretextRuns(
         style,
         inlines,
         alignInlineMathToBaseline: alignInlineMathToBaseline,
+        inlineCodeStyle: inlineCodeStyle,
+        linkStyle: linkStyle,
       ),
       fallbackStyle: style,
       textAlign: textAlign,
@@ -1998,6 +2247,7 @@ class MarkdownBlockBuilder {
       case MarkdownBlockKind.thematicBreak:
       case MarkdownBlockKind.definitionList:
       case MarkdownBlockKind.footnoteList:
+      case MarkdownBlockKind.details:
         return true;
       case MarkdownBlockKind.quote:
       case MarkdownBlockKind.orderedList:
