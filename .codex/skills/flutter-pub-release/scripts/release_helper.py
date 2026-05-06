@@ -252,6 +252,24 @@ def ensure_clean_worktree() -> None:
         raise ReleaseError("worktree is not clean; commit or stash changes before drafting the release")
 
 
+def ensure_on_main_branch() -> None:
+    branch = git("rev-parse", "--abbrev-ref", "HEAD").strip()
+    if branch != "main":
+        raise ReleaseError(f"not on main branch (currently on {branch}); switch to main before releasing")
+
+
+def ensure_no_remote_tag(tag: str) -> None:
+    remote_tags = git("ls-remote", "--tags", "origin", tag).strip()
+    if remote_tags:
+        raise ReleaseError(f"tag {tag} already exists on remote; this version may have been released already")
+
+
+def ensure_not_behind_origin() -> None:
+    ahead_behind = git("rev-list", "--left-right", "--count", "HEAD...origin/main").strip().split()
+    if int(ahead_behind[1]) > 0:
+        raise ReleaseError("local branch is behind origin/main; pull first before releasing")
+
+
 def resolve_release_intent(
     current_version: str,
     bump_override: str | None,
@@ -340,6 +358,9 @@ def cmd_draft_release(args: argparse.Namespace) -> int:
     tag = f"{args.package}-v{version}"
     notes = extract_section(changelog_path, version)
     ensure_clean_worktree()
+    ensure_on_main_branch()
+    ensure_no_remote_tag(tag)
+    ensure_not_behind_origin()
     target_ref = git("rev-parse", "HEAD").strip()
 
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as handle:

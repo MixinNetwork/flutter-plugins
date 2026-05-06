@@ -78,7 +78,7 @@ dart pub get
 - Run package-scoped checks only when they are fast and relevant.
 - Do not expand into repo-wide validation unless the change genuinely spans packages.
 
-5. Commit and run publish dry-run before drafting the release.
+5. Commit and validate before drafting the release.
 - Use an English commit message such as:
 
 ```text
@@ -86,16 +86,14 @@ chore(release): prepare <package> <version>
 ```
 
 - Commit the release changes directly on `main`.
-- After commit, run a publish dry-run from the package directory and fix any reported errors before pushing:
+- After commit, run a publish dry-run from the package directory and fix any reported errors:
 
 ```bash
 cd packages/<package>
 dart pub publish --dry-run
 ```
 
-- Push `main`.
-
-6. Draft the GitHub release.
+6. Draft the GitHub release **before** pushing.
 - Run:
 
 ```bash
@@ -106,7 +104,12 @@ python3 .codex/skills/flutter-pub-release/scripts/release_helper.py draft-releas
   - tag: `{package}-v{version}`
   - title: `{package}-v{version}`
   - notes: the same changelog section
-  - target: current `HEAD`
+  - target: current `HEAD` (the release commit you just made)
+
+- This ensures the tag is anchored to the correct commit SHA before `main` is pushed.
+
+7. Push `main`.
+- The tag reference in the draft release will resolve correctly once the commit reaches GitHub.
 
 - Stop there. Do not try to verify whether the tag exists remotely or whether `.github/workflows/publish.yml` has started running. This workflow is only responsible for preparing the draft release.
 

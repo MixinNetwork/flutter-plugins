@@ -36,3 +36,11 @@ Release preparation guidance for pub packages lives in [.codex/skills/flutter-pu
 - Prefer targeted test runs first, then broader package-level validation if the change affects shared behavior.
 - For Flutter UI packages, pair automated tests with an `example/` sanity check when interaction or rendering is involved.
 - Keep unrelated packages untouched unless there is a verified cross-package dependency.
+
+## Commit Message Guidance
+
+- Use the format `<package>: <description>` for commits that affect a single package, where `<package>` is the name of the affected package.
+- describe the change clearly and concisely in the `<description>` part, focusing on what was changed and why.
+- For commits that affect multiple packages or the repository as a whole, use a more general format
+- prefer a body in the commit message to explain the scope and impact of the change when it is not clear from the title alone.
+- the commit message is intended to generate a changelog entry, so it should be clear and informative for users who may not be familiar with the codebase.
