@@ -3122,6 +3122,102 @@ const value = 42;
     );
   });
 
+  test('mixed text keeps fitting inline code tokens together on wrap', () {
+    const baseStyle = TextStyle(fontSize: 14, height: 1.2);
+
+    double measureWidth(String text) {
+      final textPainter = TextPainter(
+        text: TextSpan(text: text, style: baseStyle),
+        textDirection: TextDirection.ltr,
+        maxLines: 1,
+      )..layout(maxWidth: double.infinity);
+      return textPainter.width;
+    }
+
+    final width = measureWidth('cachetoken') + 1;
+    final layout = computeMarkdownPretextLayoutFromRuns(
+      runs: const <MarkdownPretextInlineRun>[
+        MarkdownPretextInlineRun(
+          text: 'Use ',
+          style: baseStyle,
+        ),
+        MarkdownPretextInlineRun(
+          text: 'cachetoken',
+          style: baseStyle,
+          allowCharacterWrap: true,
+          decoration: MarkdownPretextInlineDecoration(
+            backgroundColor: Color(0xFFE9EDF2),
+            borderRadius: BorderRadius.all(Radius.circular(6)),
+            padding: EdgeInsets.zero,
+          ),
+        ),
+        MarkdownPretextInlineRun(
+          text: ' after.',
+          style: baseStyle,
+        ),
+      ],
+      fallbackStyle: baseStyle,
+      maxWidth: width,
+      textScaleFactor: 1,
+    );
+
+    expect(layout.lines, hasLength(greaterThanOrEqualTo(2)));
+    expect(layout.lines.first.text, isNot(contains('cache')));
+    expect(layout.lines[1].text, 'cachetoken');
+  });
+
+  test('pretext layout accepts unconstrained width', () {
+    const baseStyle = TextStyle(fontSize: 14, height: 1.2);
+
+    final layout = computeMarkdownPretextLayoutFromRuns(
+      runs: const <MarkdownPretextInlineRun>[
+        MarkdownPretextInlineRun(
+          text: 'Use ',
+          style: baseStyle,
+        ),
+        MarkdownPretextInlineRun(
+          text: 'cachetoken',
+          style: baseStyle,
+          allowCharacterWrap: true,
+          decoration: MarkdownPretextInlineDecoration(
+            backgroundColor: Color(0xFFE9EDF2),
+            borderRadius: BorderRadius.all(Radius.circular(6)),
+            padding: EdgeInsets.zero,
+          ),
+        ),
+      ],
+      fallbackStyle: baseStyle,
+      maxWidth: double.infinity,
+      textScaleFactor: 1,
+    );
+
+    expect(layout.lines, hasLength(1));
+    expect(layout.lines.single.text, 'Use cachetoken');
+  });
+
+  testWidgets('selectable text tolerates row unconstrained width', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: MixinSelectionArea(
+            child: Row(
+              children: <Widget>[
+                Icon(Icons.expand_more_rounded),
+                SizedBox(width: 6),
+                MixinSelectableText('Show outputs'),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('Show outputs'), findsOneWidget);
+  });
+
   test('render-span pretext layout keeps per-line heights local', () {
     const baseStyle = TextStyle(fontSize: 14, height: 1.2);
     final layout = computeMarkdownPretextLayoutFromRuns(
@@ -3238,7 +3334,7 @@ const value = 42;
           ),
         ],
       ),
-      String.fromCharCodes(List<int>.filled(6, 0xFFFC)),
+      String.fromCharCodes(List<int>.filled(3, 0xFFFC)),
     );
 
     expect(
@@ -3282,7 +3378,7 @@ const value = 42;
         (widget) =>
             widget is RichText &&
             widget.text.toPlainText().contains(
-                  String.fromCharCodes(const <int>[0xFFFC, 0xFFFC]),
+                  String.fromCharCode(0xFFFC),
                 ),
       ),
     );

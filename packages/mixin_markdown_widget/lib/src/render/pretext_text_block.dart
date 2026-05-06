@@ -135,6 +135,19 @@ class MarkdownPretextTextBlock extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
+        if (!constraints.hasBoundedWidth) {
+          return Text.rich(
+            buildMarkdownPretextSpan(
+              runs: effectiveRuns,
+              fallbackStyle: fallbackStyle,
+            ),
+            key: directTextKey,
+            style: fallbackStyle,
+            textAlign: textAlign,
+            textScaler: textScaler,
+            textDirection: textDirection,
+          );
+        }
         final constrainedLayout = _computeLayout(
           maxWidth: constraints.maxWidth,
           textScaleFactor: textScaler.scale(1.0),
@@ -459,10 +472,12 @@ MarkdownPretextLayoutResult computeMarkdownPretextLayoutFromRuns({
   TextAlign textAlign = TextAlign.start,
   TextDirection textDirection = TextDirection.ltr,
 }) {
+  final safeMaxWidth = maxWidth.isFinite ? math.max(maxWidth, 0.0) : 100000.0;
+  final alignmentWidth = maxWidth.isFinite ? math.max(maxWidth, 0.0) : 0.0;
   final cacheKey = _MarkdownPretextLayoutCacheKey(
     runsSignature: _markdownPretextRunsSignature(runs),
     fallbackStyleHash: fallbackStyle.hashCode,
-    maxWidth: (maxWidth * 100).round(),
+    maxWidth: (safeMaxWidth * 100).round(),
     textScaleFactor: (textScaleFactor * 1000).round(),
     textAlign: textAlign,
     textDirection: textDirection,
@@ -492,8 +507,6 @@ MarkdownPretextLayoutResult computeMarkdownPretextLayoutFromRuns({
     return emptyResult;
   }
 
-  final safeMaxWidth = maxWidth.isFinite ? math.max(maxWidth, 0.0) : 100000.0;
-  final alignmentWidth = maxWidth.isFinite ? math.max(maxWidth, 0.0) : 0.0;
   final segmentBuilder = _MarkdownPretextSegmentBuilder(
     textScaleFactor: textScaleFactor,
   );
@@ -2273,22 +2286,19 @@ int _plainOffsetForBreakableDecoratedRenderOffset(
 }
 
 int _nextBreakableDecoratedSegmentEnd(String text, int startIndex) {
+  final newlineIndex = text.indexOf('\n', startIndex);
+  final chunkEnd = newlineIndex == -1 ? text.length : newlineIndex;
   final firstLength = _textCharacterLengthAt(text, startIndex);
   var previousIndex = startIndex;
   var index = startIndex + firstLength;
-  while (index < text.length) {
-    if (text[index] == '\n') {
-      break;
-    }
+  while (index < chunkEnd) {
     if (_isPreferredInlineCodeBoundary(text, previousIndex, index)) {
       return index;
     }
     previousIndex = index;
     index += _textCharacterLengthAt(text, index);
   }
-  return index == text.length
-      ? firstLength + startIndex
-      : startIndex + firstLength;
+  return chunkEnd;
 }
 
 bool _isPreferredInlineCodeBoundary(
