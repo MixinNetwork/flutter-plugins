@@ -248,6 +248,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       selectWordAt: _selectWordAt,
       selectBlockAt: _selectBlockAt,
       selectSelectionUnitAt: _selectSelectionUnitAt,
+      autoScrollTargets: _inheritedSelectionAutoScrollTargets,
     );
   }
 
@@ -583,5 +584,17 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
         depth: -1,
       );
     }
+  }
+
+  Iterable<MarkdownSelectionAutoScrollTarget>
+      _inheritedSelectionAutoScrollTargets() sync* {
+    if (!widget.useColumn) {
+      yield MarkdownSelectionAutoScrollTarget(
+        scrollController: _effectiveScrollController,
+        viewportKey: _scrollableKey,
+        depth: -1,
+      );
+    }
+    yield* _autoScrollTargets();
   }
 }

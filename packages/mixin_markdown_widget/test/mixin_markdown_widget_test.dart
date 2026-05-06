@@ -7781,6 +7781,113 @@ Tables support varying alignments, complex cell contents, and inline styles.
     expect(selectionController.selectedPlainText, contains('Charlie delta'));
   });
 
+  testWidgets('MixinSelectableRow copies direct selectable text inline',
+      (tester) async {
+    final selectionController = MarkdownSelectionController();
+    addTearDown(selectionController.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 320,
+            child: MixinSelectionArea(
+              controller: selectionController,
+              child: const MixinSelectableRow(
+                spacing: 6,
+                children: <Widget>[
+                  MixinSelectableText('left'),
+                  Icon(Icons.arrow_forward_rounded, size: 16),
+                  MixinSelectableText('right'),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    selectionController.selectAll();
+
+    expect(selectionController.document.blocks, hasLength(1));
+    expect(selectionController.selectedPlainText, 'left right');
+
+    final blockFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is SelectableMarkdownBlock &&
+          widget.spec.plainText == 'left right',
+    );
+    final block = tester.widget<SelectableMarkdownBlock>(blockFinder);
+    final renderBox = tester.renderObject<RenderBox>(blockFinder);
+    final element = tester.element(blockFinder);
+    final rects = block.spec.selectionRectResolver!(
+      element,
+      renderBox.size,
+      DocumentRange(
+        start: DocumentPosition(
+          blockIndex: block.blockIndex,
+          path: const PathInBlock(<int>[0]),
+          textOffset: 0,
+        ),
+        end: DocumentPosition(
+          blockIndex: block.blockIndex,
+          path: const PathInBlock(<int>[0]),
+          textOffset: 'left right'.length,
+        ),
+      ),
+    );
+    final origin = renderBox.localToGlobal(Offset.zero);
+    final globalRects = rects.map((rect) => rect.shift(origin));
+    final iconRect =
+        tester.getRect(find.byIcon(Icons.arrow_forward_rounded)).deflate(1);
+    expect(globalRects.any((rect) => rect.overlaps(iconRect)), isFalse);
+  });
+
+  testWidgets('MixinSelectableRow drags across text split by an icon',
+      (tester) async {
+    final selectionController = MarkdownSelectionController();
+    addTearDown(selectionController.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 320,
+            child: MixinSelectionArea(
+              controller: selectionController,
+              child: const MixinSelectableRow(
+                spacing: 6,
+                children: <Widget>[
+                  MixinSelectableText('left'),
+                  Icon(Icons.arrow_forward_rounded, size: 16),
+                  MixinSelectableText('right'),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final start =
+        tester.getRect(find.text('left')).centerLeft + const Offset(1, 0);
+    final end =
+        tester.getRect(find.text('right')).centerRight - const Offset(1, 0);
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: start);
+    await gesture.down(start);
+    await tester.pump();
+    await gesture.moveTo(end);
+    await tester.pump();
+    await gesture.up();
+    await tester.pump();
+
+    expect(selectionController.hasSelection, isTrue);
+    expect(selectionController.selectedPlainText, 'left right');
+  });
+
   testWidgets('MixinSelectionArea selects across markdown and toolcall widgets',
       (tester) async {
     final selectionController = MarkdownSelectionController();
@@ -7874,6 +7981,79 @@ Tables support varying alignments, complex cell contents, and inline styles.
     expect(selectionController.selectedPlainText, contains('First markdown'));
     expect(selectionController.selectedPlainText, contains('Tool call output'));
     expect(selectionController.selectedPlainText, contains('Second markdown'));
+  });
+
+  testWidgets(
+      'MixinSelectionArea auto-scrolls nested scrollable markdown participants',
+      (tester) async {
+    final selectionController = MarkdownSelectionController();
+    final nestedScrollController = ScrollController();
+    addTearDown(selectionController.dispose);
+    addTearDown(nestedScrollController.dispose);
+
+    final buffer = StringBuffer();
+    for (var index = 0; index < 40; index++) {
+      if (index > 0) {
+        buffer.writeln();
+        buffer.writeln();
+      }
+      buffer.write('Nested paragraph $index');
+    }
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 360,
+            child: MixinSelectionArea(
+              controller: selectionController,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  const MixinSelectableText('Before nested markdown'),
+                  SizedBox(
+                    height: 100,
+                    child: MarkdownWidget(
+                      data: buffer.toString(),
+                      scrollController: nestedScrollController,
+                    ),
+                  ),
+                  const MixinSelectableText('After nested markdown'),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final nestedListFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is ListView && widget.controller == nestedScrollController,
+    );
+    final start =
+        tester.getTopLeft(find.text('Nested paragraph 0')) + const Offset(2, 8);
+    final edgeTarget =
+        tester.getBottomLeft(nestedListFinder) - const Offset(-4, 6);
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: start);
+    await gesture.down(start);
+    await tester.pump();
+    await gesture.moveTo(edgeTarget);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+
+    expect(nestedScrollController.offset, greaterThan(0));
+    expect(selectionController.hasSelection, isTrue);
+    expect(
+      selectionController.selectedPlainText,
+      contains('Nested paragraph 0'),
+    );
+
+    await gesture.up();
+    await tester.pump();
   });
 
   testWidgets('footnote backreference markers are not rendered',

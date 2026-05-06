@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -5,6 +7,7 @@ import '../clipboard/plain_text_serializer.dart';
 import '../core/document.dart';
 import '../render/pretext_text_block.dart';
 import '../render/selectable_block.dart';
+import '../render/selection/markdown_selection_gesture_detector.dart';
 import '../render/shortcuts/markdown_shortcuts_scope.dart';
 import '../widgets/markdown_theme.dart';
 import '../widgets/markdown_types.dart';
@@ -365,6 +368,7 @@ class _MixinSelectionAreaState extends State<MixinSelectionArea> {
             selectWordAt: _selectWordAt,
             selectBlockAt: _selectBlockAt,
             selectSelectionUnitAt: _selectSelectionUnitAt,
+            additionalAutoScrollTargets: _autoScrollTargets,
             onTapOutside: _contextMenuController.remove,
             child: KeyedSubtree(
               key: _selectionAreaKey,
@@ -374,6 +378,13 @@ class _MixinSelectionAreaState extends State<MixinSelectionArea> {
         },
       ),
     );
+  }
+
+  Iterable<MarkdownSelectionAutoScrollTarget> _autoScrollTargets() sync* {
+    for (final participant in _orderedParticipants) {
+      yield* participant.autoScrollTargets?.call() ??
+          const <MarkdownSelectionAutoScrollTarget>[];
+    }
   }
 }
 
@@ -606,6 +617,445 @@ class _MixinSelectableState extends State<MixinSelectable> {
       ),
       selectionColor: widget.selectionColor ?? registrar.selectionColor,
       selectionRange: selectionRange,
+    );
+  }
+}
+
+class MixinSelectableRow extends StatefulWidget {
+  const MixinSelectableRow({
+    super.key,
+    required this.children,
+    this.selectionId,
+    this.separator = ' ',
+    this.spacing = 0,
+    this.mainAxisAlignment = MainAxisAlignment.start,
+    this.mainAxisSize = MainAxisSize.max,
+    this.crossAxisAlignment = CrossAxisAlignment.center,
+    this.textDirection,
+    this.verticalDirection = VerticalDirection.down,
+    this.textBaseline,
+    this.selectionColor,
+    this.highlightBorderRadius,
+    this.paintSelectionAboveChild = false,
+  });
+
+  final List<Widget> children;
+  final Object? selectionId;
+  final String separator;
+  final double spacing;
+  final MainAxisAlignment mainAxisAlignment;
+  final MainAxisSize mainAxisSize;
+  final CrossAxisAlignment crossAxisAlignment;
+  final TextDirection? textDirection;
+  final VerticalDirection verticalDirection;
+  final TextBaseline? textBaseline;
+  final Color? selectionColor;
+  final BorderRadius? highlightBorderRadius;
+  final bool paintSelectionAboveChild;
+
+  @override
+  State<MixinSelectableRow> createState() => _MixinSelectableRowState();
+}
+
+class _MixinSelectableRowState extends State<MixinSelectableRow> {
+  final List<GlobalKey> _textSegmentKeys = <GlobalKey>[];
+
+  @override
+  Widget build(BuildContext context) {
+    final defaultTextStyle = DefaultTextStyle.of(context);
+    final textSegments = <_MixinSelectableRowTextSegment>[];
+    final textBridges = <_MixinSelectableRowTextBridge>[];
+    final rowChildren = <Widget>[];
+    final plainText = StringBuffer();
+    var textSegmentIndex = 0;
+    var textOffset = 0;
+    var hasVisualChildSinceLastText = false;
+
+    for (var childIndex = 0;
+        childIndex < widget.children.length;
+        childIndex++) {
+      final child = widget.children[childIndex];
+      if (rowChildren.isNotEmpty && widget.spacing > 0) {
+        rowChildren.add(SizedBox(width: widget.spacing));
+      }
+
+      if (child is MixinSelectableText) {
+        final effectiveStyle = child.style == null
+            ? defaultTextStyle.style
+            : defaultTextStyle.style.merge(child.style);
+        final effectiveTextAlign =
+            child.textAlign ?? defaultTextStyle.textAlign ?? TextAlign.start;
+        if (plainText.isNotEmpty) {
+          final separatorStart = textOffset;
+          plainText.write(widget.separator);
+          textOffset += widget.separator.length;
+          if (!hasVisualChildSinceLastText && separatorStart < textOffset) {
+            textBridges.add(
+              _MixinSelectableRowTextBridge(
+                leadingSegmentIndex: textSegmentIndex - 1,
+                trailingSegmentIndex: textSegmentIndex,
+                startOffset: separatorStart,
+                endOffset: textOffset,
+              ),
+            );
+          }
+        }
+        final segmentKey = _textSegmentKeyAt(textSegmentIndex);
+        final segment = _MixinSelectableRowTextSegment(
+          key: segmentKey,
+          index: textSegmentIndex,
+          text: child.data,
+          startOffset: textOffset,
+          endOffset: textOffset + child.data.length,
+          effectiveStyle: effectiveStyle,
+          textAlign: effectiveTextAlign,
+        );
+        textSegments.add(segment);
+        rowChildren.add(
+          KeyedSubtree(
+            key: segmentKey,
+            child: _MixinSelectableTextView(
+              data: child.data,
+              style: child.style,
+              textAlign: child.textAlign,
+            ),
+          ),
+        );
+        plainText.write(child.data);
+        textOffset += child.data.length;
+        textSegmentIndex += 1;
+        hasVisualChildSinceLastText = false;
+      } else {
+        rowChildren.add(child);
+        if (textSegmentIndex > 0) {
+          hasVisualChildSinceLastText = true;
+        }
+      }
+    }
+
+    if (_textSegmentKeys.length > textSegmentIndex) {
+      _textSegmentKeys.removeRange(textSegmentIndex, _textSegmentKeys.length);
+    }
+
+    final text = plainText.toString();
+    final row = Row(
+      mainAxisAlignment: widget.mainAxisAlignment,
+      mainAxisSize: widget.mainAxisSize,
+      crossAxisAlignment: widget.crossAxisAlignment,
+      textDirection: widget.textDirection,
+      verticalDirection: widget.verticalDirection,
+      textBaseline: widget.textBaseline,
+      children: rowChildren,
+    );
+    if (text.isEmpty) {
+      return row;
+    }
+
+    return MixinSelectable(
+      selectionId: widget.selectionId,
+      plainText: text,
+      selectionColor: widget.selectionColor,
+      highlightBorderRadius: widget.highlightBorderRadius,
+      paintSelectionAboveChild: widget.paintSelectionAboveChild,
+      child: row,
+      selectionRectResolver: (context, size, range) {
+        return _selectionRectsForRange(
+          context: context,
+          range: range,
+          segments: textSegments,
+          bridges: textBridges,
+        );
+      },
+      textOffsetResolver: (context, size, localPosition) {
+        return _textOffsetAt(
+          context: context,
+          localPosition: localPosition,
+          segments: textSegments,
+          plainTextLength: text.length,
+        );
+      },
+      selectionUnitRangeResolver: (context, size, localPosition, position) {
+        return DocumentRange(
+          start: DocumentPosition(
+            blockIndex: position.blockIndex,
+            path: const PathInBlock(<int>[0]),
+            textOffset: 0,
+          ),
+          end: DocumentPosition(
+            blockIndex: position.blockIndex,
+            path: const PathInBlock(<int>[0]),
+            textOffset: text.length,
+          ),
+        );
+      },
+    );
+  }
+
+  GlobalKey _textSegmentKeyAt(int index) {
+    while (_textSegmentKeys.length <= index) {
+      _textSegmentKeys.add(GlobalKey());
+    }
+    return _textSegmentKeys[index];
+  }
+
+  List<Rect> _selectionRectsForRange({
+    required BuildContext context,
+    required DocumentRange range,
+    required List<_MixinSelectableRowTextSegment> segments,
+    required List<_MixinSelectableRowTextBridge> bridges,
+  }) {
+    final rowBox = context.findRenderObject();
+    if (rowBox is! RenderBox || !rowBox.hasSize) {
+      return const <Rect>[];
+    }
+
+    final rects = <Rect>[];
+    final resolvedSegmentsByIndex =
+        <int, _ResolvedMixinSelectableRowTextSegment>{};
+    for (final segment in segments) {
+      final resolved = _resolveTextSegment(context, rowBox, segment);
+      if (resolved == null) {
+        continue;
+      }
+      resolvedSegmentsByIndex[segment.index] = resolved;
+      final selectionStart = math.max(
+        range.start.textOffset,
+        segment.startOffset,
+      );
+      final selectionEnd = math.min(range.end.textOffset, segment.endOffset);
+      if (selectionStart >= selectionEnd) {
+        continue;
+      }
+
+      final localRange = DocumentRange(
+        start: DocumentPosition(
+          blockIndex: range.start.blockIndex,
+          path: const PathInBlock(<int>[0]),
+          textOffset: selectionStart - segment.startOffset,
+        ),
+        end: DocumentPosition(
+          blockIndex: range.end.blockIndex,
+          path: const PathInBlock(<int>[0]),
+          textOffset: selectionEnd - segment.startOffset,
+        ),
+      );
+      final segmentRects = resolved.layout.selectionRectsForRange(
+        localRange,
+        textDirection: Directionality.of(context),
+      );
+      for (final rect in segmentRects) {
+        rects.add(rect.shift(resolved.origin));
+      }
+    }
+
+    rects.addAll(
+      _selectionBridgeRectsForRange(
+        range: range,
+        bridges: bridges,
+        resolvedSegmentsByIndex: resolvedSegmentsByIndex,
+      ),
+    );
+    return rects;
+  }
+
+  Iterable<Rect> _selectionBridgeRectsForRange({
+    required DocumentRange range,
+    required List<_MixinSelectableRowTextBridge> bridges,
+    required Map<int, _ResolvedMixinSelectableRowTextSegment>
+        resolvedSegmentsByIndex,
+  }) sync* {
+    for (final bridge in bridges) {
+      if (range.start.textOffset >= bridge.endOffset ||
+          range.end.textOffset <= bridge.startOffset) {
+        continue;
+      }
+      final current = resolvedSegmentsByIndex[bridge.leadingSegmentIndex];
+      final next = resolvedSegmentsByIndex[bridge.trailingSegmentIndex];
+      if (current == null || next == null) {
+        continue;
+      }
+      final left = math.min(current.rect.right, next.rect.left);
+      final right = math.max(current.rect.right, next.rect.left);
+      if (right <= left) {
+        continue;
+      }
+      yield Rect.fromLTRB(
+        left,
+        math.min(current.rect.top, next.rect.top),
+        right,
+        math.max(current.rect.bottom, next.rect.bottom),
+      );
+    }
+  }
+
+  int _textOffsetAt({
+    required BuildContext context,
+    required Offset localPosition,
+    required List<_MixinSelectableRowTextSegment> segments,
+    required int plainTextLength,
+  }) {
+    final rowBox = context.findRenderObject();
+    if (rowBox is! RenderBox || !rowBox.hasSize) {
+      return 0;
+    }
+
+    final resolvedSegments = <_ResolvedMixinSelectableRowTextSegment>[];
+    for (final segment in segments) {
+      final resolved = _resolveTextSegment(context, rowBox, segment);
+      if (resolved == null) {
+        continue;
+      }
+      if (resolved.rect.contains(localPosition)) {
+        final segmentOffset = resolved.layout.textOffsetAt(
+          localPosition - resolved.origin,
+          textDirection: Directionality.of(context),
+        );
+        return segment.startOffset + segmentOffset;
+      }
+      resolvedSegments.add(resolved);
+    }
+
+    if (resolvedSegments.isEmpty) {
+      return 0;
+    }
+
+    final first = resolvedSegments.first;
+    if (localPosition.dx <= first.rect.left) {
+      return 0;
+    }
+
+    final last = resolvedSegments.last;
+    if (localPosition.dx >= last.rect.right) {
+      return plainTextLength;
+    }
+
+    for (var index = 0; index < resolvedSegments.length - 1; index++) {
+      final current = resolvedSegments[index];
+      final next = resolvedSegments[index + 1];
+      final left = math.min(current.rect.right, next.rect.left);
+      final right = math.max(current.rect.right, next.rect.left);
+      if (localPosition.dx < left || localPosition.dx > right) {
+        continue;
+      }
+      final midpoint = left + (right - left) / 2;
+      return localPosition.dx < midpoint
+          ? current.segment.endOffset
+          : next.segment.startOffset;
+    }
+
+    return localPosition.dx < last.rect.center.dx ? 0 : plainTextLength;
+  }
+
+  _ResolvedMixinSelectableRowTextSegment? _resolveTextSegment(
+    BuildContext context,
+    RenderBox rowBox,
+    _MixinSelectableRowTextSegment segment,
+  ) {
+    final segmentContext = segment.key.currentContext;
+    final segmentRenderObject = segmentContext?.findRenderObject();
+    if (segmentRenderObject is! RenderBox || !segmentRenderObject.hasSize) {
+      return null;
+    }
+    final segmentGlobalOrigin = segmentRenderObject.localToGlobal(Offset.zero);
+    final segmentOrigin = rowBox.globalToLocal(segmentGlobalOrigin);
+    final segmentRect = segmentOrigin & segmentRenderObject.size;
+    final textScaler =
+        MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling;
+    final layout = computeMarkdownPretextLayoutFromRuns(
+      runs: <MarkdownPretextInlineRun>[
+        MarkdownPretextInlineRun(
+          text: segment.text,
+          style: segment.effectiveStyle,
+        ),
+      ],
+      fallbackStyle: segment.effectiveStyle,
+      maxWidth: segmentRenderObject.size.width,
+      textScaleFactor: textScaler.scale(1.0),
+      textAlign: segment.textAlign,
+      textDirection: Directionality.of(context),
+    );
+    return _ResolvedMixinSelectableRowTextSegment(
+      segment: segment,
+      origin: segmentOrigin,
+      rect: segmentRect,
+      layout: layout,
+    );
+  }
+}
+
+class _MixinSelectableRowTextSegment {
+  const _MixinSelectableRowTextSegment({
+    required this.key,
+    required this.index,
+    required this.text,
+    required this.startOffset,
+    required this.endOffset,
+    required this.effectiveStyle,
+    required this.textAlign,
+  });
+
+  final GlobalKey key;
+  final int index;
+  final String text;
+  final int startOffset;
+  final int endOffset;
+  final TextStyle effectiveStyle;
+  final TextAlign textAlign;
+}
+
+class _MixinSelectableRowTextBridge {
+  const _MixinSelectableRowTextBridge({
+    required this.leadingSegmentIndex,
+    required this.trailingSegmentIndex,
+    required this.startOffset,
+    required this.endOffset,
+  });
+
+  final int leadingSegmentIndex;
+  final int trailingSegmentIndex;
+  final int startOffset;
+  final int endOffset;
+}
+
+class _ResolvedMixinSelectableRowTextSegment {
+  const _ResolvedMixinSelectableRowTextSegment({
+    required this.segment,
+    required this.origin,
+    required this.rect,
+    required this.layout,
+  });
+
+  final _MixinSelectableRowTextSegment segment;
+  final Offset origin;
+  final Rect rect;
+  final MarkdownPretextLayoutResult layout;
+}
+
+class _MixinSelectableTextView extends StatelessWidget {
+  const _MixinSelectableTextView({
+    required this.data,
+    this.style,
+    this.textAlign,
+  });
+
+  final String data;
+  final TextStyle? style;
+  final TextAlign? textAlign;
+
+  @override
+  Widget build(BuildContext context) {
+    final defaultTextStyle = DefaultTextStyle.of(context);
+    final effectiveStyle = style == null
+        ? defaultTextStyle.style
+        : defaultTextStyle.style.merge(style);
+    final effectiveTextAlign =
+        textAlign ?? defaultTextStyle.textAlign ?? TextAlign.start;
+    return MarkdownPretextTextBlock.rich(
+      runs: <MarkdownPretextInlineRun>[
+        MarkdownPretextInlineRun(text: data, style: effectiveStyle),
+      ],
+      fallbackStyle: effectiveStyle,
+      textAlign: effectiveTextAlign,
     );
   }
 }

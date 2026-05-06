@@ -18,8 +18,7 @@ class _CompositeSelectionDemoPageState
   static const _openingMarkdown = '''
 ## AI reply assembled from multiple widgets
 
-I found the relevant context in the conversation history. The answer is split
-into Markdown chunks, with tool-call widgets rendered between them.
+I found the relevant context in the conversation history. The answer is split into Markdown chunks, with tool-call widgets rendered between them.
 ''';
 
   static const _middleMarkdown = '''
@@ -33,9 +32,34 @@ The retrieval result points to a product decision rather than a rendering bug:
   static const _closingMarkdown = '''
 ### Summary
 
-`MixinSelectionArea` owns one composite selection document. Nested
-`MarkdownWidget` instances and custom widgets opt into the same model, so copy
-and drag selection can cross widget boundaries.
+`MixinSelectionArea` owns one composite selection document. Nested `MarkdownWidget` instances and custom widgets opt into the same model, so copy and drag selection can cross widget boundaries.
+''';
+
+  static const _gitStatusOutput = '''
+```console
+\$ git status --short
+
+ M packages/mixin_markdown_widget/example/lib/composite_selection_demo.dart
+ M packages/mixin_markdown_widget/example/lib/composite_selection_demo.dart
+ M packages/mixin_markdown_widget/example/lib/composite_selection_demo.dart
+ M packages/mixin_markdown_widget/example/lib/composite_selection_demo.dart
+ M packages/mixin_markdown_widget/example/lib/composite_selection_demo.dart
+ M packages/mixin_markdown_widget/example/lib/composite_selection_demo.dart
+ M packages/mixin_markdown_widget/example/lib/composite_selection_demo.dart
+ M packages/mixin_markdown_widget/example/lib/composite_selection_demo.dart
+ M packages/mixin_markdown_widget/example/lib/composite_selection_demo.dart
+ M packages/mixin_markdown_widget/example/lib/composite_selection_demo.dart
+ M packages/mixin_markdown_widget/example/lib/composite_selection_demo.dart
+```
+''';
+
+  static const _analyzeOutput = '''
+```console
+\$ flutter analyze example/lib/composite_selection_demo.dart
+
+Analyzing composite_selection_demo.dart...
+No issues found! (ran in 1.3s)
+```
 ''';
 
   @override
@@ -150,11 +174,11 @@ and drag selection can cross widget boundaries.
                               ),
                               SizedBox(height: 14),
                               _ToolCallBlock(
-                                name: 'search_messages',
+                                id: 'git-status',
                                 summary:
-                                    'Query: selection scope AI markdown tool calls',
-                                result:
-                                    'Matched 3 messages across the current chat.',
+                                    'Explored 2 files, searched once, ran 1 command',
+                                command: 'git status --short',
+                                resultMarkdown: _gitStatusOutput,
                               ),
                               SizedBox(height: 14),
                               MarkdownWidget(
@@ -163,13 +187,15 @@ and drag selection can cross widget boundaries.
                               ),
                               SizedBox(height: 14),
                               _ToolCallBlock(
-                                name: 'read_message_context',
+                                id: 'flutter-analyze',
                                 summary:
-                                    'Conversation: engineering notes and prototype feedback',
-                                result:
-                                    'Returned 5 neighboring messages around the selected hit.',
+                                    'Read 1 file, resolved dependencies, ran 1 command',
+                                command:
+                                    'flutter analyze example/lib/composite_selection_demo.dart',
+                                resultMarkdown: _analyzeOutput,
                               ),
                               SizedBox(height: 14),
+                              _LineWithTwoSelectable(),
                               MarkdownWidget(
                                 data: _closingMarkdown,
                                 useColumn: true,
@@ -190,16 +216,58 @@ and drag selection can cross widget boundaries.
   }
 }
 
-class _ToolCallBlock extends StatelessWidget {
+class _LineWithTwoSelectable extends StatelessWidget {
+  const _LineWithTwoSelectable();
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return DecoratedBox(
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.72),
+          border: Border.all(color: colorScheme.outlineVariant),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: MixinSelectableRow(
+            selectionId: 'line-with-two-selectable',
+            spacing: 6,
+            children: const <Widget>[
+              MixinSelectableText(
+                'left',
+              ),
+              Icon(Icons.arrow_forward_rounded, size: 16),
+              MixinSelectableText(
+                'right',
+              ),
+            ],
+          ),
+        ));
+  }
+}
+
+class _ToolCallBlock extends StatefulWidget {
   const _ToolCallBlock({
-    required this.name,
+    required this.id,
     required this.summary,
-    required this.result,
+    required this.command,
+    required this.resultMarkdown,
   });
 
-  final String name;
+  final String id;
   final String summary;
-  final String result;
+  final String command;
+  final String resultMarkdown;
+
+  @override
+  State<_ToolCallBlock> createState() => _ToolCallBlockState();
+}
+
+class _ToolCallBlockState extends State<_ToolCallBlock>
+    with TickerProviderStateMixin {
+  bool _isToolCallExpanded = false;
+  bool _isCommandExpanded = false;
 
   @override
   Widget build(BuildContext context) {
@@ -216,43 +284,142 @@ class _ToolCallBlock extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Row(
-              children: <Widget>[
-                Icon(
-                  Icons.terminal_rounded,
-                  size: 18,
-                  color: colorScheme.primary,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: MixinSelectableText(
-                    'Tool call: $name',
-                    style: textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                Icon(
-                  Icons.check_circle_outline_rounded,
-                  size: 18,
-                  color: colorScheme.primary,
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            MixinSelectableText(
-              summary,
-              selectionId: '$name-summary',
-              style: textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 6),
-            MixinSelectableText(
-              result,
-              selectionId: '$name-result',
-              style: textTheme.bodySmall?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-                fontFamily: 'Menlo',
+            InkWell(
+              onTap: () => setState(
+                () => _isToolCallExpanded = !_isToolCallExpanded,
               ),
+              borderRadius: BorderRadius.circular(6),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 2,
+                  vertical: 4,
+                ),
+                child: Row(
+                  children: <Widget>[
+                    Icon(
+                      Icons.travel_explore_rounded,
+                      size: 18,
+                      color: colorScheme.primary,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: MixinSelectableText(
+                        widget.summary,
+                        selectionId: '${widget.id}-summary',
+                        style: textTheme.labelLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    AnimatedRotation(
+                      turns: _isToolCallExpanded ? 0.5 : 0,
+                      duration: const Duration(milliseconds: 180),
+                      curve: Curves.easeOutCubic,
+                      child: Icon(
+                        Icons.expand_more_rounded,
+                        size: 20,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            AnimatedSize(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+              alignment: Alignment.topCenter,
+              child: _isToolCallExpanded
+                  ? Padding(
+                      padding: const EdgeInsets.only(top: 10),
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: colorScheme.surface.withValues(alpha: 0.72),
+                          border: Border.all(
+                            color: colorScheme.outlineVariant,
+                          ),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(10),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              InkWell(
+                                onTap: () => setState(
+                                  () =>
+                                      _isCommandExpanded = !_isCommandExpanded,
+                                ),
+                                borderRadius: BorderRadius.circular(4),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 2,
+                                    vertical: 4,
+                                  ),
+                                  child: Row(
+                                    children: <Widget>[
+                                      Icon(
+                                        Icons.terminal_rounded,
+                                        size: 18,
+                                        color: colorScheme.primary,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: MixinSelectableText(
+                                          'Ran ${widget.command}',
+                                          selectionId: '${widget.id}-command',
+                                          style: textTheme.bodyMedium?.copyWith(
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                      AnimatedRotation(
+                                        turns: _isCommandExpanded ? 0.5 : 0,
+                                        duration: const Duration(
+                                          milliseconds: 180,
+                                        ),
+                                        curve: Curves.easeOutCubic,
+                                        child: Icon(
+                                          Icons.expand_more_rounded,
+                                          size: 20,
+                                          color: colorScheme.onSurfaceVariant,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              AnimatedSize(
+                                duration: const Duration(milliseconds: 220),
+                                curve: Curves.easeOutCubic,
+                                alignment: Alignment.topCenter,
+                                child: _isCommandExpanded
+                                    ? Padding(
+                                        padding: const EdgeInsets.only(
+                                          top: 10,
+                                        ),
+                                        child: ClipRRect(
+                                          borderRadius:
+                                              BorderRadius.circular(6),
+                                          child: ConstrainedBox(
+                                            constraints: const BoxConstraints(
+                                              maxHeight: 200,
+                                            ),
+                                            child: MarkdownWidget(
+                                              data: widget.resultMarkdown,
+                                              shrinkWrap: true,
+                                            ),
+                                          ),
+                                        ),
+                                      )
+                                    : const SizedBox.shrink(),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    )
+                  : const SizedBox.shrink(),
             ),
           ],
         ),

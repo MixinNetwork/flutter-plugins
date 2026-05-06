@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/document.dart';
+import '../render/selection/markdown_selection_gesture_detector.dart';
 import 'selection_controller.dart';
 
 typedef MixinSelectionParticipantHitTest = DocumentPosition? Function(
@@ -35,6 +36,7 @@ class MixinSelectionParticipant {
     required this.selectWordAt,
     required this.selectBlockAt,
     required this.selectSelectionUnitAt,
+    this.autoScrollTargets,
   });
 
   final Object owner;
@@ -45,6 +47,8 @@ class MixinSelectionParticipant {
   final MixinSelectionParticipantSelectWord selectWordAt;
   final MixinSelectionParticipantSelectBlock selectBlockAt;
   final MixinSelectionParticipantSelectUnit selectSelectionUnitAt;
+  final Iterable<MarkdownSelectionAutoScrollTarget> Function()?
+      autoScrollTargets;
 }
 
 class MixinSelectionRegistrar extends InheritedWidget {
