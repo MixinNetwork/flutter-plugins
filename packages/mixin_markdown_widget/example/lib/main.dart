@@ -3,6 +3,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
 
 import 'ai_chat_demo.dart';
+import 'composite_selection_demo.dart';
 
 enum _DemoLayoutMode {
   split,
@@ -309,6 +310,17 @@ This content was appended through `MarkdownController.appendChunk`.
               );
             },
             icon: const Icon(Icons.chat_outlined),
+          ),
+          IconButton(
+            tooltip: 'Composite selection demo',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const CompositeSelectionDemoPage(),
+                ),
+              );
+            },
+            icon: const Icon(Icons.dashboard_customize_outlined),
           ),
           IconButton(
             key: const Key('toggle-editor-visibility'),

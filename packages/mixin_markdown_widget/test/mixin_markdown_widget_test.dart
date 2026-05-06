@@ -7589,6 +7589,197 @@ Tables support varying alignments, complex cell contents, and inline styles.
     expect(selectionRects, isNotEmpty);
   });
 
+  testWidgets('MixinSelectionArea exposes public selectable widgets',
+      (tester) async {
+    final selectionController = MarkdownSelectionController();
+    addTearDown(selectionController.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 320,
+            child: MixinSelectionArea(
+              controller: selectionController,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  MixinSelectable(
+                    plainText: 'Custom alpha',
+                    textSpan: const TextSpan(text: 'Custom alpha'),
+                    child: const Text('Custom alpha'),
+                  ),
+                  const SizedBox(height: 8),
+                  const MixinSelectableText('Custom beta'),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    selectionController.selectAll();
+
+    expect(
+      selectionController.selectedPlainText,
+      'Custom alpha\n\nCustom beta',
+    );
+  });
+
+  testWidgets(
+      'MixinSelectionArea drags selection across selectable text widgets',
+      (tester) async {
+    final selectionController = MarkdownSelectionController();
+    addTearDown(selectionController.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 320,
+            child: MixinSelectionArea(
+              controller: selectionController,
+              child: const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  MixinSelectableText('Alpha bravo'),
+                  SizedBox(height: 8),
+                  MixinSelectableText('Charlie delta'),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final firstBlockFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is MixinSelectable && widget.plainText == 'Alpha bravo',
+    );
+    final secondBlockFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is MixinSelectable && widget.plainText == 'Charlie delta',
+    );
+    expect(firstBlockFinder, findsOneWidget);
+    expect(secondBlockFinder, findsOneWidget);
+
+    final start =
+        tester.getRect(firstBlockFinder).centerLeft + const Offset(1, 0);
+    final end =
+        tester.getRect(secondBlockFinder).centerRight - const Offset(1, 0);
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: start);
+    await gesture.down(start);
+    await tester.pump();
+    await gesture.moveTo(end);
+    await tester.pump();
+    await gesture.up();
+    await tester.pump();
+
+    expect(selectionController.hasSelection, isTrue);
+    expect(selectionController.selectedPlainText, contains('Alpha bravo'));
+    expect(selectionController.selectedPlainText, contains('Charlie delta'));
+  });
+
+  testWidgets('MixinSelectionArea selects across markdown and toolcall widgets',
+      (tester) async {
+    final selectionController = MarkdownSelectionController();
+    addTearDown(selectionController.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 360,
+            child: MixinSelectionArea(
+              controller: selectionController,
+              child: const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  MarkdownWidget(
+                    data: 'First markdown',
+                    useColumn: true,
+                  ),
+                  MixinSelectableText('Tool call output'),
+                  MarkdownWidget(
+                    data: 'Second markdown',
+                    useColumn: true,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    selectionController.selectAll();
+
+    expect(
+      selectionController.selectedPlainText,
+      'First markdown\n\nTool call output\n\nSecond markdown',
+    );
+  });
+
+  testWidgets('MixinSelectionArea drags across markdown and toolcall widgets',
+      (tester) async {
+    final selectionController = MarkdownSelectionController();
+    addTearDown(selectionController.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 360,
+            child: MixinSelectionArea(
+              controller: selectionController,
+              child: const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  MarkdownWidget(
+                    data: 'First markdown',
+                    useColumn: true,
+                  ),
+                  MixinSelectableText('Tool call output'),
+                  MarkdownWidget(
+                    data: 'Second markdown',
+                    useColumn: true,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    final start = tester.getRect(find.text('First markdown')).centerLeft +
+        const Offset(1, 0);
+    final end = tester.getRect(find.text('Second markdown')).centerRight -
+        const Offset(1, 0);
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: start);
+    await gesture.down(start);
+    await tester.pump();
+    await gesture.moveTo(end);
+    await tester.pump();
+    await gesture.up();
+    await tester.pump();
+
+    expect(selectionController.hasSelection, isTrue);
+    expect(selectionController.selectedPlainText, contains('First markdown'));
+    expect(selectionController.selectedPlainText, contains('Tool call output'));
+    expect(selectionController.selectedPlainText, contains('Second markdown'));
+  });
+
   testWidgets('footnote backreference markers are not rendered',
       (tester) async {
     await tester.pumpWidget(

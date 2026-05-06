@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../render/markdown_document_view.dart';
 import '../selection/selection_controller.dart';
+import '../selection/selection_registrar.dart';
 import 'markdown_controller.dart';
 import 'markdown_theme.dart';
 import 'markdown_types.dart';
@@ -62,11 +63,6 @@ class _MarkdownWidgetState extends State<MarkdownWidget> {
   MarkdownController get _effectiveController =>
       widget.controller ?? _ownedController!;
 
-  MarkdownSelectionController? get _effectiveSelectionController =>
-      widget.selectable
-          ? (widget.selectionController ?? _fallbackSelectionController)
-          : null;
-
   @override
   void initState() {
     super.initState();
@@ -110,7 +106,15 @@ class _MarkdownWidgetState extends State<MarkdownWidget> {
       child: Builder(
         builder: (context) {
           final theme = MarkdownTheme.of(context);
-          final selectionController = _effectiveSelectionController;
+          final selectionRegistrar = MixinSelectionRegistrar.maybeOf(context);
+          final selectionController = widget.selectable
+              ? (widget.selectionController ??
+                  selectionRegistrar?.controller ??
+                  _fallbackSelectionController)
+              : null;
+          final usesInheritedSelectionController = widget.selectable &&
+              widget.selectionController == null &&
+              selectionRegistrar != null;
           final animation = selectionController == null
               ? _effectiveController.documentListenable
               : Listenable.merge(
@@ -124,8 +128,10 @@ class _MarkdownWidgetState extends State<MarkdownWidget> {
             child: AnimatedBuilder(
               animation: animation,
               builder: (context, _) {
-                selectionController
-                    ?.attachDocument(_effectiveController.document);
+                if (!usesInheritedSelectionController) {
+                  selectionController
+                      ?.attachDocument(_effectiveController.document);
+                }
                 return MarkdownDocumentView(
                   document: _effectiveController.document,
                   theme: theme,

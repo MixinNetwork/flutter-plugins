@@ -61,6 +61,25 @@ MarkdownWidget(
 )
 ```
 
+### Generic Selection Area
+
+`MixinSelectionArea` can wrap non-Markdown widget trees. Text-like children opt in
+with `MixinSelectableText`, or with `MixinSelectable` when a custom text widget
+needs to provide its own hit-test and selection geometry.
+
+```dart
+MixinSelectionArea(
+  child: Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: const [
+      MixinSelectableText('Selectable custom text'),
+      SizedBox(height: 8),
+      MixinSelectableText('Drag selection can cross widgets'),
+    ],
+  ),
+)
+```
+
 ### Streaming / Incremental Updates
 
 For streaming or incremental updates, keep a controller and append chunks as they arrive. `appendChunk` reparses only the unstable trailing block instead of the full document, ensuring high performance.

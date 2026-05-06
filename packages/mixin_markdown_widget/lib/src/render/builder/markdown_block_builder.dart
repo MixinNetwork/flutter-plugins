@@ -68,14 +68,16 @@ class MarkdownBlockBuilder {
     BuildContext context, {
     required BlockNode block,
     required int blockIndex,
+    int? selectionBlockIndex,
     required DocumentRange? selectionRange,
   }) {
     final buildStopwatch = Stopwatch()..start();
     final cacheable = _canCacheBlockRow(block);
     final themeSignature = theme.hashCode;
+    final effectiveSelectionBlockIndex = selectionBlockIndex ?? blockIndex;
     final selectionSignature = _selectionSignatureForBlock(
       block: block,
-      blockIndex: blockIndex,
+      blockIndex: effectiveSelectionBlockIndex,
       selectionRange: selectionRange,
     );
 
@@ -83,7 +85,7 @@ class MarkdownBlockBuilder {
       final cached = _cachedBlockRows[block.id];
       if (cached != null &&
           identical(cached.block, block) &&
-          cached.blockIndex == blockIndex &&
+          cached.blockIndex == effectiveSelectionBlockIndex &&
           cached.themeSignature == themeSignature &&
           cached.selectionSignature == selectionSignature) {
         return cached.widget;
@@ -101,7 +103,7 @@ class MarkdownBlockBuilder {
           child: _buildBlockView(
             context,
             block: block,
-            blockIndex: blockIndex,
+            blockIndex: effectiveSelectionBlockIndex,
             selectionRange: selectionRange,
           ),
         ),
@@ -123,13 +125,13 @@ class MarkdownBlockBuilder {
     _logSlowBlockBuild(
       stopwatch: buildStopwatch,
       block: block,
-      blockIndex: blockIndex,
+      blockIndex: effectiveSelectionBlockIndex,
       cacheable: cacheable,
       fromCache: false,
     );
     _cachedBlockRows[block.id] = CachedBlockRow(
       block: block,
-      blockIndex: blockIndex,
+      blockIndex: effectiveSelectionBlockIndex,
       themeSignature: themeSignature,
       selectionSignature: selectionSignature,
       widget: widget,

@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import '../clipboard/plain_text_serializer.dart';
 import '../core/document.dart';
 import '../debug.dart';
+import '../selection/selection_host.dart';
 import '../selection/selection_controller.dart';
+import '../selection/selection_registrar.dart';
 import '../widgets/markdown_theme.dart';
 import '../widgets/markdown_types.dart';
 import 'code_syntax_highlighter.dart';
@@ -64,8 +66,6 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
 
   final List<TapGestureRecognizer> _recognizers = <TapGestureRecognizer>[];
   final ScrollController _fallbackScrollController = ScrollController();
-  final FocusNode _selectionFocusNode =
-      FocusNode(debugLabel: 'mixin_markdown_widget.selection');
   final ContextMenuController _contextMenuController = ContextMenuController();
   final GlobalKey _scrollableKey = GlobalKey(debugLabel: 'markdown-scrollable');
 
@@ -74,6 +74,8 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
   final MarkdownCodeSyntaxHighlighter _codeSyntaxHighlighter =
       const MarkdownCodeSyntaxHighlighter();
   late final MarkdownCodeHighlightCache _codeHighlightCache;
+  MixinSelectionRegistrar? _selectionRegistrar;
+  bool _registeredWithSelectionRegistrar = false;
 
   final Map<String, CachedBlockRow> _cachedBlockRows = {};
   final MarkdownDescriptorCache _descriptorCache = MarkdownDescriptorCache();
@@ -93,6 +95,12 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     _codeHighlightCache = MarkdownCodeHighlightCache(
       highlighter: _codeSyntaxHighlighter,
     )..addListener(_handleCodeHighlightCacheChanged);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _updateSelectionRegistrar(MixinSelectionRegistrar.maybeOf(context));
   }
 
   Set<String> _collectBlockIds(List<BlockNode> blocks) {
@@ -161,6 +169,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
         oldWidget.selectable != widget.selectable) {
       _cachedBlockRows.clear();
     }
+    _syncSelectionParticipant(participantChanged: true);
   }
 
   @override
@@ -170,9 +179,84 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       ..removeListener(_handleCodeHighlightCacheChanged)
       ..dispose();
     _fallbackScrollController.dispose();
-    _selectionFocusNode.dispose();
     _contextMenuController.remove();
+    if (_registeredWithSelectionRegistrar) {
+      _selectionRegistrar?.unregisterParticipant(this);
+    }
     super.dispose();
+  }
+
+  void _updateSelectionRegistrar(MixinSelectionRegistrar? nextRegistrar) {
+    if (identical(
+      _selectionRegistrar?.registryOwner,
+      nextRegistrar?.registryOwner,
+    )) {
+      _selectionRegistrar = nextRegistrar;
+      _syncSelectionParticipant();
+      return;
+    }
+    if (_registeredWithSelectionRegistrar) {
+      _selectionRegistrar?.unregisterParticipant(this);
+      _registeredWithSelectionRegistrar = false;
+    }
+    _selectionRegistrar = nextRegistrar;
+    _syncSelectionParticipant();
+  }
+
+  void _syncSelectionParticipant({bool participantChanged = false}) {
+    final registrar = _selectionRegistrar;
+    final shouldRegister = _usesInheritedSelection(registrar);
+    if (!shouldRegister || registrar == null) {
+      if (_registeredWithSelectionRegistrar) {
+        _selectionRegistrar?.unregisterParticipant(this);
+        _registeredWithSelectionRegistrar = false;
+      }
+      return;
+    }
+    if (!_registeredWithSelectionRegistrar) {
+      registrar.registerParticipant(_selectionParticipant());
+      _registeredWithSelectionRegistrar = true;
+      return;
+    }
+    if (participantChanged) {
+      registrar.participantChanged(this);
+    }
+  }
+
+  bool _usesInheritedSelection(MixinSelectionRegistrar? registrar) {
+    return widget.selectable &&
+        widget.selectionController != null &&
+        registrar != null &&
+        identical(widget.selectionController, registrar.controller);
+  }
+
+  int get _selectionBlockIndexOffset {
+    final registrar = _selectionRegistrar;
+    if (!_usesInheritedSelection(registrar)) {
+      return 0;
+    }
+    return registrar?.blockIndexOffsetOf(this) ?? 0;
+  }
+
+  MixinSelectionParticipant _selectionParticipant() {
+    return MixinSelectionParticipant(
+      owner: this,
+      blocks: () => widget.document.blocks,
+      globalRect: _globalRect,
+      hitTestPosition: _hitTestPosition,
+      hitTestExactTextPosition: _hitTestExactTextPosition,
+      selectWordAt: _selectWordAt,
+      selectBlockAt: _selectBlockAt,
+      selectSelectionUnitAt: _selectSelectionUnitAt,
+    );
+  }
+
+  Rect? _globalRect() {
+    final renderObject = _scrollableKey.currentContext?.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.hasSize) {
+      return null;
+    }
+    return renderObject.localToGlobal(Offset.zero) & renderObject.size;
   }
 
   void _handleCodeHighlightCacheChanged() {
@@ -310,10 +394,12 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
   }
 
   dynamic _blockStateForIndex(int blockIndex) {
-    if (blockIndex < 0 || blockIndex >= widget.document.blocks.length) {
+    final localBlockIndex = blockIndex - _selectionBlockIndexOffset;
+    if (localBlockIndex < 0 ||
+        localBlockIndex >= widget.document.blocks.length) {
       return null;
     }
-    final block = widget.document.blocks[blockIndex];
+    final block = widget.document.blocks[localBlockIndex];
     return _keysRegistry.blockKeys[block.id]?.currentState as dynamic;
   }
 
@@ -389,6 +475,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     final selectionRange = widget.selectionController?.normalizedRange;
 
     final scrollController = _effectiveScrollController;
+    final selectionBlockIndexOffset = _selectionBlockIndexOffset;
 
     Widget scrollable;
     if (widget.useColumn) {
@@ -403,6 +490,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
               context,
               block: widget.document.blocks[index],
               blockIndex: index,
+              selectionBlockIndex: selectionBlockIndexOffset + index,
               selectionRange: selectionRange,
             ),
           ),
@@ -425,6 +513,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
               context,
               block: block,
               blockIndex: index,
+              selectionBlockIndex: selectionBlockIndexOffset + index,
               selectionRange: selectionRange,
             );
           },
@@ -440,50 +529,32 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       );
     }
 
-    final gestureDetectorWrap = MarkdownSelectionGestureDetector(
-      selectionController: widget.selectionController!,
-      selectionFocusNode: _selectionFocusNode,
-      isSelectable: widget.selectable,
-      scrollableKey: _scrollableKey,
-      scrollController: scrollController,
-      onRequestToolbar: _showToolbar,
-      hitTestPosition: _hitTestPosition,
-      hitTestExactTextPosition: _hitTestExactTextPosition,
-      selectWordAt: _selectWordAt,
-      selectBlockAt: _selectBlockAt,
-      selectSelectionUnitAt: _selectSelectionUnitAt,
-      additionalAutoScrollTargets: _autoScrollTargets,
-      child: scrollable,
-    );
-
-    final tapRegion = TapRegion(
-      onTapOutside: (_) {
-        widget.selectionController!.clear();
-        _selectionFocusNode.unfocus();
-        _contextMenuController.remove();
-      },
-      child: Focus(
-        focusNode: _selectionFocusNode,
-        canRequestFocus: true,
-        child: gestureDetectorWrap,
-      ),
-    );
+    if (_usesInheritedSelection(_selectionRegistrar)) {
+      return _finishBuildWithLog(
+        buildStopwatch,
+        scrollable,
+        blockCount: widget.document.blocks.length,
+      );
+    }
 
     return _finishBuildWithLog(
       buildStopwatch,
-      MarkdownShortcutsScope(
+      MarkdownSelectionHost(
         selectionController: widget.selectionController!,
         document: widget.document,
+        isSelectable: widget.selectable,
+        scrollableKey: _scrollableKey,
+        scrollController: scrollController,
+        onRequestToolbar: _showToolbar,
+        hitTestPosition: _hitTestPosition,
+        hitTestExactTextPosition: _hitTestExactTextPosition,
+        selectWordAt: _selectWordAt,
+        selectBlockAt: _selectBlockAt,
+        selectSelectionUnitAt: _selectSelectionUnitAt,
+        additionalAutoScrollTargets: _autoScrollTargets,
         onCopyPlainText: widget.onCopyPlainText,
-        child: Listener(
-          behavior: HitTestBehavior.translucent,
-          onPointerDown: (_) {
-            if (!_selectionFocusNode.hasFocus) {
-              _selectionFocusNode.requestFocus();
-            }
-          },
-          child: tapRegion,
-        ),
+        onTapOutside: _contextMenuController.remove,
+        child: scrollable,
       ),
       blockCount: widget.document.blocks.length,
     );
