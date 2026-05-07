@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.0
+
+**BREAKING CHANGE**
+
+* remove `MarkdownDocument.sourceText` from the public document model
+* add `MixinSelectionArea` and shared selection scope for composite selections
+* improve composite selection across quotes, lists, tables, and mixed selectable widgets
+* improve inline code wrapping and decorated inline selection geometry
+* improve incremental append parsing, footnote handling, and local image fallback
+* add debug logging support and expand example and regression coverage
+
 ## 0.2.1
 
 * [mixin_markdown_widget] enhance Markdown rendering [#476](https://github.com/MixinNetwork/flutter-plugins/pull/476)
