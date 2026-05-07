@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.1
+
+* mixin_markdown_widget: fix contextual inline styling
+
 ## 0.3.0
 
 **BREAKING CHANGE**
