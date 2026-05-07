@@ -113,7 +113,7 @@ class MarkdownInlineBuilder {
             : _registerLink(() {
                 onTapLink!(link.destination, link.title, label);
               });
-        final style = baseStyle.merge(linkStyle ?? theme.linkStyle);
+        final style = _linkTextStyle(baseStyle, linkStyle);
         return buildPretextRuns(
           style,
           link.children,
@@ -142,7 +142,7 @@ class MarkdownInlineBuilder {
         return <MarkdownPretextInlineRun>[
           MarkdownPretextInlineRun(
             text: math.tex,
-            style: baseStyle.merge(inlineCodeStyle ?? theme.inlineCodeStyle),
+            style: _inlineCodeTextStyle(baseStyle, inlineCodeStyle),
             renderSpan: _buildMathSpan(
               baseStyle,
               math,
@@ -157,7 +157,7 @@ class MarkdownInlineBuilder {
         return <MarkdownPretextInlineRun>[
           MarkdownPretextInlineRun(
             text: code.text,
-            style: baseStyle.merge(inlineCodeStyle ?? theme.inlineCodeStyle),
+            style: _inlineCodeTextStyle(baseStyle, inlineCodeStyle),
             allowCharacterWrap: true,
             decoration: MarkdownPretextInlineDecoration(
               backgroundColor: theme.inlineCodeBackgroundColor,
@@ -182,7 +182,7 @@ class MarkdownInlineBuilder {
         return <MarkdownPretextInlineRun>[
           MarkdownPretextInlineRun(
             text: label,
-            style: baseStyle.merge(linkStyle ?? theme.linkStyle),
+            style: _linkTextStyle(baseStyle, linkStyle),
           ),
         ];
     }
@@ -301,7 +301,7 @@ class MarkdownInlineBuilder {
             : _registerLink(() {
                 onTapLink!(link.destination, link.title, label);
               });
-        final style = baseStyle.merge(linkStyle ?? theme.linkStyle);
+        final style = _linkTextStyle(baseStyle, linkStyle);
         return <InlineSpan>[
           TextSpan(
             style: style,
@@ -337,8 +337,7 @@ class MarkdownInlineBuilder {
                 padding: theme.inlineCodePadding,
                 child: Text(
                   code.text,
-                  style:
-                      baseStyle.merge(inlineCodeStyle ?? theme.inlineCodeStyle),
+                  style: _inlineCodeTextStyle(baseStyle, inlineCodeStyle),
                 ),
               ),
             ),
@@ -355,10 +354,50 @@ class MarkdownInlineBuilder {
         return <InlineSpan>[
           TextSpan(
             text: label,
-            style: baseStyle.merge(linkStyle ?? theme.linkStyle),
+            style: _linkTextStyle(baseStyle, linkStyle),
           ),
         ];
     }
+  }
+
+  TextStyle _linkTextStyle(TextStyle baseStyle, TextStyle? overrideStyle) {
+    final style = overrideStyle ?? theme.linkStyle;
+    final linkColor = style.color ?? baseStyle.color;
+    return baseStyle.merge(style).copyWith(
+          color: linkColor,
+          decoration: style.decoration ?? baseStyle.decoration,
+          decorationColor:
+              style.decorationColor ?? linkColor ?? baseStyle.decorationColor,
+          fontSize: _scaledInlineFontSize(style, baseStyle),
+          fontStyle: baseStyle.fontStyle ?? style.fontStyle,
+          fontWeight: baseStyle.fontWeight ?? style.fontWeight,
+        );
+  }
+
+  TextStyle _inlineCodeTextStyle(
+    TextStyle baseStyle,
+    TextStyle? overrideStyle,
+  ) {
+    final style = overrideStyle ?? theme.inlineCodeStyle;
+    return baseStyle.merge(style).copyWith(
+          color: baseStyle.color ?? style.color,
+          fontSize: _scaledInlineFontSize(style, baseStyle),
+          fontStyle: baseStyle.fontStyle ?? style.fontStyle,
+          fontWeight: baseStyle.fontWeight ?? style.fontWeight,
+        );
+  }
+
+  double? _scaledInlineFontSize(TextStyle inlineStyle, TextStyle baseStyle) {
+    final bodyFontSize = theme.bodyStyle.fontSize;
+    final baseFontSize = baseStyle.fontSize;
+    final inlineFontSize = inlineStyle.fontSize;
+    if (bodyFontSize == null ||
+        bodyFontSize == 0 ||
+        baseFontSize == null ||
+        inlineFontSize == null) {
+      return baseFontSize ?? inlineFontSize;
+    }
+    return inlineFontSize * baseFontSize / bodyFontSize;
   }
 
   TapGestureRecognizer _registerLink(VoidCallback onTap) {
@@ -414,7 +453,7 @@ class MarkdownInlineBuilder {
         textStyle: baseStyle,
         onErrorFallback: (error) => Text(
           math.tex,
-          style: baseStyle.merge(theme.inlineCodeStyle),
+          style: _inlineCodeTextStyle(baseStyle, null),
         ),
       ),
     );
@@ -432,7 +471,7 @@ class MarkdownInlineBuilder {
     final textPainter = TextPainter(
       text: TextSpan(
         text: math.tex,
-        style: baseStyle.merge(theme.inlineCodeStyle),
+        style: _inlineCodeTextStyle(baseStyle, null),
       ),
       textDirection: TextDirection.ltr,
       maxLines: 1,

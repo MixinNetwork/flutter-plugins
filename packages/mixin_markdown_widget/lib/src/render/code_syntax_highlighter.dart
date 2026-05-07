@@ -283,7 +283,11 @@ class MarkdownCodeSyntaxHighlighter {
       case 'strong':
         return const TextStyle(fontWeight: FontWeight.w700);
       case 'link':
-        return theme.linkStyle;
+        return TextStyle(
+          color: theme.linkStyle.color,
+          decoration: theme.linkStyle.decoration,
+          decorationColor: theme.linkStyle.decorationColor,
+        );
       case 'punctuation':
         return TextStyle(color: foreground.withValues(alpha: 0.78));
       default:

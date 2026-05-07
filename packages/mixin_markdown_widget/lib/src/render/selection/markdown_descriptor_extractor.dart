@@ -694,9 +694,11 @@ class MarkdownDescriptorExtractor {
     if (textStyleContext == null) {
       return null;
     }
+    final linkColor = theme.linkStyle.color;
     return _styleForContext(theme.linkStyle, textStyleContext).copyWith(
+      color: linkColor,
       decoration: theme.linkStyle.decoration,
-      decorationColor: textStyleContext.color,
+      decorationColor: theme.linkStyle.decorationColor ?? linkColor,
     );
   }
 

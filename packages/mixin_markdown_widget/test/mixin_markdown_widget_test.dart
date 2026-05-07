@@ -2409,6 +2409,45 @@ return value;
     expect(presentation.isHighlighted, isTrue);
   });
 
+  testWidgets('code highlight link tokens keep the code block font size', (
+    tester,
+  ) async {
+    late MarkdownThemeData tightTheme;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) {
+            tightTheme = MarkdownThemeData.tight(context);
+            return const SizedBox.shrink();
+          },
+        ),
+      ),
+    );
+
+    final presentation = await tester.runAsync(
+      () => const MarkdownCodeSyntaxHighlighter().buildPresentationAsync(
+        source: '[Example](https://example.com)',
+        baseStyle: tightTheme.codeBlockStyle,
+        theme: tightTheme,
+        language: 'markdown',
+      ),
+    );
+    expect(presentation, isNotNull);
+    final highlighted = presentation!;
+    expect(highlighted.isHighlighted, isTrue);
+
+    final linkRuns = highlighted.runs
+        .where((run) => run.style.decoration == tightTheme.linkStyle.decoration)
+        .toList(growable: false);
+    expect(linkRuns, isNotEmpty);
+    for (final run in linkRuns) {
+      expect(run.style.color, tightTheme.linkStyle.color);
+      expect(run.style.fontSize, tightTheme.codeBlockStyle.fontSize);
+      expect(run.style.fontFamily, tightTheme.codeBlockStyle.fontFamily);
+    }
+  });
+
   testWidgets('code blocks refresh their theme styles after a theme switch', (
     tester,
   ) async {
@@ -5268,7 +5307,7 @@ const veryLongValueName = 42;
             data: '''
 > ## Quoted heading
 >
-> - Quoted `code`
+> - Quoted `code` with a [quoted link](https://example.com)
 ''',
           ),
         ),
@@ -5305,6 +5344,61 @@ const veryLongValueName = 42;
         listTextBlock.runs!.singleWhere((run) => run.text == 'code').style;
     expect(codeStyle.color, theme.quoteStyle.color);
     expect(codeStyle.fontStyle, theme.quoteStyle.fontStyle);
+
+    final linkStyle = listTextBlock.runs!
+        .singleWhere((run) => run.text == 'quoted link')
+        .style;
+    expect(linkStyle.color, theme.linkStyle.color);
+    expect(linkStyle.decoration, theme.linkStyle.decoration);
+    expect(linkStyle.decorationColor, theme.linkStyle.decorationColor);
+    expect(linkStyle.fontStyle, theme.quoteStyle.fontStyle);
+
+    final quoteBlock = tester.widget<SelectableMarkdownBlock>(
+      find
+          .ancestor(
+            of: find.byType(MarkdownQuoteBlockView),
+            matching: find.byType(SelectableMarkdownBlock),
+          )
+          .first,
+    );
+    final descriptorLinkStyle =
+        _styleForText(quoteBlock.spec.textSpan!, 'quoted link');
+    expect(descriptorLinkStyle?.color, theme.linkStyle.color);
+    expect(descriptorLinkStyle?.decoration, theme.linkStyle.decoration);
+  });
+
+  testWidgets('heading link inline code keeps heading size and link color', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: MarkdownWidget(
+            data: '## [Title `code`](https://example.com)',
+          ),
+        ),
+      ),
+    );
+
+    final theme = MarkdownTheme.of(tester.element(find.byType(MarkdownWidget)));
+    final headingTextBlock = tester.widget<MarkdownPretextTextBlock>(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is MarkdownPretextTextBlock &&
+            widget.runs?.any((run) => run.text == 'code') == true,
+      ),
+    );
+
+    final titleStyle =
+        headingTextBlock.runs!.singleWhere((run) => run.text == 'Title ').style;
+    expect(titleStyle.color, theme.linkStyle.color);
+    expect(titleStyle.fontSize, theme.heading2Style.fontSize);
+
+    final codeStyle =
+        headingTextBlock.runs!.singleWhere((run) => run.text == 'code').style;
+    expect(codeStyle.color, theme.linkStyle.color);
+    expect(codeStyle.fontFamily, theme.inlineCodeStyle.fontFamily);
+    expect(codeStyle.fontSize, theme.heading2Style.fontSize);
   });
 
   testWidgets('nested quotes with headings remain selectable', (tester) async {
