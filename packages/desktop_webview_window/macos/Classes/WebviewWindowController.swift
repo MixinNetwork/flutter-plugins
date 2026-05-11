@@ -71,6 +71,7 @@ class WebviewWindowController: NSWindowController {
     webViewController.destroy()
     webviewPlugin = nil
     window?.delegate = nil
+    window?.close()
     window = nil
   }
 
