@@ -1,11 +1,37 @@
-## 0.2.5
+## 0.3.0
 
-* Add support for `registerJavaScriptMessageHandler` and `unregisterJavaScriptMessageHandler` on
-  Linux. Use `window.webkit.messageHandlers.<handlerName>.postMessage(<message>)` in js code
+**BREAKING CHANGES**
 
-## 0.2.4
+* Require Dart 3.5 or later.
+* Require macOS 10.13 or later for the macOS plugin.
+* Change `OnUrlRequestCallback` to return a `bool` so navigation requests can be allowed or blocked.
+* Replace `addOnUrlRequestCallback` and `removeOnUrlRequestCallback` with `setOnUrlRequestCallback`.
+* Remove the `onError` parameter from `runWebViewTitleBarWidget`.
 
-* Add backward compatibility with webkit2gtk-4.0 on Linux
+* Add Swift Package Manager support for macOS [#480](https://github.com/MixinNetwork/flutter-plugins/pull/480)
+  by [jose3ww](https://github.com/jose3ww)
+* Add `bringToForeground` API [#274](https://github.com/MixinNetwork/flutter-plugins/pull/274)
+  by [Iri-Hor](https://github.com/Iri-Hor)
+* Add `moveWebviewWindow` API [#280](https://github.com/MixinNetwork/flutter-plugins/pull/280)
+  by [Iri-Hor](https://github.com/Iri-Hor)
+* Add `maximized` parameter to `bringToForeground` [#282](https://github.com/MixinNetwork/flutter-plugins/pull/282)
+  by [Iri-Hor](https://github.com/Iri-Hor)
+* Add URL request control support [#296](https://github.com/MixinNetwork/flutter-plugins/pull/296)
+  by [Iri-Hor](https://github.com/Iri-Hor)
+* Add `getPositionalParameters` API [#291](https://github.com/MixinNetwork/flutter-plugins/pull/291)
+  by [Iri-Hor](https://github.com/Iri-Hor)
+* Add `getAllCookies` API [#349](https://github.com/MixinNetwork/flutter-plugins/pull/349)
+  by [KRTirtho](https://github.com/KRTirtho)
+* Add Linux support for `registerJavaScriptMessageHandler` and `unregisterJavaScriptMessageHandler` [#452](https://github.com/MixinNetwork/flutter-plugins/pull/452)
+  by [Carapacik](https://github.com/Carapacik)
+* Add backward compatibility with webkit2gtk-4.0 on Linux [#311](https://github.com/MixinNetwork/flutter-plugins/pull/311)
+  by [prateekmedia](https://github.com/prateekmedia)
+* Use deprecated WebKitGTK functions only on versions older than 2.40 [#334](https://github.com/MixinNetwork/flutter-plugins/pull/334)
+  by [prateekmedia](https://github.com/prateekmedia)
+* Add WebView window safety fixes for Windows and macOS [#451](https://github.com/MixinNetwork/flutter-plugins/pull/451)
+  by [paulanatoleclaudot-betclic](https://github.com/paulanatoleclaudot-betclic)
+* Update README [#313](https://github.com/MixinNetwork/flutter-plugins/pull/313)
+  by [tanvirulislam](https://github.com/tanvirulislam)
 
 ## 0.2.3
 
