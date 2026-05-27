@@ -39,7 +39,13 @@ class WebViewLayoutController: NSViewController {
     self.methodChannel = methodChannel
     self.titleBarHeight = titleBarHeight
     self.titleBarTopPadding = titleBarTopPadding
+    #if SWIFT_PACKAGE
+    // SwiftPM places resources in a per-module bundle exposed as `Bundle.module`.
+    super.init(nibName: "WebViewLayoutController", bundle: Bundle.module)
+    #else
+    // CocoaPods build: the nib is in the framework bundle of this class.
     super.init(nibName: "WebViewLayoutController", bundle: Bundle(for: WebViewLayoutController.self))
+    #endif
   }
 
   required init?(coder: NSCoder) {
