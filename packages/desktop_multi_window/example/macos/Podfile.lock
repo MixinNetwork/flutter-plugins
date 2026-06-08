@@ -1,8 +1,6 @@
 PODS:
   - desktop_lifecycle (0.0.1):
     - FlutterMacOS
-  - desktop_multi_window (0.0.1):
-    - FlutterMacOS
   - FlutterMacOS (1.0.0)
   - fvp (0.35.0):
     - Flutter
@@ -11,27 +9,15 @@ PODS:
   - mdk (0.35.0)
   - mixin_logger (0.0.1):
     - FlutterMacOS
-  - path_provider_foundation (0.0.1):
-    - Flutter
-    - FlutterMacOS
   - screen_retriever_macos (0.0.1):
-    - FlutterMacOS
-  - video_player_avfoundation (0.0.1):
-    - Flutter
-    - FlutterMacOS
-  - window_manager (0.5.0):
     - FlutterMacOS
 
 DEPENDENCIES:
   - desktop_lifecycle (from `Flutter/ephemeral/.symlinks/plugins/desktop_lifecycle/macos`)
-  - desktop_multi_window (from `Flutter/ephemeral/.symlinks/plugins/desktop_multi_window/macos`)
   - FlutterMacOS (from `Flutter/ephemeral`)
   - fvp (from `Flutter/ephemeral/.symlinks/plugins/fvp/darwin`)
   - mixin_logger (from `Flutter/ephemeral/.symlinks/plugins/mixin_logger/macos`)
-  - path_provider_foundation (from `Flutter/ephemeral/.symlinks/plugins/path_provider_foundation/darwin`)
   - screen_retriever_macos (from `Flutter/ephemeral/.symlinks/plugins/screen_retriever_macos/macos`)
-  - video_player_avfoundation (from `Flutter/ephemeral/.symlinks/plugins/video_player_avfoundation/darwin`)
-  - window_manager (from `Flutter/ephemeral/.symlinks/plugins/window_manager/macos`)
 
 SPEC REPOS:
   trunk:
@@ -40,34 +26,22 @@ SPEC REPOS:
 EXTERNAL SOURCES:
   desktop_lifecycle:
     :path: Flutter/ephemeral/.symlinks/plugins/desktop_lifecycle/macos
-  desktop_multi_window:
-    :path: Flutter/ephemeral/.symlinks/plugins/desktop_multi_window/macos
   FlutterMacOS:
     :path: Flutter/ephemeral
   fvp:
     :path: Flutter/ephemeral/.symlinks/plugins/fvp/darwin
   mixin_logger:
     :path: Flutter/ephemeral/.symlinks/plugins/mixin_logger/macos
-  path_provider_foundation:
-    :path: Flutter/ephemeral/.symlinks/plugins/path_provider_foundation/darwin
   screen_retriever_macos:
     :path: Flutter/ephemeral/.symlinks/plugins/screen_retriever_macos/macos
-  video_player_avfoundation:
-    :path: Flutter/ephemeral/.symlinks/plugins/video_player_avfoundation/darwin
-  window_manager:
-    :path: Flutter/ephemeral/.symlinks/plugins/window_manager/macos
 
 SPEC CHECKSUMS:
-  desktop_lifecycle: e4d2ff93af77bbbd473fe1a61773fdf9c5a79c91
-  desktop_multi_window: 93667594ccc4b88d91a97972fd3b1b89667fa80a
-  FlutterMacOS: 8f6f14fa908a6fb3fba0cd85dbd81ec4b251fb24
-  fvp: ecee65308dd86ae46e3c6d5d42cd2aad48095ef5
+  desktop_lifecycle: a600c10e12fe033c7be9078f2e929b8241f2c1e3
+  FlutterMacOS: d0db08ddef1a9af05a5ec4b724367152bb0500b1
+  fvp: f4fdb89279e863eb09869bde7ba7fce9e81a16ab
   mdk: baa616b93f696c7066df0e5ebe057badfa9c462b
-  mixin_logger: 6b31328b08f546a8defd32cd910370562fc48405
-  path_provider_foundation: 080d55be775b7414fd5a5ef3ac137b97b097e564
-  screen_retriever_macos: 452e51764a9e1cdb74b3c541238795849f21557f
-  video_player_avfoundation: 2cef49524dd1f16c5300b9cd6efd9611ce03639b
-  window_manager: b729e31d38fb04905235df9ea896128991cad99e
+  mixin_logger: 5e5bd35ba38da1ff4939ee5ec83260d7fc5258fc
+  screen_retriever_macos: 776e0fa5d42c6163d2bf772d22478df4b302b161
 
 PODFILE CHECKSUM: 0d3963a09fc94f580682bd88480486da345dc3f0
 
