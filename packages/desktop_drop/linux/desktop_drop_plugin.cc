@@ -21,14 +21,50 @@ G_DEFINE_TYPE(DesktopDropPlugin, desktop_drop_plugin, g_object_get_type())
 void on_drag_data_received(GtkWidget *widget, GdkDragContext *drag_context,
                            gint x, gint y, GtkSelectionData *sdata, guint info,
                            guint time, gpointer user_data) {
+  // When dragging from different file managers we may receive a plain string
+  // (e.g. "dde-fileManager") instead of real URIs.  Use gtk_selection_data_get_uris
+  // which understands the "text/uri-list" format and returns an array of
+  // URI strings.  Convert those to local filenames and join with newlines.
   auto *channel = static_cast<FlMethodChannel *>(user_data);
-  auto *data = gtk_selection_data_get_data(sdata);
   double point[] = {double(x), double(y)};
+
+  gchar *text = nullptr;
+  gchar **uris = gtk_selection_data_get_uris(sdata);
+  if (uris) {
+    // build newline-separated list of file paths
+    GString *builder = g_string_new(NULL);
+    for (gchar **uri = uris; *uri; uri++) {
+      gchar *filename = g_filename_from_uri(*uri, nullptr, nullptr);
+      if (!filename) {
+        // if conversion failed, fall back to raw URI
+        filename = g_strdup(*uri);
+      }
+      if (builder->len > 0) {
+        g_string_append(builder, "\n");
+      }
+      g_string_append(builder, filename);
+      g_free(filename);
+    }
+    text = g_string_free(builder, FALSE);
+    g_strfreev(uris);
+  } else {
+    // fallback to the raw data as before
+    auto *data = gtk_selection_data_get_data(sdata);
+    if (data) {
+      text = g_strdup((gchar *)data);
+    }
+  }
+
+  if (!text) {
+    text = g_strdup("");
+  }
+
   auto args = fl_value_new_list();
-  fl_value_append(args, fl_value_new_string((gchar *) data));
+  fl_value_append(args, fl_value_new_string(text));
   fl_value_append(args, fl_value_new_float_list(point, 2));
   fl_method_channel_invoke_method(channel, "performOperation_linux", args,
                                   nullptr, nullptr, nullptr);
+  g_free(text);
 }
 
 void on_drag_motion(GtkWidget *widget, GdkDragContext *drag_context,
@@ -95,11 +131,14 @@ void desktop_drop_plugin_register_with_registrar(FlPluginRegistrar *registrar) {
       g_object_new(desktop_drop_plugin_get_type(), nullptr));
 
   auto *fl_view = fl_plugin_registrar_get_view(registrar);
-  static GtkTargetEntry entries[] = {
-      {strdup("STRING"), GTK_TARGET_OTHER_APP, 0}
-  };
-  gtk_drag_dest_set(GTK_WIDGET(fl_view), GTK_DEST_DEFAULT_ALL, entries, 1, GDK_ACTION_COPY);
+  // Use URI targets for file drops and avoid forcing the generic STRING
+  // target first.  Prioritize text/uri-list so we receive actual file
+  // URIs instead of application names like "dde-fileManager".
+  gtk_drag_dest_set(GTK_WIDGET(fl_view), GTK_DEST_DEFAULT_ALL, nullptr, 0, GDK_ACTION_COPY);
   gtk_drag_dest_add_uri_targets(GTK_WIDGET(fl_view));
+  // In case a source doesn't provide URI targets we still accept generic
+  // text, but it is added _after_ the URI targets so it has lower priority.
+  gtk_drag_dest_add_text_targets(GTK_WIDGET(fl_view));
 
   g_autoptr(FlStandardMethodCodec) codec = fl_standard_method_codec_new();
   FlMethodChannel *channel =
