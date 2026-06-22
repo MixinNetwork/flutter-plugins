@@ -1,3 +1,7 @@
+## 0.3.1
+
+* Add Swift Package Manager support for macOS.
+
 ## 0.3.0
 
 * [BREAK CHANGE] rewritten, please refer to readme
