@@ -18,6 +18,8 @@ namespace {
 constexpr const wchar_t kWindowClassName[] =
     L"FLUTTER_MULTI_WINDOW_WIN32_WINDOW";
 
+constexpr UINT kResizeChildContentMessage = WM_APP + 0x3D1;
+
 /// Registry key for app theme preference.
 ///
 /// A value of 0 indicates apps should use dark mode. A non-zero or missing
@@ -207,18 +209,21 @@ Win32Window::MessageHandler(HWND hwnd,
 
       SetWindowPos(hwnd, nullptr, newRectSize->left, newRectSize->top, newWidth,
                    newHeight, SWP_NOZORDER | SWP_NOACTIVATE);
+      QueueChildContentResize();
 
       return 0;
     }
     case WM_SIZE: {
-      RECT rect = GetClientArea();
-      if (child_content_ != nullptr) {
-        // Size and position the child window.
-        MoveWindow(child_content_, rect.left, rect.top, rect.right - rect.left,
-                   rect.bottom - rect.top, TRUE);
-      }
+      ResizeChildContent();
       return 0;
     }
+    case WM_WINDOWPOSCHANGED:
+      QueueChildContentResize();
+      break;
+    case kResizeChildContentMessage:
+      child_resize_pending_ = false;
+      ResizeChildContent();
+      return 0;
 
     case WM_ACTIVATE:
       if (child_content_ != nullptr) {
@@ -254,10 +259,7 @@ Win32Window* Win32Window::GetThisFromHandle(HWND const window) noexcept {
 void Win32Window::SetChildContent(HWND content) {
   child_content_ = content;
   SetParent(content, window_handle_);
-  RECT frame = GetClientArea();
-
-  MoveWindow(content, frame.left, frame.top, frame.right - frame.left,
-             frame.bottom - frame.top, true);
+  ResizeChildContent();
 
   SetFocus(child_content_);
 }
@@ -274,6 +276,26 @@ HWND Win32Window::GetHandle() {
 
 void Win32Window::SetQuitOnClose(bool quit_on_close) {
   quit_on_close_ = quit_on_close;
+}
+
+void Win32Window::QueueChildContentResize() {
+  if (window_handle_ == nullptr || child_content_ == nullptr ||
+      child_resize_pending_) {
+    return;
+  }
+  child_resize_pending_ = true;
+  if (!PostMessage(window_handle_, kResizeChildContentMessage, 0, 0)) {
+    child_resize_pending_ = false;
+  }
+}
+
+void Win32Window::ResizeChildContent() {
+  if (child_content_ == nullptr) {
+    return;
+  }
+  RECT frame = GetClientArea();
+  MoveWindow(child_content_, frame.left, frame.top, frame.right - frame.left,
+             frame.bottom - frame.top, TRUE);
 }
 
 bool Win32Window::OnCreate() {
