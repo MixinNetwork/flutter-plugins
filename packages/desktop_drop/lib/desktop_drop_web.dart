@@ -33,13 +33,16 @@ class DesktopDropWeb {
   // Calling it only once silently truncates directories with >100 files.
   // See: https://wicg.github.io/entries-api/#dom-filesystemdirectoryreader-readentries
   Future<List<dynamic>> _readAllEntries(
-      web.FileSystemDirectoryReader reader) async {
+    web.FileSystemDirectoryReader reader,
+  ) async {
     final allEntries = <dynamic>[];
     while (true) {
       final completer = Completer<List<dynamic>>();
-      reader.readEntries((JSArray<web.FileSystemEntry> batch) {
-        completer.complete(batch.toDart);
-      }.toJS);
+      reader.readEntries(
+        (JSArray<web.FileSystemEntry> batch) {
+          completer.complete(batch.toDart);
+        }.toJS,
+      );
       final batch = await completer.future;
       if (batch.isEmpty) break;
       allEntries.addAll(batch);
@@ -54,11 +57,11 @@ class DesktopDropWeb {
 
       final List<dynamic> entries = await _readAllEntries(reader);
 
-      final children = await Future.wait(
-        entries.map((e) => _entryToWebDropItem(e)),
-      )
-        ..removeWhere(
-            (element) => element.name == '.DS_Store' && element.type == '');
+      final children =
+          await Future.wait(entries.map((e) => _entryToWebDropItem(e)))
+            ..removeWhere(
+              (element) => element.name == '.DS_Store' && element.type == '',
+            );
 
       return WebDropItem(
         uri: web.URL.createObjectURL(web.Blob().slice(0, 0, 'directory')),
@@ -100,11 +103,13 @@ class DesktopDropWeb {
 
       final items = event.dataTransfer!.items;
 
-      Future.wait(List.generate(items.length, (index) {
-        final item = items[index];
-        final entry = item.webkitGetAsEntry()!;
-        return _entryToWebDropItem(entry);
-      })).then((webItems) {
+      Future.wait(
+        List.generate(items.length, (index) {
+          final item = items[index];
+          final entry = item.webkitGetAsEntry()!;
+          return _entryToWebDropItem(entry);
+        }),
+      ).then((webItems) {
         channel.invokeMethod(
           "performOperation_web",
           webItems.map((e) => e.toJson()).toList(),
