@@ -19,6 +19,11 @@ class DesktopDrop {
 
   final _listeners = <RawDropListener>{};
 
+  // Buffer for app-wide drops (e.g., Dock/Finder on macOS) that may arrive
+  // before any widget listeners are registered. Delivered once to the next
+  // listener that registers, then cleared.
+  final List<DropEvent> _pendingAppWideDrops = <DropEvent>[];
+
   var _inited = false;
 
   Offset? _offset;
@@ -35,6 +40,17 @@ class DesktopDrop {
         debugPrint('_handleMethodChannel: $e $s');
       }
     });
+
+    // Inform the macOS side that Dart is ready to receive global drop events.
+    // This allows the plugin to flush any queued Dock/Finder open events that
+    // may have arrived before the handler was installed.
+    if (UniversalPlatform.isMacOS) {
+      _channel.invokeMethod('readyForGlobalDrops').catchError((_) {});
+      // Retry once on next frame in case the plugin registered after this call.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _channel.invokeMethod('readyForGlobalDrops').catchError((_) {});
+      });
+    }
   }
 
   /// macOS: Attempt to start security-scoped access for a bookmarked URL.
@@ -45,13 +61,16 @@ class DesktopDrop {
   /// If [bookmark] is empty, this function returns `false` and does not
   /// invoke the platform call. Promise files written under your container do
   /// not require security-scoped access.
-  Future<bool> startAccessingSecurityScopedResource(
-      {required Uint8List bookmark}) async {
+  Future<bool> startAccessingSecurityScopedResource({
+    required Uint8List bookmark,
+  }) async {
     if (bookmark.isEmpty) return false;
     Map<String, dynamic> resultMap = {};
     resultMap["apple-bookmark"] = bookmark;
     final bool? result = await _channel.invokeMethod(
-        "startAccessingSecurityScopedResource", resultMap);
+      "startAccessingSecurityScopedResource",
+      resultMap,
+    );
     if (result == null) return false;
     return result;
   }
@@ -60,13 +79,16 @@ class DesktopDrop {
   ///
   /// If [bookmark] is empty, this function returns `true` and does not
   /// invoke the platform call, acting as a no-op.
-  Future<bool> stopAccessingSecurityScopedResource(
-      {required Uint8List bookmark}) async {
+  Future<bool> stopAccessingSecurityScopedResource({
+    required Uint8List bookmark,
+  }) async {
     if (bookmark.isEmpty) return true;
     Map<String, dynamic> resultMap = {};
     resultMap["apple-bookmark"] = bookmark;
     final bool result = await _channel.invokeMethod(
-        "stopAccessingSecurityScopedResource", resultMap);
+      "stopAccessingSecurityScopedResource",
+      resultMap,
+    );
     return result;
   }
 
@@ -104,30 +126,55 @@ class DesktopDrop {
         break;
       case "performOperation_macos":
         final items = (call.arguments as List).cast<Map>();
-        _notifyEvent(
-          DropDoneEvent(
-            location: _offset ?? Offset.zero,
-            files: items.map((raw) {
-              final path = raw["path"] as String;
-              final bookmark = raw["apple-bookmark"] as Uint8List?;
-              final isDir = (raw["isDirectory"] as bool?) ?? false;
-              final fromPromise = (raw["fromPromise"] as bool?) ?? false;
-              if (isDir) {
-                return DropItemDirectory(
-                  path,
-                  const [],
-                  extraAppleBookmark: bookmark,
-                  fromPromise: fromPromise,
-                );
-              }
-              return DropItemFile(
+        final event = DropDoneEvent(
+          location: _offset ?? Offset.zero,
+          files: items.map<DropItem>((raw) {
+            final data = raw["data"];
+            if (data is Uint8List) {
+              final mime =
+                  (raw["mimeType"] as String?) ?? 'application/octet-stream';
+              final name = (raw["name"] as String?) ?? 'Dropped.data';
+              final pseudoPath =
+                  'memory://drop/${DateTime.now().microsecondsSinceEpoch}/$name';
+              return DropItemFile.fromData(
+                data,
+                name: name,
+                mimeType: mime,
+                length: data.lengthInBytes,
+                lastModified: DateTime.now(),
+                path: pseudoPath,
+                fromPromise: (raw["fromPromise"] as bool?) ?? false,
+              );
+            }
+
+            final path = raw["path"] as String;
+            final bookmark = raw["apple-bookmark"] as Uint8List?;
+            final isDir = (raw["isDirectory"] as bool?) ?? false;
+            final fromPromise = (raw["fromPromise"] as bool?) ?? false;
+            if (isDir) {
+              return DropItemDirectory(
                 path,
+                const [],
                 extraAppleBookmark: bookmark,
                 fromPromise: fromPromise,
               );
-            }).toList(),
-          ),
+            }
+            return DropItemFile(
+              path,
+              extraAppleBookmark: bookmark,
+              fromPromise: fromPromise,
+            );
+          }).toList(),
         );
+        _notifyEvent(event);
+        // If this was an application-wide drop (e.g., Dock/Finder on macOS)
+        // and no widget listeners were yet registered, buffer it so the first
+        // listener added can still receive it.
+        if (UniversalPlatform.isMacOS && event.location == Offset.zero) {
+          _pendingAppWideDrops
+            ..clear()
+            ..add(event);
+        }
         _offset = null;
         break;
 
@@ -151,10 +198,12 @@ class DesktopDrop {
           }
           return '';
         }).where((e) => e.isNotEmpty);
-        _notifyEvent(DropDoneEvent(
-          location: Offset(offset[0], offset[1]),
-          files: paths.map((e) => DropItemFile(e)).toList(),
-        ));
+        _notifyEvent(
+          DropDoneEvent(
+            location: Offset(offset[0], offset[1]),
+            files: paths.map((e) => DropItemFile(e)).toList(),
+          ),
+        );
         break;
       case "performOperation_web":
         final results = (call.arguments as List)
@@ -181,6 +230,16 @@ class DesktopDrop {
   void addRawDropEventListener(RawDropListener listener) {
     assert(!_listeners.contains(listener));
     _listeners.add(listener);
+    // If there is a pending app-wide drop (e.g., Dock/Finder) that arrived
+    // before any widget registered, deliver it once to the newly added
+    // listener, then clear. This makes `catchAppWideDrops` widgets receive
+    // a launch-time drop even if they register slightly later.
+    if (UniversalPlatform.isMacOS && _pendingAppWideDrops.isNotEmpty) {
+      for (final e in _pendingAppWideDrops) {
+        listener(e);
+      }
+      _pendingAppWideDrops.clear();
+    }
   }
 
   void removeRawDropEventListener(RawDropListener listener) {

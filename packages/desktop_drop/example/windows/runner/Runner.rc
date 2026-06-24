@@ -90,10 +90,10 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "Demonstrates how to use the desktop_drop plugin." "\0"
+            VALUE "FileDescription", "desktop_drop_example" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "desktop_drop_example" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2021 com.example. All rights reserved." "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2025 com.example. All rights reserved." "\0"
             VALUE "OriginalFilename", "desktop_drop_example.exe" "\0"
             VALUE "ProductName", "desktop_drop_example" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
