@@ -7,8 +7,8 @@ publish_to: 'none'
 #   sdk: ">=2.12.0 <3.0.0"
 
 environment:
-  sdk: ">=2.13.0 <3.0.0"
-  flutter: ">=1.20.0"
+  sdk: '>=3.8.1 <4.0.0'
+  flutter: '>=3.32.1'
 
 dependencies:
   flutter:
@@ -16,9 +16,9 @@ dependencies:
 
   desktop_drop:
     path: ../
-  cross_file: ^0.3.2
-  cupertino_icons: ^1.0.2
-  shared_preferences: ^2.2.3 
+  cross_file: ^0.3.5+1
+  cupertino_icons: ^1.0.8
+  shared_preferences: ^2.5.3
   universal_platform:
 
 dev_dependencies:
@@ -30,7 +30,7 @@ dev_dependencies:
   # activated in the `analysis_options.yaml` file located at the root of your
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
-  flutter_lints: ^1.0.0
+  flutter_lints: ^6.0.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

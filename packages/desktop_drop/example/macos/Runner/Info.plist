@@ -28,5 +28,42 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+<!-- Advertise broad document types so Dock/Finder route drops to the app. -->
+<key>CFBundleDocumentTypes</key>
+<array>
+<dict>
+    <key>CFBundleTypeRole</key>
+    <string>Viewer</string>
+    <key>LSItemContentTypes</key>
+    <array>
+        <string>public.data</string>
+        <string>public.folder</string>
+    </array>
+</dict>
+</array>
+<key>NSServices</key>
+<array>
+<dict>
+    <key>NSMenuItem</key>
+    <dict>
+        <key>default</key>
+        <string>Drop Text into Desktop Drop</string>
+    </dict>
+    <key>NSMessage</key>
+    <string>desktopDropAcceptDroppedText</string>
+    <key>NSSendTypes</key>
+    <array>
+        <string>NSStringPboardType</string>
+        <string>public.text</string>
+        <string>public.plain-text</string>
+        <string>public.utf8-plain-text</string>
+        <string>public.utf16-plain-text</string>
+        <string>public.utf16-external-plain-text</string>
+        <string>public.html</string>
+        <string>public.rtf</string>
+        <string>public.url</string>
+    </array>
+</dict>
+</array>
 </dict>
 </plist>

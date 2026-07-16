@@ -4,19 +4,20 @@
 #
 Pod::Spec.new do |s|
   s.name             = 'desktop_drop'
-  s.version          = '0.0.1'
-  s.summary          = 'A new flutter plugin project.'
+  s.version          = '0.5.0'
+  s.summary          = 'A plugin which allows user dragging files to your flutter desktop applications.'
   s.description      = <<-DESC
-A new flutter plugin project.
+A plugin which allows user dragging files to your flutter desktop applications.
+Supports files, folders, text, and URLs from Finder, Dock, and Chromium-based apps.
                        DESC
-  s.homepage         = 'http://example.com'
+  s.homepage         = 'https://github.com/omar-hanafy/desktop_drop'
   s.license          = { :file => '../LICENSE' }
-  s.author           = { 'Your Company' => 'email@example.com' }
+  s.author           = { 'MixinNetwork' => 'https://github.com/omar-hanafy' }
   s.source           = { :path => '.' }
   s.source_files     = 'desktop_drop/Sources/desktop_drop/**/*.{h,m,swift}'
   s.dependency 'FlutterMacOS'
 
-  s.platform = :osx, '10.13'
+  s.platform = :osx, '11.0'
   s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES' }
   s.swift_version = '5.0'
 end

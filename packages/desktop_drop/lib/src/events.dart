@@ -27,10 +27,8 @@ class DropUpdateEvent extends DropEvent {
 class DropDoneEvent extends DropEvent {
   final List<DropItem> files;
 
-  DropDoneEvent({
-    required Offset location,
-    required this.files,
-  }) : super(location);
+  DropDoneEvent({required Offset location, required this.files})
+      : super(location);
 
   @override
   String toString() {

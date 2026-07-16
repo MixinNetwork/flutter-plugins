@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.8.0
+
+* [macOS] Add app-wide drops from Dock, Finder, and Open With via
+  `DropTarget.catchAppWideDrops`.
+* [macOS] Add Dock text/link drops through Services, delivered as
+  memory-backed `DropItem`s with text and URI helpers.
+* Document and demonstrate the required macOS `Info.plist` and `AppDelegate`
+  setup for global file, folder, text, and link drops.
+
 ## 0.7.1
 
 * update worksapce
