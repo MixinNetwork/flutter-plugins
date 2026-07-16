@@ -1,5 +1,5 @@
 ## 0.1.4
-* support Swift Package Manager on iOS
+* support Swift Package Manager on iOS and macOS using shared Darwin sources
 
 ## 0.1.3
 * support android 15 16k page size
