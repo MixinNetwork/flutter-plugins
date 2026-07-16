@@ -1,5 +1,10 @@
-## 0.1.4
-* support Swift Package Manager on iOS and macOS using shared Darwin sources
+## 0.2.0
+
+**BREAKING CHANGE**
+
+* require Flutter 3.7.0 or later.
+* support Swift Package Manager on iOS and macOS using shared Darwin sources [#487](https://github.com/MixinNetwork/flutter-plugins/pull/487)
+  by [lockieRichter](https://github.com/lockieRichter)
 
 ## 0.1.3
 * support android 15 16k page size
