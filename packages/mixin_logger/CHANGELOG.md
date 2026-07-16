@@ -1,3 +1,6 @@
+## 0.1.4
+* support Swift Package Manager on iOS
+
 ## 0.1.3
 * support android 15 16k page size
 

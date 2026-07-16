@@ -11,7 +11,19 @@ const String _libName = 'mixin_logger';
 /// The dynamic library in which the symbols for [MixinLoggerBindings] can be found.
 final DynamicLibrary _dylib = () {
   if (Platform.isMacOS || Platform.isIOS) {
-    return DynamicLibrary.open('$_libName.framework/$_libName');
+    // The native code ships as a dynamic framework. With CocoaPods the
+    // framework is named after the pod (`mixin_logger`); with Swift Package
+    // Manager it is named after the SPM product (`mixin-logger`, because
+    // Flutter references plugin products with underscores replaced by
+    // hyphens). Try both so the plugin loads with either integration.
+    for (final framework in const ['mixin_logger', 'mixin-logger']) {
+      try {
+        return DynamicLibrary.open('$framework.framework/$framework');
+      } catch (_) {
+        continue;
+      }
+    }
+    throw UnsupportedError('Failed to load the $_libName dynamic library.');
   }
   if (Platform.isAndroid || Platform.isLinux) {
     return DynamicLibrary.open('lib$_libName.so');
