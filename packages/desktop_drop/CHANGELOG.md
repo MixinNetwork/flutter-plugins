@@ -2,7 +2,9 @@
 
 ## 0.8.0
 
-* [Android] Migrate to built-in Kotlin for Android Gradle Plugin 9 compatibility.
+**BREAKING CHANGE**
+
+* [Android] Migrate to built-in Kotlin. Android host apps must use Android Gradle Plugin 9 or later.
 
 ## 0.7.1
 
