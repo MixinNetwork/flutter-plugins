@@ -1,8 +1,8 @@
 # Changelog
 
-## 0.7.2
+## 0.8.0
 
-* Migrate Android builds to built-in Kotlin for AGP 9 compatibility.
+* [Android] Migrate to built-in Kotlin for Android Gradle Plugin 9 compatibility.
 
 ## 0.7.1
 
