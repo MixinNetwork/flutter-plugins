@@ -139,7 +139,7 @@ class DesktopDrop {
         final paths = const LineSplitter().convert(text).map((e) {
           try {
             final uri = Uri.tryParse(e);
-            if (uri == null) {
+            if (uri == null || uri.scheme.isEmpty) {
               return '';
             }
             if (uri.scheme == 'file') {

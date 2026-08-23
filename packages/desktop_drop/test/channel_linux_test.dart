@@ -55,4 +55,116 @@ void main() {
     final event = events.single as DropDoneEvent;
     expect(event.files.single.path, '/tmp/file.txt');
   });
+
+  test('linux drop includes rawText with portal key (Flatpak/Wayland)', () async {
+    final events = <DropEvent>[];
+    void listener(DropEvent event) => events.add(event);
+    DesktopDrop.instance.addRawDropEventListener(listener);
+    addTearDown(
+        () => DesktopDrop.instance.removeRawDropEventListener(listener));
+
+    // Simulate Flatpak drag: file:// URI + portal key from XDG Desktop Portal
+    await _invokePlatformMethod(const MethodCall('performOperation_linux', [
+      'file:///home/user/Documents/secret.pdf\nabc123portalkey456',
+      [100.0, 200.0]
+    ]));
+
+    final event = events.single as DropDoneEvent;
+    expect(event.files.single.path, '/home/user/Documents/secret.pdf');
+    expect(event.rawText, 'file:///home/user/Documents/secret.pdf\nabc123portalkey456');
+  });
+
+  test('linux drop includes rawText for multiple files with portal key', () async {
+    final events = <DropEvent>[];
+    void listener(DropEvent event) => events.add(event);
+    DesktopDrop.instance.addRawDropEventListener(listener);
+    addTearDown(
+        () => DesktopDrop.instance.removeRawDropEventListener(listener));
+
+    // Multiple files + portal key (typical Flatpak drag)
+    await _invokePlatformMethod(const MethodCall('performOperation_linux', [
+      'file:///home/user/Documents/file1.txt\nfile:///home/user/Pictures/photo.png\nxyz789portalkey',
+      [150.0, 250.0]
+    ]));
+
+    final event = events.single as DropDoneEvent;
+    expect(event.files.length, 2);
+    expect(event.files[0].path, '/home/user/Documents/file1.txt');
+    expect(event.files[1].path, '/home/user/Pictures/photo.png');
+    expect(event.rawText, 'file:///home/user/Documents/file1.txt\nfile:///home/user/Pictures/photo.png\nxyz789portalkey');
+  });
+
+  test('linux drop rawText contains only file URIs (no portal key)', () async {
+    final events = <DropEvent>[];
+    void listener(DropEvent event) => events.add(event);
+    DesktopDrop.instance.addRawDropEventListener(listener);
+    addTearDown(
+        () => DesktopDrop.instance.removeRawDropEventListener(listener));
+
+    // Normal drag from non-sandboxed app (no portal)
+    await _invokePlatformMethod(const MethodCall('performOperation_linux', [
+      'file:///home/user/Downloads/normal.txt\nfile:///home/user/Downloads/another.txt',
+      [50.0, 60.0]
+    ]));
+
+    final event = events.single as DropDoneEvent;
+    expect(event.files.length, 2);
+    expect(event.files[0].path, '/home/user/Downloads/normal.txt');
+    expect(event.files[1].path, '/home/user/Downloads/another.txt');
+    // rawText still captured (may be used by consumers)
+    expect(event.rawText, 'file:///home/user/Downloads/normal.txt\nfile:///home/user/Downloads/another.txt');
+  });
+
+  test('linux drop with non-file URI (SMB) still works and rawText captured', () async {
+    final events = <DropEvent>[];
+    void listener(DropEvent event) => events.add(event);
+    DesktopDrop.instance.addRawDropEventListener(listener);
+    addTearDown(
+        () => DesktopDrop.instance.removeRawDropEventListener(listener));
+
+    await _invokePlatformMethod(const MethodCall('performOperation_linux', [
+      'smb://server/share/document.pdf',
+      [10.0, 20.0]
+    ]));
+
+    final event = events.single as DropDoneEvent;
+    expect(event.files.single.path, 'smb://server/share/document.pdf');
+    expect(event.rawText, 'smb://server/share/document.pdf');
+  });
+
+  test('linux drop decodes percent-encoded filenames', () async {
+    final events = <DropEvent>[];
+    void listener(DropEvent event) => events.add(event);
+    DesktopDrop.instance.addRawDropEventListener(listener);
+    addTearDown(
+        () => DesktopDrop.instance.removeRawDropEventListener(listener));
+
+    await _invokePlatformMethod(const MethodCall('performOperation_linux', [
+      'file:///home/user/my%20file.txt',
+      [5.0, 5.0]
+    ]));
+
+    final event = events.single as DropDoneEvent;
+    expect(event.files.single.path, '/home/user/my file.txt');
+    expect(event.rawText, 'file:///home/user/my%20file.txt');
+  });
+
+  test('linux drop tolerates trailing blank line in payload', () async {
+    final events = <DropEvent>[];
+    void listener(DropEvent event) => events.add(event);
+    DesktopDrop.instance.addRawDropEventListener(listener);
+    addTearDown(
+        () => DesktopDrop.instance.removeRawDropEventListener(listener));
+
+    await _invokePlatformMethod(const MethodCall('performOperation_linux', [
+      'file:///home/user/a.txt\nfile:///home/user/b.txt\n',
+      [1.0, 1.0]
+    ]));
+
+    final event = events.single as DropDoneEvent;
+    expect(event.files.length, 2);
+    expect(event.files[0].path, '/home/user/a.txt');
+    expect(event.files[1].path, '/home/user/b.txt');
+    expect(event.rawText, 'file:///home/user/a.txt\nfile:///home/user/b.txt\n');
+  });
 }
