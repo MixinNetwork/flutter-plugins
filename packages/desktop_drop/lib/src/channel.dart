@@ -154,6 +154,7 @@ class DesktopDrop {
         _notifyEvent(DropDoneEvent(
           location: Offset(offset[0], offset[1]),
           files: paths.map((e) => DropItemFile(e)).toList(),
+          rawText: text,
         ));
         break;
       case "performOperation_web":

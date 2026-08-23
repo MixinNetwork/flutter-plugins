@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.1
+
+* [desktop_drop] expose raw drag text in `DropDoneEvent.rawText` and `DropDoneDetails.rawText` for XDG Desktop Portal integration on Wayland/Flatpak
+
 ## 0.8.0
 
 **BREAKING CHANGE**
