@@ -63,15 +63,15 @@ void main() {
     addTearDown(
         () => DesktopDrop.instance.removeRawDropEventListener(listener));
 
-    // Simulate Flatpak drag: file:// URI + portal key from XDG Desktop Portal
-    await _invokePlatformMethod(const MethodCall('performOperation_linux', [
-      'file:///home/user/Documents/secret.pdf\nabc123portalkey456',
+    // Simulate Flatpak drag: portal key delivered via separate portal target
+    await _invokePlatformMethod(const MethodCall('performOperation_portal', [
+      'abc123portalkey456',
       [100.0, 200.0]
     ]));
 
     final event = events.single as DropDoneEvent;
-    expect(event.files.single.path, '/home/user/Documents/secret.pdf');
-    expect(event.rawText, 'file:///home/user/Documents/secret.pdf\nabc123portalkey456');
+    expect(event.files, isEmpty);
+    expect(event.rawText, 'abc123portalkey456');
   });
 
   test('linux drop includes rawText for multiple files with portal key', () async {
@@ -81,9 +81,9 @@ void main() {
     addTearDown(
         () => DesktopDrop.instance.removeRawDropEventListener(listener));
 
-    // Multiple files + portal key (typical Flatpak drag)
+    // Multiple files delivered via text/uri-list (no portal key)
     await _invokePlatformMethod(const MethodCall('performOperation_linux', [
-      'file:///home/user/Documents/file1.txt\nfile:///home/user/Pictures/photo.png\nxyz789portalkey',
+      'file:///home/user/Documents/file1.txt\nfile:///home/user/Pictures/photo.png',
       [150.0, 250.0]
     ]));
 
@@ -91,7 +91,7 @@ void main() {
     expect(event.files.length, 2);
     expect(event.files[0].path, '/home/user/Documents/file1.txt');
     expect(event.files[1].path, '/home/user/Pictures/photo.png');
-    expect(event.rawText, 'file:///home/user/Documents/file1.txt\nfile:///home/user/Pictures/photo.png\nxyz789portalkey');
+    expect(event.rawText, 'file:///home/user/Documents/file1.txt\nfile:///home/user/Pictures/photo.png');
   });
 
   test('linux drop rawText contains only file URIs (no portal key)', () async {
@@ -166,5 +166,25 @@ void main() {
     expect(event.files[0].path, '/home/user/a.txt');
     expect(event.files[1].path, '/home/user/b.txt');
     expect(event.rawText, 'file:///home/user/a.txt\nfile:///home/user/b.txt\n');
+  });
+
+  test('linux portal drop returns portal key in rawText with no files', () async {
+    final events = <DropEvent>[];
+    void listener(DropEvent event) => events.add(event);
+    DesktopDrop.instance.addRawDropEventListener(listener);
+    addTearDown(
+        () => DesktopDrop.instance.removeRawDropEventListener(listener));
+
+    // Portal key delivered via application/vnd.portal.filetransfer target
+    await _invokePlatformMethod(const MethodCall('performOperation_portal', [
+      'abc123portalkey456',
+      [100.0, 200.0]
+    ]));
+
+    final event = events.single as DropDoneEvent;
+    expect(event.files, isEmpty);
+    expect(event.rawText, 'abc123portalkey456');
+    expect(event.location.dx, 100.0);
+    expect(event.location.dy, 200.0);
   });
 }
