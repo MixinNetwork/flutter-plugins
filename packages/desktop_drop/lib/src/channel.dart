@@ -139,12 +139,14 @@ class DesktopDrop {
         final paths = const LineSplitter().convert(text).map((e) {
           try {
             final uri = Uri.tryParse(e);
-            if (uri == null || uri.scheme.isEmpty) {
+            if (uri == null || !uri.hasScheme) {
+              // No scheme = likely a portal key
               return '';
             }
             if (uri.scheme == 'file') {
               return uri.toFilePath();
             }
+            // smb://, http://, etc. - keep as-is (not portal keys)
             return e;
           } catch (error, stacktrace) {
             debugPrint('failed to parse linux path: $error $stacktrace');
@@ -155,6 +157,18 @@ class DesktopDrop {
           location: Offset(offset[0], offset[1]),
           files: paths.map((e) => DropItemFile(e)).toList(),
           rawText: text,
+        ));
+        break;
+      case "performOperation_portal":
+        // Portal file transfer key received (application/vnd.portal.filetransfer)
+        // The key is passed as raw text, no parsing needed
+        final portalText = (call.arguments as List<dynamic>)[0] as String;
+        final portalOffset = ((call.arguments as List<dynamic>)[1] as List<dynamic>)
+            .cast<double>();
+        _notifyEvent(DropDoneEvent(
+          location: Offset(portalOffset[0], portalOffset[1]),
+          files: const [],
+          rawText: portalText,
         ));
         break;
       case "performOperation_web":

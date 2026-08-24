@@ -22,13 +22,26 @@ void on_drag_data_received(GtkWidget *widget, GdkDragContext *drag_context,
                            gint x, gint y, GtkSelectionData *sdata, guint info,
                            guint time, gpointer user_data) {
   auto *channel = static_cast<FlMethodChannel *>(user_data);
+  GdkAtom target = gtk_selection_data_get_target(sdata);
+  const gchar *target_name = gdk_atom_name(target);
   auto *data = gtk_selection_data_get_data(sdata);
   double point[] = {double(x), double(y)};
   auto args = fl_value_new_list();
-  fl_value_append(args, fl_value_new_string((gchar *) data));
-  fl_value_append(args, fl_value_new_float_list(point, 2));
-  fl_method_channel_invoke_method(channel, "performOperation_linux", args,
-                                  nullptr, nullptr, nullptr);
+
+  // Check if this is the portal file transfer target
+  if (strcmp(target_name, "application/vnd.portal.filetransfer") == 0) {
+    // Portal key received - send via dedicated method
+    fl_value_append(args, fl_value_new_string((gchar *) data));
+    fl_value_append(args, fl_value_new_float_list(point, 2));
+    fl_method_channel_invoke_method(channel, "performOperation_portal", args,
+                                    nullptr, nullptr, nullptr);
+  } else {
+    // Standard STRING or text/uri-list target
+    fl_value_append(args, fl_value_new_string((gchar *) data));
+    fl_value_append(args, fl_value_new_float_list(point, 2));
+    fl_method_channel_invoke_method(channel, "performOperation_linux", args,
+                                    nullptr, nullptr, nullptr);
+  }
 }
 
 void on_drag_motion(GtkWidget *widget, GdkDragContext *drag_context,
@@ -95,10 +108,13 @@ void desktop_drop_plugin_register_with_registrar(FlPluginRegistrar *registrar) {
       g_object_new(desktop_drop_plugin_get_type(), nullptr));
 
   auto *fl_view = fl_plugin_registrar_get_view(registrar);
+  // Register portal file transfer target FIRST (highest priority)
+  // then STRING, then URI targets
   static GtkTargetEntry entries[] = {
+      {strdup("application/vnd.portal.filetransfer"), GTK_TARGET_OTHER_APP, 0},
       {strdup("STRING"), GTK_TARGET_OTHER_APP, 0}
   };
-  gtk_drag_dest_set(GTK_WIDGET(fl_view), GTK_DEST_DEFAULT_ALL, entries, 1, GDK_ACTION_COPY);
+  gtk_drag_dest_set(GTK_WIDGET(fl_view), GTK_DEST_DEFAULT_ALL, entries, 2, GDK_ACTION_COPY);
   gtk_drag_dest_add_uri_targets(GTK_WIDGET(fl_view));
 
   g_autoptr(FlStandardMethodCodec) codec = fl_standard_method_codec_new();
