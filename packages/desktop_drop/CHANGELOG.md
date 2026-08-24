@@ -2,7 +2,8 @@
 
 ## 0.8.1
 
-* [desktop_drop] [Linux] register the `application/vnd.portal.filetransfer` drag target and deliver its key via a new `performOperation_portal` channel message, so sandboxed (Flatpak) apps can resolve dropped files through `org.freedesktop.portal.FileTransfer`
+* [desktop_drop] [Linux] register the `application/vnd.portal.filetransfer` drag target and deliver its key via a new `performOperation_portal` channel message
+* [desktop_drop] [Linux] resolve portal transfer keys through `org.freedesktop.portal.FileTransfer`, so drops from sandboxed sources yield openable document-portal paths
 * [desktop_drop] expose the raw drag payload in `DropDoneEvent.rawText` / `DropDoneDetails.rawText`
 
 ## 0.8.0

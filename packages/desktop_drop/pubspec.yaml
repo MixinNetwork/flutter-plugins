@@ -9,6 +9,7 @@ environment:
   flutter: ">=3.0.0"
 
 dependencies:
+  dbus: ^0.7.10
   flutter:
     sdk: flutter
   flutter_web_plugins:
