@@ -22,27 +22,30 @@ void on_drag_data_received(GtkWidget *widget, GdkDragContext *drag_context,
                            gint x, gint y, GtkSelectionData *sdata, guint info,
                            guint time, gpointer user_data) {
   auto *channel = static_cast<FlMethodChannel *>(user_data);
-  g_autofree gchar *target_name =
-      gdk_atom_name(gtk_selection_data_get_target(sdata));
-  auto *data = gtk_selection_data_get_data(sdata);
-  double point[] = {double(x), double(y)};
-  auto args = fl_value_new_list();
+  const gchar *method_name = "performOperation_linux";
 
-  // Check if this is the portal file transfer target
+  // The portal target carries a one-time transfer key instead of URIs.
+  // Send it through its own method so Dart knows what it received.
+  g_autofree gchar *target_name = gdk_atom_name(gtk_selection_data_get_target(sdata));
   if (target_name != nullptr &&
       strcmp(target_name, "application/vnd.portal.filetransfer") == 0) {
-    // Portal key received - send via dedicated method
-    fl_value_append(args, fl_value_new_string((gchar *) data));
-    fl_value_append(args, fl_value_new_float_list(point, 2));
-    fl_method_channel_invoke_method(channel, "performOperation_portal", args,
-                                    nullptr, nullptr, nullptr);
-  } else {
-    // Standard STRING or text/uri-list target
-    fl_value_append(args, fl_value_new_string((gchar *) data));
-    fl_value_append(args, fl_value_new_float_list(point, 2));
-    fl_method_channel_invoke_method(channel, "performOperation_linux", args,
-                                    nullptr, nullptr, nullptr);
+    method_name = "performOperation_portal";
   }
+
+  // Selection data is not guaranteed to be NUL-terminated.
+  gint length = gtk_selection_data_get_length(sdata);
+  if (length < 0) {
+    return;
+  }
+  g_autofree gchar *payload = g_strndup(
+      reinterpret_cast<const gchar *>(gtk_selection_data_get_data(sdata)), length);
+
+  double point[] = {double(x), double(y)};
+  g_autoptr(FlValue) args = fl_value_new_list();
+  fl_value_append(args, fl_value_new_string(payload));
+  fl_value_append(args, fl_value_new_float_list(point, 2));
+  fl_method_channel_invoke_method(channel, method_name, args,
+                                  nullptr, nullptr, nullptr);
 }
 
 void on_drag_motion(GtkWidget *widget, GdkDragContext *drag_context,
