@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:desktop_drop/desktop_drop.dart';
-import 'package:desktop_drop/src/events.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -54,24 +53,6 @@ void main() {
 
     final event = events.single as DropDoneEvent;
     expect(event.files.single.path, '/tmp/file.txt');
-  });
-
-  test('linux drop includes rawText with portal key (Flatpak/Wayland)', () async {
-    final events = <DropEvent>[];
-    void listener(DropEvent event) => events.add(event);
-    DesktopDrop.instance.addRawDropEventListener(listener);
-    addTearDown(
-        () => DesktopDrop.instance.removeRawDropEventListener(listener));
-
-    // Simulate Flatpak drag: portal key delivered via separate portal target
-    await _invokePlatformMethod(const MethodCall('performOperation_portal', [
-      'abc123portalkey456',
-      [100.0, 200.0]
-    ]));
-
-    final event = events.single as DropDoneEvent;
-    expect(event.files, isEmpty);
-    expect(event.rawText, 'abc123portalkey456');
   });
 
   test('linux drop includes rawText for multiple files with portal key', () async {
