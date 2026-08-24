@@ -2,7 +2,8 @@
 
 ## 0.8.1
 
-* [desktop_drop] expose raw drag text in `DropDoneEvent.rawText` and `DropDoneDetails.rawText` for XDG Desktop Portal integration on Wayland/Flatpak
+* [desktop_drop] [Linux] register the `application/vnd.portal.filetransfer` drag target and deliver its key via a new `performOperation_portal` channel message, so sandboxed (Flatpak) apps can resolve dropped files through `org.freedesktop.portal.FileTransfer`
+* [desktop_drop] expose the raw drag payload in `DropDoneEvent.rawText` / `DropDoneDetails.rawText`
 
 ## 0.8.0
 

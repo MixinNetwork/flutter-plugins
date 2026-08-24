@@ -20,24 +20,27 @@ class DropDoneDetails {
 
   /// The raw text payload from the drag operation, passed through from [DropDoneEvent.rawText].
   ///
-  /// Format: one URI or token per line (as delivered by GTK).
+  /// Format: one URI per line for `text/uri-list` drops, or a single
+  /// transfer key when the drop was negotiated as
+  /// `application/vnd.portal.filetransfer`. GTK delivers one or the
+  /// other, never both mixed.
   ///
-  /// On Linux/Wayland with Flatpak, this contains the portal key(s)
-  /// from the `application/vnd.portal.filetransfer` mimetype — a
-  /// random string token that can be passed to
-  /// `org.freedesktop.portal.FileTransfer.RetrieveFiles` to get
-  /// sandbox-accessible file paths.
-  ///
-  /// Example content:
+  /// URI payload example:
   /// ```
-  /// file:///home/user/Downloads/normal.txt
-  /// file:///home/user/Documents/portal.txt
-  /// abc123portalkey456
+  /// file:///home/user/Documents/file.txt
+  /// file:///home/user/Pictures/photo.png
   /// ```
   ///
-  /// The portal key is a token WITHOUT a URI scheme (e.g., `abc123key`).
-  /// Lines with URI schemes like `file://`, `smb://`, `http://` are NOT portal keys.
-  /// Consumers should parse each line as a URI and check the scheme.
+  /// Portal payload example (Flatpak source app):
+  /// ```
+  /// f2c1ee0e-0547-4ea6-9c15-a9cf7dbfef98
+  /// ```
+  ///
+  /// The portal key is a token WITHOUT a URI scheme. It can be passed to
+  /// `org.freedesktop.portal.FileTransfer.RetrieveFiles` to obtain
+  /// sandbox-accessible paths. Lines with a scheme like `file://`,
+  /// `smb://`, or `http://` are URIs, not keys — distinguish by parsing
+  /// each line and checking `Uri.hasScheme`.
   ///
   /// Is `null` on platforms where raw text isn't exposed (Windows,
   /// macOS, or when the platform channel doesn't provide it).
