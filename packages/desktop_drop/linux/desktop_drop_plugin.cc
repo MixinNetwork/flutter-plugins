@@ -22,8 +22,8 @@ void on_drag_data_received(GtkWidget *widget, GdkDragContext *drag_context,
                            gint x, gint y, GtkSelectionData *sdata, guint info,
                            guint time, gpointer user_data) {
   auto *channel = static_cast<FlMethodChannel *>(user_data);
-  GdkAtom target = gtk_selection_data_get_target(sdata);
-  const gchar *target_name = gdk_atom_name(target);
+  g_autofree gchar *target_name =
+      gdk_atom_name(gtk_selection_data_get_target(sdata));
   auto *data = gtk_selection_data_get_data(sdata);
   double point[] = {double(x), double(y)};
   auto args = fl_value_new_list();
