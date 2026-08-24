@@ -29,7 +29,8 @@ void on_drag_data_received(GtkWidget *widget, GdkDragContext *drag_context,
   auto args = fl_value_new_list();
 
   // Check if this is the portal file transfer target
-  if (strcmp(target_name, "application/vnd.portal.filetransfer") == 0) {
+  if (target_name != nullptr &&
+      strcmp(target_name, "application/vnd.portal.filetransfer") == 0) {
     // Portal key received - send via dedicated method
     fl_value_append(args, fl_value_new_string((gchar *) data));
     fl_value_append(args, fl_value_new_float_list(point, 2));
