@@ -35,10 +35,9 @@ class DropDoneDetails {
   /// abc123portalkey456
   /// ```
   ///
-  /// The portal key line is NOT a file URI and can be distinguished
-  /// by not starting with `file://`. It is only present when the
-  /// drag source used the XDG Desktop Portal (typical for sandboxed
-  /// apps on Wayland).
+  /// The portal key is a token WITHOUT a URI scheme (e.g., `abc123key`).
+  /// Lines with URI schemes like `file://`, `smb://`, `http://` are NOT portal keys.
+  /// Consumers should parse each line as a URI and check the scheme.
   ///
   /// Is `null` on platforms where raw text isn't exposed (Windows,
   /// macOS, or when the platform channel doesn't provide it).
