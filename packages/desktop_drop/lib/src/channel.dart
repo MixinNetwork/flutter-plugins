@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:dbus/dbus.dart';
 import 'package:desktop_drop/src/drop_item.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -139,12 +140,14 @@ class DesktopDrop {
         final paths = const LineSplitter().convert(text).map((e) {
           try {
             final uri = Uri.tryParse(e);
-            if (uri == null) {
+            if (uri == null || !uri.hasScheme) {
+              // No scheme = likely a portal key
               return '';
             }
             if (uri.scheme == 'file') {
               return uri.toFilePath();
             }
+            // smb://, http://, etc. - keep as-is (not portal keys)
             return e;
           } catch (error, stacktrace) {
             debugPrint('failed to parse linux path: $error $stacktrace');
@@ -154,6 +157,22 @@ class DesktopDrop {
         _notifyEvent(DropDoneEvent(
           location: Offset(offset[0], offset[1]),
           files: paths.map((e) => DropItemFile(e)).toList(),
+          rawText: text,
+        ));
+        break;
+      case "performOperation_portal":
+        // The portal target carries a one-time transfer key instead of
+        // file paths. Resolve it against org.freedesktop.portal.FileTransfer
+        // so consumers receive paths they can open directly.
+        final portalText = (call.arguments as List<dynamic>)[0] as String;
+        final portalOffset =
+            ((call.arguments as List<dynamic>)[1] as List<dynamic>)
+                .cast<double>();
+        final paths = await _resolvePortalFiles(portalText);
+        _notifyEvent(DropDoneEvent(
+          location: Offset(portalOffset[0], portalOffset[1]),
+          files: paths.map((e) => DropItemFile(e)).toList(),
+          rawText: portalText,
         ));
         break;
       case "performOperation_web":
@@ -169,6 +188,39 @@ class DesktopDrop {
         break;
       default:
         throw UnimplementedError('${call.method} not implement.');
+    }
+  }
+
+  /// Resolves an XDG FileTransfer portal key into document-portal paths.
+  ///
+  /// RetrieveFiles exports each dropped file for this application and
+  /// returns paths under /run/user/$UID/doc that are readable both inside
+  /// and outside a Flatpak sandbox. On any failure an empty list is
+  /// returned; rawText still carries the key for callers that implement
+  /// their own resolution.
+  Future<List<String>> _resolvePortalFiles(String key) async {
+    DBusClient? client;
+    try {
+      client = DBusClient.session();
+      final result = await client.callMethod(
+        destination: 'org.freedesktop.portal.Documents',
+        path: DBusObjectPath('/org/freedesktop/portal/documents'),
+        interface: 'org.freedesktop.portal.FileTransfer',
+        name: 'RetrieveFiles',
+        values: [DBusString(key), DBusDict.stringVariant({})],
+      );
+      if (result.values.isEmpty || result.values.first is! DBusArray) {
+        return const [];
+      }
+      return (result.values.first as DBusArray)
+          .children
+          .map((value) => value.asString())
+          .toList();
+    } catch (error) {
+      debugPrint('desktop_drop: failed to resolve portal transfer: $error');
+      return const [];
+    } finally {
+      await client?.close();
     }
   }
 
