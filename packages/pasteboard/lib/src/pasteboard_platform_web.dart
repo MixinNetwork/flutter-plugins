@@ -40,7 +40,7 @@ class PasteboardPlatformWeb implements PasteboardPlatform {
       for (var clipboardItem in clipboardItems.toDart) {
         if (clipboardItem.types.toDart.contains('text/html'.toJS)) {
           final blob = await clipboardItem.getType('text/html').toDart;
-          return _readBlobAsText(blob);
+          return await _readBlobAsText(blob);
         }
       }
     } catch (e) {
@@ -57,7 +57,7 @@ class PasteboardPlatformWeb implements PasteboardPlatform {
         for (var type in item.types.toDart) {
           if (type.toDart.startsWith('image/')) {
             final blob = await item.getType(type.toDart).toDart;
-            return blob._readAsUint8List();
+            return await blob._readAsUint8List();
           }
         }
       }
