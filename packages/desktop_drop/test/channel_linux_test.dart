@@ -55,7 +55,8 @@ void main() {
     expect(event.files.single.path, '/tmp/file.txt');
   });
 
-  test('linux drop includes rawText for multiple files with portal key', () async {
+  test('linux drop includes rawText for multiple files with portal key',
+      () async {
     final events = <DropEvent>[];
     void listener(DropEvent event) => events.add(event);
     DesktopDrop.instance.addRawDropEventListener(listener);
@@ -72,7 +73,8 @@ void main() {
     expect(event.files.length, 2);
     expect(event.files[0].path, '/home/user/Documents/file1.txt');
     expect(event.files[1].path, '/home/user/Pictures/photo.png');
-    expect(event.rawText, 'file:///home/user/Documents/file1.txt\nfile:///home/user/Pictures/photo.png');
+    expect(event.rawText,
+        'file:///home/user/Documents/file1.txt\nfile:///home/user/Pictures/photo.png');
   });
 
   test('linux drop rawText contains only file URIs (no portal key)', () async {
@@ -93,10 +95,12 @@ void main() {
     expect(event.files[0].path, '/home/user/Downloads/normal.txt');
     expect(event.files[1].path, '/home/user/Downloads/another.txt');
     // rawText still captured (may be used by consumers)
-    expect(event.rawText, 'file:///home/user/Downloads/normal.txt\nfile:///home/user/Downloads/another.txt');
+    expect(event.rawText,
+        'file:///home/user/Downloads/normal.txt\nfile:///home/user/Downloads/another.txt');
   });
 
-  test('linux drop with non-file URI (SMB) still works and rawText captured', () async {
+  test('linux drop with non-file URI (SMB) still works and rawText captured',
+      () async {
     final events = <DropEvent>[];
     void listener(DropEvent event) => events.add(event);
     DesktopDrop.instance.addRawDropEventListener(listener);
@@ -149,7 +153,8 @@ void main() {
     expect(event.rawText, 'file:///home/user/a.txt\nfile:///home/user/b.txt\n');
   });
 
-  test('linux portal drop returns portal key in rawText with no files', () async {
+  test('linux portal drop returns portal key in rawText with no files',
+      () async {
     final events = <DropEvent>[];
     void listener(DropEvent event) => events.add(event);
     DesktopDrop.instance.addRawDropEventListener(listener);
