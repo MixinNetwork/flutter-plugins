@@ -2,7 +2,7 @@ group 'com.example.desktop_drop'
 version '1.0-SNAPSHOT'
 
 buildscript {
-    ext.kotlin_version = '1.9.25'
+    ext.kotlin_version = '2.2.0'
     repositories {
         google()
         mavenCentral()
@@ -15,6 +15,16 @@ buildscript {
 }
 
 apply plugin: 'com.android.library'
+
+// Apply KGP only when the host does not provide built-in Kotlin.
+// AGP 9+ ships Kotlin built-in and hard-fails if kotlin-android is applied,
+// while hosts on AGP < 9 do not apply any Kotlin plugin to this subproject.
+// See https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-plugin-authors
+// ("Support Flutter versions earlier than 3.44").
+def agpMajor = com.android.Version.ANDROID_GRADLE_PLUGIN_VERSION.tokenize('.')[0] as int
+if (agpMajor < 9) {
+    apply plugin: 'kotlin-android'
+}
 
 rootProject.allprojects {
     repositories {

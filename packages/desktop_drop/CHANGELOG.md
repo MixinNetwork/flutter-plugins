@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.2
+
+* [desktop_drop] [Android] restore compatibility with hosts on Android Gradle Plugin < 9 by applying the Kotlin Gradle Plugin conditionally, per the Flutter built-in Kotlin migration guide
+* [desktop_drop] [Android] bump bundled Kotlin Gradle Plugin to 2.2.0 to support the `kotlin.compilerOptions` DSL on AGP < 9 hosts
+
 ## 0.8.1
 
 * [desktop_drop] [Linux] register the `application/vnd.portal.filetransfer` drag target and deliver its key via a new `performOperation_portal` channel message
