@@ -1,3 +1,7 @@
+## 0.0.4
+
+* [macOS] add Swift Package Manager support [#496](https://github.com/MixinNetwork/flutter-plugins/pull/496).
+
 ## 0.0.3
 
 * fix un inhibit in Linux.
