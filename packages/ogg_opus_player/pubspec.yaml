@@ -29,10 +29,10 @@ flutter:
       windows:
         ffiPlugin: true
       ios:
-        pluginClass: OggOpusPlayerPlugin
+        pluginClass: SwiftOggOpusPlayerPlugin
         sharedDarwinSource: true
       macos:
-        pluginClass: OggOpusPlayerPlugin
+        pluginClass: SwiftOggOpusPlayerPlugin
         sharedDarwinSource: true
       android:
         package: one.mixin.oggOpusPlayer

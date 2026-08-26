@@ -13,9 +13,9 @@ A new flutter plugin project.
   s.license          = { :file => '../LICENSE' }
   s.author           = { 'Your Company' => 'email@example.com' }
   s.source           = { :path => '.' }
-  s.source_files     = 'Classes/**/*'
+  s.source_files     = 'fts5_simple/Sources/fts5_simple/**/*'
   s.dependency 'FlutterMacOS'
-  s.vendored_libraries = 'libs/libsimple.dylib'
+  s.vendored_libraries = 'fts5_simple/Libs/libsimple.xcframework/macos-x86_64/libsimple.dylib'
 
   s.platform = :osx, '10.11'
   s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES' }

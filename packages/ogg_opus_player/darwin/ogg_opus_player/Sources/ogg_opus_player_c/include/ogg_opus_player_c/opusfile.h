@@ -106,8 +106,8 @@ extern "C" {
 
 # include <stdarg.h>
 # include <stdio.h>
-# include <ogg.hh>
-# include <opus_multistream.h>
+# include "ogg.hh"
+# include "opus_multistream.h"
 
 /**@cond PRIVATE*/
 

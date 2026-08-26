@@ -1,4 +1,7 @@
 import Foundation
+#if SWIFT_PACKAGE
+import ogg_opus_player_c
+#endif
 
 class OggOpusReader {
     

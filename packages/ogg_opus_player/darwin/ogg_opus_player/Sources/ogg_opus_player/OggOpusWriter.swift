@@ -1,4 +1,7 @@
 import Foundation
+#if SWIFT_PACKAGE
+import ogg_opus_player_c
+#endif
 
 fileprivate let numberOfChannels: Int32 = 1;
 fileprivate let outputBitRate: Int32 = 16 * 1024;

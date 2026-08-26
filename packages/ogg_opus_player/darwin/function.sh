@@ -19,7 +19,7 @@ cd "$(dirname \"$0\")"
 REPOROOT=$(pwd)
 
 # Where we'll end up storing things in the end
-OUTPUTDIR="${REPOROOT}"
+OUTPUTDIR="${REPOROOT}/ogg_opus_player"
 mkdir -p ${OUTPUTDIR}/Frameworks
 
 BUILDDIR="${REPOROOT}/build"
@@ -162,6 +162,19 @@ function generate_xc_framework_info_plist() {
 <dict>
 	<key>AvailableLibraries</key>
 	<array>
+		<dict>
+			<key>LibraryIdentifier</key>
+			<string>macos-arm64_x86_64</string>
+			<key>LibraryPath</key>
+			<string>lib${lib_name}.a</string>
+			<key>SupportedArchitectures</key>
+			<array>
+				<string>arm64</string>
+				<string>x86_64</string>
+			</array>
+			<key>SupportedPlatform</key>
+			<string>macos</string>
+		</dict>
 		<dict>
 			<key>HeadersPath</key>
 			<string>Headers</string>
