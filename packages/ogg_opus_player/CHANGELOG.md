@@ -1,3 +1,9 @@
+# Changelog
+
+## 0.8.1
+
+* [iOS/macOS] add Swift Package Manager support [#496](https://github.com/MixinNetwork/flutter-plugins/pull/496).
+
 ## 0.8.0
 
 * [iOS/macOS] break change: raise the minimum supported versions to iOS 13.0 and macOS 10.15.
