@@ -8,11 +8,12 @@
 			<key>BinaryPath</key>
 			<string>libsimple.dylib</string>
 			<key>LibraryIdentifier</key>
-			<string>macos-x86_64</string>
+			<string>macos-arm64_x86_64</string>
 			<key>LibraryPath</key>
 			<string>libsimple.dylib</string>
 			<key>SupportedArchitectures</key>
 			<array>
+				<string>arm64</string>
 				<string>x86_64</string>
 			</array>
 			<key>SupportedPlatform</key>
