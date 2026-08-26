@@ -1,6 +1,6 @@
 ## 0.3.1
 
-* Add Swift Package Manager support for macOS.
+* [macOS] add Swift Package Manager support [#482](https://github.com/MixinNetwork/flutter-plugins/pull/482).
 
 ## 0.3.0
 
