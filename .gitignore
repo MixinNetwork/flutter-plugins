@@ -6,3 +6,5 @@ cmake-build-*
 /.dart_tool/
 pubspec_overrides.yaml
 build/
+.build/
+.swiftpm/
