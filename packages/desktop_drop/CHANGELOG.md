@@ -2,8 +2,9 @@
 
 ## 0.8.2
 
-* [desktop_drop] [Android] restore compatibility with hosts on Android Gradle Plugin < 9 by applying the Kotlin Gradle Plugin conditionally, per the Flutter built-in Kotlin migration guide
-* [desktop_drop] [Android] bump bundled Kotlin Gradle Plugin to 2.2.0 to support the `kotlin.compilerOptions` DSL on AGP < 9 hosts
+* [Android] Restore compatibility with Android Gradle Plugin versions below 9 by applying the Kotlin Gradle Plugin conditionally, while continuing to use built-in Kotlin on AGP 9 and later [#495](https://github.com/MixinNetwork/flutter-plugins/pull/495)
+  by [loucass](https://github.com/loucass)
+* [Android] Hosts on AGP versions below 9 must provide Kotlin Gradle Plugin 2.0.0 or later because `desktop_drop` uses the `kotlin.compilerOptions` DSL. Apps using an older KGP version must upgrade it before updating `desktop_drop`
 
 ## 0.8.1
 
