@@ -16,14 +16,28 @@ buildscript {
 
 apply plugin: 'com.android.library'
 
-// Apply KGP only when the host does not provide built-in Kotlin.
-// AGP 9+ ships Kotlin built-in and hard-fails if kotlin-android is applied,
-// while hosts on AGP < 9 do not apply any Kotlin plugin to this subproject.
-// See https://docs.flutter.dev/release/breaking-changes/migrate-to-built-in-kotlin/for-plugin-authors
-// ("Support Flutter versions earlier than 3.44").
-def agpMajor = com.android.Version.ANDROID_GRADLE_PLUGIN_VERSION.tokenize('.')[0] as int
+// AGP 9 has built-in Kotlin; applying KGP there fails.
+// Hosts on AGP < 9 don't provide Kotlin for this plugin, so we apply it.
+// Each AGP uses a different DSL for jvmTarget.
+def agpMajor = 0
+try {
+    agpMajor = com.android.Version.ANDROID_GRADLE_PLUGIN_VERSION.tokenize('.')[0].toInteger()
+} catch (ignored) {
+    agpMajor = 0
+}
 if (agpMajor < 9) {
     apply plugin: 'kotlin-android'
+    android {
+        kotlinOptions {
+            jvmTarget = JavaVersion.VERSION_1_8.toString()
+        }
+    }
+} else {
+    kotlin {
+        compilerOptions {
+            jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_1_8
+        }
+    }
 }
 
 rootProject.allprojects {
@@ -52,12 +66,6 @@ android {
 
     defaultConfig {
         minSdkVersion 16
-    }
-}
-
-kotlin {
-    compilerOptions {
-        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_1_8
     }
 }
 

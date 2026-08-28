@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.3
+
+* [Android] Fix `Could not find method kotlin()` / `kotlinOptions()` on Gradle 9 / AGP 9 hosts by making the Kotlin configuration block itself conditional on the host AGP, complementing the conditional `apply plugin` from 0.8.2
+
 ## 0.8.2
 
 * [Android] Restore compatibility with Android Gradle Plugin versions below 9 by applying the Kotlin Gradle Plugin conditionally, while continuing to use built-in Kotlin on AGP 9 and later [#495](https://github.com/MixinNetwork/flutter-plugins/pull/495)
