@@ -46,7 +46,7 @@ jobs:
       - name: Downgrade AGP to 8.12.1 for compatibility check
         run: |
           sed -i 's/id("com.android.application") version "9.1.0"/id("com.android.application") version "8.12.1"/' packages/desktop_drop/example/android/settings.gradle.kts
-          sed -i 's|gradle-9.3.1-all.zip|gradle-8.13-all.zip|' packages/desktop_drop/example/android/gradle/wrapper/gradle-wrapper.properties
+          sed -i 's|gradle-9.3.1-all.zip|gradle-8.14.3-all.zip|' packages/desktop_drop/example/android/gradle/wrapper/gradle-wrapper.properties
           cat packages/desktop_drop/example/android/settings.gradle.kts | grep com.android.application
           cat packages/desktop_drop/example/android/gradle/wrapper/gradle-wrapper.properties | grep distributionUrl
 
