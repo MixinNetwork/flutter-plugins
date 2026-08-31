@@ -1,10 +1,10 @@
 //
-// Created by yangbin on 2021/11/11.
+// Created by chuishui233 on 2025/09/26.
 //
 
-#include "utils.h"
-
 #include <windows.h>
+
+#include "utils.h"
 
 #include <memory>
 #include <set>
@@ -55,8 +55,7 @@ void ClipOrCenterWindowToMonitor(HWND hwnd, UINT flags) {
   RECT rc;
   GetWindowRect(hwnd, &rc);
   ClipOrCenterRectToMonitor(&rc, flags);
-  SetWindowPos(hwnd, nullptr, rc.left, rc.top, 0, 0,
-               SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+  SetWindowPos(hwnd, nullptr, rc.left, rc.top, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
 bool SetWindowBackgroundTransparent(HWND hwnd) {
@@ -66,7 +65,7 @@ bool SetWindowBackgroundTransparent(HWND hwnd) {
 
 static std::unique_ptr<std::set<LPCWSTR>> class_registered_;
 
-const wchar_t *RegisterWindowClass(LPCWSTR class_name, WNDPROC wnd_proc) {
+const wchar_t *RegisterWindowClass(LPCWSTR class_name, WNDPROC wnd_proc, const std::wstring &iconPath) {
   if (!class_registered_ || class_registered_->count(class_name) == 0) {
     if (!class_registered_) {
       class_registered_ = std::make_unique<std::set<LPCWSTR>>();
@@ -78,8 +77,19 @@ const wchar_t *RegisterWindowClass(LPCWSTR class_name, WNDPROC wnd_proc) {
     window_class.cbClsExtra = 0;
     window_class.cbWndExtra = 0;
     window_class.hInstance = GetModuleHandle(nullptr);
-    window_class.hIcon = LoadIcon(window_class.hInstance, IDI_APPLICATION);
-    window_class.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+    
+    // Load custom icon if provided, otherwise use default
+    if (!iconPath.empty()) {
+      window_class.hIcon = (HICON)LoadImageW(nullptr, iconPath.c_str(), IMAGE_ICON, 0, 0, LR_LOADFROMFILE | LR_DEFAULTSIZE);
+      if (!window_class.hIcon) {
+        // Fallback to default icon if loading fails
+        window_class.hIcon = LoadIcon(window_class.hInstance, IDI_APPLICATION);
+      }
+    } else {
+      window_class.hIcon = LoadIcon(window_class.hInstance, IDI_APPLICATION);
+    }
+    
+    window_class.hbrBackground = (HBRUSH) (COLOR_WINDOW + 1);
     window_class.lpszMenuName = nullptr;
     window_class.lpfnWndProc = wnd_proc;
     RegisterClass(&window_class);
@@ -94,16 +104,6 @@ void UnregisterWindowClass(LPCWSTR class_name) {
   }
   class_registered_->erase(class_name);
   UnregisterClass(class_name, nullptr);
-}
-
-std::string ConvertLPCWSTRToString(LPCWSTR lpcwszStr) {
-  int strLength = WideCharToMultiByte(CP_UTF8, 0, lpcwszStr, -1, nullptr, 0,
-                                      nullptr, nullptr);
-  std::string str(strLength, 0);
-
-  WideCharToMultiByte(CP_UTF8, 0, lpcwszStr, -1, &str[0], strLength, nullptr,
-                      nullptr);
-  return str;
 }
 
 }  // namespace webview_window
