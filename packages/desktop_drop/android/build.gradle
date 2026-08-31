@@ -18,7 +18,8 @@ apply plugin: 'com.android.library'
 
 // AGP 9 has built-in Kotlin; applying KGP there fails.
 // Hosts on AGP < 9 don't provide Kotlin for this plugin, so we apply it.
-// Each AGP uses a different DSL for jvmTarget.
+// Configure jvmTarget via tasks.withType - works regardless of whether
+// the kotlin extension comes from KGP or AGP built-in.
 def agpMajor = 0
 try {
     agpMajor = com.android.Version.ANDROID_GRADLE_PLUGIN_VERSION.tokenize('.')[0].toInteger()
@@ -27,17 +28,9 @@ try {
 }
 if (agpMajor < 9) {
     apply plugin: 'kotlin-android'
-    android {
-        kotlinOptions {
-            jvmTarget = JavaVersion.VERSION_1_8.toString()
-        }
-    }
-} else {
-    kotlin {
-        compilerOptions {
-            jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_1_8
-        }
-    }
+}
+tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+    kotlinOptions.jvmTarget = "1.8"
 }
 
 rootProject.allprojects {

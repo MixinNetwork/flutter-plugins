@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.4
+
+* [Android] Fix Kotlin configuration for both AGP 8 and AGP 9 hosts by configuring `jvmTarget` via `tasks.withType(KotlinCompile)` — works whether Kotlin comes from KGP or AGP built-in
+
 ## 0.8.3
 
 * [Android] Fix Kotlin configuration for AGP 8 and AGP 9 hosts [#498](https://github.com/MixinNetwork/flutter-plugins/pull/498)
