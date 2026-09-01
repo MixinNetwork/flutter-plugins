@@ -17,10 +17,19 @@ buildscript {
 apply plugin: 'com.android.library'
 
 // Apply KGP only when AGP does not provide built-in Kotlin.
-// builtInKotlin=true  -> AGP 9+ with Flutter 3.47+ provides Kotlin built-in, skip KGP
-// builtInKotlin=false -> AGP 8 or AGP 9+ with Flutter <3.47, must apply KGP explicitly
-def builtInKotlin = project.hasProperty('android.builtInKotlin') &&
-    project.property('android.builtInKotlin').toString().toBoolean()
+// AGP <9 never has built-in Kotlin -> apply KGP.
+// AGP 9+ defaults to built-in Kotlin unless property is explicitly false.
+def agpMajor = 0
+try {
+    agpMajor = com.android.Version.ANDROID_GRADLE_PLUGIN_VERSION.tokenize('.')[0].toInteger()
+} catch (ignored) {
+    agpMajor = 0
+}
+
+def builtInKotlin = agpMajor >= 9
+if (project.hasProperty('android.builtInKotlin')) {
+    builtInKotlin = project.property('android.builtInKotlin').toString().toBoolean()
+}
 
 if (!builtInKotlin) {
     apply plugin: 'kotlin-android'
