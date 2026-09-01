@@ -37,6 +37,13 @@ Release preparation guidance for pub packages lives in [.codex/skills/flutter-pu
 - For Flutter UI packages, pair automated tests with an `example/` sanity check when interaction or rendering is involved.
 - Keep unrelated packages untouched unless there is a verified cross-package dependency.
 
+## Release Metadata Ownership
+
+- Keep ordinary feature and fix pull requests focused on the implementation. Do not bump a package version, add the next release section to `CHANGELOG.md`, or update an example lockfile solely to prepare a release.
+- Treat package versions, release changelog sections, and release-related lockfile updates as maintainer-owned release work. Update them together only when the task explicitly asks to prepare or publish a release, following `.codex/skills/flutter-pub-release/SKILL.md`.
+- Use clear package-scoped commit and pull request titles because release preparation derives candidate entries from commits since the latest package tag. During release preparation, inspect the actual changes and rewrite the final changelog for package users instead of copying contributor wording mechanically.
+- Changes whose explicit purpose is to correct existing release metadata are exempt from this separation.
+
 ## Commit Message Guidance
 
 - Use the format `<package>: <description>` for commits that affect a single package, where `<package>` is the name of the affected package.

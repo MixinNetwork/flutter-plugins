@@ -264,8 +264,10 @@ def ensure_no_remote_tag(tag: str) -> None:
         raise ReleaseError(f"tag {tag} already exists on remote; this version may have been released already")
 
 
-def ensure_not_behind_origin() -> None:
+def ensure_synced_with_origin_main() -> None:
     ahead_behind = git("rev-list", "--left-right", "--count", "HEAD...origin/main").strip().split()
+    if int(ahead_behind[0]) > 0:
+        raise ReleaseError("local HEAD has not been pushed to origin/main; push main before drafting the release")
     if int(ahead_behind[1]) > 0:
         raise ReleaseError("local branch is behind origin/main; pull first before releasing")
 
@@ -360,7 +362,7 @@ def cmd_draft_release(args: argparse.Namespace) -> int:
     ensure_clean_worktree()
     ensure_on_main_branch()
     ensure_no_remote_tag(tag)
-    ensure_not_behind_origin()
+    ensure_synced_with_origin_main()
     target_ref = git("rev-parse", "HEAD").strip()
 
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as handle:

@@ -93,7 +93,16 @@ cd packages/<package>
 dart pub publish --dry-run
 ```
 
-6. Draft the GitHub release **before** pushing.
+6. Push `main`.
+
+```bash
+git push origin main
+```
+
+- The release commit must exist on GitHub before it can be used as a draft release target.
+- If the push is rejected, stop and report the failure. Do not force-push.
+
+7. Draft the GitHub release.
 - Run:
 
 ```bash
@@ -106,10 +115,7 @@ python3 .codex/skills/flutter-pub-release/scripts/release_helper.py draft-releas
   - notes: the same changelog section
   - target: current `HEAD` (the release commit you just made)
 
-- This ensures the tag is anchored to the correct commit SHA before `main` is pushed.
-
-7. Push `main`.
-- The tag reference in the draft release will resolve correctly once the commit reaches GitHub.
+- The helper requires the current `HEAD` to be present on `origin/main`, then anchors the draft tag to that exact commit.
 
 - Stop there. Do not try to verify whether the tag exists remotely or whether `.github/workflows/publish.yml` has started running. This workflow is only responsible for preparing the draft release.
 
