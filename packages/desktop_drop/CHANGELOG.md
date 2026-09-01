@@ -2,7 +2,7 @@
 
 ## 0.8.4
 
-* [Android] Fix Kotlin configuration for both AGP 8 and AGP 9 hosts by configuring `jvmTarget` via `tasks.withType(KotlinCompile)` — works whether Kotlin comes from KGP or AGP built-in
+* [Android] Apply Kotlin Gradle Plugin unconditionally on all AGP versions (8 and 9) — restores the approach from 0.7.1 that was proven working on both
 
 ## 0.8.3
 
