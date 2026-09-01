@@ -27,7 +27,7 @@ try {
 }
 
 def builtInKotlin = agpMajor >= 9
-if (project.hasProperty('android.builtInKotlin')) {
+if (builtInKotlin && project.hasProperty('android.builtInKotlin')) {
     builtInKotlin = project.property('android.builtInKotlin').toString().toBoolean()
 }
 

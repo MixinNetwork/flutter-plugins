@@ -2,7 +2,8 @@
 
 ## 0.8.4
 
-* [Android] Conditionally apply Kotlin Gradle Plugin based on `android.builtInKotlin` property — applies KGP on AGP 8 and AGP 9 with `builtInKotlin=false`, skips KGP on AGP 9 with `builtInKotlin=true`
+* fix: use builtInKotlin property to conditionally apply KGP [#500](https://github.com/MixinNetwork/flutter-plugins/pull/500)
+  by [loucass](https://github.com/loucass)
 
 ## 0.8.3
 
