@@ -16,28 +16,23 @@ buildscript {
 
 apply plugin: 'com.android.library'
 
-// AGP 9 has built-in Kotlin; applying KGP there fails.
-// Hosts on AGP < 9 don't provide Kotlin for this plugin, so we apply it.
-// Each AGP uses a different DSL for jvmTarget.
+// Apply KGP only when AGP does not provide built-in Kotlin.
+// AGP <9 never has built-in Kotlin -> apply KGP.
+// AGP 9+ defaults to built-in Kotlin unless property is explicitly false.
 def agpMajor = 0
 try {
     agpMajor = com.android.Version.ANDROID_GRADLE_PLUGIN_VERSION.tokenize('.')[0].toInteger()
 } catch (ignored) {
     agpMajor = 0
 }
-if (agpMajor < 9) {
+
+def builtInKotlin = agpMajor >= 9
+if (project.hasProperty('android.builtInKotlin')) {
+    builtInKotlin = project.property('android.builtInKotlin').toString().toBoolean()
+}
+
+if (!builtInKotlin) {
     apply plugin: 'kotlin-android'
-    android {
-        kotlinOptions {
-            jvmTarget = JavaVersion.VERSION_1_8.toString()
-        }
-    }
-} else {
-    kotlin {
-        compilerOptions {
-            jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_1_8
-        }
-    }
 }
 
 rootProject.allprojects {
@@ -67,8 +62,18 @@ android {
     defaultConfig {
         minSdkVersion 16
     }
+
+    if (!builtInKotlin) {
+        kotlinOptions {
+            jvmTarget = JavaVersion.VERSION_1_8.toString()
+        }
+    }
 }
 
-dependencies {
-    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
+if (builtInKotlin) {
+    kotlin {
+        compilerOptions {
+            jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_1_8
+        }
+    }
 }
