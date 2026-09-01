@@ -15,7 +15,16 @@ buildscript {
 }
 
 apply plugin: 'com.android.library'
-apply plugin: 'kotlin-android'
+
+// Apply KGP only when AGP does not provide built-in Kotlin.
+// builtInKotlin=true  -> AGP 9+ with Flutter 3.47+ provides Kotlin built-in, skip KGP
+// builtInKotlin=false -> AGP 8 or AGP 9+ with Flutter <3.47, must apply KGP explicitly
+def builtInKotlin = project.hasProperty('android.builtInKotlin') &&
+    project.property('android.builtInKotlin').toString().toBoolean()
+
+if (!builtInKotlin) {
+    apply plugin: 'kotlin-android'
+}
 
 rootProject.allprojects {
     repositories {
@@ -45,11 +54,17 @@ android {
         minSdkVersion 16
     }
 
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_1_8.toString()
+    if (!builtInKotlin) {
+        kotlinOptions {
+            jvmTarget = JavaVersion.VERSION_1_8.toString()
+        }
     }
 }
 
-dependencies {
-    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
+if (builtInKotlin) {
+    kotlin {
+        compilerOptions {
+            jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_1_8
+        }
+    }
 }

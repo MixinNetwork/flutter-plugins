@@ -2,7 +2,7 @@
 
 ## 0.8.4
 
-* [Android] Apply Kotlin Gradle Plugin unconditionally on all AGP versions (8 and 9) — restores the approach from 0.7.1 that was proven working on both
+* [Android] Conditionally apply Kotlin Gradle Plugin based on `android.builtInKotlin` property — applies KGP on AGP 8 and AGP 9 with `builtInKotlin=false`, skips KGP on AGP 9 with `builtInKotlin=true`
 
 ## 0.8.3
 
