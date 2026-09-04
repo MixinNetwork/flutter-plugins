@@ -83,12 +83,23 @@ class DesktopDropWeb {
 
     final web.File file = await fileCompleter.future;
 
+    return _fileToWebDropItem(
+      file,
+      relativePath: entry.fullPath,
+    );
+
+  }
+
+  WebDropItem _fileToWebDropItem(
+    web.File file, {
+    String? relativePath,
+  }) {
     return WebDropItem(
       uri: web.URL.createObjectURL(file),
       name: file.name,
       size: file.size,
       lastModified: DateTime.fromMillisecondsSinceEpoch(file.lastModified),
-      relativePath: entry.fullPath,
+      relativePath: relativePath,
       type: file.type,
       children: [],
     );
@@ -102,12 +113,26 @@ class DesktopDropWeb {
 
       Future.wait(List.generate(items.length, (index) {
         final item = items[index];
-        final entry = item.webkitGetAsEntry()!;
-        return _entryToWebDropItem(entry);
+        final entry = item.webkitGetAsEntry();
+        if (entry != null) {
+          return _entryToWebDropItem(entry);
+        }
+        final file = item.getAsFile();
+        if (file != null) {
+          return _fileToWebDropItem(
+            file,
+            relativePath: null,
+          );
+        }
+        return Future.value(null);
       })).then((webItems) {
+        final items = webItems.whereType<WebDropItem>().toList();
+        if (items.isEmpty) {
+          return;
+        }
         channel.invokeMethod(
           "performOperation_web",
-          webItems.map((e) => e.toJson()).toList(),
+          items.map((e) => e.toJson()).toList(),
         );
       }).catchError((e, s) {
         debugPrint('desktop_drop_web: $e $s');
