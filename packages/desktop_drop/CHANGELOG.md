@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+* [desktop_drop] [Linux] prefer the `text/uri-list` drag target over `application/vnd.portal.filetransfer`. File managers such as Dolphin and dde-fileManager advertise the portal target on plain X11 drags too, where `org.freedesktop.portal.FileTransfer.RetrieveFiles` rejects the key with `AccessDenied: Invalid transfer` and the drop is silently lost. The portal target is now a fallback, used only when the source offers nothing else. [#501](https://github.com/MixinNetwork/flutter-plugins/pull/501)
+
 ## 0.8.4
 
 * fix: use builtInKotlin property to conditionally apply KGP [#500](https://github.com/MixinNetwork/flutter-plugins/pull/500)

@@ -112,14 +112,29 @@ void desktop_drop_plugin_register_with_registrar(FlPluginRegistrar *registrar) {
       g_object_new(desktop_drop_plugin_get_type(), nullptr));
 
   auto *fl_view = fl_plugin_registrar_get_view(registrar);
-  // Register portal file transfer target FIRST (highest priority)
-  // then STRING, then URI targets
-  static GtkTargetEntry entries[] = {
-      {strdup("application/vnd.portal.filetransfer"), GTK_TARGET_OTHER_APP, 0},
-      {strdup("STRING"), GTK_TARGET_OTHER_APP, 0}
-  };
-  gtk_drag_dest_set(GTK_WIDGET(fl_view), GTK_DEST_DEFAULT_ALL, entries, 2, GDK_ACTION_COPY);
+  // Match `text/uri-list` before `application/vnd.portal.filetransfer`.
+  //
+  // GTK picks the first destination target the drag source also offers, so
+  // whichever target is registered first wins. The portal transfer key is
+  // only resolvable when the source is sandboxed and has actually registered
+  // a FileTransfer with the document portal. File managers such as Dolphin
+  // and dde-fileManager advertise `application/vnd.portal.filetransfer` on
+  // plain X11 drags as well, where `RetrieveFiles` then rejects the key with
+  // `org.freedesktop.DBus.Error.AccessDenied: Invalid transfer` and the drop
+  // is silently lost. Register the URI targets first and keep the portal key
+  // (and a bare STRING) as fallbacks for sources that offer nothing better.
+  gtk_drag_dest_set(GTK_WIDGET(fl_view), GTK_DEST_DEFAULT_ALL, nullptr, 0,
+                    GDK_ACTION_COPY);
   gtk_drag_dest_add_uri_targets(GTK_WIDGET(fl_view));
+  GtkTargetList *target_list = gtk_drag_dest_get_target_list(GTK_WIDGET(fl_view));
+  if (target_list != nullptr) {
+    gtk_target_list_add(
+        target_list,
+        gdk_atom_intern_static_string("application/vnd.portal.filetransfer"),
+        GTK_TARGET_OTHER_APP, 0);
+    gtk_target_list_add(target_list, gdk_atom_intern_static_string("STRING"),
+                        GTK_TARGET_OTHER_APP, 0);
+  }
 
   g_autoptr(FlStandardMethodCodec) codec = fl_standard_method_codec_new();
   FlMethodChannel *channel =
