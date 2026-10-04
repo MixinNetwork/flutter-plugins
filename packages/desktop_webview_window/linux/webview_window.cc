@@ -128,22 +128,25 @@ WebviewWindow::WebviewWindow(FlMethodChannel *method_channel, int64_t window_id,
   gtk_container_add(GTK_CONTAINER(window_), GTK_WIDGET(box_));
 
   // initial flutter_view
-  g_autoptr(FlDartProject) project = fl_dart_project_new();
-  const char *args[] = {"web_view_title_bar", g_strdup_printf("%ld", window_id),
-                        nullptr};
-  fl_dart_project_set_dart_entrypoint_arguments(project,
-                                                const_cast<char **>(args));
-  auto *title_bar = fl_view_new(project);
+  FlView *title_bar = nullptr;
+  if (title_bar_height > 0) {
+    g_autoptr(FlDartProject) project = fl_dart_project_new();
+    const char *args[] = {"web_view_title_bar", g_strdup_printf("%ld", window_id),
+                          nullptr};
+    fl_dart_project_set_dart_entrypoint_arguments(project,
+                                                  const_cast<char **>(args));
+    title_bar = fl_view_new(project);
 
-  g_autoptr(FlPluginRegistrar) desktop_webview_window_registrar =
-      fl_plugin_registry_get_registrar_for_plugin(FL_PLUGIN_REGISTRY(title_bar),
-                                                  "DesktopWebviewWindowPlugin");
-  client_message_channel_plugin_register_with_registrar(
-      desktop_webview_window_registrar);
+    g_autoptr(FlPluginRegistrar) desktop_webview_window_registrar =
+        fl_plugin_registry_get_registrar_for_plugin(FL_PLUGIN_REGISTRY(title_bar),
+                                                    "DesktopWebviewWindowPlugin");
+    client_message_channel_plugin_register_with_registrar(
+        desktop_webview_window_registrar);
 
-  gtk_widget_set_size_request(GTK_WIDGET(title_bar), -1, title_bar_height);
-  gtk_widget_set_vexpand(GTK_WIDGET(title_bar), FALSE);
-  gtk_box_pack_start(box_, GTK_WIDGET(title_bar), FALSE, FALSE, 0);
+    gtk_widget_set_size_request(GTK_WIDGET(title_bar), -1, title_bar_height);
+    gtk_widget_set_vexpand(GTK_WIDGET(title_bar), FALSE);
+    gtk_box_pack_start(box_, GTK_WIDGET(title_bar), FALSE, FALSE, 0);
+  }
 
   // initial web_view
   webview_ = webkit_web_view_new();
@@ -167,10 +170,12 @@ WebviewWindow::WebviewWindow(FlMethodChannel *method_channel, int64_t window_id,
   // Disconnect all delete-event handlers first in flutter 3.10.1, which causes
   // delete_event not working. Issues from flutter/engine:
   // https://github.com/flutter/engine/pull/40033
-  guint handler_id = g_signal_handler_find(window_, G_SIGNAL_MATCH_DATA, 0, 0,
-                                           NULL, NULL, title_bar);
-  if (handler_id > 0) {
-    g_signal_handler_disconnect(window_, handler_id);
+  if (title_bar != nullptr) {
+    guint handler_id = g_signal_handler_find(window_, G_SIGNAL_MATCH_DATA, 0, 0,
+                                             NULL, NULL, title_bar);
+    if (handler_id > 0) {
+      g_signal_handler_disconnect(window_, handler_id);
+    }
   }
 }
 

@@ -12,6 +12,7 @@ import 'package:path/path.dart' as p;
 
 import 'src/create_configuration.dart';
 import 'src/message_channel.dart';
+import 'src/title_bar_state.dart';
 import 'src/webview.dart';
 import 'src/webview_impl.dart';
 
@@ -64,9 +65,14 @@ class WebviewWindow {
   }) async {
     configuration ??= CreateConfiguration.platform();
     _init();
+    final arguments = configuration.toMap();
+    if (!titleBarInitialized) {
+      arguments['titleBarHeight'] = 0;
+      arguments['titleBarTopPadding'] = 0;
+    }
     final viewId = await _channel.invokeMethod(
       "create",
-      configuration.toMap(),
+      arguments,
     ) as int;
     final webview = WebviewImpl(viewId, _channel);
     _webviews.add(webview);
