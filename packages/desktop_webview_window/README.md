@@ -102,8 +102,8 @@ flutter test integration_test/windows_webview_test.dart -d windows --timeout 5m
 The tests use local pages, temporary profiles, and fake media devices. They do
 not require a physical camera or microphone.
 
-The bundled `windows/WebView2.h` comes from Microsoft.Web.WebView2 SDK
-1.0.1661.34, which provides the `SavesInProfile` permission API.
+The bundled Windows SDK headers, loader DLL, and import library come from
+Microsoft.Web.WebView2 SDK 1.0.4258.31.
 
 ## License
 

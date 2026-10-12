@@ -1,3 +1,22 @@
+## 0.3.1
+
+* Add Windows `openHidden` and `denyCameraAndMicrophone` options, and fix blank pages when approving navigation requests [#508](https://github.com/MixinNetwork/flutter-plugins/pull/508)
+  by [mtallenca](https://github.com/mtallenca)
+* Prevent stale Windows navigation approvals from replacing newer navigation, restore WebView visibility when maximizing hidden windows, and keep media permission denials out of the shared profile.
+* Update the bundled Windows WebView2 SDK headers, loader DLL, and import library to 1.0.4258.31.
+* Fill the window with web content when `runWebViewTitleBarWidget` is not called [#511](https://github.com/MixinNetwork/flutter-plugins/pull/511)
+  by [FrankenApps](https://github.com/FrankenApps)
+* Fix the macOS Swift Package Manager Flutter framework dependency [#510](https://github.com/MixinNetwork/flutter-plugins/pull/510)
+  by [FrankenApps](https://github.com/FrankenApps)
+* Fix a use-after-free when closing a Linux window [#513](https://github.com/MixinNetwork/flutter-plugins/pull/513)
+  by [matsukiender-star](https://github.com/matsukiender-star)
+* Fix crashes when opening new windows on Linux by opening user-clicked links in the current view and ignoring script-opened windows [#514](https://github.com/MixinNetwork/flutter-plugins/pull/514)
+  by [matsukiender-star](https://github.com/matsukiender-star)
+* Skip the extra Flutter title-bar engine on Linux when `titleBarHeight` is zero [#515](https://github.com/MixinNetwork/flutter-plugins/pull/515)
+  by [matsukiender-star](https://github.com/matsukiender-star)
+* Make Linux WebView windows transient children of the application window [#516](https://github.com/MixinNetwork/flutter-plugins/pull/516)
+  by [matsukiender-star](https://github.com/matsukiender-star)
+
 ## 0.3.0
 
 **BREAKING CHANGES**
