@@ -25,6 +25,8 @@ struct _WebviewWindowPlugin {
   GObject parent_instance;
   FlMethodChannel *method_channel;
   std::map<int64_t, std::unique_ptr<WebviewWindow>> *windows;
+  // The app's view, used to find the window webview windows belong to.
+  FlView *view;
 };
 
 G_DEFINE_TYPE(WebviewWindowPlugin, webview_window_plugin, g_object_get_type())
@@ -48,6 +50,14 @@ static void webview_window_plugin_handle_method_call(
     auto title_bar_height =
         fl_value_get_int(fl_value_lookup_string(args, "titleBarHeight"));
 
+    GtkWindow *parent = nullptr;
+    if (self->view != nullptr) {
+      auto *toplevel = gtk_widget_get_toplevel(GTK_WIDGET(self->view));
+      if (GTK_IS_WINDOW(toplevel)) {
+        parent = GTK_WINDOW(toplevel);
+      }
+    }
+
     auto window_id = next_window_id_;
     g_object_ref(self);
     auto webview = std::make_unique<WebviewWindow>(
@@ -56,7 +66,7 @@ static void webview_window_plugin_handle_method_call(
           self->windows->erase(window_id);
           g_object_unref(self);
         },
-        title, width, height, title_bar_height);
+        title, width, height, title_bar_height, parent);
     self->windows->insert({window_id, std::move(webview)});
     next_window_id_++;
     fl_method_call_respond_success(method_call, fl_value_new_int(window_id),
@@ -331,6 +341,7 @@ void desktop_webview_window_plugin_register_with_registrar(
                             "webview_window", FL_METHOD_CODEC(codec));
   g_object_ref(channel);
   plugin->method_channel = channel;
+  plugin->view = fl_plugin_registrar_get_view(registrar);
   fl_method_channel_set_method_call_handler(
       channel, method_call_cb, g_object_ref(plugin), g_object_unref);
 

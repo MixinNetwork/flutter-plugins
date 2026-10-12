@@ -98,7 +98,7 @@ gboolean decide_policy_cb(WebKitWebView *web_view,
 WebviewWindow::WebviewWindow(FlMethodChannel *method_channel, int64_t window_id,
                              std::function<void()> on_close_callback,
                              const std::string &title, int width, int height,
-                             int title_bar_height)
+                             int title_bar_height, GtkWindow *parent)
     : method_channel_(method_channel),
       window_id_(window_id),
       on_close_callback_(std::move(on_close_callback)),
@@ -106,6 +106,12 @@ WebviewWindow::WebviewWindow(FlMethodChannel *method_channel, int64_t window_id,
   g_object_ref(method_channel_);
 
   window_ = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+  if (parent != nullptr) {
+    // Declared as a child of the app window, so window managers treat it like
+    // a dialog: centred over the app and kept above it on stacking ones,
+    // floated instead of tiled on tiling ones.
+    gtk_window_set_transient_for(GTK_WINDOW(window_), parent);
+  }
   g_signal_connect(G_OBJECT(window_), "destroy",
                    G_CALLBACK(+[](GtkWidget *, gpointer arg) {
                      auto *window = static_cast<WebviewWindow *>(arg);
@@ -126,7 +132,9 @@ WebviewWindow::WebviewWindow(FlMethodChannel *method_channel, int64_t window_id,
                    this);
   gtk_window_set_title(GTK_WINDOW(window_), title.c_str());
   gtk_window_set_default_size(GTK_WINDOW(window_), width, height);
-  gtk_window_set_position(GTK_WINDOW(window_), GTK_WIN_POS_CENTER);
+  gtk_window_set_position(GTK_WINDOW(window_),
+                          parent != nullptr ? GTK_WIN_POS_CENTER_ON_PARENT
+                                            : GTK_WIN_POS_CENTER);
 
   box_ = GTK_BOX(gtk_box_new(GTK_ORIENTATION_VERTICAL, 0));
   gtk_container_add(GTK_CONTAINER(window_), GTK_WIDGET(box_));
