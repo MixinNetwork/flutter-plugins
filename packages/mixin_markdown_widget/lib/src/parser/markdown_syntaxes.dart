@@ -6,6 +6,7 @@ final List<md.BlockSyntax> _markdownBlockSyntaxes =
     List<md.BlockSyntax>.unmodifiable(<md.BlockSyntax>[
   const md.FencedCodeBlockSyntax(),
   const MarkdownMathBlockSyntax(),
+  const MarkdownHtmlCommentBlockSyntax(),
   const MarkdownHtmlBlockSyntax(),
   const md.HeaderWithIdSyntax(),
   const md.SetextHeaderWithIdSyntax(),
@@ -35,6 +36,26 @@ List<md.BlockSyntax> buildMarkdownBlockSyntaxes() => _markdownBlockSyntaxes;
 
 List<md.InlineSyntax> buildMarkdownInlineSyntaxes() => _markdownInlineSyntaxes;
 
+// Keep comments out of the visible AST without rewriting the Markdown source.
+class MarkdownHtmlCommentBlockSyntax extends md.BlockSyntax {
+  const MarkdownHtmlCommentBlockSyntax();
+
+  static final openingPattern = RegExp(r'^ {0,3}<!--');
+
+  @override
+  RegExp get pattern => openingPattern;
+
+  @override
+  md.Node parse(md.BlockParser parser) {
+    while (!parser.isDone) {
+      final closed = parser.current.content.contains('-->');
+      parser.advance();
+      if (closed) break;
+    }
+    return md.Element.empty('html-comment');
+  }
+}
+
 class MarkdownHtmlBlockSyntax extends md.BlockSyntax {
   const MarkdownHtmlBlockSyntax();
 
@@ -56,7 +77,7 @@ class MarkdownHtmlBlockSyntax extends md.BlockSyntax {
   };
 
   static final RegExp _openingPattern = RegExp(
-    r'^\s{0,3}<([A-Za-z][A-Za-z0-9-]*)(?:\s+[^>]*)?>',
+    r'^\s{0,3}<([A-Za-z][A-Za-z0-9-]*)(?:\s+[^>]*)?\s*/?>',
     caseSensitive: false,
   );
 
@@ -481,6 +502,9 @@ class MarkdownInlineHtmlTagSyntax extends md.InlineSyntax {
     'sub',
     'sup',
     'code',
+    'relative-time',
+    'local-time',
+    'time',
   };
   static final RegExp _lineBreakPattern = RegExp(
     r'^<br(?:\s+[^>]*)?\s*/?>',
@@ -503,6 +527,14 @@ class MarkdownInlineHtmlTagSyntax extends md.InlineSyntax {
     }
 
     final source = parser.source.substring(startMatchPos);
+    if (source.startsWith('<!--')) {
+      final end = source.indexOf('-->', 4);
+      if (end >= 0) {
+        parser.writeText();
+        parser.consume(end + 3);
+        return true;
+      }
+    }
     final lineBreakMatch = _lineBreakPattern.firstMatch(source);
     if (lineBreakMatch != null) {
       parser.writeText();
