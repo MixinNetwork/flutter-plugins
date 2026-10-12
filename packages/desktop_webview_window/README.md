@@ -12,11 +12,11 @@ Show a webview window on your flutter desktop application.
 
 ## Getting Started
 
-1. modify your `main` method.
+1. To enable the optional webview title-bar controls, modify your `main` method.
    ```dart
    import 'package:desktop_webview_window/desktop_webview_window.dart';
    
-   void main() async {
+   void main(List<String> args) async {
      WidgetsFlutterBinding.ensureInitialized();
      
      // Add this your main method.

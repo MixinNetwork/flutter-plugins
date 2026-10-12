@@ -10,7 +10,8 @@ import FlutterMacOS
 import WebKit
 
 class WebViewLayoutController: NSViewController {
-  private lazy var titleBarController: FlutterViewController = {
+  private lazy var titleBarController: FlutterViewController? = {
+    guard titleBarHeight + titleBarTopPadding > 0 else { return nil }
     let project = FlutterDartProject()
     project.dartEntrypointArguments = ["web_view_title_bar", "\(viewId)", "\(titleBarTopPadding)"]
     return FlutterViewController(project: project)
@@ -55,31 +56,30 @@ class WebViewLayoutController: NSViewController {
   override func loadView() {
     super.loadView()
 
-    addChild(titleBarController)
-    titleBarController.view.translatesAutoresizingMaskIntoConstraints = false
+    var webViewTopAnchor = view.topAnchor
+    if let titleBarController = titleBarController {
+      addChild(titleBarController)
 
-    // Register titlebar plugins
-    ClientMessageChannelPlugin.register(with: titleBarController.registrar(forPlugin: "DesktopWebviewWindowPlugin"))
+      // Register titlebar plugins
+      ClientMessageChannelPlugin.register(with: titleBarController.registrar(forPlugin: "DesktopWebviewWindowPlugin"))
 
-    let flutterView = titleBarController.view
+      let flutterView = titleBarController.view
+      flutterView.translatesAutoresizingMaskIntoConstraints = false
+      view.addSubview(flutterView)
 
-    flutterView.translatesAutoresizingMaskIntoConstraints = false
-
-    view.addSubview(flutterView)
-
-    let constraints = [
-      flutterView.topAnchor.constraint(equalTo: view.topAnchor),
-      flutterView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-      flutterView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-      flutterView.heightAnchor.constraint(equalToConstant: CGFloat(titleBarHeight + titleBarTopPadding)),
-    ]
-
-    NSLayoutConstraint.activate(constraints)
+      NSLayoutConstraint.activate([
+        flutterView.topAnchor.constraint(equalTo: view.topAnchor),
+        flutterView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+        flutterView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+        flutterView.heightAnchor.constraint(equalToConstant: CGFloat(titleBarHeight + titleBarTopPadding)),
+      ])
+      webViewTopAnchor = flutterView.bottomAnchor
+    }
 
     view.addSubview(webView)
     webView.translatesAutoresizingMaskIntoConstraints = false
     NSLayoutConstraint.activate([
-      webView.topAnchor.constraint(equalTo: flutterView.bottomAnchor),
+      webView.topAnchor.constraint(equalTo: webViewTopAnchor),
       webView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
       webView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
       webView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
@@ -155,7 +155,7 @@ class WebViewLayoutController: NSViewController {
   func destroy() {
     webView.stopLoading(self)
     webView.removeFromSuperview()
-    titleBarController.engine.shutDownEngine()
+    titleBarController?.engine.shutDownEngine()
   }
 
   func reload() {
