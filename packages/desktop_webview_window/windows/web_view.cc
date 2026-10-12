@@ -35,10 +35,12 @@ WebView::WebView(
     std::shared_ptr<flutter::MethodChannel<flutter::EncodableValue>>
         method_channel,
     int64_t web_view_id, std::wstring userDataFolder,
+    bool deny_camera_and_microphone,
     std::function<void(HRESULT)> on_web_view_created)
     : method_channel_(std::move(method_channel)),
       web_view_id_(web_view_id),
       user_data_folder_(std::move(userDataFolder)),
+      deny_camera_and_microphone_(deny_camera_and_microphone),
       on_web_view_created_callback_(std::move(on_web_view_created)) {
   RegisterWindowClass(kWebViewClassName, WndProc);
   view_window_ = wil::unique_hwnd(::CreateWindowEx(
@@ -58,17 +60,35 @@ WebView::WebView(
               on_web_view_created_callback_(result);
               return S_OK;
             }
+            if (deny_camera_and_microphone_) {
+              // SavesInProfile is available in Runtime 111 and later. Do not
+              // silently turn a window-scoped policy into a persistent denial
+              // on older runtimes.
+              wil::unique_cotaskmem_string version;
+              int comparison = 0;
+              HRESULT hr = env->get_BrowserVersionString(&version);
+              if (SUCCEEDED(hr)) {
+                hr = CompareBrowserVersions(version.get(), L"111.0.1661.34",
+                                            &comparison);
+              }
+              if (FAILED(hr) || comparison < 0) {
+                auto callback = std::move(on_web_view_created_callback_);
+                callback(FAILED(hr) ? hr : HRESULT_FROM_WIN32(ERROR_OLD_WIN_VERSION));
+                return S_OK;
+              }
+            }
             env->CreateCoreWebView2Controller(
                 view_window_.get(),
                 Callback<
                     ICoreWebView2CreateCoreWebView2ControllerCompletedHandler>(
                     [this](HRESULT result,
                            ICoreWebView2Controller *controller) -> HRESULT {
-                      on_web_view_created_callback_(result);
                       if (SUCCEEDED(result)) {
                         webview_controller_ = controller;
-                        OnWebviewControllerCreated();
+                        result = OnWebviewControllerCreated();
                       }
+                      auto callback = std::move(on_web_view_created_callback_);
+                      callback(result);
                       return S_OK;
                     })
                     .Get());
@@ -77,22 +97,22 @@ WebView::WebView(
           .Get());
 }
 
-void WebView::OnWebviewControllerCreated() {
+HRESULT WebView::OnWebviewControllerCreated() {
   if (!webview_controller_) {
-    return;
+    return E_POINTER;
   }
   
   HRESULT hr = webview_controller_->get_CoreWebView2(&webview_);
   if (FAILED(hr) || !webview_) {
     std::cerr << "failed to get core webview" << std::endl;
-    return;
+    return FAILED(hr) ? hr : E_FAIL;
   }
 
   wil::com_ptr<ICoreWebView2Settings> settings;
   hr = webview_->get_Settings(&settings);
   if (FAILED(hr) || !settings) {
     std::cerr << "failed to get settings" << std::endl;
-    return;
+    return FAILED(hr) ? hr : E_FAIL;
   }
   
   settings->put_IsScriptEnabled(true);
@@ -111,6 +131,7 @@ void WebView::OnWebviewControllerCreated() {
     }
   }
 
+  webview_controller_->put_IsVisible(visible_);
   UpdateBounds();
 
   // Always use single window to load web page.
@@ -128,6 +149,30 @@ void WebView::OnWebviewControllerCreated() {
           })
           .Get(),
       nullptr);
+
+  if (deny_camera_and_microphone_) {
+    // Answered here, so the request never reaches Windows' own privacy prompt.
+    hr = webview_->add_PermissionRequested(
+        Callback<ICoreWebView2PermissionRequestedEventHandler>(
+            [](ICoreWebView2 *sender,
+               ICoreWebView2PermissionRequestedEventArgs *args) {
+              COREWEBVIEW2_PERMISSION_KIND kind;
+              if (SUCCEEDED(args->get_PermissionKind(&kind)) &&
+                  (kind == COREWEBVIEW2_PERMISSION_KIND_CAMERA ||
+                   kind == COREWEBVIEW2_PERMISSION_KIND_MICROPHONE)) {
+                wil::com_ptr<ICoreWebView2PermissionRequestedEventArgs3> args3;
+                HRESULT hr = args->QueryInterface(IID_PPV_ARGS(&args3));
+                if (FAILED(hr)) return hr;
+                hr = args3->put_SavesInProfile(FALSE);
+                if (FAILED(hr)) return hr;
+                return args->put_State(COREWEBVIEW2_PERMISSION_STATE_DENY);
+              }
+              return S_OK;
+            })
+            .Get(),
+        nullptr);
+    if (FAILED(hr)) return hr;
+  }
 
   webview_->add_ContentLoading(
       Callback<ICoreWebView2ContentLoadingEventHandler>(
@@ -166,6 +211,9 @@ void WebView::OnWebviewControllerCreated() {
                      flutter::EncodableValue(web_view_id_)},
                 }));
 
+            // Every new navigation supersedes pending approval, including
+            // navigations that intentionally bypass the Dart callback.
+            CancelPendingNavigation();
             if (triggerOnUrlRequestedEvent) {
               wil::unique_cotaskmem_string uri;
               HRESULT hr = args->get_Uri(&uri);
@@ -177,18 +225,32 @@ void WebView::OnWebviewControllerCreated() {
               // Capture URI string before async callback
               std::wstring uri_string(uri.get());
 
+              UINT64 navigation_id = 0;
+              args->get_NavigationId(&navigation_id);
+              awaiting_cancelled_navigation_ = true;
+              cancelled_navigation_id_ = navigation_id;
+              deferred_navigation_.reset();
+              const auto generation = navigation_generation_;
+
               auto result_handler =
                   std::make_unique<flutter::MethodResultFunctions<>>(
-                      [uri_string, sender,
+                      [uri_string, generation,
                        this](const flutter::EncodableValue *success_value) {
                         bool letPass = false;
                         if (success_value && 
                             std::holds_alternative<bool>(*success_value)) {
                           letPass = std::get<bool>(*success_value);
                         }
+                        // A later navigation has superseded this one.
+                        if (generation != navigation_generation_) {
+                          return;
+                        }
                         if (letPass) {
-                          this->setTriggerOnUrlRequestedEvent(false);
-                          sender->Navigate(uri_string.c_str());
+                          if (awaiting_cancelled_navigation_) {
+                            deferred_navigation_ = uri_string;
+                          } else {
+                            NavigateAllowed(uri_string);
+                          }
                         }
                       },
                       nullptr, nullptr);
@@ -220,6 +282,18 @@ void WebView::OnWebviewControllerCreated() {
       Callback<ICoreWebView2NavigationCompletedEventHandler>(
           [this](ICoreWebView2 *sender,
                  ICoreWebView2NavigationCompletedEventArgs *args) {
+            UINT64 navigation_id = 0;
+            args->get_NavigationId(&navigation_id);
+            if (awaiting_cancelled_navigation_ &&
+                navigation_id == cancelled_navigation_id_) {
+              awaiting_cancelled_navigation_ = false;
+              if (deferred_navigation_) {
+                auto url = std::move(*deferred_navigation_);
+                deferred_navigation_.reset();
+                NavigateAllowed(url);
+              }
+            }
+
             auto method_args = flutter::EncodableMap{
                 {flutter::EncodableValue("id"),
                  flutter::EncodableValue(web_view_id_)},
@@ -262,6 +336,7 @@ void WebView::OnWebviewControllerCreated() {
           })
           .Get(),
       nullptr);
+  return S_OK;
 }
 
 void WebView::UpdateBounds() {
@@ -273,11 +348,31 @@ void WebView::UpdateBounds() {
 }
 
 void WebView::Navigate(const std::wstring &url) {
+  CancelPendingNavigation();
   if (webview_) {
     webview_->Navigate(url.c_str());
   } else {
     std::cerr << "webview not created" << std::endl;
   }
+}
+
+void WebView::SetVisible(bool visible) {
+  visible_ = visible;
+  if (webview_controller_) {
+    webview_controller_->put_IsVisible(visible);
+  }
+}
+
+// Issues a navigation Dart allowed, without asking about it again.
+void WebView::NavigateAllowed(const std::wstring &url) {
+  setTriggerOnUrlRequestedEvent(false);
+  Navigate(url);
+}
+
+void WebView::CancelPendingNavigation() {
+  ++navigation_generation_;
+  awaiting_cancelled_navigation_ = false;
+  deferred_navigation_.reset();
 }
 
 void WebView::AddScriptToExecuteOnDocumentCreated(
@@ -303,24 +398,28 @@ void WebView::SetApplicationNameForUserAgent(const std::wstring &name) {
 }
 
 void WebView::GoBack() {
+  CancelPendingNavigation();
   if (webview_) {
     webview_->GoBack();
   }
 }
 
 void WebView::GoForward() {
+  CancelPendingNavigation();
   if (webview_) {
     webview_->GoForward();
   }
 }
 
 void WebView::Reload() {
+  CancelPendingNavigation();
   if (webview_) {
     webview_->Reload();
   }
 }
 
 void WebView::Stop() {
+  CancelPendingNavigation();
   if (webview_) {
     webview_->Stop();
   }

@@ -72,11 +72,38 @@ you can use `WebviewWindow.create()` to create a webview with a custom user data
 
 ```dart
 final webview = await WebviewWindow.create(
-  confiruation: CreateConfiguration(
+  configuration: CreateConfiguration(
     userDataFolderWindows: 'your_custom_user_data_folder',
   ),
 );
 ```
+
+### Window and media options
+
+`CreateConfiguration(openHidden: true)` creates a Windows WebView without
+showing its window. Show it later with `setWebviewWindowVisibility(true)` or
+`bringToForeground(maximized: true)`.
+
+`CreateConfiguration(denyCameraAndMicrophone: true)` denies camera and microphone
+requests for that window without saving the denial in the shared profile.
+This option requires WebView2 Runtime 111.0.1661.34 or later. Window creation
+fails on older runtimes when this option is enabled. Both options default to
+`false`.
+
+### Windows regression tests
+
+Run from `example/` on Windows with WebView2 Runtime installed:
+
+```powershell
+$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--use-fake-device-for-media-stream'
+flutter test integration_test/windows_webview_test.dart -d windows --timeout 5m
+```
+
+The tests use local pages, temporary profiles, and fake media devices. They do
+not require a physical camera or microphone.
+
+The bundled `windows/WebView2.h` comes from Microsoft.Web.WebView2 SDK
+1.0.1661.34, which provides the `SavesInProfile` permission API.
 
 ## License
 

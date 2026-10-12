@@ -70,6 +70,16 @@ void WebviewWindowPlugin::HandleMethodCall(
     auto windowPosY =
         arguments->at(flutter::EncodableValue("windowPosY")).LongValue();
 
+    // Optional, so a caller that predates them gets the old behaviour.
+    auto optional_bool = [arguments](const char *key) {
+      auto it = arguments->find(flutter::EncodableValue(key));
+      if (it == arguments->end()) return false;
+      auto *value = std::get_if<bool>(&it->second);
+      return value != nullptr && *value;
+    };
+    auto openHidden = optional_bool("openHidden");
+    auto denyCameraAndMicrophone = optional_bool("denyCameraAndMicrophone");
+
     auto window_id = next_window_id_;
     auto window = std::make_unique<WebviewWindow>(
         method_channel_, window_id, int(titleBarHeight),
@@ -79,7 +89,8 @@ void WebviewWindowPlugin::HandleMethodCall(
     window->CreateAndShow(
         utf8_to_wide(title), int(height), int(width),
         utf8_to_wide(userDataFolder), int(windowPosX), int(windowPosY),
-        useWindowPositionAndSize, openMaximized,
+        useWindowPositionAndSize, openMaximized, openHidden,
+        denyCameraAndMicrophone,
         [this, window_id, result(result2)](bool succeed) mutable {
           if (!succeed) {
             result->Error("0", "failed to show window");

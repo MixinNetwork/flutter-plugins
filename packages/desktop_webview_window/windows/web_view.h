@@ -7,6 +7,7 @@
 
 #include <windows.h>
 
+#include <optional>
 #include <string>
 
 #include <flutter/method_channel.h>
@@ -26,6 +27,7 @@ class WebView {
   WebView(std::shared_ptr<flutter::MethodChannel<flutter::EncodableValue>> method_channel,
           int64_t web_view_id,
           std::wstring userDataFolder,
+          bool deny_camera_and_microphone,
           std::function<void(HRESULT)> on_web_view_created_callback
   );
 
@@ -64,6 +66,11 @@ class WebView {
 
   void setTriggerOnUrlRequestedEvent(const bool value);
 
+  // Whether WebView2 renders. It does not follow its host window's
+  // visibility, so a webview in a window created hidden stays blank when the
+  // window is shown unless it is told.
+  void SetVisible(bool visible);
+
  private:
   wil::unique_hwnd view_window_;
 
@@ -85,7 +92,24 @@ class WebView {
 
   bool triggerOnUrlRequestedEvent{true};
 
-  void OnWebviewControllerCreated();
+  bool deny_camera_and_microphone_{false};
+
+  // Applied when the controller is created, if SetVisible came first.
+  bool visible_{true};
+
+  // A navigation cancelled so Dart could be asked about it, until WebView2
+  // reports it finished. Re-navigating before then is dropped together with
+  // the cancelled navigation, so an allowed URL waits here for it.
+  bool awaiting_cancelled_navigation_{false};
+  uint64_t cancelled_navigation_id_{0};
+  uint64_t navigation_generation_{0};
+  std::optional<std::wstring> deferred_navigation_;
+
+  void NavigateAllowed(const std::wstring &url);
+
+  void CancelPendingNavigation();
+
+  HRESULT OnWebviewControllerCreated();
 
   [[nodiscard]] bool CanGoBack() const;
 
