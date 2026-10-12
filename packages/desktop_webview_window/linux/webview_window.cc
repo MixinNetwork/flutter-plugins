@@ -77,7 +77,14 @@ gboolean on_load_failed_with_tls_errors(WebKitWebView *web_view,
 GtkWidget *on_create(WebKitWebView *web_view,
                      WebKitNavigationAction *navigation_action,
                      gpointer user_data) {
-  return GTK_WIDGET(web_view);
+  // WebKit expects either a new view related to web_view or nullptr here.
+  // Handing back web_view itself aborts in WebCore on some builds, so open
+  // user-clicked links in the same view and drop script-opened windows.
+  if (webkit_navigation_action_is_user_gesture(navigation_action)) {
+    webkit_web_view_load_request(
+        web_view, webkit_navigation_action_get_request(navigation_action));
+  }
+  return nullptr;
 }
 
 void on_load_changed(WebKitWebView *web_view, WebKitLoadEvent load_event,
