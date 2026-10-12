@@ -31,6 +31,8 @@ target_include_directories(${PLUGIN_NAME} INTERFACE
         "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_link_libraries(${PLUGIN_NAME} PRIVATE flutter flutter_wrapper_plugin flutter_wrapper_app)
 
+# SDK headers, loader DLL and import library: Microsoft.Web.WebView2 1.0.4258.31,
+# build/native/include and build/native/x64 in the official NuGet package.
 add_library(Webview2 SHARED IMPORTED GLOBAL)
 SET_PROPERTY(TARGET Webview2 PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/libs/x64/Webview2Loader.dll)
 SET_PROPERTY(TARGET Webview2 PROPERTY IMPORTED_IMPLIB ${CMAKE_CURRENT_SOURCE_DIR}/libs/x64/Webview2Loader.dll.lib)
