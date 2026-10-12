@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
 
 import 'message_channel.dart';
+import 'title_bar_state.dart';
 
 const _channel = ClientMessageChannel();
 
 /// runs the title bar
 /// title bar is a widget that displays the title of the webview window
 /// return true if the args is matchs the title bar
+///
+/// Call this from main before creating any webview windows to enable their
+/// title-bar controls.
+///
+/// Without this hook, web content fills the window.
 ///
 /// [builder] custom TitleBar widget builder.
 /// can use [TitleBarWebViewController] to controller the WebView
@@ -17,6 +23,7 @@ bool runWebViewTitleBarWidget(
   WidgetBuilder? builder,
   Color? backgroundColor,
 }) {
+  titleBarInitialized = true;
   if (args.isEmpty || args[0] != 'web_view_title_bar') {
     return false;
   }

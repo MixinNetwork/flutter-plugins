@@ -217,6 +217,22 @@ The renderer also maps common GitHub-style HTML blocks into structured Markdown 
 </blockquote>
 </details>
 
+### GitHub Review Comments
+
+> <!-- sample-review-metadata {"repository":"sample/project"} -->
+> | Review | Status | Commit |
+> | --- | --- | --- |
+> | **Code Review** | Running since <relative-time datetime="2030-01-02T03:04:05Z">2030-01-02T03:04:05Z</relative-time> | `0123456` |
+>
+> <details> <summary>About reviews</summary>
+> <br/>
+>
+> Reviews run when you
+> - Open a pull request
+> - Comment `@review-bot review`.
+>
+> </details>
+
 Plain HTML paragraphs and lists are supported too:
 
 <p>This paragraph came from a <strong>raw HTML</strong> block with an inline <a href="https://github.com/MixinNetwork/flutter-plugins">repository link</a>.</p>
