@@ -8,3 +8,6 @@ pubspec_overrides.yaml
 build/
 .build/
 .swiftpm/
+
+# macOS Finder metadata.
+.DS_Store
