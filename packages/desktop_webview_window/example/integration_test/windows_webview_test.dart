@@ -39,6 +39,7 @@ void main() {
       );
       await request.response.close();
     });
+    await tester.pump();
   });
 
   tearDown(() async {
@@ -85,6 +86,7 @@ void main() {
       await Future<void>.delayed(const Duration(seconds: 1));
       expect(await readScript(view, 'location.pathname'), '/new');
     });
+    await tester.pump();
   });
 
   testWidgets('a hidden page becomes visible when maximized and activated', (
@@ -103,6 +105,7 @@ void main() {
       await view.bringToForeground(maximized: true);
       await waitForScript(view, 'document.visibilityState', 'visible');
     });
+    await tester.pump();
   });
 
   testWidgets('media denial does not persist in the shared profile', (
@@ -143,5 +146,6 @@ void main() {
         await waitForScript(normal, 'window.permissionResult', 'prompt');
       }
     });
+    await tester.pump();
   });
 }
