@@ -39,7 +39,6 @@ void main() {
       );
       await request.response.close();
     });
-    await tester.pump();
   });
 
   tearDown(() async {
