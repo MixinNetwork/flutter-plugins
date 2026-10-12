@@ -102,11 +102,14 @@ class WebView {
   // the cancelled navigation, so an allowed URL waits here for it.
   bool awaiting_cancelled_navigation_{false};
   uint64_t cancelled_navigation_id_{0};
+  uint64_t navigation_generation_{0};
   std::optional<std::wstring> deferred_navigation_;
 
   void NavigateAllowed(const std::wstring &url);
 
-  void OnWebviewControllerCreated();
+  void CancelPendingNavigation();
+
+  HRESULT OnWebviewControllerCreated();
 
   [[nodiscard]] bool CanGoBack() const;
 

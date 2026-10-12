@@ -168,6 +168,9 @@ void WebviewWindow::moveWebviewWindow(int left, int top, int width, int height) 
 void WebviewWindow::bringToForeground(bool maximized) {
   SetForegroundWindow(hwnd_.get());
   if (maximized) {
+    if (web_view_) {
+      web_view_->SetVisible(true);
+    }
     ::ShowWindow(hwnd_.get(), SW_MAXIMIZE);
   }
 }

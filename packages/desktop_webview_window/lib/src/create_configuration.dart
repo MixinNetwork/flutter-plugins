@@ -31,6 +31,9 @@ class CreateConfiguration {
   /// Windows only. Deny every camera and microphone permission request the
   /// page (or any frame in it) makes, instead of handing it to Windows, which
   /// prompts the user on the app's behalf.
+  ///
+  /// The denial is not saved to the shared profile. Requires WebView2 Runtime
+  /// 111.0.1661.34 or later; window creation fails on older runtimes when enabled.
   final bool denyCameraAndMicrophone;
 
   const CreateConfiguration({
