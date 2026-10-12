@@ -124,7 +124,12 @@ class MarkdownDocumentParser {
       );
     }
 
+    // A hidden trailing comment may still be open across a blank line.
+    // Reparse its owning source tail before treating appended text as visible.
     final parseAppendedChunkAsNewBlocks = hasBlankLineBoundary &&
+        !previousTailLines.any(
+          MarkdownHtmlCommentBlockSyntax.openingPattern.hasMatch,
+        ) &&
         _canKeepLastBlockStableAcrossBlankAppend(previousDocument.blocks.last);
     final prefixLength = parseAppendedChunkAsNewBlocks
         ? previousDocument.blocks.length
@@ -613,6 +618,7 @@ class MarkdownDocumentParser {
     }
 
     final ranges = <SourceRange>[];
+    int? hiddenStart;
     int? footnoteStart;
     int? footnoteEnd;
     var index = 0;
@@ -622,7 +628,21 @@ class MarkdownDocumentParser {
         continue;
       }
 
-      final startIndex = index;
+      if (MarkdownHtmlCommentBlockSyntax.openingPattern
+          .hasMatch(lines[index])) {
+        hiddenStart ??= index;
+        while (index < lines.length) {
+          final closed = lines[index].contains('-->');
+          index += 1;
+          if (closed) break;
+        }
+        continue;
+      }
+
+      // Let the next visible block own preceding hidden source, so reparsing
+      // preserves comment boundaries without creating selectable empty blocks.
+      final startIndex = hiddenStart ?? index;
+      hiddenStart = null;
       if (_isFootnoteDefinitionStart(lines[index])) {
         final endIndex = _consumeFootnoteDefinition(lines, index);
         footnoteStart ??= sourceOffset + lineStarts[startIndex];
@@ -837,6 +857,7 @@ class MarkdownDocumentParser {
     final line = lines[index];
     return _isIndentedCodeBlockStart(line) ||
         _isFenceStart(line) ||
+        MarkdownHtmlCommentBlockSyntax.openingPattern.hasMatch(line) ||
         _isTableStart(lines, index) ||
         _isDefinitionListStart(lines, index) ||
         _isBlockquoteLine(line) ||

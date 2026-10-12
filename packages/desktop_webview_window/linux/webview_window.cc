@@ -77,7 +77,14 @@ gboolean on_load_failed_with_tls_errors(WebKitWebView *web_view,
 GtkWidget *on_create(WebKitWebView *web_view,
                      WebKitNavigationAction *navigation_action,
                      gpointer user_data) {
-  return GTK_WIDGET(web_view);
+  // WebKit expects either a new view related to web_view or nullptr here.
+  // Handing back web_view itself aborts in WebCore on some builds, so open
+  // user-clicked links in the same view and drop script-opened windows.
+  if (webkit_navigation_action_is_user_gesture(navigation_action)) {
+    webkit_web_view_load_request(
+        web_view, webkit_navigation_action_get_request(navigation_action));
+  }
+  return nullptr;
 }
 
 void on_load_changed(WebKitWebView *web_view, WebKitLoadEvent load_event,
@@ -98,7 +105,7 @@ gboolean decide_policy_cb(WebKitWebView *web_view,
 WebviewWindow::WebviewWindow(FlMethodChannel *method_channel, int64_t window_id,
                              std::function<void()> on_close_callback,
                              const std::string &title, int width, int height,
-                             int title_bar_height)
+                             int title_bar_height, GtkWindow *parent)
     : method_channel_(method_channel),
       window_id_(window_id),
       on_close_callback_(std::move(on_close_callback)),
@@ -106,40 +113,55 @@ WebviewWindow::WebviewWindow(FlMethodChannel *method_channel, int64_t window_id,
   g_object_ref(method_channel_);
 
   window_ = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+  if (parent != nullptr) {
+    // Declared as a child of the app window, so window managers treat it like
+    // a dialog: centred over the app and kept above it on stacking ones,
+    // floated instead of tiled on tiling ones.
+    gtk_window_set_transient_for(GTK_WINDOW(window_), parent);
+  }
   g_signal_connect(G_OBJECT(window_), "destroy",
                    G_CALLBACK(+[](GtkWidget *, gpointer arg) {
                      auto *window = static_cast<WebviewWindow *>(arg);
-                     if (window->on_close_callback_) {
-                       window->on_close_callback_();
-                     }
+                     // on_close_callback_ erases this window from the plugin's
+                     // map, which deletes it, so notify Dart first and run the
+                     // callback last, from a local copy.
+                     auto on_close = std::move(window->on_close_callback_);
                      auto *args = fl_value_new_map();
                      fl_value_set(args, fl_value_new_string("id"),
                                   fl_value_new_int(window->window_id_));
                      fl_method_channel_invoke_method(
                          FL_METHOD_CHANNEL(window->method_channel_),
                          "onWindowClose", args, nullptr, nullptr, nullptr);
+                     if (on_close) {
+                       on_close();
+                     }
                    }),
                    this);
   gtk_window_set_title(GTK_WINDOW(window_), title.c_str());
   gtk_window_set_default_size(GTK_WINDOW(window_), width, height);
-  gtk_window_set_position(GTK_WINDOW(window_), GTK_WIN_POS_CENTER);
+  gtk_window_set_position(GTK_WINDOW(window_),
+                          parent != nullptr ? GTK_WIN_POS_CENTER_ON_PARENT
+                                            : GTK_WIN_POS_CENTER);
 
   box_ = GTK_BOX(gtk_box_new(GTK_ORIENTATION_VERTICAL, 0));
   gtk_container_add(GTK_CONTAINER(window_), GTK_WIDGET(box_));
 
   // initial flutter_view
+  // The title bar is a second Flutter engine. Tearing it down when the window
+  // closes breaks the host app's GL context, so a title_bar_height of 0 skips
+  // it for apps that draw their own controls.
   FlView *title_bar = nullptr;
   if (title_bar_height > 0) {
     g_autoptr(FlDartProject) project = fl_dart_project_new();
-    const char *args[] = {"web_view_title_bar", g_strdup_printf("%ld", window_id),
-                          nullptr};
+    const char *args[] = {"web_view_title_bar",
+                          g_strdup_printf("%ld", window_id), nullptr};
     fl_dart_project_set_dart_entrypoint_arguments(project,
                                                   const_cast<char **>(args));
     title_bar = fl_view_new(project);
 
     g_autoptr(FlPluginRegistrar) desktop_webview_window_registrar =
-        fl_plugin_registry_get_registrar_for_plugin(FL_PLUGIN_REGISTRY(title_bar),
-                                                    "DesktopWebviewWindowPlugin");
+        fl_plugin_registry_get_registrar_for_plugin(
+            FL_PLUGIN_REGISTRY(title_bar), "DesktopWebviewWindowPlugin");
     client_message_channel_plugin_register_with_registrar(
         desktop_webview_window_registrar);
 
@@ -171,8 +193,8 @@ WebviewWindow::WebviewWindow(FlMethodChannel *method_channel, int64_t window_id,
   // delete_event not working. Issues from flutter/engine:
   // https://github.com/flutter/engine/pull/40033
   if (title_bar != nullptr) {
-    guint handler_id = g_signal_handler_find(window_, G_SIGNAL_MATCH_DATA, 0, 0,
-                                             NULL, NULL, title_bar);
+    guint handler_id = g_signal_handler_find(window_, G_SIGNAL_MATCH_DATA, 0,
+                                             0, NULL, NULL, title_bar);
     if (handler_id > 0) {
       g_signal_handler_disconnect(window_, handler_id);
     }
