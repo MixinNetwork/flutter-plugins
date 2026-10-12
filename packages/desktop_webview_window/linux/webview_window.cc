@@ -109,15 +109,19 @@ WebviewWindow::WebviewWindow(FlMethodChannel *method_channel, int64_t window_id,
   g_signal_connect(G_OBJECT(window_), "destroy",
                    G_CALLBACK(+[](GtkWidget *, gpointer arg) {
                      auto *window = static_cast<WebviewWindow *>(arg);
-                     if (window->on_close_callback_) {
-                       window->on_close_callback_();
-                     }
+                     // on_close_callback_ erases this window from the plugin's
+                     // map, which deletes it, so notify Dart first and run the
+                     // callback last, from a local copy.
+                     auto on_close = std::move(window->on_close_callback_);
                      auto *args = fl_value_new_map();
                      fl_value_set(args, fl_value_new_string("id"),
                                   fl_value_new_int(window->window_id_));
                      fl_method_channel_invoke_method(
                          FL_METHOD_CHANNEL(window->method_channel_),
                          "onWindowClose", args, nullptr, nullptr, nullptr);
+                     if (on_close) {
+                       on_close();
+                     }
                    }),
                    this);
   gtk_window_set_title(GTK_WINDOW(window_), title.c_str());
