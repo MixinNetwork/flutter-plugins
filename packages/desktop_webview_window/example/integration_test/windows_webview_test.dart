@@ -41,15 +41,36 @@ void main() {
     });
   });
 
-  tearDown(() async {
+  Future<void> closeViews() async {
     for (final view in views) {
       view.close();
       await view.onClose.timeout(const Duration(seconds: 10));
     }
     views.clear();
+    // Let native activation events settle before Flutter disposes its focus tree.
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    FocusManager.instance.applyFocusChangesIfNeeded();
+  }
+
+  tearDown(() async {
     await server.close(force: true);
     // WebView2 may retain the profile lock until its browser process exits.
   });
+
+  Future<void> runScenario(
+    WidgetTester tester,
+    Future<void> Function() body,
+  ) async {
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.runAsync(() async {
+      try {
+        await body();
+      } finally {
+        await closeViews();
+      }
+    });
+    await tester.pump();
+  }
 
   String url(String path) => 'http://127.0.0.1:${server.port}$path';
 
@@ -69,8 +90,7 @@ void main() {
   testWidgets('a newer explicit launch replaces an allowed URL request', (
     tester,
   ) async {
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.runAsync(() async {
+    await runScenario(tester, () async {
       final view = await create();
       var replaced = false;
       view.setOnUrlRequestCallback((requested) {
@@ -85,14 +105,12 @@ void main() {
       await Future<void>.delayed(const Duration(seconds: 1));
       expect(await readScript(view, 'location.pathname'), '/new');
     });
-    await tester.pump();
   });
 
   testWidgets('a hidden page becomes visible when maximized and activated', (
     tester,
   ) async {
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.runAsync(() async {
+    await runScenario(tester, () async {
       final view = await create(hidden: true);
       view.launch(url('/visibility'), triggerOnUrlRequestEvent: false);
       await waitForScript(view, 'location.pathname', '/visibility');
@@ -104,14 +122,12 @@ void main() {
       await view.bringToForeground(maximized: true);
       await waitForScript(view, 'document.visibilityState', 'visible');
     });
-    await tester.pump();
   });
 
   testWidgets('media denial does not persist in the shared profile', (
     tester,
   ) async {
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.runAsync(() async {
+    await runScenario(tester, () async {
       final denied = await create(denyMedia: true);
       denied.launch(url('/permissions'), triggerOnUrlRequestEvent: false);
       await waitForScript(denied, 'location.pathname', '/permissions');
@@ -145,6 +161,5 @@ void main() {
         await waitForScript(normal, 'window.permissionResult', 'prompt');
       }
     });
-    await tester.pump();
   });
 }
