@@ -41,10 +41,16 @@ void main() {
     });
   });
 
+  Future<void> closeView(Webview view) async {
+    view.close();
+    // close() is fire-and-forget on Windows. A following call on the same
+    // channel waits until native window destruction has been processed.
+    await WebviewWindow.isWebviewAvailable();
+  }
+
   Future<void> closeViews() async {
     for (final view in views) {
-      view.close();
-      await view.onClose.timeout(const Duration(seconds: 10));
+      await closeView(view);
     }
     views.clear();
     // Let native activation events settle before Flutter disposes its focus tree.
@@ -144,8 +150,7 @@ void main() {
         ''');
         await waitForScript(denied, 'window.mediaResult', 'NotAllowedError');
       }
-      denied.close();
-      await denied.onClose;
+      await closeView(denied);
       views.remove(denied);
 
       final normal = await create();
