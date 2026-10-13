@@ -1,0 +1,101 @@
+name: Integration Tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: integration-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  select:
+    name: Select integration targets
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.targets.outputs.matrix }}
+      has_targets: ${{ steps.targets.outputs.has_targets }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Test target selection
+        run: python3 -B -m unittest discover -s tool/ci -p 'test_*.py' -v
+      - name: Select targets
+        id: targets
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          args=()
+          if [[ "$EVENT" == "pull_request" ]]; then
+            args+=(--base "$BASE" --head "$HEAD")
+          fi
+          python3 -B tool/ci/select_integration_targets.py "${args[@]}" --output "$GITHUB_OUTPUT"
+
+  integration:
+    name: ${{ matrix.package }} / ${{ matrix.platform }}
+    needs: select
+    if: needs.select.outputs.has_targets == 'true'
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix: ${{ fromJSON(needs.select.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Record environment
+        shell: bash
+        run: flutter doctor -v
+      - name: Install workspace dependencies
+        shell: bash
+        run: dart pub get
+      - name: Prepare package environment
+        if: matrix.setup != ''
+        shell: pwsh
+        run: '& "./packages/${{ matrix.package }}/${{ matrix.setup }}"'
+      - name: Run integration tests
+        working-directory: packages/${{ matrix.package }}/example
+        shell: bash
+        run: flutter test "${{ matrix.test }}" -d "${{ matrix.platform }}" --timeout 5m 2>&1 | tee integration-test.log
+      - name: Upload test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-${{ matrix.package }}-${{ matrix.platform }}
+          path: packages/${{ matrix.package }}/example/integration-test.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+  result:
+    name: Integration Tests
+    if: always()
+    needs: [select, integration]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        env:
+          SELECTION: ${{ needs.select.result }}
+          HAS_TARGETS: ${{ needs.select.outputs.has_targets }}
+          INTEGRATION: ${{ needs.integration.result }}
+        run: |
+          [[ "$SELECTION" == "success" ]] || exit 1
+          if [[ "$HAS_TARGETS" == "false" && "$INTEGRATION" == "skipped" ]]; then
+            echo "No affected integration targets."
+          elif [[ "$HAS_TARGETS" == "true" && "$INTEGRATION" == "success" ]]; then
+            echo "All selected integration targets passed."
+          else
+            echo "Integration tests did not complete successfully."
+            exit 1
+          fi
