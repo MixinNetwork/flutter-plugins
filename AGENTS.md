@@ -37,6 +37,13 @@ Release preparation guidance for pub packages lives in [.codex/skills/flutter-pu
 - For Flutter UI packages, pair automated tests with an `example/` sanity check when interaction or rendering is involved.
 - Keep unrelated packages untouched unless there is a verified cross-package dependency.
 
+## Integration Test Entry Points
+
+- Each package with integration tests must have exactly one integration test application entry point: `example/integration_test/app_test.dart`.
+- Register all scenarios through that entry point, with platform dispatch when needed. Put reusable/platform scenarios under `integration_test/src/`; those files must not define `main()` or create additional `*_test.dart` entry points.
+- Every platform target for a package in `.github/integration-tests.json` must reference the same entry point. Add scenarios to the shared suite instead of adding scenario-specific CI steps or targets.
+- A `test_driver/integration_test.dart` adapter may run that suite when a platform needs `flutter drive`; it must not register a separate set of scenarios.
+
 ## Release Metadata Ownership
 
 - Keep ordinary feature and fix pull requests focused on the implementation. Do not bump a package version, add the next release section to `CHANGELOG.md`, or update an example lockfile solely to prepare a release.

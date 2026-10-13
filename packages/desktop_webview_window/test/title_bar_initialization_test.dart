@@ -42,13 +42,15 @@ void main() {
     titleBarInitialized = false;
   });
 
-  test('omitting the title-bar hook removes default height and padding',
-      () async {
-    await WebviewWindow.create();
+  test(
+    'omitting the title-bar hook removes default height and padding',
+    () async {
+      await WebviewWindow.create();
 
-    expect(createArguments.single['titleBarHeight'], 0);
-    expect(createArguments.single['titleBarTopPadding'], 0);
-  });
+      expect(createArguments.single['titleBarHeight'], 0);
+      expect(createArguments.single['titleBarTopPadding'], 0);
+    },
+  );
 
   test('omitting the hook removes custom title-bar space only', () async {
     const configuration = CreateConfiguration(
@@ -72,7 +74,7 @@ void main() {
 
   for (final args in <List<String>>[
     [],
-    ['application-argument']
+    ['application-argument'],
   ]) {
     test('calling the hook with $args preserves title-bar configuration',
         () async {
@@ -81,14 +83,20 @@ void main() {
       expect(runWebViewTitleBarWidget(args), isFalse);
 
       await WebviewWindow.create();
-      expect(createArguments.last, {...CreateConfiguration.platform().toMap(), 'useTitleBar': true});
+      expect(createArguments.last, {
+        ...CreateConfiguration.platform().toMap(),
+        'useTitleBar': true,
+      });
 
       const configuration = CreateConfiguration(
         titleBarHeight: 60,
         titleBarTopPadding: 24,
       );
       await WebviewWindow.create(configuration: configuration);
-      expect(createArguments.last, {...configuration.toMap(), 'useTitleBar': true});
+      expect(createArguments.last, {
+        ...configuration.toMap(),
+        'useTitleBar': true,
+      });
     });
   }
 }

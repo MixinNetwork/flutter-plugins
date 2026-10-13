@@ -7,19 +7,15 @@ import 'package:desktop_webview_window/src/message_channel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:integration_test/integration_test.dart';
 
 const _bridge = ClientMessageChannel();
 const _native = MethodChannel('webview_window');
 const _geometry = MethodChannel('webview_example/native_test');
 
-// Run with flutter drive so the secondary engine receives its main arguments.
-void main([List<String> args = const []]) {
-  if (runWebViewTitleBarWidget(args, builder: (_) => const _TestToolbar())) {
-    return;
-  }
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+Widget buildSharedEngineTestToolbar(BuildContext context) =>
+    const _TestToolbar();
 
+void registerSharedEngineTests() {
   testWidgets('native shared titlebars route and survive close/recreate', (
     tester,
   ) async {
@@ -28,10 +24,11 @@ void main([List<String> args = const []]) {
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       server.listen((request) async {
         request.response.headers.contentType = ContentType.html;
-        request.response
-            .write('''<!doctype html><title>${request.uri.path}</title>
+        request.response.write(
+          '''<!doctype html><title>${request.uri.path}</title>
 <input id="input"><button id="button" onclick="window.clicked=true">Click</button>
-<a id="next" href="${request.uri.path}/next">Next</a>''');
+<a id="next" href="${request.uri.path}/next">Next</a>''',
+        );
         await request.response.close();
       });
       final open = <Webview>[];
@@ -45,9 +42,8 @@ void main([List<String> args = const []]) {
         }
       }
 
-      Future<Map> nativeState() async => Map.from(
-            (await _native.invokeMethod<Map>('debugTitleBarState'))!,
-          );
+      Future<Map> nativeState() async =>
+          Map.from((await _native.invokeMethod<Map>('debugTitleBarState'))!);
       Future<Webview> create({bool toolbar = true}) async {
         final view = await WebviewWindow.create(
           configuration: CreateConfiguration(
@@ -98,8 +94,9 @@ void main([List<String> args = const []]) {
             'operation': operation,
           });
           try {
-            return await reply.future
-                .timeout(const Duration(milliseconds: 200));
+            return await reply.future.timeout(
+              const Duration(milliseconds: 200),
+            );
           } on TimeoutException {
             replies.remove(current);
           }
@@ -108,7 +105,10 @@ void main([List<String> args = const []]) {
       }
 
       Future<void> waitToolbar(
-          Map descriptor, String key, Object expected) async {
+        Map descriptor,
+        String key,
+        Object expected,
+      ) async {
         for (var attempt = 0; attempt < 100; attempt++) {
           final state = await toolbar(descriptor, 'inspect');
           if (state[key] == expected) return;
@@ -145,8 +145,9 @@ void main([List<String> args = const []]) {
         await waitToolbar(firstBar, 'url', url('/first'));
         await waitToolbar(secondBar, 'url', url('/second'));
 
-        await first
-            .evaluateJavaScript("document.getElementById('next').click()");
+        await first.evaluateJavaScript(
+          "document.getElementById('next').click()",
+        );
         await waitFor(first, 'document.title', '/first/next');
         await waitToolbar(firstBar, 'canGoBack', true);
         await toolbar(firstBar, 'back');
@@ -164,8 +165,10 @@ void main([List<String> args = const []]) {
           document.getElementById('button').click();
         ''');
         expect(await script(first, 'document.activeElement.id'), 'input');
-        expect(await script(first, "document.getElementById('input').value"),
-            'integration input');
+        expect(
+          await script(first, "document.getElementById('input').value"),
+          'integration input',
+        );
         expect(await script(first, 'window.clicked'), true);
         await toolbar(firstBar, 'reload');
         await waitFor(first, "document.getElementById('input').value", '');
@@ -178,7 +181,10 @@ void main([List<String> args = const []]) {
           'height': 620.0,
         });
         await waitFor(
-            second, 'innerWidth > $width && innerHeight > $height', true);
+          second,
+          'innerWidth > $width && innerHeight > $height',
+          true,
+        );
         expect((await nativeState())['views'], hasLength(2));
 
         // Closing through the toolbar exercises its real cross-engine route.
@@ -206,8 +212,11 @@ void main([List<String> args = const []]) {
         await waitFor(reopened, 'document.title', '/reopened');
         final finalState = await nativeState();
         expect(finalState['engine'], engine);
-        await waitToolbar((finalState['views'] as List).single as Map, 'url',
-            url('/reopened'));
+        await waitToolbar(
+          (finalState['views'] as List).single as Map,
+          'url',
+          url('/reopened'),
+        );
         await close(reopened);
         expect((await nativeState())['views'], isEmpty);
       } finally {
@@ -270,7 +279,6 @@ class _TestToolbarState extends State<_TestToolbar> {
   }
 
   @override
-  Widget build(BuildContext context) => Text(
-        TitleBarWebViewState.of(context).url ?? 'Waiting for native page',
-      );
+  Widget build(BuildContext context) =>
+      Text(TitleBarWebViewState.of(context).url ?? 'Waiting for native page');
 }

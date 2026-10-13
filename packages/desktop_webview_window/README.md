@@ -149,7 +149,7 @@ Run from `example/` on Windows with WebView2 Runtime installed:
 
 ```powershell
 $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--use-fake-device-for-media-stream'
-flutter test integration_test/windows_webview_test.dart -d windows --timeout 5m
+flutter test integration_test/app_test.dart -d windows --timeout 5m
 ```
 
 The tests use local pages, temporary profiles, and fake media devices. They do
@@ -164,10 +164,14 @@ see [LICENSE](./LICENSE)
 
 ## Repeatable macOS integration test
 
+All platform scenarios register through the package's single application test
+entry point, `example/integration_test/app_test.dart`. Files under
+`integration_test/src/` contain scenarios only, with no additional `main()`.
+
 From `example`, run the native shared-titlebar regression with:
 
 ```sh
-flutter drive -d macos --driver=test_driver/integration_test.dart --target=integration_test/shared_engine_test.dart
+flutter drive -d macos --driver=test_driver/integration_test.dart --target=integration_test/app_test.dart
 ```
 
 This launches real WKWebViews and the dedicated multi-view toolbar engine. It

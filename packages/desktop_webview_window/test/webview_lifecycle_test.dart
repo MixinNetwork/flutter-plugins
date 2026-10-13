@@ -14,9 +14,9 @@ void main() {
     var closes = 0;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
-          if (call.method == 'close') closes++;
-          return null;
-        });
+      if (call.method == 'close') closes++;
+      return null;
+    });
     final webview = WebviewImpl(123, channel);
     webview.close();
     webview.close();
@@ -35,12 +35,12 @@ void main() {
       final configurations = <Map>[];
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(channel, (call) async {
-            if (call.method == 'create') {
-              configurations.add(call.arguments as Map);
-              return configurations.length;
-            }
-            return null;
-          });
+        if (call.method == 'create') {
+          configurations.add(call.arguments as Map);
+          return configurations.length;
+        }
+        return null;
+      });
       titleBarHookRegistered = false;
       await WebviewWindow.create();
       expect(configurations.single['useTitleBar'], isFalse);

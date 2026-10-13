@@ -87,8 +87,11 @@ released 0.3.1 platform fixes. Independently validated on 2026-10-13 with Flutte
 - Default toolbar back/forward/reload, real keyboard input and native button
   interaction: manually confirmed
 - Portable Windows engine ownership/routing harness on macOS: passed
-- Integration CI target selection/manifest regression tests: seven passed
-- Windows/WebView2 and Linux native builds/runtime: not run in this validation
+- Integration CI target selection/manifest regression tests: eight passed
+- CI for `a49a704`: macOS native integration passed; Windows native build and
+  the existing WebView2 navigation/visibility/media-policy regressions passed
+- Windows shared-toolbar GUI/input acceptance and Linux native build/runtime:
+  not run in this validation
 - Release runtime, isolated CocoaPods plugin integration, accessibility and
   long-running memory/DPI acceptance: not run
 
@@ -101,7 +104,7 @@ open observation, not a resolved engine issue.
 From `example`, run the repeatable native macOS regression:
 
 ```sh
-flutter drive -d macos --driver=test_driver/integration_test.dart --target=integration_test/shared_engine_test.dart
+flutter drive -d macos --driver=test_driver/integration_test.dart --target=integration_test/app_test.dart
 ```
 
 This launches real WKWebViews and the dedicated toolbar engine. It verifies

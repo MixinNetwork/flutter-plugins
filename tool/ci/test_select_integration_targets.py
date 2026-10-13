@@ -119,6 +119,30 @@ class TargetSelectionTest(unittest.TestCase):
                     with self.assertRaises(ValueError):
                         load_targets(root)
 
+    def test_package_rejects_additional_integration_entry_points(self):
+        target = next(target for target in self.targets if target['platform'] == 'windows')
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / '.github').mkdir()
+            package = root / 'packages' / target['package']
+            entrypoint = package / 'example' / target['test']
+            entrypoint.parent.mkdir(parents=True)
+            entrypoint.write_text('fixture')
+            setup = package / target['setup']
+            setup.parent.mkdir(parents=True)
+            setup.write_text('fixture')
+            manifest = root / '.github/integration-tests.json'
+            manifest.write_text(json.dumps({'targets': [target]}))
+            self.assertEqual(load_targets(root), [target])
+            extra = entrypoint.parent / 'src' / 'extra_test.dart'
+            extra.parent.mkdir()
+            extra.write_text('fixture')
+            with self.assertRaisesRegex(ValueError, 'Keep one integration test entry point'):
+                load_targets(root)
+            manifest.write_text(json.dumps({'targets': [{**target, 'test': 'integration_test/other_test.dart'}]}))
+            with self.assertRaisesRegex(ValueError, 'must use integration_test/app_test.dart'):
+                load_targets(root)
+
     def test_workflow_result_gate(self):
         workflow = (ROOT / '.github/workflows/integration-tests.yml').read_text()
         # Execute the actual gate, including its failure and unexpected-skip paths.

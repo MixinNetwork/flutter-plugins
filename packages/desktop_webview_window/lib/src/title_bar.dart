@@ -220,8 +220,8 @@ class TitleBarWebViewState extends InheritedWidget {
   final String? url;
 
   static TitleBarWebViewState of(BuildContext context) {
-    final TitleBarWebViewState? result = context
-        .dependOnInheritedWidgetOfExactType<TitleBarWebViewState>();
+    final TitleBarWebViewState? result =
+        context.dependOnInheritedWidgetOfExactType<TitleBarWebViewState>();
     assert(result != null, 'No WebViewState found in context');
     return result!;
   }

@@ -13,10 +13,10 @@ Future<void> sendNative(String channel, String method, [Object? args]) async {
   final done = Completer<void>();
   TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
       .handlePlatformMessage(
-        channel,
-        const StandardMethodCodec().encodeMethodCall(MethodCall(method, args)),
-        (_) => done.complete(),
-      );
+    channel,
+    const StandardMethodCodec().encodeMethodCall(MethodCall(method, args)),
+    (_) => done.complete(),
+  );
   await done.future;
 }
 

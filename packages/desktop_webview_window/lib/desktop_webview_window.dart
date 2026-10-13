@@ -110,9 +110,9 @@ class WebviewWindow {
   static Future<dynamic> _handleOtherIsolateMethodCall(MethodCall call) async {
     final webViewId = call.arguments['webViewId'] as int;
     final webView = _webviews.cast<WebviewImpl?>().firstWhere(
-      (w) => w?.viewId == webViewId,
-      orElse: () => null,
-    );
+          (w) => w?.viewId == webViewId,
+          orElse: () => null,
+        );
     if (webView == null) {
       return;
     }
@@ -148,9 +148,9 @@ class WebviewWindow {
     final args = call.arguments as Map;
     final viewId = args['id'] as int;
     final webview = _webviews.cast<WebviewImpl?>().firstWhere(
-      (e) => e?.viewId == viewId,
-      orElse: () => null,
-    );
+          (e) => e?.viewId == viewId,
+          orElse: () => null,
+        );
     if (webview == null) {
       if (call.method == 'onWindowClose' && _pendingCreates > 0) {
         _closedDuringCreate.add(viewId);
@@ -201,10 +201,9 @@ class WebviewWindow {
         break;
       case "onNavigationCompleted":
         webview.onNavigationCompleted();
-        await _sendTitleBarEvent(
-          'onNavigationCompleted',
-          {'webViewId': viewId},
-        );
+        await _sendTitleBarEvent('onNavigationCompleted', {
+          'webViewId': viewId,
+        });
         break;
       default:
         return;

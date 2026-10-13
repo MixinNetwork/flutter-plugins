@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:desktop_webview_window/desktop_webview_window.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:integration_test/integration_test.dart';
 
 Future<Object?> readScript(Webview view, String script) async {
   final result = await view.evaluateJavaScript(script);
@@ -22,9 +21,7 @@ Future<void> waitForScript(Webview view, String script, Object expected) async {
   expect(actual, expected, reason: script);
 }
 
-void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
-
+void registerWindowsWebviewTests() {
   late HttpServer server;
   late Directory profile;
   final views = <Webview>[];

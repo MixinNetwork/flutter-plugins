@@ -32,6 +32,12 @@ def load_targets(root):
             raise ValueError(f'Duplicate target: {key}')
         seen.add(key)
         package_root = root / 'packages' / package
+        entrypoint = target['test']
+        if entrypoint != 'integration_test/app_test.dart':
+            raise ValueError('Each package must use integration_test/app_test.dart')
+        actual_entries = sorted((package_root / 'example' / 'integration_test').rglob('*_test.dart'))
+        if actual_entries != [package_root / 'example' / entrypoint]:
+            raise ValueError(f'Keep one integration test entry point for {package}: {actual_entries}')
         for field, base in [('test', package_root / 'example'), ('setup', package_root), ('driver', package_root / 'example')]:
             if field in {'setup', 'driver'} and field not in target:
                 continue
