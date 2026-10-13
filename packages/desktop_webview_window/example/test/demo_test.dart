@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:desktop_webview_window/desktop_webview_window.dart';
 import 'package:desktop_webview_window/src/title_bar_runtime.dart';
 import 'package:desktop_webview_window/src/webview_impl.dart';
 import 'package:flutter/material.dart';
@@ -23,6 +24,8 @@ void main() {
     state = DemoState(pages);
     calls = [];
     titleBarInitialization = Future<void>.value();
+    defaultTitleBarConfiguration.value =
+        const WebviewTitleBarConfiguration(height: 44);
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
       calls.add(call);
@@ -33,6 +36,7 @@ void main() {
 
   tearDown(() async {
     titleBarInitialization = null;
+    defaultTitleBarConfiguration.value = const WebviewTitleBarConfiguration();
     await pages.close();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, null);

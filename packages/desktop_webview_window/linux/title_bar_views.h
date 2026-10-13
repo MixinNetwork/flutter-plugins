@@ -9,7 +9,8 @@
 // Tracks browser titlebar views on the application-owned engine.
 class TitleBarViews {
  public:
-  explicit TitleBarViews(FlView* main_view);
+  TitleBarViews(FlBinaryMessenger* messenger, FlView* main_view);
+  void AttachEngine(FlEngine* engine);
   ~TitleBarViews();
 
   FlView* CreateView(int64_t webview_id, int title_bar_top_padding);
@@ -25,7 +26,7 @@ class TitleBarViews {
   FlValue* GetViews() const;
 
   FlEngine* engine_ = nullptr;  // Borrowed from the application.
-  int64_t main_view_id_;
+  int64_t main_view_id_ = -1;
   FlMethodChannel* channel_ = nullptr;
   std::map<int64_t, ViewConfiguration> views_;
 };

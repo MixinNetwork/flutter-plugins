@@ -28,6 +28,7 @@ struct _WebviewWindowPlugin {
   // The app's view, used to find the window webview windows belong to.
   FlView *view;
   TitleBarViews *title_bar_views;
+  FlBinaryMessenger *messenger;
 };
 
 G_DEFINE_TYPE(WebviewWindowPlugin, webview_window_plugin, g_object_get_type())
@@ -332,9 +333,18 @@ static void webview_window_plugin_dispose(GObject *object) {
   // Windows must release their views before the shared host is destroyed.
   delete self->windows;
   self->windows = nullptr;
+  if (self->messenger != nullptr) {
+    g_object_set_data(G_OBJECT(self->messenger), "desktop_webview_window/titlebars", nullptr);
+  }
   delete self->title_bar_views;
   self->title_bar_views = nullptr;
   g_clear_object(&self->method_channel);
+  g_clear_object(&self->messenger);
+  if (self->view != nullptr) {
+    g_object_remove_weak_pointer(G_OBJECT(self->view),
+                                reinterpret_cast<gpointer*>(&self->view));
+    self->view = nullptr;
+  }
   G_OBJECT_CLASS(webview_window_plugin_parent_class)->dispose(object);
 }
 
@@ -364,10 +374,26 @@ void desktop_webview_window_plugin_register_with_registrar(
                             "webview_window", FL_METHOD_CODEC(codec));
   g_object_ref(channel);
   plugin->method_channel = channel;
+  plugin->messenger = FL_BINARY_MESSENGER(g_object_ref(
+      fl_plugin_registrar_get_messenger(registrar)));
   plugin->view = fl_plugin_registrar_get_view(registrar);
-  plugin->title_bar_views = new TitleBarViews(plugin->view);
+  if (plugin->view != nullptr) {
+    g_object_add_weak_pointer(G_OBJECT(plugin->view),
+                             reinterpret_cast<gpointer*>(&plugin->view));
+  }
+  plugin->title_bar_views = new TitleBarViews(
+      fl_plugin_registrar_get_messenger(registrar), plugin->view);
   fl_method_channel_set_method_call_handler(
       channel, method_call_cb, g_object_ref(plugin), g_object_unref);
 
   g_object_unref(plugin);
+}
+
+void desktop_webview_window_plugin_attach_engine(FlEngine* engine) {
+  g_return_if_fail(FL_IS_ENGINE(engine));
+  auto* messenger = fl_engine_get_binary_messenger(engine);
+  auto* titlebars = static_cast<TitleBarViews*>(g_object_get_data(
+      G_OBJECT(messenger), "desktop_webview_window/titlebars"));
+  g_return_if_fail(titlebars != nullptr);
+  titlebars->AttachEngine(engine);
 }

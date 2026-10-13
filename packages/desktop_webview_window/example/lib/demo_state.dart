@@ -118,14 +118,13 @@ class DemoState extends ChangeNotifier {
             title: 'Browser $id',
             windowWidth: 960,
             windowHeight: 720,
-            titleBarHeight: showTitleBar ? 44 : 0,
             showSystemTitleBar: showSystemTitleBar,
-            titleBarTopPadding:
-                showTitleBar && showSystemTitleBar && Platform.isMacOS ? 24 : 0,
             userDataFolderWindows: userDataFolder,
             openHidden: openHidden,
             denyCameraAndMicrophone: denyMedia,
           ),
+          titleBar:
+              showTitleBar ? null : const WebviewTitleBarConfiguration.none(),
         );
         if (_disposed) {
           view.close();

@@ -1,5 +1,3 @@
-import 'dart:io';
-
 class CreateConfiguration {
   final int windowWidth;
   final int windowHeight;
@@ -11,16 +9,11 @@ class CreateConfiguration {
   /// the title of window
   final String title;
 
-  /// Set to zero to omit Flutter toolbar UI and its engine entirely.
-  final int titleBarHeight;
-
-  final int titleBarTopPadding;
-
   /// Show the system title bar and window buttons on macOS, Windows and Linux.
   ///
-  /// When false, macOS also omits [titleBarTopPadding]. The Flutter toolbar is
-  /// controlled separately by [titleBarHeight]. Provide your own window controls
-  /// and drag region when hiding the system title bar.
+  /// When false, toolbar top padding is omitted. The Flutter toolbar is
+  /// controlled separately by WebviewTitleBarConfiguration. Provide your own
+  /// window controls and drag region when hiding the system title bar.
   final bool showSystemTitleBar;
 
   final String userDataFolderWindows;
@@ -50,8 +43,6 @@ class CreateConfiguration {
     this.windowPosX = 0,
     this.windowPosY = 0,
     this.title = "",
-    this.titleBarHeight = 40,
-    this.titleBarTopPadding = 0,
     this.showSystemTitleBar = true,
     this.userDataFolderWindows = 'webview_window_WebView2',
     this.useWindowPositionAndSize = false,
@@ -60,9 +51,7 @@ class CreateConfiguration {
     this.denyCameraAndMicrophone = false,
   });
 
-  factory CreateConfiguration.platform() {
-    return CreateConfiguration(titleBarTopPadding: Platform.isMacOS ? 24 : 0);
-  }
+  factory CreateConfiguration.platform() => const CreateConfiguration();
 
   Map toMap() => {
         "windowWidth": windowWidth,
@@ -70,8 +59,6 @@ class CreateConfiguration {
         "windowPosX": windowPosX,
         "windowPosY": windowPosY,
         "title": title,
-        "titleBarHeight": titleBarHeight,
-        "titleBarTopPadding": titleBarTopPadding,
         "showSystemTitleBar": showSystemTitleBar,
         "userDataFolderWindows": userDataFolderWindows,
         "useWindowPositionAndSize": useWindowPositionAndSize,

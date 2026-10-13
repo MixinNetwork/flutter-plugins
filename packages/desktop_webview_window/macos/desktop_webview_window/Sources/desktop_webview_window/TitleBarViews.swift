@@ -1,5 +1,6 @@
 import Cocoa
 import FlutterMacOS
+import ObjectiveC.runtime
 
 /// Tracks browser views on the application-owned engine.
 final class TitleBarViews {
@@ -18,6 +19,7 @@ final class TitleBarViews {
   private var engineId: Int64?
   private var mainViewId: Int64?
   private static let mainControllers = NSMapTable<AnyObject, FlutterViewController>.weakToWeakObjects()
+  private weak var messenger: FlutterBinaryMessenger?
   private let channel: FlutterMethodChannel
   private var registrations: [Int64: Registration] = [:]
   private var isShutdown = false
@@ -29,6 +31,7 @@ final class TitleBarViews {
   private static let removeViewControllerSelector = NSSelectorFromString("removeViewController:")
 
   init(messenger: FlutterBinaryMessenger) {
+    self.messenger = messenger
     if let controller = Self.mainControllers.object(forKey: messenger as AnyObject) {
       engine = controller.engine
       mainViewId = controller.viewIdentifier
@@ -43,11 +46,18 @@ final class TitleBarViews {
       }
       switch call.method {
       case "initialize":
-        guard self.engine != nil, let mainViewId = self.mainViewId else {
-          result(FlutterError(code: "titlebar_multiview_unavailable", message: "Create the main controller with DesktopWebviewWindowPlugin.createMainViewController() before registering plugins", details: nil))
+        guard let args = call.arguments as? [String: Any],
+              let identifier = args["engineId"] as? Int64 else {
+          result(FlutterError(code: "titlebar_engine_missing", message: "The application engine ID is required", details: nil))
           return
         }
-        result(mainViewId)
+        if let error = self.attachEngine(identifier: identifier) {
+          result(error)
+        } else {
+          result(nil)
+        }
+      case "getMainView":
+        result(self.mainViewId)
       case "getViews":
         result(self.snapshot())
       default:
@@ -55,6 +65,32 @@ final class TitleBarViews {
       }
     }
 
+  }
+
+  // Resolve the stock engine's guarded lookup API. The host may be attached
+  // before any application window exists; it does not need a main controller.
+  private func attachEngine(identifier: Int64) -> FlutterError? {
+    let selector = NSSelectorFromString("engineForIdentifier:")
+    guard let method = class_getClassMethod(FlutterEngine.self, selector) else {
+      return FlutterError(code: "titlebar_multiview_unavailable", message: "The Flutter engine lookup API is unavailable", details: nil)
+    }
+    typealias EngineForIdentifier = @convention(c) (AnyClass, Selector, Int64) -> Unmanaged<AnyObject>?
+    let lookup = unsafeBitCast(method_getImplementation(method), to: EngineForIdentifier.self)
+    guard let candidate = lookup(FlutterEngine.self, selector, identifier)?.takeUnretainedValue() as? FlutterEngine,
+          candidate.binaryMessenger === messenger,
+          candidate.responds(to: Self.enableMultiViewSelector),
+          candidate.responds(to: Self.removeViewControllerSelector) else {
+      return FlutterError(code: "titlebar_multiview_unavailable", message: "Cannot attach titlebars to this application engine", details: nil)
+    }
+    guard candidate.viewController == nil else {
+      return FlutterError(code: "titlebar_multiview_unavailable", message: "Enable multi-view before creating the first controller. For a runner-owned main view, use DesktopWebviewWindowPlugin.createMainViewController()", details: nil)
+    }
+    typealias EnableMultiView = @convention(c) (AnyObject, Selector) -> Void
+    let enable = unsafeBitCast(candidate.method(for: Self.enableMultiViewSelector), to: EnableMultiView.self)
+    enable(candidate, Self.enableMultiViewSelector)
+    engine = candidate
+    engineId = identifier
+    return nil
   }
 
   // This is called by the runner before constructing its first controller.

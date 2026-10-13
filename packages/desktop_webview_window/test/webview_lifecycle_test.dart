@@ -2,19 +2,28 @@ import 'dart:async';
 
 import 'package:desktop_webview_window/desktop_webview_window.dart';
 import 'package:desktop_webview_window/src/title_bar_runtime.dart';
-import 'package:desktop_webview_window/src/title_bar_messages.dart';
 import 'package:desktop_webview_window/src/webview_impl.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'title_bar_initialization_test.dart' show sendBrowserEvent;
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   const channel = MethodChannel('webview_window');
+  final messenger =
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+
+  tearDown(() async {
+    for (final id in List.of(titleBarWebviews.value.keys)) {
+      await sendBrowserEvent('onWindowClose', {'id': id});
+    }
+    messenger.setMockMethodCallHandler(channel, null);
+  });
 
   test('close is idempotent before and after native acknowledgement', () async {
     var closes = 0;
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(channel, (call) async {
+    messenger.setMockMethodCallHandler(channel, (call) async {
       if (call.method == 'close') closes++;
       return null;
     });
@@ -31,100 +40,44 @@ void main() {
   });
 
   test(
-    'create omits toolbar without hook and preserves public config',
-    () async {
-      final configurations = <Map>[];
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(channel, (call) async {
-        if (call.method == 'create') {
-          configurations.add(call.arguments as Map);
-          return configurations.length;
-        }
-        return null;
-      });
-      titleBarInitialization = null;
-      await WebviewWindow.create();
-      expect(configurations.single['useTitleBar'], isFalse);
-      titleBarInitialization = Future<void>.value();
-      await WebviewWindow.create(
-        configuration: const CreateConfiguration(titleBarHeight: 0),
-      );
-      expect(configurations.last['useTitleBar'], isTrue);
-      expect(configurations.last['titleBarHeight'], 0);
-      expect(
-          configurations.last, isNot(contains('useSharedTitleBarEngineLinux')));
-    },
-  );
-  test(
-    'native close arriving before create response still completes onClose',
-    () async {
-      final response = Completer<int>();
-      final messenger =
-          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
-      messenger.setMockMethodCallHandler(
-        channel,
-        (call) async => response.future,
-      );
-      final creating = WebviewWindow.create();
-      await Future<void>.delayed(Duration.zero);
-      final delivered = Completer<void>();
-      messenger.handlePlatformMessage(
-        channel.name,
-        const StandardMethodCodec().encodeMethodCall(
-          const MethodCall('onWindowClose', {'id': 303}),
-        ),
-        (_) => delivered.complete(),
-      );
-      await delivered.future;
-      response.complete(303);
-      final webview = await creating;
-      await webview.onClose;
-    },
-  );
-  test(
-    'late titlebar readiness replays only the latest browser state',
-    () async {
-      final messenger =
-          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
-      const bridge = TitleBarMessages();
-      final received = <MethodCall>[];
-      messenger.setMockMethodCallHandler(channel, (call) async => 404);
-      Future<dynamic> receive(MethodCall call) async {
-        if (call.method != 'onTitleBarReady') received.add(call);
-      }
+      'native close before the create response completes onClose without publishing a toolbar handle',
+      () async {
+    final response = Completer<int>();
+    messenger.setMockMethodCallHandler(
+        channel, (call) async => response.future);
+    final creating = WebviewWindow.create(
+        titleBar: const WebviewTitleBarConfiguration.none());
+    await Future<void>.delayed(Duration.zero);
+    await sendBrowserEvent('onWindowClose', {'id': 303});
+    response.complete(303);
+    final webview = await creating;
+    await webview.onClose;
+    expect(titleBarWebviews.value, isEmpty);
+  });
 
-      bridge.addMessageHandler(receive);
-      await WebviewWindow.create();
-      Future<void> send(String name, String method, Map args) async {
-        final done = Completer<void>();
-        messenger.handlePlatformMessage(
-          name,
-          const StandardMethodCodec().encodeMethodCall(
-            MethodCall(method, args),
-          ),
-          (_) => done.complete(),
-        );
-        await done.future;
-      }
-
-      await send(channel.name, 'onNavigationStarted', {'id': 404});
-      await send(channel.name, 'onNavigationCompleted', {'id': 404});
-      await send(channel.name, 'onUrlRequested', {
-        'id': 404,
-        'url': 'https://example.com',
-      });
-      received.clear();
-      await bridge.invokeMethod('onTitleBarReady', {'webViewId': 404});
-      expect(received.map((e) => e.method), [
-        'onNavigationCompleted',
-        'onUrlRequested',
-      ]);
-      expect(received.last.arguments['url'], 'https://example.com');
-      await send(channel.name, 'onWindowClose', {'id': 404});
-      received.clear();
-      await bridge.invokeMethod('onTitleBarReady', {'webViewId': 404});
-      expect(received, isEmpty);
-      bridge.removeMessageHandler(receive);
-    },
-  );
+  test(
+      'application and late toolbar readers share the current navigation state',
+      () async {
+    messenger.setMockMethodCallHandler(channel, (call) async => 404);
+    final webview = await WebviewWindow.create(
+        titleBar: const WebviewTitleBarConfiguration.none());
+    var updates = 0;
+    webview.navigationState.addListener(() => updates++);
+    await sendBrowserEvent('onNavigationStarted', {'id': 404});
+    await sendBrowserEvent('onNavigationCompleted', {'id': 404});
+    await sendBrowserEvent('onHistoryChanged',
+        {'id': 404, 'canGoBack': true, 'canGoForward': false});
+    await sendBrowserEvent(
+        'onUrlRequested', {'id': 404, 'url': 'https://example.com'});
+    expect(
+        webview.navigationState.value,
+        const WebviewNavigationState(
+          canGoBack: true,
+          url: 'https://example.com',
+        ));
+    expect(webview.isNavigating.value, isFalse);
+    expect(updates, 4);
+    await sendBrowserEvent('onNavigationCompleted', {'id': 404});
+    expect(updates, 4);
+  });
 }

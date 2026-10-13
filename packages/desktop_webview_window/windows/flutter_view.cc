@@ -49,9 +49,18 @@ TitleBarViews::TitleBarViews(flutter::BinaryMessenger* messenger) {
       if (!Initialize(found->second.LongValue(), &error)) {
         result->Error("titlebar_multiview_unavailable", error);
       } else {
-        const auto main_view = args->find(flutter::EncodableValue("mainViewId"));
-        result->Success(main_view == args->end() ? flutter::EncodableValue(int64_t{0}) : main_view->second);
+        result->Success();
       }
+    } else if (call.method_name() == "getMainView") {
+      const auto* args = std::get_if<flutter::EncodableMap>(call.arguments());
+      if (args) {
+        const auto main_view = args->find(flutter::EncodableValue("mainViewId"));
+        if (main_view != args->end()) {
+          result->Success(main_view->second);
+          return;
+        }
+      }
+      result->Success();
     } else if (call.method_name() == "getViews") {
       result->Success(flutter::EncodableValue(GetViews()));
     } else {
@@ -90,7 +99,7 @@ std::unique_ptr<FlutterView> TitleBarViews::CreateView(
     int64_t web_view_id, int top_padding, int width, int height,
     std::string* error) {
   if (!engine_) {
-    *error = "Mount WebviewWindowApp before creating a titlebar.";
+    *error = "Mount WebviewTitleBarHost before creating a titlebar.";
     return nullptr;
   }
   BorrowedViewControllerProperties properties = {width, height};

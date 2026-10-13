@@ -220,6 +220,7 @@ public class DesktopWebviewWindowPlugin: NSObject, FlutterPlugin {
         return
       }
       wc.webViewController.goBack()
+      result(nil)
       break
     case "forward":
       guard let argument = call.arguments as? [String: Any?] else {
@@ -235,6 +236,7 @@ public class DesktopWebviewWindowPlugin: NSObject, FlutterPlugin {
         return
       }
       wc.webViewController.goForward()
+      result(nil)
       break
     case "reload":
       guard let argument = call.arguments as? [String: Any?] else {
@@ -250,6 +252,7 @@ public class DesktopWebviewWindowPlugin: NSObject, FlutterPlugin {
         return
       }
       wc.webViewController.reload()
+      result(nil)
       break
     case "stop":
       guard let argument = call.arguments as? [String: Any?] else {
@@ -265,6 +268,7 @@ public class DesktopWebviewWindowPlugin: NSObject, FlutterPlugin {
         return
       }
       wc.webViewController.stopLoading()
+      result(nil)
       break
     case "close":
       guard let argument = call.arguments as? [String: Any?] else {

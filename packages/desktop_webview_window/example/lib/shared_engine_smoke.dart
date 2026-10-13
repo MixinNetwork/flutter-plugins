@@ -63,9 +63,11 @@ class _SmokePageState extends State<_SmokePage> {
         title: 'Browser $id',
         windowWidth: 640,
         windowHeight: 480,
-        titleBarHeight: hiddenToolbar ? 0 : 40,
-        titleBarTopPadding: !hiddenToolbar && Platform.isMacOS ? 24 : 0,
       ),
+      titleBar:
+          hiddenToolbar || const bool.fromEnvironment('SMOKE_NO_TITLEBAR_ROOT')
+              ? const WebviewTitleBarConfiguration.none()
+              : null,
     ).timeout(const Duration(seconds: 20));
     _open.add(view);
     unawaited(view.onClose.then((_) => _open.remove(view)));

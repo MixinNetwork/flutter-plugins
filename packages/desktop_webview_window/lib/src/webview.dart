@@ -18,8 +18,39 @@ typedef OnUrlRequestCallback = bool Function(String url);
 /// [message] constains the webmessage
 typedef OnWebMessageReceivedCallback = void Function(String message);
 
+/// Current browser navigation state, shared by the application and toolbar.
+@immutable
+class WebviewNavigationState {
+  const WebviewNavigationState({
+    this.canGoBack = false,
+    this.canGoForward = false,
+    this.isLoading = false,
+    this.url,
+  });
+
+  final bool canGoBack;
+  final bool canGoForward;
+  final bool isLoading;
+
+  /// The most recently requested URL. This is not a committed-navigation URL.
+  final String? url;
+
+  @override
+  bool operator ==(Object other) =>
+      other is WebviewNavigationState &&
+      canGoBack == other.canGoBack &&
+      canGoForward == other.canGoForward &&
+      isLoading == other.isLoading &&
+      url == other.url;
+
+  @override
+  int get hashCode => Object.hash(canGoBack, canGoForward, isLoading, url);
+}
+
 abstract class Webview {
   Future<void> get onClose;
+
+  ValueListenable<WebviewNavigationState> get navigationState;
 
   ///  true if the webview is currently loading a page.
   ValueListenable<bool> get isNavigating;
@@ -42,7 +73,7 @@ abstract class Webview {
   void launch(String url, {bool triggerOnUrlRequestEvent = true});
 
   /// Overrides this window's toolbar theme and native titlebar brightness.
-  /// Pass null to resume following WebviewWindowApp.titleBarTheme.
+  /// Pass null to resume following the window configuration or host theme.
   /// Native titlebar synchronization is supported on macOS and Windows.
   Future<void> setTitleBarTheme(ThemeData? theme);
 

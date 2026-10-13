@@ -1,28 +1,28 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' show PlatformDispatcher;
 
 import 'package:desktop_webview_window/desktop_webview_window.dart';
-import 'package:desktop_webview_window/src/title_bar_messages.dart';
 import 'package:desktop_webview_window/src/title_bar_runtime.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-const _bridge = TitleBarMessages();
+final _toolbars = <int, _TestToolbarState>{};
 const _native = MethodChannel('webview_window');
 const _geometry = MethodChannel('webview_example/native_test');
 
-Widget buildSharedEngineTestToolbar(BuildContext context) =>
-    const _TestToolbar();
+Widget buildSharedEngineTestToolbar(
+        BuildContext context, Webview webview, WebviewNavigationState state) =>
+    _TestToolbar(webview: webview, state: state);
 
 void registerSharedEngineTests() {
   testWidgets('system titlebar visibility leaves no reserved space when hidden',
       (tester) async {
     await tester.pumpWidget(
       const WebviewWindowApp(
-        titleBarBuilder: buildSharedEngineTestToolbar,
+        titleBar:
+            WebviewTitleBarConfiguration(builder: buildSharedEngineTestToolbar),
         child: MaterialApp(home: SizedBox.shrink()),
       ),
       wrapWithView: false,
@@ -33,13 +33,13 @@ void registerSharedEngineTests() {
         for (final toolbar in [true, false]) {
           final title = 'Titlebar visibility $system $toolbar';
           final view = await WebviewWindow.create(
+            titleBar: toolbar
+                ? const WebviewTitleBarConfiguration(
+                    topPadding: 24, builder: buildSharedEngineTestToolbar)
+                : const WebviewTitleBarConfiguration.none(),
             configuration: CreateConfiguration(
               title: title,
               showSystemTitleBar: system,
-              titleBarHeight: toolbar ? 40 : 0,
-              // Deliberately keep macOS padding: native code must discard it
-              // when the system titlebar is hidden.
-              titleBarTopPadding: 24,
             ),
           );
           try {
@@ -75,7 +75,8 @@ void registerSharedEngineTests() {
   ) async {
     await tester.pumpWidget(
       const WebviewWindowApp(
-        titleBarBuilder: buildSharedEngineTestToolbar,
+        titleBar:
+            WebviewTitleBarConfiguration(builder: buildSharedEngineTestToolbar),
         child: MaterialApp(home: SizedBox.shrink()),
       ),
       wrapWithView: false,
@@ -93,26 +94,16 @@ void registerSharedEngineTests() {
         await request.response.close();
       });
       final open = <Webview>[];
-      final replies = <int, Completer<Map>>{};
-      var token = 0;
       var serial = 0;
-      Future<dynamic> receive(MethodCall call) async {
-        if (call.method == 'integrationToolbarReply') {
-          final reply = Map.from(call.arguments as Map);
-          replies.remove(reply['token'])?.complete(reply);
-        }
-      }
-
       Future<Map> nativeState() async =>
           Map.from((await _native.invokeMethod<Map>('debugTitleBarState'))!);
       Future<Webview> create({bool toolbar = true}) async {
         final view = await WebviewWindow.create(
+          titleBar: toolbar ? null : const WebviewTitleBarConfiguration.none(),
           configuration: CreateConfiguration(
             title: 'Integration browser ${++serial}',
             windowWidth: 640,
             windowHeight: 480,
-            titleBarHeight: toolbar ? 40 : 0,
-            titleBarTopPadding: toolbar ? 24 : 0,
           ),
         ).timeout(const Duration(seconds: 20));
         open.add(view);
@@ -144,25 +135,16 @@ void registerSharedEngineTests() {
       }
 
       Future<Map> toolbar(Map descriptor, String operation) async {
-        // Native registration may precede the first Flutter build.
-        for (var attempt = 0; attempt < 50; attempt++) {
-          final current = ++token;
-          final reply = Completer<Map>();
-          replies[current] = reply;
-          await _bridge.invokeMethod('integrationToolbarCommand', {
-            ...descriptor,
-            'token': current,
-            'operation': operation,
-          });
-          try {
-            return await reply.future.timeout(
-              const Duration(milliseconds: 200),
-            );
-          } on TimeoutException {
-            replies.remove(current);
+        for (var attempt = 0; attempt < 100; attempt++) {
+          final toolbar = _toolbars[descriptor['viewId']];
+          if (toolbar != null) {
+            return toolbar
+                .command(operation)
+                .timeout(const Duration(seconds: 10));
           }
+          await Future<void>.delayed(const Duration(milliseconds: 50));
         }
-        throw StateError('Toolbar did not respond: $descriptor $operation');
+        throw StateError('Toolbar did not mount: $descriptor');
       }
 
       Future<void> waitToolbar(
@@ -183,7 +165,6 @@ void registerSharedEngineTests() {
         final applicationEngine = PlatformDispatcher.instance.engineId;
         expect((await nativeState())['engine'], applicationEngine);
         final bare = await create(toolbar: false);
-        _bridge.addMessageHandler(receive);
         expect((await nativeState())['views'], isEmpty);
         bare.launch(url('/bare'));
         await waitFor(bare, 'document.title', '/bare');
@@ -234,6 +215,7 @@ void registerSharedEngineTests() {
           'integration input',
         );
         expect(await script(first, 'window.clicked'), true);
+        await toolbar(secondBar, 'stop');
         await toolbar(firstBar, 'reload');
         await waitFor(first, "document.getElementById('input').value", '');
 
@@ -284,7 +266,6 @@ void registerSharedEngineTests() {
         await close(reopened);
         expect((await nativeState())['views'], isEmpty);
       } finally {
-        _bridge.removeMessageHandler(receive);
         for (final view in List.of(open)) {
           await close(view);
         }
@@ -297,52 +278,54 @@ void registerSharedEngineTests() {
 }
 
 class _TestToolbar extends StatefulWidget {
-  const _TestToolbar();
+  const _TestToolbar({required this.webview, required this.state});
+  final Webview webview;
+  final WebviewNavigationState state;
 
   @override
   State<_TestToolbar> createState() => _TestToolbarState();
 }
 
 class _TestToolbarState extends State<_TestToolbar> {
+  int? _viewId;
+
   @override
-  void initState() {
-    super.initState();
-    _bridge.addMessageHandler(_handle);
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _viewId = View.of(context).viewId;
+    _toolbars[_viewId!] = this;
   }
 
-  Future<dynamic> _handle(MethodCall call) async {
-    if (call.method != 'integrationToolbarCommand' || !mounted) return;
-    final args = call.arguments as Map;
-    if (args['viewId'] != View.of(context).viewId) return;
-    final controller = TitleBarWebViewController.of(context);
-    final state = TitleBarWebViewState.of(context);
-    await _bridge.invokeMethod('integrationToolbarReply', {
-      'webViewId': args['webViewId'],
-      'token': args['token'],
+  Future<Map> command(String operation) async {
+    final state = widget.state;
+    final reply = {
       'url': state.url,
       'canGoBack': state.canGoBack,
       'canGoForward': state.canGoForward,
       'isLoading': state.isLoading,
-    });
-    switch (args['operation']) {
+    };
+    switch (operation) {
       case 'back':
-        controller.back();
+        await widget.webview.back();
       case 'forward':
-        controller.forward();
+        await widget.webview.forward();
       case 'reload':
-        controller.reload();
+        await widget.webview.reload();
+      case 'stop':
+        await widget.webview.stop();
       case 'close':
-        controller.close();
+        widget.webview.close();
     }
+    return reply;
   }
 
   @override
   void dispose() {
-    _bridge.removeMessageHandler(_handle);
+    _toolbars.remove(_viewId);
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) =>
-      Text(TitleBarWebViewState.of(context).url ?? 'Waiting for native page');
+      Text(widget.state.url ?? 'Waiting for native page');
 }

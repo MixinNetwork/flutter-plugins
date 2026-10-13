@@ -22,8 +22,9 @@ Show a webview window on your flutter desktop application.
    }
    ```
 
-   For a custom titlebar, pass `titleBarBuilder`. Startup arguments and the old
-   `runWebViewTitleBarWidget` hook are no longer used.
+   For a custom titlebar, pass `titleBar: WebviewTitleBarConfiguration(...)`.
+   Its `builder(context, webview, state)` receives the browser handle and current
+   navigation state. Startup-argument dispatch is not needed.
 
 2. launch WebViewWindow
 
@@ -45,12 +46,47 @@ Titlebar state and commands are delivered within the same Dart isolate. Each
 widget retains its own state; static/global variables are shared with the main
 application. A titlebar's Flutter view ID and browser ID are distinct.
 
-To install inherited dependencies above both the main application and titlebars,
-use `runWidget` with `WebviewWindowApp` as the multi-view child. Dependencies
-inside `MyApp` remain scoped to the main view.
+Applications that already manage Flutter views use the composable host instead
+of the convenience root:
 
-Using ordinary `runApp` without this root creates browsers without Flutter
-titlebars. `CreateConfiguration(titleBarHeight: 0)` also omits the titlebar.
+```dart
+runWidget(
+  WebviewTitleBarHost(
+    titleBar: WebviewTitleBarConfiguration(
+      height: 44,
+      builder: (context, webview, state) => IconButton(
+        onPressed: state.canGoBack ? webview.back : null,
+        icon: const Icon(Icons.arrow_back),
+      ),
+    ),
+    child: const MyMultiWindowApp(), // Creates its own views/windows.
+  ),
+);
+```
+
+The host renders only browser toolbar views. Application windows remain owned
+by `MyMultiWindowApp`. Install one host per engine above windows that may close
+independently. Shared inherited dependencies belong above the host. Dependencies
+inside a particular window remain scoped to that window.
+
+`WebviewWindow.create()` follows the host defaults. A `titleBar` argument replaces
+them for that browser. A null theme continues to follow the host theme;
+`setTitleBarTheme(null)` restores the window configuration or host theme.
+Builder and theme changes update existing toolbars. Height, padding and enabled
+state are applied when creating a browser.
+
+To use ordinary `runApp` without Flutter toolbar views, explicitly disable them:
+
+```dart
+final webview = await WebviewWindow.create(
+  titleBar: const WebviewTitleBarConfiguration.none(),
+);
+```
+
+Requesting a Flutter toolbar without a mounted host throws a `StateError` instead
+of silently hiding it. `showSystemTitleBar` remains independent of the Flutter
+toolbar. Configure Flutter toolbars through `WebviewTitleBarConfiguration`.
+See [Migration](#migration) for removed APIs and their replacements.
 
 ### macOS runner setup
 
@@ -66,7 +102,16 @@ let flutterViewController = try! DesktopWebviewWindowPlugin.createMainViewContro
 
 Keep the existing window assignment and `RegisterGeneratedPlugins` call after
 this line. The helper creates the application's only engine and main controller.
-Windows and Linux reuse their normal runner engine without a runner change.
+Applications already using Flutter multi-window startup keep their existing
+engine and use `WebviewTitleBarHost`; the plugin borrows that engine without
+requiring a main view or calling this helper.
+
+Windows and ordinary Linux runners need no change. A headless Linux runner calls
+`desktop_webview_window_plugin_attach_engine(engine)` after generated plugin
+registration. Include
+`desktop_webview_window/desktop_webview_window_plugin.h` for that function.
+This explicitly supplies the existing engine because the public Linux registrar
+has no engine getter when its view is null.
 
 Windows uses runtime-resolved borrowing APIs; macOS uses guarded internal
 multi-view selectors. Future Flutter upgrades require native validation.
@@ -79,6 +124,115 @@ Linux uses the public `fl_view_new_for_engine` API on the main application engin
 X11/GLX rendering has related upstream failures, including
 [Flutter #186577](https://github.com/flutter/flutter/issues/186577).
 See [the Linux investigation](doc/linux_shared_titlebar_engine.md) for evidence.
+
+## Migration
+
+The old titlebar APIs have been removed. Existing callers must migrate to
+`WebviewTitleBarConfiguration`; they are no longer available as deprecated
+aliases.
+
+### Titlebar builders and themes
+
+Move the root titlebar parameters into `titleBar`. This applies to both
+`runWebviewWindowApp` and `WebviewWindowApp`.
+
+| Removed API | Replacement |
+| --- | --- |
+| `titleBarBuilder` | `titleBar.builder`, with `(context, webview, state)` arguments |
+| `titleBarBackgroundColor` | `titleBar.backgroundColor` |
+| `titleBarTheme` | `titleBar.theme` |
+| `TitleBarWebViewController.of(context)` | The `webview` passed to the builder |
+| `TitleBarWebViewState.of(context)` | The `state` passed to the builder |
+
+Before:
+
+```dart
+runWebviewWindowApp(
+  const MyApp(),
+  titleBarTheme: ThemeData.dark(),
+  titleBarBackgroundColor: Colors.black,
+  titleBarBuilder: (context) {
+    final controller = TitleBarWebViewController.of(context);
+    final state = TitleBarWebViewState.of(context);
+    return IconButton(
+      onPressed: state.canGoBack ? controller.back : null,
+      icon: const Icon(Icons.arrow_back),
+    );
+  },
+);
+```
+
+After:
+
+```dart
+runWebviewWindowApp(
+  const MyApp(),
+  titleBar: WebviewTitleBarConfiguration(
+    theme: ThemeData.dark(),
+    backgroundColor: Colors.black,
+    builder: (context, webview, state) => IconButton(
+      onPressed: state.canGoBack ? webview.back : null,
+      icon: const Icon(Icons.arrow_back),
+    ),
+  ),
+);
+```
+
+Use `state.isLoading`, `state.canGoBack`, `state.canGoForward`, and `state.url`
+for navigation state. Call `webview.back()`, `forward()`, `reload()`, `stop()`,
+or `close()` for browser commands. Outside a titlebar builder, listen to
+`webview.navigationState` for updates.
+
+### Titlebar dimensions and omission
+
+The `titleBarHeight` and `titleBarTopPadding` constructor parameters and getters
+have been removed from `CreateConfiguration`. Keep native window options there;
+pass Flutter toolbar options through `WebviewWindow.create(titleBar: ...)`.
+
+Before:
+
+```dart
+final webview = await WebviewWindow.create(
+  configuration: const CreateConfiguration(
+    windowWidth: 1024,
+    titleBarHeight: 48,
+    titleBarTopPadding: 12,
+  ),
+);
+```
+
+After:
+
+```dart
+final webview = await WebviewWindow.create(
+  configuration: const CreateConfiguration(windowWidth: 1024),
+  titleBar: const WebviewTitleBarConfiguration(height: 48, topPadding: 12),
+);
+```
+
+To set dimensions for all browsers, put them in the host's `titleBar`
+configuration instead. A per-window configuration replaces the host defaults;
+include any custom builder or background color that window should retain.
+A null theme continues to follow the host theme.
+
+Replace `CreateConfiguration(titleBarHeight: 0)` with:
+
+```dart
+final webview = await WebviewWindow.create(
+  titleBar: const WebviewTitleBarConfiguration.none(),
+);
+```
+
+Ordinary `runApp` no longer silently omits Flutter toolbars. Explicitly pass
+`.none()` when no toolbar host is mounted. To keep Flutter toolbars, start with
+`runWebviewWindowApp`, or mount `WebviewTitleBarHost` in an application that
+already manages its own views. `showSystemTitleBar` still controls the native
+system titlebar independently.
+
+For applications migrating from the older separate-engine implementation,
+remove the `runWebViewTitleBarWidget(args)` startup hook and its early return.
+Initialize the application once with `runWebviewWindowApp`. On macOS, also
+follow the [runner setup](#macos-runner-setup) above.
 
 ## linux requirement
 

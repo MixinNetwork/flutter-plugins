@@ -1,56 +1,46 @@
 import 'dart:async';
-import 'dart:ui' show FlutterView, PlatformDispatcher;
+import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'title_bar_configuration.dart';
 import 'title_bar_runtime.dart';
+import 'webview.dart';
+import 'webview_impl.dart';
 
-import 'title_bar_messages.dart';
+const _control = MethodChannel('desktop_webview_window/titlebars');
 
-const _channel = TitleBarMessages();
-
-/// Runs the application and all browser titlebars on the current engine.
+/// Convenience entrypoint for an application with a runner-owned main view.
 ///
-/// Use this instead of `runApp`. On macOS, the runner must create its main
-/// controller with `DesktopWebviewWindowPlugin.createMainViewController()`.
+/// On macOS, create that view with
+/// `DesktopWebviewWindowPlugin.createMainViewController()` in the runner.
+/// Applications that already own their views should use [WebviewTitleBarHost]
+/// with `runWidget` instead.
 void runWebviewWindowApp(
   Widget app, {
-  WidgetBuilder? titleBarBuilder,
-  Color? titleBarBackgroundColor,
-  ThemeData? titleBarTheme,
+  WebviewTitleBarConfiguration? titleBar,
 }) {
   WidgetsFlutterBinding.ensureInitialized();
   runWidget(WebviewWindowApp(
-    titleBarTheme: titleBarTheme,
-    titleBarBuilder: titleBarBuilder,
-    titleBarBackgroundColor: titleBarBackgroundColor,
+    titleBar: titleBar,
     child: app,
   ));
 }
 
-/// Multi-view root containing the main application and its browser titlebars.
-/// Mount with `runWidget`, not inside `runApp` or another Flutter view.
+/// Convenience root for a runner-owned main view. Mount with `runWidget`.
+///
+/// [child] is ordinary application content. For a child that already creates
+/// its own views, use [WebviewTitleBarHost] instead.
 class WebviewWindowApp extends StatefulWidget {
   const WebviewWindowApp({
     super.key,
     required this.child,
-    this.titleBarBuilder,
-    this.titleBarBackgroundColor,
-    this.titleBarTheme,
+    this.titleBar,
   });
 
   final Widget child;
-  final WidgetBuilder? titleBarBuilder;
-
-  /// Explicit background color, taking precedence over the titlebar theme.
-  final Color? titleBarBackgroundColor;
-
-  /// Theme for all browser toolbars and native titlebars (macOS and Windows).
-  /// Rebuild this widget to update existing windows. Per-window overrides take
-  /// precedence. Without any configured theme, native appearance is unchanged.
-  /// Clearing a previously configured theme restores the platform default.
-  final ThemeData? titleBarTheme;
+  final WebviewTitleBarConfiguration? titleBar;
 
   @override
   State<WebviewWindowApp> createState() => _WebviewWindowAppState();
@@ -58,45 +48,113 @@ class WebviewWindowApp extends StatefulWidget {
 
 class _WebviewWindowAppState extends State<WebviewWindowApp>
     with WidgetsBindingObserver {
-  static const _channel = MethodChannel('desktop_webview_window/titlebars');
-  Map<int, Map<Object?, Object?>> _views = {};
-  bool _refreshing = false;
-  bool _refreshAgain = false;
   int? _mainViewId;
-  late final Future<void> _initialization;
 
   @override
   void initState() {
     super.initState();
-    defaultTitleBarTheme.value = widget.titleBarTheme;
-    final dispatcher = WidgetsBinding.instance.platformDispatcher;
-    _initialization = _channel.invokeMethod<int>('initialize', {
-      // Test bindings may simulate engine IDs; native borrowing needs the real ID.
-      'engineId': PlatformDispatcher.instance.engineId,
-      'mainViewId': dispatcher.implicitView?.viewId,
-    }).then((mainViewId) {
-      if (mainViewId == null) {
-        throw PlatformException(
-            code: 'main_view_missing',
-            message: 'The native main view is unavailable');
+    WidgetsBinding.instance.addObserver(this);
+    unawaited(_loadMainView());
+  }
+
+  Future<void> _loadMainView() async {
+    try {
+      final id = await _control.invokeMethod<int>('getMainView', {
+        'mainViewId':
+            WidgetsBinding.instance.platformDispatcher.implicitView?.viewId,
+      });
+      if (id == null) {
+        throw StateError('No runner-owned main view. Use WebviewTitleBarHost '
+            'for an application that creates its own windows.');
       }
-      if (!mounted) return;
-      setState(() => _mainViewId = mainViewId);
+      if (mounted) setState(() => _mainViewId = id);
+    } catch (error, stack) {
+      FlutterError.reportError(FlutterErrorDetails(
+        exception: error,
+        stack: stack,
+        library: 'desktop_webview_window',
+        context: ErrorDescription('loading the runner-owned main view'),
+      ));
+    }
+  }
+
+  @override
+  void didChangeMetrics() => setState(() {});
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final views = WidgetsBinding.instance.platformDispatcher.views;
+    return WebviewTitleBarHost(
+      titleBar: widget.titleBar ?? const WebviewTitleBarConfiguration(),
+      child: ViewCollection(views: [
+        for (final view in views)
+          if (view.viewId == _mainViewId)
+            View(key: ValueKey(view.viewId), view: view, child: widget.child),
+      ]),
+    );
+  }
+}
+
+/// Composes browser toolbar views with the application's existing widget tree.
+///
+/// Install exactly one host per engine, above any windows that can outlive the
+/// main window. With `runWidget`, [child] must provide its own views. Inside an
+/// existing view (for example with `runApp`), side views use [ViewAnchor].
+/// Native multi-view support must already be configured on macOS.
+class WebviewTitleBarHost extends StatefulWidget {
+  const WebviewTitleBarHost({
+    super.key,
+    required this.child,
+    this.titleBar = const WebviewTitleBarConfiguration(),
+  });
+
+  final Widget child;
+
+  /// Defaults for browsers without an override. Builder and theme updates apply
+  /// to existing toolbars; height, padding and enabled state apply at creation.
+  final WebviewTitleBarConfiguration titleBar;
+
+  @override
+  State<WebviewTitleBarHost> createState() => _WebviewTitleBarHostState();
+}
+
+class _WebviewTitleBarHostState extends State<WebviewTitleBarHost>
+    with WidgetsBindingObserver {
+  Map<int, Map<Object?, Object?>> _views = {};
+  bool _refreshing = false;
+  bool _refreshAgain = false;
+  Future<void>? _initialization;
+
+  @override
+  void initState() {
+    super.initState();
+    if (titleBarInitialization != null) {
+      throw StateError(
+          'Only one WebviewTitleBarHost may be mounted per engine');
+    }
+    defaultTitleBarConfiguration.value = widget.titleBar;
+    _initialization = _control.invokeMethod<void>('initialize', {
+      // Native borrowing needs the actual engine, not a test binding's ID.
+      'engineId': PlatformDispatcher.instance.engineId,
     });
     titleBarInitialization = _initialization;
     WidgetsBinding.instance.addObserver(this);
-    _channel.setMethodCallHandler((call) async {
-      if (call.method == 'viewsChanged') {
-        await _refresh();
-      }
+    _control.setMethodCallHandler((call) async {
+      if (call.method == 'viewsChanged') await _refresh();
     });
     unawaited(_refresh());
   }
 
   @override
-  void didUpdateWidget(WebviewWindowApp oldWidget) {
+  void didUpdateWidget(WebviewTitleBarHost oldWidget) {
     super.didUpdateWidget(oldWidget);
-    defaultTitleBarTheme.value = widget.titleBarTheme;
+    defaultTitleBarConfiguration.value = widget.titleBar;
   }
 
   Future<void> _refresh() async {
@@ -109,7 +167,7 @@ class _WebviewWindowAppState extends State<WebviewWindowApp>
       await _initialization;
       do {
         _refreshAgain = false;
-        final snapshot = await _channel.invokeListMethod<dynamic>('getViews');
+        final snapshot = await _control.invokeListMethod<dynamic>('getViews');
         if (!mounted) return;
         final views = <int, Map<Object?, Object?>>{};
         for (final item in snapshot ?? const []) {
@@ -118,14 +176,13 @@ class _WebviewWindowAppState extends State<WebviewWindowApp>
         }
         setState(() => _views = views);
       } while (_refreshAgain && mounted);
-    } on PlatformException catch (error) {
-      FlutterError.reportError(
-        FlutterErrorDetails(
-          exception: error,
-          library: 'desktop_webview_window',
-          context: ErrorDescription('loading toolbar views'),
-        ),
-      );
+    } catch (error, stack) {
+      FlutterError.reportError(FlutterErrorDetails(
+        exception: error,
+        stack: stack,
+        library: 'desktop_webview_window',
+        context: ErrorDescription('loading toolbar views'),
+      ));
     } finally {
       _refreshing = false;
     }
@@ -134,272 +191,109 @@ class _WebviewWindowAppState extends State<WebviewWindowApp>
   @override
   void didChangeMetrics() {
     // AddView/RemoveView and the native snapshot can arrive in either order.
-    // Never replace PlatformDispatcher.onMetricsChanged: the binding owns it.
     setState(() {});
   }
 
   @override
   void dispose() {
-    if (identical(titleBarInitialization, _initialization)) {
+    if (_initialization != null &&
+        identical(titleBarInitialization, _initialization)) {
       titleBarInitialization = null;
-      defaultTitleBarTheme.value = null;
+      defaultTitleBarConfiguration.value = const WebviewTitleBarConfiguration();
+      _control.setMethodCallHandler(null);
     }
     WidgetsBinding.instance.removeObserver(this);
-    _channel.setMethodCallHandler(null);
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    FlutterView? mainView;
-    for (final view in WidgetsBinding.instance.platformDispatcher.views) {
-      if (view.viewId == _mainViewId) mainView = view;
-    }
-    return ViewCollection(
-      views: [
-        if (mainView != null)
-          View(
-            key: ValueKey(mainView.viewId),
-            view: mainView,
-            child: widget.child,
-          ),
-        for (final view in WidgetsBinding.instance.platformDispatcher.views)
-          if (view.viewId != _mainViewId)
+    final anchored = View.maybeOf(context) != null;
+    return ValueListenableBuilder<Map<int, WebviewImpl>>(
+      valueListenable: titleBarWebviews,
+      child: widget.child,
+      builder: (context, browsers, child) {
+        final toolbars = <Widget>[
+          for (final view in WidgetsBinding.instance.platformDispatcher.views)
             if (_views[view.viewId] case final descriptor?)
-              View(
-                key: ValueKey(view.viewId),
-                view: view,
-                child: _TitleBarApp(
-                  key: ValueKey(descriptor['webViewId']),
-                  webViewId: descriptor['webViewId'] as int,
-                  titleBarTopPadding:
-                      descriptor['titleBarTopPadding'] as int? ?? 0,
-                  builder: widget.titleBarBuilder ?? _defaultTitleBar,
-                  backgroundColor: widget.titleBarBackgroundColor,
-                  theme: widget.titleBarTheme,
-                ),
-              ),
-      ],
-    );
-  }
-}
-
-mixin TitleBarWebViewController {
-  static TitleBarWebViewController of(BuildContext context) {
-    final state = context.findAncestorStateOfType<_TitleBarAppState>();
-    assert(
-      state != null,
-      'TitleBarWebViewController requires a titlebar inside WebviewWindowApp',
-    );
-    return state!;
-  }
-
-  int get _webViewId;
-
-  /// navigate back
-  void back() {
-    _channel.invokeMethod('onBackPressed', {'webViewId': _webViewId});
-  }
-
-  /// navigate forward
-  void forward() {
-    _channel.invokeMethod('onForwardPressed', {'webViewId': _webViewId});
-  }
-
-  /// reload the webview
-  void reload() {
-    _channel.invokeMethod('onRefreshPressed', {'webViewId': _webViewId});
-  }
-
-  /// stop loading the webview
-  void stop() {
-    _channel.invokeMethod('onStopPressed', {'webViewId': _webViewId});
-  }
-
-  /// close the webview
-  void close() {
-    _channel.invokeMethod('onClosePressed', {'webViewId': _webViewId});
-  }
-}
-
-class TitleBarWebViewState extends InheritedWidget {
-  const TitleBarWebViewState({
-    super.key,
-    required super.child,
-    required this.isLoading,
-    required this.canGoBack,
-    required this.canGoForward,
-    required this.url,
-  });
-
-  final bool isLoading;
-  final bool canGoBack;
-  final bool canGoForward;
-  final String? url;
-
-  static TitleBarWebViewState of(BuildContext context) {
-    final TitleBarWebViewState? result =
-        context.dependOnInheritedWidgetOfExactType<TitleBarWebViewState>();
-    assert(result != null, 'No WebViewState found in context');
-    return result!;
-  }
-
-  @override
-  bool updateShouldNotify(TitleBarWebViewState oldWidget) {
-    return isLoading != oldWidget.isLoading ||
-        canGoBack != oldWidget.canGoBack ||
-        canGoForward != oldWidget.canGoForward ||
-        url != oldWidget.url;
-  }
-}
-
-class _TitleBarApp extends StatefulWidget {
-  const _TitleBarApp({
-    super.key,
-    required this.webViewId,
-    required this.titleBarTopPadding,
-    required this.builder,
-    this.backgroundColor,
-    this.theme,
-  });
-
-  final int webViewId;
-
-  final int titleBarTopPadding;
-
-  final WidgetBuilder builder;
-
-  final Color? backgroundColor;
-  final ThemeData? theme;
-
-  @override
-  State<_TitleBarApp> createState() => _TitleBarAppState();
-}
-
-class _TitleBarAppState extends State<_TitleBarApp>
-    with TitleBarWebViewController {
-  bool _canGoBack = false;
-  bool _canGoForward = false;
-
-  bool _isLoading = false;
-
-  String? _url;
-  ThemeData? _themeOverride;
-
-  @override
-  int get _webViewId => widget.webViewId;
-
-  @override
-  void initState() {
-    super.initState();
-    _channel.addMessageHandler(_handleMessage);
-    unawaited(
-      _channel.invokeMethod('onTitleBarReady', {'webViewId': _webViewId}),
-    );
-  }
-
-  Future<dynamic> _handleMessage(MethodCall call) async {
-    final args = call.arguments as Map;
-    final webViewId = args['webViewId'] as int;
-    if (!mounted || webViewId != widget.webViewId) {
-      return;
-    }
-    switch (call.method) {
-      case 'onTitleBarThemeChanged':
-        setState(() => _themeOverride = args['theme'] as ThemeData?);
-        break;
-      case "onHistoryChanged":
-        setState(() {
-          _canGoBack = args['canGoBack'] as bool;
-          _canGoForward = args['canGoForward'] as bool;
-        });
-        break;
-      case "onNavigationStarted":
-        setState(() {
-          _isLoading = true;
-        });
-        break;
-      case "onNavigationCompleted":
-        setState(() {
-          _isLoading = false;
-        });
-        break;
-      case "onUrlRequested":
-        setState(() {
-          _url = args['url'] as String;
-        });
-        break;
-    }
-  }
-
-  @override
-  void dispose() {
-    _channel.removeMessageHandler(_handleMessage);
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      theme: _themeOverride ?? widget.theme,
-      home: Builder(
-          builder: (context) => Material(
-                color: widget.backgroundColor ??
-                    Theme.of(context).scaffoldBackgroundColor,
-                child: Padding(
-                  padding: EdgeInsets.only(
-                      top: widget.titleBarTopPadding.toDouble()),
-                  child: TitleBarWebViewState(
-                    isLoading: _isLoading,
-                    canGoBack: _canGoBack,
-                    canGoForward: _canGoForward,
-                    url: _url,
-                    child: Builder(builder: widget.builder),
+              if (browsers[descriptor['webViewId']] case final webview?)
+                View(
+                  key: ValueKey(view.viewId),
+                  view: view,
+                  child: _TitleBarApp(
+                    webview: webview,
+                    topPadding: descriptor['titleBarTopPadding'] as int? ?? 0,
                   ),
                 ),
-              )),
+        ];
+        return anchored
+            ? ViewAnchor(view: ViewCollection(views: toolbars), child: child!)
+            : ViewCollection(views: [child!, ...toolbars]);
+      },
     );
   }
 }
 
-Widget _defaultTitleBar(BuildContext context) {
-  final state = TitleBarWebViewState.of(context);
-  final controller = TitleBarWebViewController.of(context);
-  return Row(
-    crossAxisAlignment: CrossAxisAlignment.center,
-    children: [
-      IconButton(
-        padding: EdgeInsets.zero,
-        splashRadius: 16,
-        iconSize: 16,
-        onPressed: !state.canGoBack ? null : controller.back,
-        icon: const Icon(Icons.arrow_back),
-      ),
-      IconButton(
-        padding: EdgeInsets.zero,
-        splashRadius: 16,
-        iconSize: 16,
-        onPressed: !state.canGoForward ? null : controller.forward,
-        icon: const Icon(Icons.arrow_forward),
-      ),
-      if (state.isLoading)
-        IconButton(
-          padding: EdgeInsets.zero,
-          splashRadius: 16,
-          iconSize: 16,
-          onPressed: controller.stop,
-          icon: const Icon(Icons.close),
-        )
-      else
-        IconButton(
-          padding: EdgeInsets.zero,
-          splashRadius: 16,
-          iconSize: 16,
-          onPressed: controller.reload,
-          icon: const Icon(Icons.refresh),
-        ),
-      const Spacer(),
-    ],
-  );
+class _TitleBarApp extends StatelessWidget {
+  const _TitleBarApp({required this.webview, required this.topPadding});
+
+  final WebviewImpl webview;
+  final int topPadding;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+        listenable: Listenable.merge([webview, webview.navigationState]),
+        builder: (context, _) {
+          final configuration = webview.effectiveTitleBarConfiguration;
+          final state = webview.navigationState.value;
+          return MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: webview.effectiveTitleBarTheme,
+            home: Builder(
+                builder: (context) => Material(
+                      color: configuration.backgroundColor ??
+                          Theme.of(context).scaffoldBackgroundColor,
+                      child: Padding(
+                        padding: EdgeInsets.only(top: topPadding.toDouble()),
+                        child: Builder(
+                          builder: (context) => (configuration.builder ??
+                              _defaultTitleBar)(context, webview, state),
+                        ),
+                      ),
+                    )),
+          );
+        },
+      );
 }
+
+Widget _defaultTitleBar(
+        BuildContext context, Webview webview, WebviewNavigationState state) =>
+    Row(
+      children: [
+        IconButton(
+          tooltip: 'Back',
+          padding: EdgeInsets.zero,
+          splashRadius: 16,
+          iconSize: 16,
+          onPressed: state.canGoBack ? webview.back : null,
+          icon: const Icon(Icons.arrow_back),
+        ),
+        IconButton(
+          tooltip: 'Forward',
+          padding: EdgeInsets.zero,
+          splashRadius: 16,
+          iconSize: 16,
+          onPressed: state.canGoForward ? webview.forward : null,
+          icon: const Icon(Icons.arrow_forward),
+        ),
+        IconButton(
+          tooltip: state.isLoading ? 'Stop' : 'Reload',
+          padding: EdgeInsets.zero,
+          splashRadius: 16,
+          iconSize: 16,
+          onPressed: state.isLoading ? webview.stop : webview.reload,
+          icon: Icon(state.isLoading ? Icons.close : Icons.refresh),
+        ),
+        const Spacer(),
+      ],
+    );

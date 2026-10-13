@@ -1,8 +1,3 @@
-// You have generated a new plugin project without
-// specifying the `--platforms` flag. A plugin project supports no platforms is generated.
-// To add platforms, run `flutter create -t plugin --platforms <platforms> .` under the same
-// directory. You can also find a detailed instruction on how to add platforms in the `pubspec.yaml` at https://flutter.dev/docs/development/packages-and-plugins/developing-packages#plugin-platforms.
-
 import 'dart:async';
 import 'dart:io';
 
@@ -11,43 +6,22 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
 import 'src/create_configuration.dart';
-import 'src/title_bar_messages.dart';
+import 'src/title_bar_configuration.dart';
 import 'src/title_bar_runtime.dart';
 import 'src/webview.dart';
 import 'src/webview_impl.dart';
 
 export 'src/create_configuration.dart';
 export 'src/title_bar.dart';
+export 'src/title_bar_configuration.dart';
 export 'src/webview.dart';
-
-final List<WebviewImpl> _webviews = [];
 
 class WebviewWindow {
   static const MethodChannel _channel = MethodChannel('webview_window');
 
-  static const _titleBarMessages = TitleBarMessages();
-
   static bool _inited = false;
   static int _pendingCreates = 0;
   static final Set<int> _closedDuringCreate = {};
-  static final Map<int, Map<String, Map<String, Object?>>> _titleBarStates = {};
-
-  static Future<void> _sendTitleBarEvent(
-    String method,
-    Map<String, Object?> args,
-  ) async {
-    final id = args['webViewId'] as int;
-    (_titleBarStates[id] ??= {})[method] = args;
-    // Loading-start and loading-complete are one state, not two replay events.
-    if (method == 'onNavigationStarted') {
-      _titleBarStates[id]!.remove('onNavigationCompleted');
-    }
-    if (method == 'onNavigationCompleted') {
-      _titleBarStates[id]!.remove('onNavigationStarted');
-    }
-    await _titleBarMessages.invokeMethod(method, args);
-  }
-
   static void _init() {
     if (_inited) {
       return;
@@ -61,13 +35,6 @@ class WebviewWindow {
         debugPrint('handleMethodCall error: $e $s');
       }
     });
-    _titleBarMessages.addMessageHandler((call) async {
-      try {
-        return await _handleTitleBarCommand(call);
-      } catch (e, s) {
-        debugPrint('_handleTitleBarCommand error: $e $s');
-      }
-    });
   }
 
   /// Check if WebView runtime is available on the current devices.
@@ -79,29 +46,53 @@ class WebviewWindow {
     return true;
   }
 
-  static Future<Webview> create({CreateConfiguration? configuration}) async {
+  /// Creates a browser using the host defaults unless [titleBar] is supplied.
+  /// A Flutter toolbar requires a mounted WebviewTitleBarHost. Use
+  /// WebviewTitleBarConfiguration.none() for ordinary runApp without a host.
+  static Future<Webview> create({
+    CreateConfiguration? configuration,
+    WebviewTitleBarConfiguration? titleBar,
+  }) async {
     configuration ??= CreateConfiguration.platform();
-    _init();
     final arguments = configuration.toMap();
-    final initialization = titleBarInitialization;
-    if (initialization != null) await initialization;
-    if (initialization == null) {
-      arguments['titleBarHeight'] = 0;
-      arguments['titleBarTopPadding'] = 0;
+    final defaults = defaultTitleBarConfiguration.value;
+    final resolved = titleBar ?? defaults;
+    if (resolved.enabled) {
+      final initialization = titleBarInitialization;
+      if (initialization == null) {
+        throw StateError(
+          'A Flutter titlebar requires a mounted WebviewTitleBarHost. '
+          'Use runWebviewWindowApp, mount the host, or explicitly pass '
+          'WebviewTitleBarConfiguration.none().',
+        );
+      }
+      await initialization;
+      if (!identical(titleBarInitialization, initialization)) {
+        throw StateError(
+            'The titlebar host was removed while creating a browser');
+      }
     }
+    _init();
+    arguments['useTitleBar'] = resolved.enabled;
+    arguments['titleBarHeight'] = resolved.height;
+    arguments['titleBarTopPadding'] =
+        !resolved.enabled || !configuration.showSystemTitleBar
+            ? 0
+            : resolved.topPadding ?? (Platform.isMacOS ? 24 : 0);
+    final theme = resolved.theme ?? defaults.theme;
+    if (theme != null) arguments['titleBarBrightness'] = theme.brightness.index;
     _pendingCreates++;
     try {
-      final viewId = await _channel.invokeMethod("create", {
-        ...arguments,
-        'useTitleBar': initialization != null,
-        if (defaultTitleBarTheme.value case final theme?)
-          'titleBarBrightness': theme.brightness.index,
-      }) as int;
-      final webview = WebviewImpl(viewId, _channel);
+      final viewId = await _channel.invokeMethod<int>('create', arguments);
+      if (viewId == null) {
+        throw StateError('Native create returned no browser ID');
+      }
+      final webview =
+          WebviewImpl(viewId, _channel, titleBarConfiguration: titleBar);
       if (_closedDuringCreate.remove(viewId)) {
         webview.onClosed();
       } else {
-        _webviews.add(webview);
+        titleBarWebviews.value = {...titleBarWebviews.value, viewId: webview};
         await webview.syncTitleBarBrightness();
       }
       return webview;
@@ -111,56 +102,10 @@ class WebviewWindow {
     }
   }
 
-  static Future<dynamic> _handleTitleBarCommand(MethodCall call) async {
-    final webViewId = call.arguments['webViewId'] as int;
-    final webView = _webviews.cast<WebviewImpl?>().firstWhere(
-          (w) => w?.viewId == webViewId,
-          orElse: () => null,
-        );
-    if (webView == null) {
-      return;
-    }
-    switch (call.method) {
-      case 'onTitleBarReady':
-        if (webView.titleBarTheme != null) {
-          await _titleBarMessages.invokeMethod('onTitleBarThemeChanged', {
-            'webViewId': webViewId,
-            'theme': webView.titleBarTheme,
-          });
-        }
-        final state = _titleBarStates[webViewId];
-        if (state != null) {
-          await Future.wait([
-            for (final entry in List.of(state.entries))
-              _titleBarMessages.invokeMethod(entry.key, entry.value),
-          ]);
-        }
-        break;
-      case 'onBackPressed':
-        await webView.back();
-        break;
-      case 'onForwardPressed':
-        await webView.forward();
-        break;
-      case 'onRefreshPressed':
-        await webView.reload();
-        break;
-      case 'onStopPressed':
-        await webView.stop();
-        break;
-      case 'onClosePressed':
-        webView.close();
-        break;
-    }
-  }
-
   static Future<dynamic> _handleMethodCall(MethodCall call) async {
     final args = call.arguments as Map;
     final viewId = args['id'] as int;
-    final webview = _webviews.cast<WebviewImpl?>().firstWhere(
-          (e) => e?.viewId == viewId,
-          orElse: () => null,
-        );
+    final webview = titleBarWebviews.value[viewId];
     if (webview == null) {
       if (call.method == 'onWindowClose' && _pendingCreates > 0) {
         _closedDuringCreate.add(viewId);
@@ -169,8 +114,7 @@ class WebviewWindow {
     }
     switch (call.method) {
       case "onWindowClose":
-        _webviews.remove(webview);
-        _titleBarStates.remove(viewId);
+        titleBarWebviews.value = {...titleBarWebviews.value}..remove(viewId);
         webview.onClosed();
         break;
       case "onJavaScriptMessage":
@@ -183,37 +127,20 @@ class WebviewWindow {
         );
       case "onHistoryChanged":
         webview.onHistoryChanged(args['canGoBack'], args['canGoForward']);
-        await _sendTitleBarEvent('onHistoryChanged', {
-          'webViewId': viewId,
-          'canGoBack': args['canGoBack'] as bool,
-          'canGoForward': args['canGoForward'] as bool,
-        });
         break;
       case "onNavigationStarted":
         webview.onNavigationStarted();
-        await _sendTitleBarEvent('onNavigationStarted', {'webViewId': viewId});
         break;
       case "onUrlRequested":
         final url = args['url'] as String;
         final ret = webview.notifyUrlChanged(url);
-        await _sendTitleBarEvent('onUrlRequested', {
-          'webViewId': viewId,
-          'url': url,
-        });
         return ret;
       case "onWebMessageReceived":
         final message = args['message'] as String;
         webview.notifyWebMessageReceived(message);
-        await _titleBarMessages.invokeMethod('onWebMessageReceived', {
-          'webViewId': viewId,
-          'message': message,
-        });
         break;
       case "onNavigationCompleted":
         webview.onNavigationCompleted();
-        await _sendTitleBarEvent('onNavigationCompleted', {
-          'webViewId': viewId,
-        });
         break;
       default:
         return;

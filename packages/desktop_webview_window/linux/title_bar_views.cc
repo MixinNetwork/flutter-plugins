@@ -11,10 +11,14 @@ TitleBarViews::~TitleBarViews() {
   }
 }
 
-TitleBarViews::TitleBarViews(FlView* main_view)
-    : engine_(fl_view_get_engine(main_view)), main_view_id_(fl_view_get_id(main_view)) {
+TitleBarViews::TitleBarViews(FlBinaryMessenger* messenger, FlView* main_view) {
+  if (main_view != nullptr) {
+    engine_ = fl_view_get_engine(main_view);
+    main_view_id_ = fl_view_get_id(main_view);
+  }
+  g_object_set_data(G_OBJECT(messenger), "desktop_webview_window/titlebars", this);
   g_autoptr(FlStandardMethodCodec) codec = fl_standard_method_codec_new();
-  channel_ = fl_method_channel_new(fl_engine_get_binary_messenger(engine_),
+  channel_ = fl_method_channel_new(messenger,
                                   "desktop_webview_window/titlebars",
                                   FL_METHOD_CODEC(codec));
   fl_method_channel_set_method_call_handler(
@@ -23,7 +27,16 @@ TitleBarViews::TitleBarViews(FlView* main_view)
         auto* self = static_cast<TitleBarViews*>(user_data);
         const char* method = fl_method_call_get_name(call);
         if (strcmp(method, "initialize") == 0) {
-          g_autoptr(FlValue) id = fl_value_new_int(self->main_view_id_);
+          if (self->engine_ == nullptr) {
+            fl_method_call_respond_error(call, "titlebar_engine_missing",
+                "Headless runners must call desktop_webview_window_plugin_attach_engine after registering plugins",
+                nullptr, nullptr);
+          } else {
+            fl_method_call_respond_success(call, nullptr, nullptr);
+          }
+        } else if (strcmp(method, "getMainView") == 0) {
+          g_autoptr(FlValue) id = self->main_view_id_ < 0
+              ? nullptr : fl_value_new_int(self->main_view_id_);
           fl_method_call_respond_success(call, id, nullptr);
         } else if (strcmp(method, "getViews") == 0) {
           g_autoptr(FlValue) views = self->GetViews();
@@ -34,6 +47,10 @@ TitleBarViews::TitleBarViews(FlView* main_view)
       },
       this, nullptr);
 
+}
+
+void TitleBarViews::AttachEngine(FlEngine* engine) {
+  engine_ = engine;
 }
 
 FlView* TitleBarViews::CreateView(int64_t webview_id,

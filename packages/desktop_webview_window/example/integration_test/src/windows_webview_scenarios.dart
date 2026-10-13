@@ -79,8 +79,8 @@ void registerWindowsWebviewTests() {
 
   Future<Webview> create({bool hidden = false, bool denyMedia = false}) async {
     final view = await WebviewWindow.create(
+      titleBar: const WebviewTitleBarConfiguration.none(),
       configuration: CreateConfiguration(
-        titleBarHeight: 0,
         openHidden: hidden,
         denyCameraAndMicrophone: denyMedia,
         userDataFolderWindows: profile.path,

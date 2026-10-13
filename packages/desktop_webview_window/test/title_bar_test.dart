@@ -1,24 +1,13 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:desktop_webview_window/desktop_webview_window.dart';
-import 'package:desktop_webview_window/src/title_bar_messages.dart';
 import 'package:desktop_webview_window/src/title_bar_runtime.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-Future<void> sendNative(String channel, String method, [Object? args]) async {
-  final done = Completer<void>();
-  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-      .handlePlatformMessage(
-    channel,
-    const StandardMethodCodec().encodeMethodCall(MethodCall(method, args)),
-    (_) => done.complete(),
-  );
-  await done.future;
-}
+import 'title_bar_initialization_test.dart' show sendBrowserEvent;
 
 class _Dispatcher extends TestPlatformDispatcher {
   _Dispatcher({required super.platformDispatcher});
@@ -30,250 +19,281 @@ class _Dispatcher extends TestPlatformDispatcher {
         if (showMainView) ...super.views,
         ...extraViews,
       ];
+
+  @override
+  TestFlutterView? get implicitView => showMainView ? super.implicitView : null;
 }
 
 class _Binding extends AutomatedTestWidgetsFlutterBinding {
   late final _dispatcher =
       _Dispatcher(platformDispatcher: super.platformDispatcher);
-
   @override
   _Dispatcher get platformDispatcher => _dispatcher;
 }
 
 class _ExtraView extends TestFlutterView {
-  _ExtraView(TestFlutterView main, _Dispatcher dispatcher, [this.id = 100])
+  _ExtraView(TestFlutterView main, _Dispatcher dispatcher, this.id)
       : super(
             view: main, platformDispatcher: dispatcher, display: main.display);
-
   final int id;
-
   @override
   int get viewId => id;
-
   @override
   void render(ui.Scene scene, {ui.Size? size}) {}
-
   @override
   void updateSemantics(ui.SemanticsUpdate update) {}
 }
 
 void main() {
   final binding = _Binding();
-  const client = TitleBarMessages();
   const control = MethodChannel('desktop_webview_window/titlebars');
+  const native = MethodChannel('webview_window');
+  final messenger = binding.defaultBinaryMessenger;
+  var nextId = 100;
+  final descriptors = <Map<String, int>>[];
+  final calls = <MethodCall>[];
 
-  tearDown(() {
-    client.setMessageHandler(null);
-    binding.platformDispatcher.extraViews.clear();
-    binding.platformDispatcher.showMainView = true;
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(control, null);
-    titleBarInitialization = null;
+  Future<void> refresh() async {
+    final done = Completer<void>();
+    messenger.handlePlatformMessage(
+        control.name,
+        const StandardMethodCodec()
+            .encodeMethodCall(const MethodCall('viewsChanged')),
+        (_) => done.complete());
+    await done.future;
+  }
+
+  setUp(() {
+    nextId = 100;
+    descriptors.clear();
+    calls.clear();
+    messenger.setMockMethodCallHandler(control, (call) async {
+      calls.add(call);
+      if (call.method == 'getMainView') return 0;
+      if (call.method == 'getViews') return List.of(descriptors);
+      return null;
+    });
+    messenger.setMockMethodCallHandler(native, (call) async {
+      calls.add(call);
+      if (call.method == 'create') return ++nextId;
+      return null;
+    });
   });
 
-  test('local messages fan out and unsubscribe without a native relay',
-      () async {
-    final received = <String>[];
-    Future<void> first(MethodCall call) async => received.add('first');
-    Future<void> second(MethodCall call) async => received.add('second');
-    client.addMessageHandler(first);
-    client.addMessageHandler(second);
-    await client.invokeMethod('event', {});
-    expect(received, ['first', 'second']);
-    received.clear();
-    client.removeMessageHandler(first);
-    await client.invokeMethod('event', {});
-    expect(received, ['second']);
+  tearDown(() async {
+    for (final id in List.of(titleBarWebviews.value.keys)) {
+      await sendBrowserEvent('onWindowClose', {'id': id});
+    }
+    binding.platformDispatcher.extraViews.clear();
+    binding.platformDispatcher.showMainView = true;
+    messenger.setMockMethodCallHandler(control, null);
+    messenger.setMockMethodCallHandler(native, null);
   });
 
   testWidgets(
-      'main state survives titlebar close/recreate and isolated routing',
+      'headless host preserves application views and routes each toolbar to its browser',
       (tester) async {
-    final mainView = tester.view;
-    binding.platformDispatcher.extraViews.add(
-      _ExtraView(mainView, binding.platformDispatcher),
-    );
-    var browserId = 101;
-    var visible = true;
-    var mainBuilds = 0;
-    final commands = <MethodCall>[];
-    final messenger =
-        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
-    messenger.setMockMethodCallHandler(control, (call) async {
-      if (call.method == 'initialize') return tester.view.viewId;
-      expect(call.method, 'getViews');
-      return [
-        if (visible)
-          {'viewId': 100, 'webViewId': browserId, 'titleBarTopPadding': 0},
-      ];
-    });
-    client.addMessageHandler((call) async {
-      if (call.method == 'onClosePressed') commands.add(call);
-    });
-    final main = StatefulBuilder(builder: (context, setState) {
-      mainBuilds++;
-      return const MaterialApp(home: Text('main application'));
-    });
-    await tester.pumpWidget(
-      WebviewWindowApp(
-        titleBarBuilder: (context) {
-          final state = TitleBarWebViewState.of(context);
-          return TextButton(
-            onPressed: TitleBarWebViewController.of(context).close,
-            child: Text('${state.url ?? "empty"}:${state.isLoading}'),
-          );
-        },
-        child: main,
-      ),
-      wrapWithView: false,
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('main application'), findsOneWidget);
-    expect(find.text('empty:false'), findsOneWidget);
-    final initialMainBuilds = mainBuilds;
-    await client.invokeMethod('onUrlRequested', {
-      'webViewId': 999,
-      'url': 'wrong',
-    });
-    await tester.pump();
-    expect(find.text('empty:false'), findsOneWidget);
-    await client.invokeMethod('onUrlRequested', {
-      'webViewId': 101,
-      'url': 'https://example.com',
-    });
-    await tester.pump();
-    expect(find.text('https://example.com:false'), findsOneWidget);
-    await tester.tap(find.byType(TextButton));
-    expect(commands.single.arguments, {'webViewId': 101});
-    visible = false;
-    await sendNative(control.name, 'viewsChanged');
-    await tester.pumpAndSettle();
-    expect(find.byType(TextButton), findsNothing);
-    expect(find.text('main application'), findsOneWidget);
-    await client.invokeMethod('onNavigationStarted', {'webViewId': 101});
-    visible = true;
-    browserId = 202;
-    await sendNative(control.name, 'viewsChanged');
-    await tester.pumpAndSettle();
-    expect(find.text('empty:false'), findsOneWidget);
-    expect(mainBuilds, initialMainBuilds);
-    await tester.tap(find.byType(TextButton));
-    expect(commands.last.arguments, {'webViewId': 202});
+    final main = tester.view;
+    final appView = _ExtraView(main, binding.platformDispatcher, 300);
+    final barView = _ExtraView(main, binding.platformDispatcher, 100);
+    binding.platformDispatcher.extraViews.addAll([appView, barView]);
     binding.platformDispatcher.showMainView = false;
-    await sendNative(control.name, 'viewsChanged');
-    await tester.pumpAndSettle();
-    expect(find.text('main application'), findsNothing);
-    expect(find.text('empty:false'), findsOneWidget);
-    binding.platformDispatcher.showMainView = true;
-    await tester.pumpWidget(const SizedBox.shrink());
-    expect(titleBarInitialization, isNull);
-    expect(tester.takeException(), isNull);
-  });
-  testWidgets('global and per-window themes update toolbars and native windows',
-      (tester) async {
-    final messenger = binding.defaultBinaryMessenger;
-    const native = MethodChannel('webview_window');
-    final nativeCalls = <MethodCall>[];
-    var nextId = 101;
-    var visible = false;
-    messenger.setMockMethodCallHandler(native, (call) async {
-      if (call.method == 'create') return nextId++;
-      nativeCalls.add(call);
-      return null;
-    });
-    messenger.setMockMethodCallHandler(control, (call) async {
-      if (call.method == 'initialize') return tester.view.viewId;
-      return [
-        if (visible)
-          {'viewId': 100, 'webViewId': 101, 'titleBarTopPadding': 24},
-        if (visible) {'viewId': 200, 'webViewId': 102, 'titleBarTopPadding': 0},
-      ];
-    });
-    binding.platformDispatcher.extraViews.addAll([
-      _ExtraView(tester.view, binding.platformDispatcher),
-      _ExtraView(tester.view, binding.platformDispatcher, 200),
-    ]);
-    final global = ValueNotifier<ThemeData?>(ThemeData.light());
+    descriptors.add({'viewId': 100, 'webViewId': 101, 'titleBarTopPadding': 0});
+    Webview? toolbarBrowser;
+    Widget builder(
+        BuildContext context, Webview webview, WebviewNavigationState state) {
+      toolbarBrowser = webview;
+      return TextButton(
+          onPressed: webview.reload,
+          child: Text('${state.url ?? "empty"}:${state.isLoading}'));
+    }
+
+    var appBuilds = 0;
+    final application = View(
+        view: appView,
+        child: StatefulBuilder(builder: (context, setState) {
+          appBuilds++;
+          return const MaterialApp(home: Text('owned application window'));
+        }));
     await tester.pumpWidget(
-        ValueListenableBuilder<ThemeData?>(
-          valueListenable: global,
-          builder: (context, theme, _) => WebviewWindowApp(
-            titleBarTheme: theme,
-            titleBarBuilder: (context) => Text(
-              Theme.of(context).brightness.name,
-              key: const ValueKey('theme'),
-            ),
-            child: const MaterialApp(home: SizedBox.shrink()),
-          ),
+        WebviewTitleBarHost(
+          titleBar: WebviewTitleBarConfiguration(builder: builder),
+          child: application,
         ),
         wrapWithView: false);
     await tester.pumpAndSettle();
+    expect(find.text('owned application window'), findsOneWidget);
+    expect(find.byType(TextButton), findsNothing);
+    expect(calls.where((call) => call.method == 'getMainView'), isEmpty);
     final first = await WebviewWindow.create();
+    await sendBrowserEvent(
+        'onUrlRequested', {'id': 101, 'url': 'https://example.com/first'});
+    await tester.pumpAndSettle();
+    expect(toolbarBrowser, same(first));
+    expect(find.text('https://example.com/first:false'), findsOneWidget);
+    final initialBuilds = appBuilds;
+    final gesture = await tester
+        .startGesture(tester.getCenter(find.byType(TextButton)), view: barView);
+    await gesture.up(view: barView);
+    expect(calls.last.arguments, {'viewId': 101});
+    await sendBrowserEvent('onNavigationStarted', {'id': 999});
+    await tester.pump();
+    expect(find.text('https://example.com/first:false'), findsOneWidget);
+    await sendBrowserEvent('onNavigationStarted', {'id': 101});
+    await tester.pump();
+    expect(find.text('https://example.com/first:true'), findsOneWidget);
+    expect(first.navigationState.value.isLoading, isTrue);
+    await sendBrowserEvent('onWindowClose', {'id': 101});
+    descriptors.clear();
+    await refresh();
+    await tester.pumpAndSettle();
+    expect(find.byType(TextButton), findsNothing);
+    expect(find.text('owned application window'), findsOneWidget);
     final second = await WebviewWindow.create();
-    final toolbarless = await WebviewWindow.create(
-      configuration: const CreateConfiguration(titleBarHeight: 0),
-    );
-    // The override must survive a toolbar mounting after the API call.
-    await first.setTitleBarTheme(ThemeData.dark());
-    visible = true;
-    await sendNative(control.name, 'viewsChanged');
+    descriptors.add({'viewId': 100, 'webViewId': 102, 'titleBarTopPadding': 0});
+    await refresh();
     await tester.pumpAndSettle();
-    expect(find.text('dark'), findsOneWidget);
-    expect(find.text('light'), findsOneWidget);
-    final darkContext = tester.element(find.text('dark'));
-    expect(Material.of(darkContext).color,
-        ThemeData.dark().scaffoldBackgroundColor);
-    global.value = ThemeData.dark();
-    await tester.pumpAndSettle();
-    expect(find.text('dark'), findsNWidgets(2));
-    global.value = ThemeData.light();
-    await tester.pumpAndSettle();
-    expect(find.text('dark'), findsOneWidget);
-    expect(find.text('light'), findsOneWidget);
-    await first.setTitleBarTheme(null);
-    await tester.pumpAndSettle();
-    expect(find.text('light'), findsNWidgets(2));
-    if (Platform.isMacOS || Platform.isWindows) {
-      expect(
-          nativeCalls
-              .where((call) => call.method == 'setBrightness')
-              .map((call) => call.arguments),
-          [
-            {'viewId': 101, 'brightness': 1},
-            {'viewId': 102, 'brightness': 1},
-            {'viewId': 103, 'brightness': 1},
-            {'viewId': 101, 'brightness': 0},
-            {'viewId': 102, 'brightness': 0},
-            {'viewId': 103, 'brightness': 0},
-            {'viewId': 102, 'brightness': 1},
-            {'viewId': 103, 'brightness': 1},
-            {'viewId': 101, 'brightness': 1},
-          ]);
-    }
-    global.value = null;
-    await tester.pumpAndSettle();
-    if (Platform.isMacOS || Platform.isWindows) {
-      expect(nativeCalls.last.arguments, {'viewId': 103, 'brightness': -1});
-    }
-    for (final view in [first, second, toolbarless]) {
-      view.close();
-      await sendNative(native.name, 'onWindowClose', {
-        'id': view == first
-            ? 101
-            : view == second
-                ? 102
-                : 103,
-      });
-    }
-    final callsAfterClose = nativeCalls.length;
-    global.value = ThemeData.dark();
-    await tester.pumpAndSettle();
-    expect(nativeCalls.length, callsAfterClose);
-    await first.setTitleBarTheme(ThemeData.dark());
-    expect(nativeCalls.length, callsAfterClose);
-    await tester.pumpWidget(const SizedBox.shrink());
-    global.dispose();
-    messenger.setMockMethodCallHandler(native, null);
+    expect(toolbarBrowser, same(second));
+    expect(find.text('empty:false'), findsOneWidget);
+    expect(appBuilds, initialBuilds);
+    final nextGesture = await tester
+        .startGesture(tester.getCenter(find.byType(TextButton)), view: barView);
+    await nextGesture.up(view: barView);
+    expect(calls.last.arguments, {'viewId': 102});
+    binding.platformDispatcher.showMainView = true;
+    await tester.pumpWidget(const ViewCollection(views: []),
+        wrapWithView: false);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('host can anchor titlebars inside an existing runApp view',
+      (tester) async {
+    binding.platformDispatcher.extraViews
+        .add(_ExtraView(tester.view, binding.platformDispatcher, 100));
+    descriptors.add({'viewId': 100, 'webViewId': 101, 'titleBarTopPadding': 0});
+    await tester.pumpWidget(WebviewTitleBarHost(
+      titleBar: WebviewTitleBarConfiguration(
+          builder: (context, webview, state) => const Text('toolbar')),
+      child: const MaterialApp(home: Text('main application')),
+    ));
+    await WebviewWindow.create();
+    await tester.pumpAndSettle();
+    expect(find.text('main application'), findsOneWidget);
+    expect(find.text('toolbar'), findsOneWidget);
+    expect(find.byType(ViewAnchor), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'global builder and theme update while window overrides stay local',
+      (tester) async {
+    for (final id in [100, 200]) {
+      binding.platformDispatcher.extraViews
+          .add(_ExtraView(tester.view, binding.platformDispatcher, id));
+    }
+    descriptors.addAll([
+      {'viewId': 100, 'webViewId': 101, 'titleBarTopPadding': 24},
+      {'viewId': 200, 'webViewId': 102, 'titleBarTopPadding': 0},
+    ]);
+    final theme = ValueNotifier<ThemeData?>(ThemeData.light());
+    var prefix = 'shared';
+    await tester.pumpWidget(ValueListenableBuilder<ThemeData?>(
+      valueListenable: theme,
+      builder: (context, value, _) => WebviewTitleBarHost(
+        titleBar: WebviewTitleBarConfiguration(
+            theme: value,
+            builder: (context, webview, state) =>
+                Text('$prefix ${Theme.of(context).brightness.name}')),
+        child: const MaterialApp(home: SizedBox.shrink()),
+      ),
+    ));
+    final first = await WebviewWindow.create();
+    final second = await WebviewWindow.create(
+        titleBar: WebviewTitleBarConfiguration(
+      builder: (context, webview, state) =>
+          Text('custom ${Theme.of(context).brightness.name}'),
+      theme: ThemeData.dark(),
+    ));
+    await WebviewWindow.create(
+        titleBar: const WebviewTitleBarConfiguration.none());
+    await tester.pumpAndSettle();
+    expect(find.text('shared light'), findsOneWidget);
+    expect(find.text('custom dark'), findsOneWidget);
+    var navigationNotifications = 0;
+    first.navigationState.addListener(() => navigationNotifications++);
+    await first.setTitleBarTheme(ThemeData.dark());
+    await tester.pumpAndSettle();
+    expect(find.text('shared dark'), findsOneWidget);
+    await first.setTitleBarTheme(null);
+    prefix = 'updated';
+    theme.value = ThemeData.dark();
+    await tester.pumpAndSettle();
+    expect(find.text('updated dark'), findsOneWidget);
+    expect(find.text('custom dark'), findsOneWidget);
+    theme.value = ThemeData.light();
+    await second.setTitleBarTheme(ThemeData.light());
+    await tester.pumpAndSettle();
+    expect(find.text('updated light'), findsOneWidget);
+    expect(find.text('custom light'), findsOneWidget);
+    await second.setTitleBarTheme(null);
+    await tester.pumpAndSettle();
+    expect(find.text('custom dark'), findsOneWidget);
+    theme.value = null;
+    await tester.pumpAndSettle();
+    final brightness =
+        calls.where((call) => call.method == 'setBrightness').toList();
+    if (brightness.isNotEmpty) {
+      expect(
+          brightness
+              .lastWhere((call) => (call.arguments as Map)['viewId'] == 101)
+              .arguments,
+          {'viewId': 101, 'brightness': -1});
+      expect(
+          brightness
+              .lastWhere((call) => (call.arguments as Map)['viewId'] == 103)
+              .arguments,
+          {'viewId': 103, 'brightness': -1});
+    }
+    expect(navigationNotifications, 0);
+    for (final id in [101, 102, 103]) {
+      await sendBrowserEvent('onWindowClose', {'id': id});
+    }
+    final callsAfterClose = calls.length;
+    theme.value = ThemeData.dark();
+    await tester.pumpAndSettle();
+    expect(calls.length, callsAfterClose);
+    await tester.pumpWidget(const SizedBox.shrink());
+    theme.dispose();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'convenience root passes browser state and commands to the builder',
+      (tester) async {
+    binding.platformDispatcher.extraViews
+        .add(_ExtraView(tester.view, binding.platformDispatcher, 100));
+    descriptors.add({'viewId': 100, 'webViewId': 101, 'titleBarTopPadding': 0});
+    await tester.pumpWidget(
+        WebviewWindowApp(
+          titleBar: WebviewTitleBarConfiguration(
+            builder: (context, webview, state) => TextButton(
+              onPressed: webview.close,
+              child: Text('${state.canGoBack}'),
+            ),
+          ),
+          child: const MaterialApp(home: SizedBox.shrink()),
+        ),
+        wrapWithView: false);
+    await tester.pumpAndSettle();
+    await WebviewWindow.create();
+    await sendBrowserEvent('onHistoryChanged',
+        {'id': 101, 'canGoBack': true, 'canGoForward': false});
+    await tester.pumpAndSettle();
+    expect(find.text('true'), findsOneWidget);
+    await tester.tap(find.byType(TextButton));
+    expect(calls.last.method, 'close');
+    expect(calls.last.arguments, {'viewId': 101});
+    await tester.pumpWidget(const SizedBox.shrink());
   });
 }

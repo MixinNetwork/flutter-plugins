@@ -21,8 +21,14 @@ Future<void> main() async {
     valueListenable: state.darkMode,
     child: DemoApp(state: state),
     builder: (context, dark, child) => WebviewWindowApp(
-      titleBarTheme: state.theme,
-      titleBarBuilder: (_) => const DemoTitleBar(),
+      titleBar: WebviewTitleBarConfiguration(
+        height: 44,
+        theme: state.theme,
+        builder: (context, webview, navigation) => DemoTitleBar(
+          webview: webview,
+          state: navigation,
+        ),
+      ),
       child: child!,
     ),
   ));

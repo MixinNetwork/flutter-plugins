@@ -14,9 +14,11 @@ void registerTitleBarThemeTests() {
         ValueListenableBuilder<ThemeData?>(
           valueListenable: theme,
           builder: (context, value, _) => WebviewWindowApp(
-            titleBarTheme: value,
-            titleBarBuilder: (context) => Text(
-              'Toolbar ${Theme.of(context).brightness.name}',
+            titleBar: WebviewTitleBarConfiguration(
+              theme: value,
+              builder: (context, webview, state) => Text(
+                'Toolbar ${Theme.of(context).brightness.name}',
+              ),
             ),
             child: const MaterialApp(home: SizedBox.shrink()),
           ),
@@ -27,9 +29,9 @@ void registerTitleBarThemeTests() {
         await titleBarInitialization;
         for (var i = 0; i < 3; i++) {
           windows.add(await WebviewWindow.create(
+            titleBar: i == 2 ? const WebviewTitleBarConfiguration.none() : null,
             configuration: CreateConfiguration(
               title: 'Theme test $i',
-              titleBarHeight: i == 2 ? 0 : 40,
             ),
           ));
         }
