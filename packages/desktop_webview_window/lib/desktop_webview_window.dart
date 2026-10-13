@@ -11,14 +11,13 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
 import 'src/create_configuration.dart';
-import 'src/message_channel.dart';
-import 'src/title_bar_state.dart';
+import 'src/title_bar_messages.dart';
 import 'src/title_bar_runtime.dart';
 import 'src/webview.dart';
 import 'src/webview_impl.dart';
 
 export 'src/create_configuration.dart';
-export 'src/title_bar.dart' hide SharedTitleBarViews;
+export 'src/title_bar.dart';
 export 'src/webview.dart';
 
 final List<WebviewImpl> _webviews = [];
@@ -26,7 +25,7 @@ final List<WebviewImpl> _webviews = [];
 class WebviewWindow {
   static const MethodChannel _channel = MethodChannel('webview_window');
 
-  static const _otherIsolateMessageHandler = ClientMessageChannel();
+  static const _titleBarMessages = TitleBarMessages();
 
   static bool _inited = false;
   static int _pendingCreates = 0;
@@ -46,7 +45,7 @@ class WebviewWindow {
     if (method == 'onNavigationCompleted') {
       _titleBarStates[id]!.remove('onNavigationStarted');
     }
-    await _otherIsolateMessageHandler.invokeMethod(method, args);
+    await _titleBarMessages.invokeMethod(method, args);
   }
 
   static void _init() {
@@ -62,11 +61,11 @@ class WebviewWindow {
         debugPrint('handleMethodCall error: $e $s');
       }
     });
-    _otherIsolateMessageHandler.setMessageHandler((call) async {
+    _titleBarMessages.addMessageHandler((call) async {
       try {
-        return await _handleOtherIsolateMethodCall(call);
+        return await _handleTitleBarCommand(call);
       } catch (e, s) {
-        debugPrint('_handleOtherIsolateMethodCall error: $e $s');
+        debugPrint('_handleTitleBarCommand error: $e $s');
       }
     });
   }
@@ -84,7 +83,9 @@ class WebviewWindow {
     configuration ??= CreateConfiguration.platform();
     _init();
     final arguments = configuration.toMap();
-    if (!titleBarInitialized) {
+    final initialization = titleBarInitialization;
+    if (initialization != null) await initialization;
+    if (initialization == null) {
       arguments['titleBarHeight'] = 0;
       arguments['titleBarTopPadding'] = 0;
     }
@@ -92,7 +93,7 @@ class WebviewWindow {
     try {
       final viewId = await _channel.invokeMethod("create", {
         ...arguments,
-        'useTitleBar': titleBarHookRegistered && titleBarInitialized,
+        'useTitleBar': initialization != null,
       }) as int;
       final webview = WebviewImpl(viewId, _channel);
       if (_closedDuringCreate.remove(viewId)) {
@@ -107,7 +108,7 @@ class WebviewWindow {
     }
   }
 
-  static Future<dynamic> _handleOtherIsolateMethodCall(MethodCall call) async {
+  static Future<dynamic> _handleTitleBarCommand(MethodCall call) async {
     final webViewId = call.arguments['webViewId'] as int;
     final webView = _webviews.cast<WebviewImpl?>().firstWhere(
           (w) => w?.viewId == webViewId,
@@ -122,7 +123,7 @@ class WebviewWindow {
         if (state != null) {
           await Future.wait([
             for (final entry in List.of(state.entries))
-              _otherIsolateMessageHandler.invokeMethod(entry.key, entry.value),
+              _titleBarMessages.invokeMethod(entry.key, entry.value),
           ]);
         }
         break;
@@ -194,7 +195,7 @@ class WebviewWindow {
       case "onWebMessageReceived":
         final message = args['message'] as String;
         webview.notifyWebMessageReceived(message);
-        await _otherIsolateMessageHandler.invokeMethod('onWebMessageReceived', {
+        await _titleBarMessages.invokeMethod('onWebMessageReceived', {
           'webViewId': viewId,
           'message': message,
         });

@@ -9,6 +9,12 @@ import Cocoa
 import FlutterMacOS
 import WebKit
 
+// Borderless browser windows must still accept keyboard input.
+private class BrowserWindow: NSWindow {
+  override var canBecomeKey: Bool { true }
+  override var canBecomeMain: Bool { true }
+}
+
 class WebviewWindowController: NSWindowController {
   private let methodChannel: FlutterMethodChannel
 
@@ -24,21 +30,29 @@ class WebviewWindowController: NSWindowController {
 
   init(viewId: Int64, methodChannel: FlutterMethodChannel,
        width: Int, height: Int,
-       title: String, titleBarHeight: Int,
+       title: String, showSystemTitleBar: Bool, titleBarHeight: Int,
        titleBarController: FlutterViewController?,
-       titleBarEngine: SharedTitleBarEngine?) {
+       titleBarViews: TitleBarViews?) {
     self.viewId = viewId
     self.methodChannel = methodChannel
     webViewController = WebViewLayoutController(
       methodChannel: methodChannel, viewId: viewId,
       titleBarHeight: titleBarHeight,
-      titleBarController: titleBarController, titleBarEngine: titleBarEngine)
+      titleBarController: titleBarController, titleBarViews: titleBarViews)
     super.init(window: nil)
 
-    let newWindow = NSWindow(contentRect: NSRect(x: 0, y: 0, width: width, height: height), styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
+    var styleMask: NSWindow.StyleMask = showSystemTitleBar
+      ? [.titled, .closable, .miniaturizable, .resizable]
+      : [.borderless, .resizable]
+    let usesFlutterTitlebar = showSystemTitleBar && titleBarController != nil
+    if usesFlutterTitlebar {
+      styleMask.insert(.fullSizeContentView)
+    }
+    let newWindow = BrowserWindow(contentRect: NSRect(x: 0, y: 0, width: width, height: height),
+                                  styleMask: styleMask, backing: .buffered, defer: false)
     newWindow.delegate = self
     newWindow.title = title
-    newWindow.titlebarAppearsTransparent = true
+    newWindow.titlebarAppearsTransparent = usesFlutterTitlebar
 
     newWindow.contentViewController = webViewController
     newWindow.setContentSize(NSSize(width: width, height: height))

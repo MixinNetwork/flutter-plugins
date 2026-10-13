@@ -21,7 +21,7 @@ class WebviewWindowPlugin: public flutter::Plugin {
 
   static void RegisterWithRegistrar(flutter::PluginRegistrarWindows *registrar);
 
-  explicit WebviewWindowPlugin(MethodChannelPtr method_channel);
+  WebviewWindowPlugin(MethodChannelPtr method_channel, flutter::BinaryMessenger* messenger);
 
   ~WebviewWindowPlugin() override;
 
@@ -33,8 +33,8 @@ class WebviewWindowPlugin: public flutter::Plugin {
 
   MethodChannelPtr method_channel_;
 
-  // Declared before windows_ so every borrowed view dies before this engine.
-  webview_window::SharedToolbarEngine toolbar_engine_;
+  // Declared before windows_ so views die before their routing registry.
+  webview_window::TitleBarViews title_bar_views_;
 
   std::map<int64_t, std::shared_ptr<WebviewWindow>> windows_;
 

@@ -4,28 +4,18 @@ import 'dart:io';
 import 'package:desktop_webview_window/desktop_webview_window.dart';
 import 'package:flutter/material.dart';
 
+import 'demo_page_server.dart';
+
 // Serve test pages on loopback, preserving native navigation scheme policies.
-Future<void> main(List<String> args) async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  if (!const bool.fromEnvironment('SMOKE_NO_TITLEBAR_HOOK') &&
-      runWebViewTitleBarWidget(args)) {
-    return;
+  final server = await DemoPageServer.start();
+  final app = MaterialApp(home: _SmokePage(port: server.port));
+  if (const bool.fromEnvironment('SMOKE_NO_TITLEBAR_ROOT')) {
+    runApp(app);
+  } else {
+    runWebviewWindowApp(app);
   }
-  final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-  server.listen((request) async {
-    final id = request.uri.queryParameters['id'] ?? '0';
-    final next = request.uri.path == '/next';
-    request.response.headers.contentType = ContentType.html;
-    request.response.write(
-        '''<!doctype html><title>Browser $id${next ? ' next' : ''}</title>
-<h1>Browser $id${next ? ' next' : ''}</h1>
-<label>Native input <input placeholder="Type here"></label>
-<p>Resize, focus, select text and close this window independently.</p>
-<button onclick="this.textContent='Clicked browser $id'">Native button</button>
-<a href="${next ? '/' : '/next'}?id=$id">${next ? 'First page' : 'Next page'}</a>''');
-    await request.response.close();
-  });
-  runApp(MaterialApp(home: _SmokePage(port: server.port)));
 }
 
 class _SmokePage extends StatefulWidget {
@@ -45,7 +35,9 @@ class _SmokePageState extends State<_SmokePage> {
   @override
   void initState() {
     super.initState();
-    if (const bool.fromEnvironment('SMOKE_OPEN_PAIR')) {
+    if (const bool.fromEnvironment('SMOKE_AUTORUN')) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _stress());
+    } else if (const bool.fromEnvironment('SMOKE_OPEN_PAIR')) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _openPair());
     }
   }
@@ -73,9 +65,6 @@ class _SmokePageState extends State<_SmokePage> {
         windowHeight: 480,
         titleBarHeight: hiddenToolbar ? 0 : 40,
         titleBarTopPadding: !hiddenToolbar && Platform.isMacOS ? 24 : 0,
-        useSharedTitleBarEngineLinux: const bool.fromEnvironment(
-          'SMOKE_SHARED_LINUX',
-        ),
       ),
     ).timeout(const Duration(seconds: 20));
     _open.add(view);
@@ -102,6 +91,7 @@ class _SmokePageState extends State<_SmokePage> {
 
   Future<void> _stress() async {
     if (_running) return;
+    var passed = false;
     setState(() => _running = true);
     try {
       final first = await _create();
@@ -125,6 +115,7 @@ class _SmokePageState extends State<_SmokePage> {
       await Future<void>.delayed(const Duration(milliseconds: 300));
       await _close(reopened);
       _log('PASS lifecycle sequence (inspect native logs for renderer errors)');
+      passed = true;
     } catch (error, stack) {
       _log('FAIL $error');
       debugPrintStack(stackTrace: stack);
@@ -133,6 +124,7 @@ class _SmokePageState extends State<_SmokePage> {
         view.close();
       }
       if (mounted) setState(() => _running = false);
+      if (const bool.fromEnvironment('SMOKE_AUTORUN')) exit(passed ? 0 : 1);
     }
   }
 

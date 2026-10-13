@@ -14,7 +14,7 @@
 #include <string>
 #include <unordered_map>
 
-#include "title_bar_engine.h"
+#include "title_bar_views.h"
 
 typedef struct {
     GMainLoop *loop;
@@ -32,7 +32,8 @@ class WebviewWindow {
                 std::function<void()> on_close_callback,
                 const std::string &title, int width, int height,
                 int title_bar_height, int title_bar_top_padding,
-                TitleBarEngine *title_bar_engine, GtkWindow *parent);
+                TitleBarViews *title_bar_views, GtkWindow *parent,
+                bool show_system_title_bar);
 
   virtual ~WebviewWindow();
 
@@ -80,7 +81,7 @@ class WebviewWindow {
   GtkBox *box_ = nullptr;
   WebKitUserContentManager *content_manager_ = nullptr;
   GCancellable *javascript_cancellable_ = nullptr;
-  TitleBarEngine *title_bar_engine_ = nullptr;  // Owned by the plugin.
+  TitleBarViews *title_bar_views_ = nullptr;  // Owned by the plugin.
   int64_t title_bar_view_id_ = -1;
   bool closing_ = false;
   bool closed_ = false;

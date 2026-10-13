@@ -1,186 +1,130 @@
-# Shared titlebar engine: design and validation
+# Single-engine titlebars: design and validation
 
-## Ownership and compatibility
+## Ownership and startup
 
-The application's normal engine owns its plugin and browser sessions. The plugin
-lazily owns one separate titlebar engine, running the existing main entrypoint
-with `web_view_title_bar shared`. That entrypoint uses `runWidget` internally,
-reconciles `ViewCollection` against native snapshots, and builds a separate
-MaterialApp for each registered Flutter view. Native WebViews remain the browser
-content and retain native keyboard/pointer handling.
+The runner owns one application Flutter engine and its main view. Browser windows
+own additional titlebar view controllers borrowing that engine. The plugin owns
+only their routing registry. It never starts or shuts down another engine.
 
-A dedicated engine preserves the existing `main(List<String>)` hook and avoids
-requiring consumers to replace their main `runApp` with a multi-view root. This
-means one application engine **plus** one titlebar engine, not one engine total.
-Custom titlebar static state is shared; widget state remains view-local.
+Dart starts once with `runWebviewWindowApp(MyApp())`. Its `WebviewWindowApp` root
+uses `runWidget` and `ViewCollection` to mount the main application alongside each
+titlebar's `View` and `MaterialApp`. There is no startup-argument dispatch or
+secondary Dart entrypoint. Static state is shared with the application; titlebar
+widget state remains browser-local.
 
-`desktop_webview_window/titlebars` belongs only to the titlebar engine:
+Native WebViews remain the browser content, below the non-overlapping titlebar.
+Native keyboard/pointer behavior is unchanged by the ownership migration.
 
-- `getViews`: snapshot of `{viewId, webViewId, titleBarTopPadding}`
-- `viewsChanged`: invalidate the snapshot
-- view-list/metrics changes and native snapshots may arrive in either order;
-  only descriptors matching a currently registered Flutter view are mounted
+`desktop_webview_window/titlebars` belongs to the application engine:
 
-The existing `webview_message/client_channel` routes browser state and toolbar
-commands. One dispatcher multicasts incoming messages to live titlebar widgets;
-widgets filter by browser ID and unsubscribe before disposal. URL-only changes
-also notify custom builders. A native view ID is never used as a browser ID.
+- `initialize`: attach the application's engine and return its native main view
+  ID. Windows receives the actual `dart:ui` engine ID, not the test binding's
+  simulated identifier. macOS identifies the runner's controller through a weak
+  registration keyed by the engine messenger.
+- `getViews`: snapshot of `{viewId, webViewId, titleBarTopPadding}`.
+- `viewsChanged`: invalidate the snapshot.
 
-Windows controllers borrow the dedicated engine. The old public constructor that
-transfers engine ownership must not be reused for multiple views. macOS enables
-multi-view before the first controller and starts its engine before adding views.
-Windows also retains a hidden implicit view 0; browser windows use explicit
-views only. Linux's experimental path retains a realized implicit owner view because the
-public secondary-view API requires an already-running non-headless engine.
+The root waits for initialization before mounting the application. Native metrics
+and snapshots can arrive in either order. Only titlebar descriptors matching a
+registered Flutter view are mounted. A synthetic implicit view with no native
+macOS controller must not be mistaken for the main window.
 
-## SDK and risk boundary
+Browser state and toolbar commands use local Dart listeners. The old native
+cross-engine broadcast channels are removed. Browser IDs remain distinct from
+Flutter view IDs. Late widget readiness replays the latest browser state.
 
-Reference runtime: Flutter 3.47.6, framework
-`5fc346839b5d0eef006ed8404392afb4dfae428d`, engine
-`692136cb6582dbfc5af3fb33c2515a069f2f66d0`.
-No engine source changes or rebuilt engine are required.
+Closing a browser withdraws its routing record and destroys only its view.
+Closing every browser leaves the application engine and main view running.
+Plugin teardown detaches browser views without destroying the runner's engine.
 
-macOS and Windows rely on internal embedding entrypoints in that stock runtime.
-Symbol/selector guards detect missing entrypoints, not every possible future ABI
-or behavior change. The minimum SDK cannot promise all future versions are
-compatible. Native accessibility, plugins requiring an implicit view, and
-platform input/focus integration need separate validation.
+## Platform contracts
 
-Linux shared-engine support is an explicit opt-in and remains experimental.
-A standalone stock-engine probe failed rapid secondary destroy/recreate under
-GLX with both Impeller enabled and disabled. Software rendering passed 20 rounds,
-which is diagnostic evidence only. Keeping the implicit view alive was already
-part of that probe and is not a demonstrated fix. Default Linux windows continue
-to use the legacy per-window-engine renderer.
+- Linux: `fl_view_new_for_engine` borrows the existing main view's engine. There
+  is no hidden bootstrap window or additional implicit owner view.
+- Windows: runtime-resolved `FlutterDesktopEngineForId` and
+  `FlutterDesktopEngineCreateViewController` borrow the application's engine.
+  The runner retains its existing implicit view 0. The plugin never uses the
+  constructor that transfers engine ownership.
+- macOS: the runner calls
+  `DesktopWebviewWindowPlugin.createMainViewController()` before registering
+  plugins. It enables multi-view before creating the first controller, starts
+  the main engine, and creates the main view. Plugin registries borrow this
+  engine and remove explicit views through guarded internal selectors.
 
-## Automated checks
+Flutter 3.47.7 / Dart 3.13.5 is the validation SDK. Windows/macOS still depend on
+in-progress embedding APIs. Symbol guards cannot promise future ABI stability.
+macOS plugins that assume `registrar.view` or an implicit controller may need
+adaptation for a multi-view main application.
 
-Package-local Flutter tests cover malformed entry arguments, primary hook
-registration, live-listener fan-out/unsubscription, snapshot/browser-ID routing,
-late events after removal, close/recreate state isolation, duplicate close,
-close-before-create-response, no-hook configuration, and URL-only state updates.
+## Regression checks
 
-Run from this package with Flutter 3.47.6 or newer:
+Package tests cover no-root/zero-height creation, initialization ordering,
+same-isolate fan-out and unsubscribe, separate browser/view IDs, main subtree
+preservation across titlebar close/recreate, replay of only current browser
+state, duplicate close and close before native create completes.
+
+The portable Windows harness verifies that a pre-existing application engine
+and view 0 survive browser create/close/reopen and registry disposal. It also
+asserts that no engine is created/destroyed and no native message relay is
+registered by the titlebar code. This is ownership validation, not GUI rendering.
+
+From the package:
 
 ```sh
-flutter pub get
-flutter analyze
-flutter test
+flutter analyze --no-pub
+flutter test --no-pub
+./windows/tests/run_shared_toolbar_engine_test.sh /path/to/flutter
 ```
 
-In the monorepo, dependency resolution follows its existing pub workspace. A
-standalone copy may remove only `resolution: workspace` from its pubspec for
-isolated checks. Do not commit generated lockfiles solely for this refactor.
-
-## Current validation
-
-Replayed onto upstream `bee5a1e2cf59ace59aac88c1780a55817e5f8b07`, preserving the
-released 0.3.1 platform fixes. Independently validated on 2026-10-13 with Flutter
-3.47.7 / Dart 3.13.5 and Xcode 27.0 on Apple Silicon:
-
-- Package and example analysis: no issues
-- Eleven package unit/widget tests: passed
-- Original example Release build and lifecycle smoke Debug build: passed
-- macOS native integration scenario: passed with driver exit code 0
-- Native smoke: twenty close/recreate rounds, including zero height, duplicate
-  close, immediate close and reopening after all views are removed: passed
-- Default toolbar back/forward/reload, real keyboard input and native button
-  interaction: manually confirmed
-- Portable Windows engine ownership/routing harness on macOS: passed
-- Integration CI target selection/manifest regression tests: eight passed
-- CI for `a49a704`: macOS native integration passed; Windows native build and
-  the existing WebView2 navigation/visibility/media-policy regressions passed
-- Windows shared-toolbar GUI/input acceptance and Linux native build/runtime:
-  not run in this validation
-- Release runtime, isolated CocoaPods plugin integration, accessibility and
-  long-running memory/DPI acceptance: not run
-
-The plugin built through Flutter's generated Swift Package dependency graph;
-the example host still retains CocoaPods configuration. Runtime logs included
-Flutter's `Reported frame time is older than the last one; clamping` diagnostic,
-without an observed crash or interaction failure. This diagnostic remains an
-open observation, not a resolved engine issue.
-
-From `example`, run the repeatable native macOS regression:
+From `example`:
 
 ```sh
 flutter drive -d macos --driver=test_driver/integration_test.dart --target=integration_test/app_test.dart
+flutter run -d linux -t lib/shared_engine_smoke.dart --dart-define=SMOKE_AUTORUN=true
 ```
 
-This launches real WKWebViews and the dedicated toolbar engine. It verifies
-engine/view identity, mounted toolbar state, navigation isolation, production
-controller commands through the cross-engine relay, DOM input/button behavior,
-native resize, duplicate/rapid close and engine reuse after all windows close.
-DOM focus checks do not assert real keyboard or pointer delivery. The integration
-scenario uses a custom toolbar builder; default controls have separate widget
-and manual coverage.
+The macOS integration scenario compares the native engine ID with the main
+isolate's actual engine ID and verifies routing, navigation, DOM interactions,
+resize, twenty close/recreate rounds and reopen after every browser is closed.
+The smoke example also supports Windows and macOS and uses loopback test pages.
+`SMOKE_NO_TITLEBAR_ROOT=true` exercises ordinary `runApp` without titlebars
+on Windows/Linux with their unmodified runners. A macOS runner configured for
+multi-view must continue to use the multi-view Dart root.
 
-Use `flutter drive` for this target: `flutter test` wraps `main()` and discards
-the secondary engine's startup arguments. Debug-only native diagnostics expose
-engine/view identity; the example's Debug fixture resizes windows. Neither adds
-a public Dart API or a Release diagnostics path. The existing CI matrix runs
-this scenario through an optional driver, alongside its original Windows target.
+Native lifecycle checks do not prove physical keyboard/pointer delivery,
+accessibility, long-running memory behavior or application shutdown. Linux X11
+and Wayland must be reported independently. See the Linux investigation for
+historical renderer failures; no per-window engine implementation is retained.
 
-Earlier recovery-archive logs are historical evidence only and are not counted
-as acceptance of this replay. In particular, their partial Linux zero-toolbar
-run does not establish Linux renderer safety.
+## Validation on 2026-10-13
 
-## Runnable native smoke target
+Flutter 3.47.7 / Dart 3.13.5 was used on macOS, Windows and Ubuntu 22.04 WSL.
+The first complete remote single-engine code snapshot was
+`20261013T100032-31e3c3fc9284`. Its logs remain under
+`~/.codex/remote-flutter-tests/20261013T100032-31e3c3fc9284/`.
 
-From `example`, run on the desired platform (replace `linux` with `windows` or
-`macos`):
+- Package analysis passed. Nine package tests passed locally, on Windows and
+  on WSL (exit 0).
+- The portable Windows ownership/routing harness passed: no engine creation or
+  destruction, and application view 0 retained after every titlebar was removed.
+- macOS native integration passed (driver exit 0), including equality with the
+  main isolate's actual engine ID, native navigation/DOM/resize and 20 rounds.
+- Windows Debug build and the automatic 20-round native smoke passed. The
+  existing navigation/visibility/media-policy integration suite also passed
+  (three tests, exit 0). The smoke used the remote runner's interactive task
+  transport with its command pointed at the smoke target; it was not the
+  three-test integration suite despite the transport job's integration label.
+- WSL Debug build passed. Native Wayland completed the 20-round smoke and exited
+  0. X11 reproduced GLX BadAccess and exited on SIGTRAP (-5).
+- A macOS smoke application successfully hot reloaded. An earlier idle launch
+  lost its connection before reload, without a new native crash report.
 
-```sh
-flutter run -d linux -t lib/shared_engine_smoke.dart
-```
+The final root also retains surviving titlebars when the native main view is
+removed. A package regression exercises that case separately from preserving
+the main subtree across browser close/recreate.
 
-The target provides native-input windows and a 20-round close/recreate sequence,
-including closing the first browser while others survive, duplicate close,
-zero-height toolbar, and reopening after all browsers close. It serves self-contained
-pages from a loopback HTTP server. A lifecycle PASS does not replace visual/input
-or native renderer-log inspection.
-
-To test no entrypoint hook, add `--dart-define=SMOKE_NO_TITLEBAR_HOOK=true`.
-For explicitly experimental Linux shared-view reproduction only, add
-`--dart-define=SMOKE_SHARED_LINUX=true`; expect the documented GLX risk.
-
-## Native regression plan (all platforms)
-
-1. Run the example normally and open three browsers with distinct URLs/titles.
-2. Exercise back/forward/reload/stop in each; verify only that browser changes.
-3. Type into native web inputs and move focus between browser and toolbar.
-4. Resize/minimize/restore and test the correct content/titlebar boundaries.
-5. Close the first-created, middle and last browser in different orders. Check
-   surviving windows and the main application remain functional.
-6. Reopen after all browsers close; toolbar isolate static state should survive
-   on shared-engine platforms, while per-window widget state starts fresh.
-7. Repeat create/close immediately, including before WebView2 initialization
-   completes; check every create/onClose settles and no late callback touches a
-   disposed host. Repeat 20 or more times with at least one survivor.
-8. Repeat with height zero and with no hook. No toolbar engine should be started.
-9. Repeat application shutdown while browsers/initialization are outstanding.
-10. Repeat Debug and Release and inspect engine/controller counts and memory.
-
-Linux: run this suite on the default fallback first, then opt in on a noncritical
-local build. Test X11/Wayland and actual hardware GPU separately. Never report a
-software-only pass as GLX safety. macOS: verify both native and programmatic close,
-CocoaPods and SPM. Windows: test a fresh user-data folder and unavailable runtime.
-
-## Related issue scope
-
-- #497: Linux destroy callback must not read its owner after the callback erases
-  the owning unique_ptr. Cleanup/notification precede final ownership removal.
-- #511: no-hook/zero-height mode avoids starting unnecessary toolbar engines.
-  This implementation is independently developed; no contributor patch is copied.
-- #366/#367: Windows asynchronous creation and early-close handling are in scope;
-  do not consider the historical reports fully resolved without native repro QA.
-- #510: added the missing SwiftPM FlutterFramework dependency; native SPM
-  resolution/build still needs macOS validation.
-- #406: macOS programmatic and native close share one idempotent path; historical
-  report resolution remains subject to native repro QA.
-- #457/#478: related Linux teardown symptoms are not automatically resolved by
-  fixing one proven use-after-free.
-- #254/#200 request embedded widget functionality and are not implemented here.
-- #326/#418/#176 and unrelated permission/navigation behavior are out of scope.
-
-A draft PR is for cross-platform review and validation, not a release assertion.
+The smoke's automatic mode exits the process after its result; it does not prove
+normal native teardown with outstanding windows. Release, real keyboard/pointer
+acceptance, physical Linux GPU combinations, accessibility, and sustained memory
+use were not validated. macOS logs retain the previously observed frame-time
+clamping diagnostic. No Flutter engine source or SDK installation was modified.

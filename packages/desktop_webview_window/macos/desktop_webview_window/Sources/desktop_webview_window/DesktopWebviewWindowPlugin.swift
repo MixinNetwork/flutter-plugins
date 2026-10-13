@@ -2,7 +2,7 @@ import Cocoa
 import FlutterMacOS
 import WebKit
 
-// Browser IDs remain process-wide because the message bridge spans engines.
+// Browser IDs are distinct from engine-assigned Flutter view IDs.
 private var nextWebViewId: Int64 = 0
 
 public class DesktopWebviewWindowPlugin: NSObject, FlutterPlugin {
@@ -10,25 +10,31 @@ public class DesktopWebviewWindowPlugin: NSObject, FlutterPlugin {
 
   private var webviews: [Int64: WebviewWindowController] = [:]
 
-  private var titleBarEngine: SharedTitleBarEngine?
+  private let titleBarViews: TitleBarViews
 
-  public init(methodChannel: FlutterMethodChannel) {
+  public init(methodChannel: FlutterMethodChannel, messenger: FlutterBinaryMessenger) {
     self.methodChannel = methodChannel
+    self.titleBarViews = TitleBarViews(messenger: messenger)
     super.init()
+  }
+
+  /// Creates the application's main controller with multi-view enabled.
+  /// Call before RegisterGeneratedPlugins in the macOS runner.
+  public static func createMainViewController() throws -> FlutterViewController {
+    try TitleBarViews.createMainViewController()
   }
 
   public static func register(with registrar: FlutterPluginRegistrar) {
     let channel = FlutterMethodChannel(name: "webview_window", binaryMessenger: registrar.messenger)
-    let instance = DesktopWebviewWindowPlugin(methodChannel: channel)
+    let instance = DesktopWebviewWindowPlugin(methodChannel: channel, messenger: registrar.messenger)
     registrar.addMethodCallDelegate(instance, channel: channel)
-    ClientMessageChannelPlugin.register(with: registrar)
   }
 
   public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     switch call.method {
     #if DEBUG
     case "debugTitleBarState":
-      result(titleBarEngine?.debugState() ?? ["views": []])
+      result(titleBarViews.debugState())
       return
     #endif
     case "create":
@@ -40,38 +46,24 @@ public class DesktopWebviewWindowPlugin: NSObject, FlutterPlugin {
       let height = argument["windowHeight"] as? Int ?? 720
       let title = argument["title"] as? String ?? ""
       let titleBarHeight = argument["titleBarHeight"] as? Int ?? 50
-      let titleBarTopPadding = max(0, argument["titleBarTopPadding"] as? Int ?? 0)
+      let showSystemTitleBar = argument["showSystemTitleBar"] as? Bool ?? true
+      let titleBarTopPadding = showSystemTitleBar
+        ? max(0, argument["titleBarTopPadding"] as? Int ?? 0) : 0
       let useTitleBar = argument["useTitleBar"] as? Bool ?? true
       let viewId = nextWebViewId
       nextWebViewId += 1
 
       var titleBarController: FlutterViewController?
       if useTitleBar && titleBarHeight > 0 {
-        do {
-          if titleBarEngine == nil {
-            titleBarEngine = try SharedTitleBarEngine()
-          }
-          titleBarController = titleBarEngine?.createView(
-            webViewId: viewId, titleBarTopPadding: titleBarTopPadding)
-        } catch SharedTitleBarEngine.StartupError.multiViewUnavailable {
-          result(FlutterError(
-            code: "titlebar_multiview_unavailable",
-            message: "Shared titlebars require Flutter 3.47.6 or a compatible macOS engine with multi-view support",
-            details: nil))
-          return
-        } catch {
-          result(FlutterError(
-            code: "titlebar_engine_start_failed", message: "Could not start the shared titlebar engine",
-            details: nil))
-          return
-        }
+        titleBarController = titleBarViews.createView(
+          webViewId: viewId, titleBarTopPadding: titleBarTopPadding)
       }
 
       let controller = WebviewWindowController(
         viewId: viewId, methodChannel: methodChannel,
-        width: width, height: height, title: title,
+        width: width, height: height, title: title, showSystemTitleBar: showSystemTitleBar,
         titleBarHeight: titleBarController == nil ? 0 : titleBarHeight + titleBarTopPadding,
-        titleBarController: titleBarController, titleBarEngine: titleBarEngine
+        titleBarController: titleBarController, titleBarViews: titleBarViews
       )
       controller.webviewPlugin = self
       webviews[viewId] = controller
@@ -334,11 +326,11 @@ public class DesktopWebviewWindowPlugin: NSObject, FlutterPlugin {
   }
 
   deinit {
-    // Controllers must detach before the one shared engine shuts down.
+    // Detach only browser views; the runner retains the application engine.
     for controller in webviews.values {
       controller.destroy()
     }
     webviews.removeAll()
-    titleBarEngine?.shutdown()
+    titleBarViews.shutdown()
   }
 }

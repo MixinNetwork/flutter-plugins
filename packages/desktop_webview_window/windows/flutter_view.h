@@ -13,9 +13,9 @@
 
 namespace webview_window {
 
-class SharedToolbarEngine;
+class TitleBarViews;
 
-// Owns only a view controller. The plugin's SharedToolbarEngine owns its engine.
+// Owns a view controller borrowing the application engine.
 class FlutterView {
  public:
   ~FlutterView();
@@ -30,23 +30,23 @@ class FlutterView {
   void ForceRedraw();
 
  private:
-  friend class SharedToolbarEngine;
-  FlutterView(SharedToolbarEngine* owner,
+  friend class TitleBarViews;
+  FlutterView(TitleBarViews* owner,
               FlutterDesktopViewControllerRef controller, int64_t view_id);
 
-  SharedToolbarEngine* owner_;
+  TitleBarViews* owner_;
   FlutterDesktopViewControllerRef controller_;
   int64_t view_id_;
 };
 
-// One lazy, dedicated engine per plugin owner, retained even with no open views.
-// Every controller borrows this engine; none may use the owning create API.
-class SharedToolbarEngine {
+// Tracks titlebar views without owning or starting the application engine.
+class TitleBarViews {
  public:
-  SharedToolbarEngine() = default;
-  ~SharedToolbarEngine();
-  SharedToolbarEngine(const SharedToolbarEngine&) = delete;
-  SharedToolbarEngine& operator=(const SharedToolbarEngine&) = delete;
+  explicit TitleBarViews(flutter::BinaryMessenger* messenger);
+  bool Initialize(int64_t engine_id, std::string* error);
+  ~TitleBarViews();
+  TitleBarViews(const TitleBarViews&) = delete;
+  TitleBarViews& operator=(const TitleBarViews&) = delete;
 
   std::unique_ptr<FlutterView> CreateView(int64_t web_view_id, int top_padding,
                                         int width, int height, std::string* error);
@@ -54,14 +54,10 @@ class SharedToolbarEngine {
   void ReloadSystemFonts();
 
  private:
-  bool Initialize(std::string* error);
   void NotifyViewsChanged();
   flutter::EncodableList GetViews() const;
 
   FlutterDesktopEngineRef engine_ = nullptr;
-  // Windows reserves view 0 for the engine's entire lifetime. Keep it hidden;
-  // every browser toolbar must use an independently removable explicit view.
-  FlutterDesktopViewControllerRef implicit_controller_ = nullptr;
   // Flutter's installed headers omit this in-progress API. Its ABI is isolated
   // in flutter_view.cc and resolved from the loaded stock engine at runtime.
   FARPROC create_view_controller_ = nullptr;

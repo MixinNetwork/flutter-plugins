@@ -1,5 +1,6 @@
 import 'package:desktop_webview_window/desktop_webview_window.dart';
-import 'package:desktop_webview_window/src/title_bar_state.dart';
+import 'package:desktop_webview_window/src/title_bar_runtime.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -14,7 +15,7 @@ void main() {
   final createdViewIds = <int>[];
 
   setUp(() {
-    titleBarInitialized = false;
+    titleBarInitialization = null;
     createArguments.clear();
     messenger.setMockMethodCallHandler(channel, (call) async {
       if (call.method == 'create') {
@@ -39,7 +40,7 @@ void main() {
     }
     createdViewIds.clear();
     messenger.setMockMethodCallHandler(channel, null);
-    titleBarInitialized = false;
+    titleBarInitialization = null;
   });
 
   test(
@@ -72,31 +73,37 @@ void main() {
     expect(configuration.titleBarTopPadding, 24);
   });
 
-  for (final args in <List<String>>[
-    [],
-    ['application-argument'],
-  ]) {
-    test('calling the hook with $args preserves title-bar configuration',
-        () async {
-      // Main-isolate startup does not render a title bar, but enables the hook
-      // that will render one when the native platform starts a title-bar engine.
-      expect(runWebViewTitleBarWidget(args), isFalse);
+  test('system title bar defaults to visible and can be disabled', () async {
+    await WebviewWindow.create();
+    expect(createArguments.last['showSystemTitleBar'], isTrue);
+    await WebviewWindow.create(
+      configuration: const CreateConfiguration(showSystemTitleBar: false),
+    );
+    expect(createArguments.last['showSystemTitleBar'], isFalse);
+  });
 
-      await WebviewWindow.create();
-      expect(createArguments.last, {
-        ...CreateConfiguration.platform().toMap(),
-        'useTitleBar': true,
-      });
-
-      const configuration = CreateConfiguration(
-        titleBarHeight: 60,
-        titleBarTopPadding: 24,
-      );
-      await WebviewWindow.create(configuration: configuration);
-      expect(createArguments.last, {
-        ...configuration.toMap(),
-        'useTitleBar': true,
-      });
+  testWidgets('mounting the root initializes the main engine before create',
+      (tester) async {
+    const control = MethodChannel('desktop_webview_window/titlebars');
+    final calls = <String>[];
+    messenger.setMockMethodCallHandler(control, (call) async {
+      calls.add(call.method);
+      if (call.method == 'initialize') {
+        expect((call.arguments as Map)['mainViewId'], tester.view.viewId);
+        return tester.view.viewId;
+      }
+      return call.method == 'getViews' ? [] : null;
     });
-  }
+    addTearDown(() => messenger.setMockMethodCallHandler(control, null));
+    await tester.pumpWidget(
+      const WebviewWindowApp(child: SizedBox.shrink()),
+      wrapWithView: false,
+    );
+    await WebviewWindow.create();
+    expect(calls.first, 'initialize');
+    expect(createArguments.last['useTitleBar'], isTrue);
+    expect(createArguments.last['titleBarHeight'], 40);
+    await tester.pumpWidget(const SizedBox.shrink());
+    expect(titleBarInitialization, isNull);
+  });
 }

@@ -6,7 +6,6 @@
 #include <cassert>
 #include <cstring>
 
-#include "message_channel_plugin.h"
 
 namespace webview_window {
 namespace {
@@ -31,91 +30,67 @@ CreateBorrowedViewController BorrowedCreateFunction(FARPROC symbol) {
 
 }  // namespace
 
-bool SharedToolbarEngine::Initialize(std::string* error) {
-  if (engine_) {
-    return true;
-  }
-  auto module = GetModuleHandleW(L"flutter_windows.dll");
-  create_view_controller_ = module ? GetProcAddress(
-      module, "FlutterDesktopEngineCreateViewController") : nullptr;
-  if (!create_view_controller_) {
-    *error = "Shared title bars require Flutter 3.47.6 or a compatible Windows "
-             "engine exporting FlutterDesktopEngineCreateViewController.";
-    return false;
-  }
-
-  const char* arguments[] = {"web_view_title_bar", "shared"};
-  FlutterDesktopEngineProperties properties = {};
-  // Match DartProject(L"data"); the C API resolves these against the executable.
-  properties.assets_path = L"data\\flutter_assets";
-  properties.icu_data_path = L"data\\icudtl.dat";
-  properties.aot_library_path = L"data\\app.so";
-  properties.dart_entrypoint_argc = 2;
-  properties.dart_entrypoint_argv = arguments;
-  engine_ = FlutterDesktopEngineCreate(&properties);
-  if (!engine_) {
-    *error = "Failed to create the shared title bar Flutter engine.";
-    return false;
-  }
-
-  auto registrar = FlutterDesktopEngineGetPluginRegistrar(
-      engine_, "DesktopWebviewWindowToolbarPlugin");
-  auto registrar_windows = flutter::PluginRegistrarManager::GetInstance()
-      ->GetRegistrar<flutter::PluginRegistrarWindows>(registrar);
-  // Install both channels before the first view starts the Dart entrypoint.
-  RegisterClientMessageChannelPlugin(registrar);
+TitleBarViews::TitleBarViews(flutter::BinaryMessenger* messenger) {
   channel_ = std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
-      registrar_windows->messenger(), "desktop_webview_window/titlebars",
+      messenger, "desktop_webview_window/titlebars",
       &flutter::StandardMethodCodec::GetInstance());
   channel_->SetMethodCallHandler([this](const auto& call, auto result) {
-    if (call.method_name() == "getViews") {
+    if (call.method_name() == "initialize") {
+      const auto* args = std::get_if<flutter::EncodableMap>(call.arguments());
+      const auto found = args ? args->find(flutter::EncodableValue("engineId")) :
+          flutter::EncodableMap::const_iterator{};
+      if (!args || found == args->end() ||
+          (!std::holds_alternative<int32_t>(found->second) &&
+           !std::holds_alternative<int64_t>(found->second))) {
+        result->Error("titlebar_engine_missing", "The application engine ID is required.");
+        return;
+      }
+      std::string error;
+      if (!Initialize(found->second.LongValue(), &error)) {
+        result->Error("titlebar_multiview_unavailable", error);
+      } else {
+        const auto main_view = args->find(flutter::EncodableValue("mainViewId"));
+        result->Success(main_view == args->end() ? flutter::EncodableValue(int64_t{0}) : main_view->second);
+      }
+    } else if (call.method_name() == "getViews") {
       result->Success(flutter::EncodableValue(GetViews()));
-    } else if (call.method_name() == "ready") {
-      result->Success();
-      NotifyViewsChanged();
     } else {
       result->NotImplemented();
     }
   });
+}
 
-  // Stock Windows Flutter treats view 0 as permanent and never removes it from
-  // the engine/framework. Reserve it here so closing the first browser cannot
-  // leave Flutter presenting to a destroyed implicit view.
-  const BorrowedViewControllerProperties implicit_properties = {0, 0};
-  implicit_controller_ = BorrowedCreateFunction(create_view_controller_)(
-      engine_, &implicit_properties);
-  if (!implicit_controller_) {
-    channel_->SetMethodCallHandler(nullptr);
-    channel_.reset();
-    FlutterDesktopEngineDestroy(engine_);
-    engine_ = nullptr;
-    *error = "Failed to start the shared title bar Flutter engine.";
+bool TitleBarViews::Initialize(int64_t engine_id, std::string* error) {
+  if (engine_) return true;
+  auto module = GetModuleHandleW(L"flutter_windows.dll");
+  create_view_controller_ = module ? GetProcAddress(
+      module, "FlutterDesktopEngineCreateViewController") : nullptr;
+  FARPROC engine_for_id_symbol = module ? GetProcAddress(
+      module, "FlutterDesktopEngineForId") : nullptr;
+  if (!create_view_controller_ || !engine_for_id_symbol) {
+    *error = "Titlebars require a Windows engine exporting "
+             "FlutterDesktopEngineCreateViewController and FlutterDesktopEngineForId.";
     return false;
   }
-  ShowWindow(FlutterDesktopViewGetHWND(
-      FlutterDesktopViewControllerGetView(implicit_controller_)), SW_HIDE);
-  return true;
+  using EngineForId = FlutterDesktopEngineRef (*)(int64_t);
+  EngineForId engine_for_id = nullptr;
+  static_assert(sizeof(engine_for_id) == sizeof(engine_for_id_symbol));
+  std::memcpy(&engine_for_id, &engine_for_id_symbol, sizeof(engine_for_id));
+  engine_ = engine_for_id(engine_id);
+  return engine_ != nullptr;
 }
 
-SharedToolbarEngine::~SharedToolbarEngine() {
-  // WebviewWindowPlugin destroys all borrowed views before its engine owner.
+TitleBarViews::~TitleBarViews() {
   assert(views_.empty());
-  if (channel_) {
-    channel_->SetMethodCallHandler(nullptr);
-    channel_.reset();
-  }
-  if (implicit_controller_) {
-    FlutterDesktopViewControllerDestroy(implicit_controller_);
-  }
-  if (engine_) {
-    FlutterDesktopEngineDestroy(engine_);
-  }
+  channel_->SetMethodCallHandler(nullptr);
+  // The runner owns the engine and its main view. Never destroy either here.
 }
 
-std::unique_ptr<FlutterView> SharedToolbarEngine::CreateView(
+std::unique_ptr<FlutterView> TitleBarViews::CreateView(
     int64_t web_view_id, int top_padding, int width, int height,
     std::string* error) {
-  if (!Initialize(error)) {
+  if (!engine_) {
+    *error = "Mount WebviewWindowApp before creating a titlebar.";
     return nullptr;
   }
   BorrowedViewControllerProperties properties = {width, height};
@@ -143,12 +118,12 @@ std::unique_ptr<FlutterView> SharedToolbarEngine::CreateView(
   return result;
 }
 
-void SharedToolbarEngine::RemoveView(int64_t view_id) {
+void TitleBarViews::RemoveView(int64_t view_id) {
   views_.erase(view_id);
   NotifyViewsChanged();
 }
 
-flutter::EncodableList SharedToolbarEngine::GetViews() const {
+flutter::EncodableList TitleBarViews::GetViews() const {
   flutter::EncodableList result;
   for (const auto& entry : views_) {
     result.emplace_back(entry.second);
@@ -156,15 +131,15 @@ flutter::EncodableList SharedToolbarEngine::GetViews() const {
   return result;
 }
 
-void SharedToolbarEngine::NotifyViewsChanged() {
+void TitleBarViews::NotifyViewsChanged() {
   channel_->InvokeMethod("viewsChanged", nullptr);
 }
 
-void SharedToolbarEngine::ReloadSystemFonts() {
+void TitleBarViews::ReloadSystemFonts() {
   FlutterDesktopEngineReloadSystemFonts(engine_);
 }
 
-FlutterView::FlutterView(SharedToolbarEngine* owner,
+FlutterView::FlutterView(TitleBarViews* owner,
                          FlutterDesktopViewControllerRef controller, int64_t view_id)
     : owner_(owner), controller_(controller), view_id_(view_id) {}
 

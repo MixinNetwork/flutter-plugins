@@ -1,3 +1,3 @@
-// Set only by the primary isolate's entrypoint hook. A separate toolbar isolate
-// runs that same entrypoint; the application's main/runApp contract is unchanged.
-bool titleBarHookRegistered = false;
+// Set while the multi-view application root is mounted. Native initialization
+// must complete before a browser requests a view on the application engine.
+Future<void>? titleBarInitialization;

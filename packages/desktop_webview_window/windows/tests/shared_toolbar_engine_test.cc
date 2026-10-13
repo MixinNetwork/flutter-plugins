@@ -3,6 +3,7 @@
 #include "../flutter_view.h"
 
 #include <flutter/method_result_functions.h>
+#include <flutter/plugin_registrar_windows.h>
 #include <flutter/standard_method_codec.h>
 #include "flutter/shell/platform/windows/flutter_windows_internal.h"
 
@@ -75,22 +76,28 @@ int ShowWindow(HWND, int command) { assert(command == SW_HIDE); return 0; }
 
 HMODULE GetModuleHandleW(const wchar_t*) { return reinterpret_cast<HMODULE>(1); }
 FARPROC GetProcAddress(HMODULE, const char* name) {
-  assert(std::strcmp(name, "FlutterDesktopEngineCreateViewController") == 0);
   if (!has_borrowed_api) return nullptr;
-  auto function = &FlutterDesktopEngineCreateViewController;
-  FARPROC result;
-  static_assert(sizeof(function) == sizeof(result));
-  std::memcpy(&result, &function, sizeof(result));
+  FARPROC result = nullptr;
+  if (std::strcmp(name, "FlutterDesktopEngineCreateViewController") == 0) {
+    auto function = &FlutterDesktopEngineCreateViewController;
+    std::memcpy(&result, &function, sizeof(result));
+  } else {
+    assert(std::strcmp(name, "FlutterDesktopEngineForId") == 0);
+    auto function = &FlutterDesktopEngineForId;
+    std::memcpy(&result, &function, sizeof(result));
+  }
   return result;
 }
 
 extern "C" {
+FlutterDesktopEngineRef FlutterDesktopEngineForId(int64_t id) {
+  assert(id == 1234);
+  return last_engine;
+}
 FlutterDesktopEngineRef FlutterDesktopEngineCreate(const FlutterDesktopEngineProperties* props) {
-  assert(props->dart_entrypoint_argc == 2);
-  assert(std::strcmp(props->dart_entrypoint_argv[0], "web_view_title_bar") == 0);
-  assert(std::strcmp(props->dart_entrypoint_argv[1], "shared") == 0);
   ++engines_created;
-  return last_engine = new FlutterDesktopEngine;
+  assert(false && "The plugin must not create an engine");
+  return nullptr;
 }
 bool FlutterDesktopEngineDestroy(FlutterDesktopEngineRef engine) {
   assert(engine->views.empty());
@@ -109,7 +116,7 @@ FlutterDesktopViewControllerRef FlutterDesktopEngineCreateViewController(
     assert(props->width == 800 && props->height == 50);
   }
   assert(engine->registrar.messenger.handlers.count("desktop_webview_window/titlebars"));
-  assert(engine->registrar.messenger.handlers.count("webview_message/client_channel"));
+  assert(!engine->registrar.messenger.handlers.count("webview_message/client_channel"));
   if (std::exchange(fail_next_view, false)) return nullptr;
   const auto id = engine->next_view_id++;
   engine->views.insert(id);
@@ -190,41 +197,47 @@ void FlutterDesktopTextureRegistrarUnregisterExternalTexture(FlutterDesktopTextu
 }  // extern "C"
 
 int main() {
+  // The runner has already created and started the application engine/view 0.
+  FlutterDesktopEngine application_engine;
+  application_engine.views.insert(0);
+  application_engine.next_view_id = 1;
+  last_engine = &application_engine;
+  flutter::PluginRegistrarWindows registrar(&application_engine.registrar);
   std::string error;
   {
-    webview_window::SharedToolbarEngine owner;
-    assert(engines_created == 0);  // A hidden-titlebar-only app remains engine-free.
-    has_borrowed_api = false;
+    webview_window::TitleBarViews owner(registrar.messenger());
     assert(!owner.CreateView(0, 0, 800, 50, &error));
-    assert(error.find("FlutterDesktopEngineCreateViewController") != std::string::npos);
-    assert(engines_created == 0);
+    has_borrowed_api = false;
+    assert(!owner.Initialize(1234, &error));
     has_borrowed_api = true;
+    assert(owner.Initialize(1234, &error));
     auto first = owner.CreateView(7, 3, 800, 50, &error);
     auto second = owner.CreateView(42, 5, 800, 50, &error);
     assert(first && second);
-    assert(engines_created == 1 && clients_registered == 1);
+    assert(engines_created == 0 && clients_registered == 0);
     assert(first->GetViewId() > 0 && second->GetViewId() > 0);
-    assert(first->GetViewId() != 7 && second->GetViewId() != 42);
     assert(first->GetViewId() != second->GetViewId());
     auto views = Snapshot();
     assert(views.size() == 2);
     assert(Field(views[0], "viewId") == first->GetViewId());
     assert(Field(views[0], "webViewId") == 7 && Field(views[0], "titleBarTopPadding") == 3);
-    first.reset();  // Closing the first-created view must not own the engine.
+    first.reset();
     assert(engines_destroyed == 0 && Snapshot().size() == 1);
     assert(Field(Snapshot()[0], "webViewId") == 42);
     fail_next_view = true;
     assert(!owner.CreateView(50, 0, 800, 50, &error));
     assert(Snapshot().size() == 1 && engines_destroyed == 0);
     second.reset();
-    assert(Snapshot().empty() && engines_destroyed == 0);
-    assert(last_engine->views == std::set<int64_t>{0});
+    assert(Snapshot().empty());
+    assert(application_engine.views == std::set<int64_t>{0});
     auto reopened = owner.CreateView(99, 0, 800, 50, &error);
-    assert(reopened && engines_created == 1 && clients_registered == 1);
+    assert(reopened && engines_created == 0);
     assert(Field(Snapshot()[0], "webViewId") == 99);
-    assert(last_engine->registrar.messenger.notifications.size() == 5);
     reopened.reset();
   }
-  assert(engines_created == 1 && engines_destroyed == 1 && controllers_destroyed == 4);
-  std::cout << "Shared toolbar engine ownership and routing tests passed.\n";
+  assert(engines_created == 0 && engines_destroyed == 0);
+  assert(controllers_destroyed == 3);
+  assert(application_engine.views == std::set<int64_t>{0});
+  assert(application_engine.registrar.messenger.handlers.empty());
+  std::cout << "Application engine ownership and titlebar routing tests passed.\n";
 }

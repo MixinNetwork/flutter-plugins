@@ -27,11 +27,11 @@ the example on Windows with the target Flutter version and WebView2 installed:
 
 1. Open at least three windows and interact with their independent toolbars
 2. Close the first-created window, then another, and verify the survivor works
-3. Close all windows and reopen several; verify one extra toolbar engine only
+3. Close all windows and reopen several; verify the original application engine and view 0 remain alive
 4. Close a window immediately while WebView2 is initializing, then repeat
 5. Close during a pending URL-decision callback and verify no late navigation
 6. Exercise `clearAll`, minimize/restore, move across DPI displays, resize only
    vertically, and open maximized
-7. Omit the `runWebViewTitleBarWidget` entrypoint hook, then separately test
-   non-positive `titleBarHeight`; verify no toolbar engine/view is started and the WebView occupies the full client area
+7. Use ordinary `runApp` without `WebviewWindowApp`, then separately test
+   non-positive `titleBarHeight`; verify no toolbar view is added and the WebView occupies the full client area
 8. Run both debug and release builds and check clean application shutdown

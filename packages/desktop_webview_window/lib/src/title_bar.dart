@@ -1,94 +1,77 @@
 import 'dart:async';
+import 'dart:ui' show FlutterView, PlatformDispatcher;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'title_bar_runtime.dart';
 
-import 'message_channel.dart';
-import 'title_bar_state.dart';
+import 'title_bar_messages.dart';
 
-const _channel = ClientMessageChannel();
+const _channel = TitleBarMessages();
 
-/// runs the title bar
-/// title bar is a widget that displays the title of the webview window
-/// return true if the args is matchs the title bar
+/// Runs the application and all browser titlebars on the current engine.
 ///
-/// Call this from main before creating any webview windows to enable their
-/// title-bar controls.
-///
-/// Without this hook, web content fills the window.
-///
-/// [builder] custom TitleBar widget builder.
-/// can use [TitleBarWebViewController] to controller the WebView
-/// use [TitleBarWebViewState] to triger the title bar status.
-///
-bool runWebViewTitleBarWidget(
-  List<String> args, {
-  WidgetBuilder? builder,
-  Color? backgroundColor,
+/// Use this instead of `runApp`. On macOS, the runner must create its main
+/// controller with `DesktopWebviewWindowPlugin.createMainViewController()`.
+void runWebviewWindowApp(
+  Widget app, {
+  WidgetBuilder? titleBarBuilder,
+  Color? titleBarBackgroundColor,
 }) {
-  titleBarInitialized = true;
-  if (args.isEmpty || args[0] != 'web_view_title_bar') {
-    titleBarHookRegistered = true;
-    return false;
-  }
-  if (args.length < 2) {
-    return false;
-  }
-  if (args[1] == 'shared') {
-    WidgetsFlutterBinding.ensureInitialized();
-    runWidget(
-      SharedTitleBarViews(
-        builder: builder ?? _defaultTitleBar,
-        backgroundColor: backgroundColor,
-      ),
-    );
-    return true;
-  }
-  final webViewId = int.tryParse(args[1]);
-  if (webViewId == null) {
-    return false;
-  }
-  final titleBarTopPadding = int.tryParse(args.length > 2 ? args[2] : '0') ?? 0;
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(
-    _TitleBarApp(
-      webViewId: webViewId,
-      titleBarTopPadding: titleBarTopPadding,
-      backgroundColor: backgroundColor,
-      builder: builder ?? _defaultTitleBar,
-    ),
-  );
-  return true;
+  runWidget(WebviewWindowApp(
+    titleBarBuilder: titleBarBuilder,
+    titleBarBackgroundColor: titleBarBackgroundColor,
+    child: app,
+  ));
 }
 
-/// Internal root for the dedicated toolbar isolate. Browser IDs are not view IDs.
-@visibleForTesting
-class SharedTitleBarViews extends StatefulWidget {
-  const SharedTitleBarViews({
+/// Multi-view root containing the main application and its browser titlebars.
+/// Mount with `runWidget`, not inside `runApp` or another Flutter view.
+class WebviewWindowApp extends StatefulWidget {
+  const WebviewWindowApp({
     super.key,
-    required this.builder,
-    this.backgroundColor,
+    required this.child,
+    this.titleBarBuilder,
+    this.titleBarBackgroundColor,
   });
 
-  final WidgetBuilder builder;
-  final Color? backgroundColor;
+  final Widget child;
+  final WidgetBuilder? titleBarBuilder;
+  final Color? titleBarBackgroundColor;
 
   @override
-  State<SharedTitleBarViews> createState() => _SharedTitleBarViewsState();
+  State<WebviewWindowApp> createState() => _WebviewWindowAppState();
 }
 
-class _SharedTitleBarViewsState extends State<SharedTitleBarViews>
+class _WebviewWindowAppState extends State<WebviewWindowApp>
     with WidgetsBindingObserver {
   static const _channel = MethodChannel('desktop_webview_window/titlebars');
   Map<int, Map<Object?, Object?>> _views = {};
   bool _refreshing = false;
   bool _refreshAgain = false;
+  int? _mainViewId;
+  late final Future<void> _initialization;
 
   @override
   void initState() {
     super.initState();
+    final dispatcher = WidgetsBinding.instance.platformDispatcher;
+    _initialization = _channel.invokeMethod<int>('initialize', {
+      // Test bindings may simulate engine IDs; native borrowing needs the real ID.
+      'engineId': PlatformDispatcher.instance.engineId,
+      'mainViewId': dispatcher.implicitView?.viewId,
+    }).then((mainViewId) {
+      if (mainViewId == null) {
+        throw PlatformException(
+            code: 'main_view_missing',
+            message: 'The native main view is unavailable');
+      }
+      if (!mounted) return;
+      setState(() => _mainViewId = mainViewId);
+    });
+    titleBarInitialization = _initialization;
     WidgetsBinding.instance.addObserver(this);
     _channel.setMethodCallHandler((call) async {
       if (call.method == 'viewsChanged') {
@@ -105,6 +88,7 @@ class _SharedTitleBarViewsState extends State<SharedTitleBarViews>
     }
     _refreshing = true;
     try {
+      await _initialization;
       do {
         _refreshAgain = false;
         final snapshot = await _channel.invokeListMethod<dynamic>('getViews');
@@ -138,6 +122,9 @@ class _SharedTitleBarViewsState extends State<SharedTitleBarViews>
 
   @override
   void dispose() {
+    if (identical(titleBarInitialization, _initialization)) {
+      titleBarInitialization = null;
+    }
     WidgetsBinding.instance.removeObserver(this);
     _channel.setMethodCallHandler(null);
     super.dispose();
@@ -145,22 +132,33 @@ class _SharedTitleBarViewsState extends State<SharedTitleBarViews>
 
   @override
   Widget build(BuildContext context) {
+    FlutterView? mainView;
+    for (final view in WidgetsBinding.instance.platformDispatcher.views) {
+      if (view.viewId == _mainViewId) mainView = view;
+    }
     return ViewCollection(
       views: [
+        if (mainView != null)
+          View(
+            key: ValueKey(mainView.viewId),
+            view: mainView,
+            child: widget.child,
+          ),
         for (final view in WidgetsBinding.instance.platformDispatcher.views)
-          if (_views[view.viewId] case final descriptor?)
-            View(
-              key: ValueKey(view.viewId),
-              view: view,
-              child: _TitleBarApp(
-                key: ValueKey(descriptor['webViewId']),
-                webViewId: descriptor['webViewId'] as int,
-                titleBarTopPadding:
-                    descriptor['titleBarTopPadding'] as int? ?? 0,
-                builder: widget.builder,
-                backgroundColor: widget.backgroundColor,
+          if (view.viewId != _mainViewId)
+            if (_views[view.viewId] case final descriptor?)
+              View(
+                key: ValueKey(view.viewId),
+                view: view,
+                child: _TitleBarApp(
+                  key: ValueKey(descriptor['webViewId']),
+                  webViewId: descriptor['webViewId'] as int,
+                  titleBarTopPadding:
+                      descriptor['titleBarTopPadding'] as int? ?? 0,
+                  builder: widget.titleBarBuilder ?? _defaultTitleBar,
+                  backgroundColor: widget.titleBarBackgroundColor,
+                ),
               ),
-            ),
       ],
     );
   }
@@ -171,7 +169,7 @@ mixin TitleBarWebViewController {
     final state = context.findAncestorStateOfType<_TitleBarAppState>();
     assert(
       state != null,
-      'only can find TitleBarWebViewController in widget which run from runWebViewTitleBarWidget',
+      'TitleBarWebViewController requires a titlebar inside WebviewWindowApp',
     );
     return state!;
   }

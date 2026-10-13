@@ -36,13 +36,13 @@ WebviewWindow::WebviewWindow(
     int64_t window_id,
     int title_bar_height,
     int title_bar_top_padding,
-    webview_window::SharedToolbarEngine* toolbar_engine,
+    webview_window::TitleBarViews* title_bar_views,
     std::function<void()> on_close_callback
 ) : method_channel_(std::move(method_channel)),
     hwnd_(),
     window_id_(window_id),
     on_close_callback_(std::move(on_close_callback)),
-    toolbar_engine_(toolbar_engine),
+    title_bar_views_(title_bar_views),
     title_bar_top_padding_(title_bar_top_padding),
     title_bar_height_(title_bar_height) {
 
@@ -65,7 +65,7 @@ void WebviewWindow::CreateAndShow(const std::wstring &title, int height, int wid
                                   const std::wstring &userDataFolder,
                                   int windowPosX, int windowPosY, bool useWindowPositionAndSize,
                                   bool openMaximized, bool openHidden,
-                                  bool denyCameraAndMicrophone,
+                                  bool denyCameraAndMicrophone, bool showSystemTitleBar,
                                   CreateCallback callback) {
 
   // Keep this alive through synchronous failure callbacks and window messages.
@@ -76,7 +76,8 @@ void WebviewWindow::CreateAndShow(const std::wstring &title, int height, int wid
   const POINT target_point = {static_cast<LONG>(10), static_cast<LONG>(10)};
   HMONITOR monitor = MonitorFromPoint(target_point, MONITOR_DEFAULTTONEAREST);
   const double scale_factor = FlutterDesktopGetDpiForMonitor(monitor) / 96.0;
-  DWORD style = WS_OVERLAPPEDWINDOW;
+  DWORD style = showSystemTitleBar ? WS_OVERLAPPEDWINDOW :
+      WS_POPUP | WS_THICKFRAME | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX;
   if (openMaximized) {
     style |= WS_MAXIMIZE;
   }
@@ -101,7 +102,7 @@ void WebviewWindow::CreateAndShow(const std::wstring &title, int height, int wid
   const int title_bar_height = Scale(title_bar_height_, scale_factor);
   if (title_bar_height_ > 0) {
     std::string error;
-    flutter_action_bar_ = toolbar_engine_->CreateView(
+    flutter_action_bar_ = title_bar_views_->CreateView(
         window_id_, title_bar_top_padding_, bounds.right - bounds.left,
         title_bar_height, &error);
     if (!flutter_action_bar_) {

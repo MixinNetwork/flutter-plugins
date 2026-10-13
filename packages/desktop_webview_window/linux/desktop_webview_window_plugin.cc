@@ -9,7 +9,6 @@
 #include <memory>
 #include <vector>
 
-#include "message_channel_plugin.h"
 #include "webview_window.h"
 
 namespace {
@@ -28,7 +27,7 @@ struct _WebviewWindowPlugin {
   std::map<int64_t, std::unique_ptr<WebviewWindow>> *windows;
   // The app's view, used to find the window webview windows belong to.
   FlView *view;
-  TitleBarEngine *title_bar_engine;
+  TitleBarViews *title_bar_views;
 };
 
 G_DEFINE_TYPE(WebviewWindowPlugin, webview_window_plugin, g_object_get_type())
@@ -59,6 +58,9 @@ static void webview_window_plugin_handle_method_call(
         parent = GTK_WINDOW(toplevel);
       }
     }
+    auto *system_title_bar = fl_value_lookup_string(args, "showSystemTitleBar");
+    const bool show_system_title_bar = system_title_bar == nullptr ||
+        fl_value_get_bool(system_title_bar);
     auto *use_title_bar = fl_value_lookup_string(args, "useTitleBar");
     if ((use_title_bar != nullptr &&
          fl_value_get_type(use_title_bar) == FL_VALUE_TYPE_BOOL &&
@@ -68,15 +70,7 @@ static void webview_window_plugin_handle_method_call(
     auto *padding = fl_value_lookup_string(args, "titleBarTopPadding");
     const int title_bar_top_padding =
         padding == nullptr ? 0 : fl_value_get_int(padding);
-    auto *shared = fl_value_lookup_string(args, "useSharedTitleBarEngineLinux");
-    // Opt-in only: the stock Linux GLX backend has a reproducible rapid
-    // remove/recreate crash. Retaining the implicit view does not fix it.
-    const bool use_shared_engine = title_bar_height > 0 && shared != nullptr &&
-        fl_value_get_type(shared) == FL_VALUE_TYPE_BOOL &&
-        fl_value_get_bool(shared);
-    if (use_shared_engine && self->title_bar_engine == nullptr) {
-      self->title_bar_engine = new TitleBarEngine();
-    }
+
 
     auto window_id = next_window_id_;
     auto webview = std::make_unique<WebviewWindow>(
@@ -85,7 +79,7 @@ static void webview_window_plugin_handle_method_call(
           self->windows->erase(window_id);
         },
         title, width, height, title_bar_height, title_bar_top_padding,
-        use_shared_engine ? self->title_bar_engine : nullptr, parent);
+        self->title_bar_views, parent, show_system_title_bar);
     self->windows->insert({window_id, std::move(webview)});
     next_window_id_++;
     g_autoptr(FlValue) result = fl_value_new_int(window_id);
@@ -338,8 +332,8 @@ static void webview_window_plugin_dispose(GObject *object) {
   // Windows must release their views before the shared host is destroyed.
   delete self->windows;
   self->windows = nullptr;
-  delete self->title_bar_engine;
-  self->title_bar_engine = nullptr;
+  delete self->title_bar_views;
+  self->title_bar_views = nullptr;
   g_clear_object(&self->method_channel);
   G_OBJECT_CLASS(webview_window_plugin_parent_class)->dispose(object);
 }
@@ -360,7 +354,6 @@ static void method_call_cb(FlMethodChannel *channel, FlMethodCall *method_call,
 
 void desktop_webview_window_plugin_register_with_registrar(
     FlPluginRegistrar *registrar) {
-  client_message_channel_plugin_register_with_registrar(registrar);
 
   WebviewWindowPlugin *plugin = WEBVIEW_WINDOW_PLUGIN(
       g_object_new(webview_window_plugin_get_type(), nullptr));
@@ -372,6 +365,7 @@ void desktop_webview_window_plugin_register_with_registrar(
   g_object_ref(channel);
   plugin->method_channel = channel;
   plugin->view = fl_plugin_registrar_get_view(registrar);
+  plugin->title_bar_views = new TitleBarViews(plugin->view);
   fl_method_channel_set_method_call_handler(
       channel, method_call_cb, g_object_ref(plugin), g_object_unref);
 

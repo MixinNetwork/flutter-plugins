@@ -1,14 +1,16 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' show PlatformDispatcher;
 
 import 'package:desktop_webview_window/desktop_webview_window.dart';
-import 'package:desktop_webview_window/src/message_channel.dart';
+import 'package:desktop_webview_window/src/title_bar_messages.dart';
+import 'package:desktop_webview_window/src/title_bar_runtime.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-const _bridge = ClientMessageChannel();
+const _bridge = TitleBarMessages();
 const _native = MethodChannel('webview_window');
 const _geometry = MethodChannel('webview_example/native_test');
 
@@ -16,11 +18,70 @@ Widget buildSharedEngineTestToolbar(BuildContext context) =>
     const _TestToolbar();
 
 void registerSharedEngineTests() {
+  testWidgets('system titlebar visibility leaves no reserved space when hidden',
+      (tester) async {
+    await tester.pumpWidget(
+      const WebviewWindowApp(
+        titleBarBuilder: buildSharedEngineTestToolbar,
+        child: MaterialApp(home: SizedBox.shrink()),
+      ),
+      wrapWithView: false,
+    );
+    await tester.runAsync(() async {
+      await titleBarInitialization;
+      for (final system in [true, false]) {
+        for (final toolbar in [true, false]) {
+          final title = 'Titlebar visibility $system $toolbar';
+          final view = await WebviewWindow.create(
+            configuration: CreateConfiguration(
+              title: title,
+              showSystemTitleBar: system,
+              titleBarHeight: toolbar ? 40 : 0,
+              // Deliberately keep macOS padding: native code must discard it
+              // when the system titlebar is hidden.
+              titleBarTopPadding: 24,
+            ),
+          );
+          try {
+            final geometry = (await _geometry.invokeMapMethod<String, dynamic>(
+              'inspect',
+              {'title': title},
+            ))!;
+            expect(geometry['titled'], system);
+            expect(geometry['closeButtonVisible'], system);
+            expect(geometry['canBecomeKey'], isTrue);
+            if (system && !toolbar) {
+              expect(geometry['fullSizeContentView'], isFalse);
+              expect(geometry['transparentTitlebar'], isFalse);
+              expect(geometry['webTopInWindow'],
+                  lessThanOrEqualTo(geometry['contentLayoutTop'] as num));
+            }
+            expect(geometry['webWidth'], geometry['contentWidth']);
+            final reserved = (geometry['contentHeight'] as num) -
+                (geometry['webHeight'] as num);
+            expect(reserved, toolbar ? (system ? 64 : 40) : 0);
+          } finally {
+            view.close();
+            await view.onClose.timeout(const Duration(seconds: 10));
+          }
+        }
+      }
+    });
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets('native shared titlebars route and survive close/recreate', (
     tester,
   ) async {
-    await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
+    await tester.pumpWidget(
+      const WebviewWindowApp(
+        titleBarBuilder: buildSharedEngineTestToolbar,
+        child: MaterialApp(home: SizedBox.shrink()),
+      ),
+      wrapWithView: false,
+    );
     await tester.runAsync(() async {
+      await titleBarInitialization;
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       server.listen((request) async {
         request.response.headers.contentType = ContentType.html;
@@ -118,11 +179,12 @@ void registerSharedEngineTests() {
       }
 
       try {
-        // Zero-height creates no toolbar engine before the first real toolbar.
-        expect((await nativeState())['engine'], isNull);
+        // The main engine is already running; a bare browser adds no Flutter view.
+        final applicationEngine = PlatformDispatcher.instance.engineId;
+        expect((await nativeState())['engine'], applicationEngine);
         final bare = await create(toolbar: false);
         _bridge.addMessageHandler(receive);
-        expect((await nativeState())['engine'], isNull);
+        expect((await nativeState())['views'], isEmpty);
         bare.launch(url('/bare'));
         await waitFor(bare, 'document.title', '/bare');
         await close(bare);
@@ -135,9 +197,11 @@ void registerSharedEngineTests() {
         await waitFor(second, 'document.title', '/second');
         final initial = await nativeState();
         final engine = initial['engine'];
-        expect(engine, isNotNull);
+        expect(engine, applicationEngine);
         final descriptors = (initial['views'] as List).cast<Map>();
         expect(descriptors, hasLength(2));
+        expect(descriptors.map((d) => d['viewId']),
+            isNot(contains(initial['mainViewId'])));
         final firstBar = descriptors[0];
         final secondBar = descriptors[1];
         expect(firstBar['viewId'], isNot(secondBar['viewId']));
@@ -187,7 +251,7 @@ void registerSharedEngineTests() {
         );
         expect((await nativeState())['views'], hasLength(2));
 
-        // Closing through the toolbar exercises its real cross-engine route.
+        // Closing through the toolbar exercises the same-isolate command route.
         await toolbar(firstBar, 'close');
         await first.onClose.timeout(const Duration(seconds: 10));
         open.remove(first);

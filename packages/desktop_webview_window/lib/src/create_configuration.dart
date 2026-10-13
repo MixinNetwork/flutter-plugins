@@ -14,11 +14,14 @@ class CreateConfiguration {
   /// Set to zero to omit Flutter toolbar UI and its engine entirely.
   final int titleBarHeight;
 
-  /// Experimental Linux shared-engine rendering. Disabled by default because
-  /// rapid view destruction/recreation can fail in the stock GLX renderer.
-  final bool useSharedTitleBarEngineLinux;
-
   final int titleBarTopPadding;
+
+  /// Show the system title bar and window buttons on macOS, Windows and Linux.
+  ///
+  /// When false, macOS also omits [titleBarTopPadding]. The Flutter toolbar is
+  /// controlled separately by [titleBarHeight]. Provide your own window controls
+  /// and drag region when hiding the system title bar.
+  final bool showSystemTitleBar;
 
   final String userDataFolderWindows;
 
@@ -48,8 +51,8 @@ class CreateConfiguration {
     this.windowPosY = 0,
     this.title = "",
     this.titleBarHeight = 40,
-    this.useSharedTitleBarEngineLinux = false,
     this.titleBarTopPadding = 0,
+    this.showSystemTitleBar = true,
     this.userDataFolderWindows = 'webview_window_WebView2',
     this.useWindowPositionAndSize = false,
     this.openMaximized = false,
@@ -68,8 +71,8 @@ class CreateConfiguration {
         "windowPosY": windowPosY,
         "title": title,
         "titleBarHeight": titleBarHeight,
-        "useSharedTitleBarEngineLinux": useSharedTitleBarEngineLinux,
         "titleBarTopPadding": titleBarTopPadding,
+        "showSystemTitleBar": showSystemTitleBar,
         "userDataFolderWindows": userDataFolderWindows,
         "useWindowPositionAndSize": useWindowPositionAndSize,
         "openMaximized": openMaximized,

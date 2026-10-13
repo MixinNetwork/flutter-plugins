@@ -33,7 +33,7 @@ class WebviewWindow : public std::enable_shared_from_this<WebviewWindow> {
                 int64_t window_id,
                 int title_bar_height,
                 int title_bar_top_padding,
-                webview_window::SharedToolbarEngine* toolbar_engine,
+                webview_window::TitleBarViews* title_bar_views,
                 std::function<void()> on_close_callback);
 
   virtual ~WebviewWindow();
@@ -44,7 +44,8 @@ class WebviewWindow : public std::enable_shared_from_this<WebviewWindow> {
                      const std::wstring &userDataFolder,
                      int windowPosX, int windowPosY, bool useWindowPositionAndSize,
                      bool openMaximized, bool openHidden,
-                     bool denyCameraAndMicrophone, CreateCallback callback);
+                     bool denyCameraAndMicrophone, bool showSystemTitleBar,
+                     CreateCallback callback);
 
 
   // OS callback called by message pump. Handles the WM_NCCREATE message which
@@ -90,7 +91,7 @@ class WebviewWindow : public std::enable_shared_from_this<WebviewWindow> {
 
   std::shared_ptr<webview_window::WebView> web_view_;
 
-  webview_window::SharedToolbarEngine* toolbar_engine_;
+  webview_window::TitleBarViews* title_bar_views_;
 
   CreateCallback create_callback_;
 

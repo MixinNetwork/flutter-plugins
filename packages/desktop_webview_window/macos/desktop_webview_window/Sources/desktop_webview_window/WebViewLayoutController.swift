@@ -12,7 +12,7 @@ import WebKit
 class WebViewLayoutController: NSViewController {
   private var titleBarController: FlutterViewController?
 
-  private weak var titleBarEngine: SharedTitleBarEngine?
+  private weak var titleBarViews: TitleBarViews?
 
   private lazy var webView: WKWebView = {
     WKWebView()
@@ -33,12 +33,12 @@ class WebViewLayoutController: NSViewController {
   private let titleBarHeight: Int
 
   init(methodChannel: FlutterMethodChannel, viewId: Int64, titleBarHeight: Int,
-       titleBarController: FlutterViewController?, titleBarEngine: SharedTitleBarEngine?) {
+       titleBarController: FlutterViewController?, titleBarViews: TitleBarViews?) {
     self.viewId = viewId
     self.methodChannel = methodChannel
     self.titleBarHeight = titleBarHeight
     self.titleBarController = titleBarController
-    self.titleBarEngine = titleBarEngine
+    self.titleBarViews = titleBarViews
     #if SWIFT_PACKAGE
     // SwiftPM places resources in a per-module bundle exposed as `Bundle.module`.
     super.init(nibName: "WebViewLayoutController", bundle: Bundle.module)
@@ -177,10 +177,10 @@ class WebViewLayoutController: NSViewController {
         titleBarController.view.removeFromSuperview()
       }
       titleBarController.removeFromParent()
-      titleBarEngine?.removeView(titleBarController)
+      titleBarViews?.removeView(titleBarController)
     }
     titleBarController = nil
-    titleBarEngine = nil
+    titleBarViews = nil
   }
 
   func reload() {

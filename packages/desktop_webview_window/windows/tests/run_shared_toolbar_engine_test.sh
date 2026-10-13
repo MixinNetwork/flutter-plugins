@@ -14,7 +14,7 @@ trap 'rm -rf "$build_dir"' EXIT
   -isystem "$platform/common/client_wrapper/include" \
   -isystem "$platform/common/client_wrapper/include/flutter" \
   "$test_dir/shared_toolbar_engine_test.cc" \
-  "$test_dir/../flutter_view.cc" "$test_dir/../message_channel_plugin.cc" \
+  "$test_dir/../flutter_view.cc" \
   "$platform/common/client_wrapper/core_implementations.cc" \
   "$platform/common/client_wrapper/plugin_registrar.cc" \
   "$platform/common/client_wrapper/standard_codec.cc" \

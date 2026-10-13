@@ -17,8 +17,6 @@ add_library(${PLUGIN_NAME} SHARED
         "flutter_view.cc"
         "web_view.h"
         "web_view.cc"
-        "message_channel_plugin.h"
-        "message_channel_plugin.cc"
         "web_view_window_plugin.h"
         "web_view_window_plugin.cc"
         )

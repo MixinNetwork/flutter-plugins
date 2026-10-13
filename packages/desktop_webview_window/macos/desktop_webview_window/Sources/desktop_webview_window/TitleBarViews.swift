@@ -1,11 +1,11 @@
 import Cocoa
 import FlutterMacOS
 
-/// Owns the one titlebar isolate. Windows own their controllers, never the engine.
-final class SharedTitleBarEngine {
+/// Tracks browser views on the application-owned engine.
+final class TitleBarViews {
   enum StartupError: Error {
     case multiViewUnavailable
-    case engineRunFailed
+    case mainViewNotConfigured
   }
 
   private struct Registration {
@@ -14,7 +14,10 @@ final class SharedTitleBarEngine {
     let titleBarTopPadding: Int
   }
 
-  private let engine: FlutterEngine
+  private weak var engine: FlutterEngine?
+  private var engineId: Int64?
+  private var mainViewId: Int64?
+  private static let mainControllers = NSMapTable<AnyObject, FlutterViewController>.weakToWeakObjects()
   private let channel: FlutterMethodChannel
   private var registrations: [Int64: Registration] = [:]
   private var isShutdown = false
@@ -25,64 +28,64 @@ final class SharedTitleBarEngine {
   private static let enableMultiViewSelector = NSSelectorFromString("enableMultiView")
   private static let removeViewControllerSelector = NSSelectorFromString("removeViewController:")
 
-  init() throws {
-    let project = FlutterDartProject()
-    project.dartEntrypointArguments = ["web_view_title_bar", "shared"]
-    engine = FlutterEngine(
-      name: "desktop_webview_window.titlebars",
-      project: project,
-      allowHeadlessExecution: true)
-    channel = FlutterMethodChannel(
-      name: "desktop_webview_window/titlebars",
-      binaryMessenger: engine.binaryMessenger)
-
-    guard engine.responds(to: Self.enableMultiViewSelector),
-          engine.responds(to: Self.removeViewControllerSelector) else {
-      throw StartupError.multiViewUnavailable
+  init(messenger: FlutterBinaryMessenger) {
+    if let controller = Self.mainControllers.object(forKey: messenger as AnyObject) {
+      engine = controller.engine
+      mainViewId = controller.viewIdentifier
+      engineId = Int64(Int(bitPattern: Unmanaged.passUnretained(controller.engine).toOpaque()))
     }
-
-    // Multi-view must be enabled before the first controller is constructed.
-    // A typed IMP is used because these Objective-C methods return void.
-    typealias EnableMultiView = @convention(c) (AnyObject, Selector) -> Void
-    let enableMultiView = unsafeBitCast(
-      engine.method(for: Self.enableMultiViewSelector), to: EnableMultiView.self)
-    enableMultiView(engine, Self.enableMultiViewSelector)
-
+    channel = FlutterMethodChannel(
+      name: "desktop_webview_window/titlebars", binaryMessenger: messenger)
     channel.setMethodCallHandler { [weak self] call, result in
       guard let self = self, !self.isShutdown else {
-        result(FlutterError(code: "titlebar_engine_closed", message: "The titlebar engine is closed", details: nil))
+        result(FlutterError(code: "titlebar_views_closed", message: "The titlebar view registry is closed", details: nil))
         return
       }
       switch call.method {
+      case "initialize":
+        guard self.engine != nil, let mainViewId = self.mainViewId else {
+          result(FlutterError(code: "titlebar_multiview_unavailable", message: "Create the main controller with DesktopWebviewWindowPlugin.createMainViewController() before registering plugins", details: nil))
+          return
+        }
+        result(mainViewId)
       case "getViews":
         result(self.snapshot())
-      case "ready":
-        result(nil)
-        self.viewsChanged()
       default:
         result(FlutterMethodNotImplemented)
       }
     }
 
-    // Register the broadcast bridge once for the isolate, not once per view.
-    ClientMessageChannelPlugin.register(
-      with: engine.registrar(forPlugin: "DesktopWebviewWindowTitleBarMessages"))
+  }
 
-    // FlutterViewController.init immediately calls AddView. That requires a
-    // running engine even when the first view has not loaded yet.
-    guard engine.run(withEntrypoint: nil) else {
-      throw StartupError.engineRunFailed
+  // This is called by the runner before constructing its first controller.
+  static func createMainViewController() throws -> FlutterViewController {
+    let engine = FlutterEngine(
+      name: "desktop_webview_window.app", project: FlutterDartProject(),
+      allowHeadlessExecution: true)
+    guard engine.responds(to: enableMultiViewSelector),
+          engine.responds(to: removeViewControllerSelector) else {
+      throw StartupError.multiViewUnavailable
     }
+    typealias EnableMultiView = @convention(c) (AnyObject, Selector) -> Void
+    let enable = unsafeBitCast(engine.method(for: enableMultiViewSelector), to: EnableMultiView.self)
+    enable(engine, enableMultiViewSelector)
+    guard engine.run(withEntrypoint: nil) else {
+      throw StartupError.mainViewNotConfigured
+    }
+    let controller = FlutterViewController(engine: engine, nibName: nil, bundle: nil)
+    mainControllers.setObject(controller, forKey: engine.binaryMessenger as AnyObject)
+    return controller
   }
 
   func createView(webViewId: Int64, titleBarTopPadding: Int) -> FlutterViewController {
     precondition(!isShutdown)
+    guard let engine = engine else { preconditionFailure("Application engine is unavailable") }
     let controller = FlutterViewController(engine: engine, nibName: nil, bundle: nil)
     registrations[controller.viewIdentifier] = Registration(
       controller: controller, webViewId: webViewId,
       titleBarTopPadding: titleBarTopPadding)
     #if DEBUG
-    print("TITLEBAR_ENGINE add engine=\(ObjectIdentifier(engine)) view=\(controller.viewIdentifier) browser=\(webViewId) count=\(registrations.count)")
+    print("TITLEBAR_VIEW add engine=\(ObjectIdentifier(engine)) view=\(controller.viewIdentifier) browser=\(webViewId) count=\(registrations.count)")
     #endif
     viewsChanged()
     return controller
@@ -95,7 +98,7 @@ final class SharedTitleBarEngine {
     }
     registrations.removeValue(forKey: viewId)
     #if DEBUG
-    print("TITLEBAR_ENGINE remove engine=\(ObjectIdentifier(engine)) view=\(viewId) count=\(registrations.count)")
+    print("TITLEBAR_VIEW remove engine=\(engineId ?? 0) view=\(viewId) count=\(registrations.count)")
     #endif
     // Remove the mapping before detaching. RemoveView may pump platform messages,
     // and Dart must not rebuild a titlebar for a window that is already closing.
@@ -121,6 +124,7 @@ final class SharedTitleBarEngine {
   }
 
   private func detach(_ controller: FlutterViewController) {
+    guard let engine = engine else { return }
     typealias RemoveViewController = @convention(c) (AnyObject, Selector, AnyObject) -> Void
     let removeViewController = unsafeBitCast(
       engine.method(for: Self.removeViewControllerSelector), to: RemoveViewController.self)
@@ -129,7 +133,7 @@ final class SharedTitleBarEngine {
 
   #if DEBUG
   func debugState() -> [String: Any] {
-    ["engine": String(describing: ObjectIdentifier(engine)), "views": snapshot()]
+    ["engine": engineId as Any, "mainViewId": mainViewId as Any, "views": snapshot()]
   }
   #endif
 
@@ -142,7 +146,6 @@ final class SharedTitleBarEngine {
     for controller in controllers {
       detach(controller)
     }
-    engine.shutDownEngine()
   }
 
   deinit {

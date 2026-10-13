@@ -26,7 +26,7 @@ void WebviewWindowPlugin::RegisterWithRegistrar(
       std::make_shared<flutter::MethodChannel<flutter::EncodableValue>>(
           registrar->messenger(), "webview_window",
           &flutter::StandardMethodCodec::GetInstance());
-  auto plugin = std::make_unique<WebviewWindowPlugin>(channel);
+  auto plugin = std::make_unique<WebviewWindowPlugin>(channel, registrar->messenger());
 
   channel->SetMethodCallHandler(
       [plugin_pointer = plugin.get()](const auto &call, auto result) {
@@ -36,8 +36,9 @@ void WebviewWindowPlugin::RegisterWithRegistrar(
   registrar->AddPlugin(std::move(plugin));
 }
 
-WebviewWindowPlugin::WebviewWindowPlugin(MethodChannelPtr method_channel)
-    : method_channel_(std::move(method_channel)), windows_() {}
+WebviewWindowPlugin::WebviewWindowPlugin(
+    MethodChannelPtr method_channel, flutter::BinaryMessenger* messenger)
+    : method_channel_(std::move(method_channel)), title_bar_views_(messenger), windows_() {}
 
 WebviewWindowPlugin::~WebviewWindowPlugin() {
   method_channel_->SetMethodCallHandler(nullptr);
@@ -86,6 +87,9 @@ void WebviewWindowPlugin::HandleMethodCall(
       auto *value = std::get_if<bool>(&it->second);
       return value != nullptr && *value;
     };
+    const auto system_title_bar = arguments->find(flutter::EncodableValue("showSystemTitleBar"));
+    const bool show_system_title_bar = system_title_bar == arguments->end() ||
+        std::get<bool>(system_title_bar->second);
     auto openHidden = optional_bool("openHidden");
     auto denyCameraAndMicrophone = optional_bool("denyCameraAndMicrophone");
 
@@ -101,7 +105,7 @@ void WebviewWindowPlugin::HandleMethodCall(
     const auto window_id = next_window_id_++;
     std::weak_ptr<bool> lifetime = lifetime_;
     auto window = std::make_shared<WebviewWindow>(
-        method_channel_, window_id, toolbar_height, top_padding, &toolbar_engine_,
+        method_channel_, window_id, toolbar_height, top_padding, &title_bar_views_,
         [this, lifetime, window_id]() {
           if (!lifetime.expired()) {
             windows_.erase(window_id);
@@ -116,6 +120,7 @@ void WebviewWindowPlugin::HandleMethodCall(
         utf8_to_wide(title), int(height), int(width),
         utf8_to_wide(userDataFolder), int(windowPosX), int(windowPosY),
         useWindowPositionAndSize, openMaximized, openHidden, denyCameraAndMicrophone,
+        show_system_title_bar,
         [window_id, pending_result](bool success, const std::string& error) {
           if (success) {
             pending_result->Success(flutter::EncodableValue(window_id));

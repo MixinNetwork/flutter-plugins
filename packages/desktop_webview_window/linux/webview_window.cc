@@ -4,7 +4,6 @@
 
 #include "webview_window.h"
 #include <utility>
-#include "message_channel_plugin.h"
 #include <unordered_map>
 #include <string>
 
@@ -106,16 +105,18 @@ WebviewWindow::WebviewWindow(FlMethodChannel *method_channel, int64_t window_id,
                              std::function<void()> on_close_callback,
                              const std::string &title, int width, int height,
                              int title_bar_height, int title_bar_top_padding,
-                             TitleBarEngine *title_bar_engine, GtkWindow *parent)
+                             TitleBarViews *title_bar_views, GtkWindow *parent,
+                             bool show_system_title_bar)
     : method_channel_(method_channel),
       window_id_(window_id),
       on_close_callback_(std::move(on_close_callback)),
       default_user_agent_(),
-      title_bar_engine_(title_bar_engine) {
+      title_bar_views_(title_bar_views) {
   g_object_ref(method_channel_);
 
   javascript_cancellable_ = g_cancellable_new();
   window_ = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+  gtk_window_set_decorated(GTK_WINDOW(window_), show_system_title_bar);
   if (parent != nullptr) {
     // Declared as a child of the app window, so window managers treat it like
     // a dialog: centred over the app and kept above it on stacking ones,
@@ -140,24 +141,8 @@ WebviewWindow::WebviewWindow(FlMethodChannel *method_channel, int64_t window_id,
 
   FlView *title_bar = nullptr;
   if (title_bar_height > 0) {
-    if (title_bar_engine_ != nullptr) {
-      title_bar = title_bar_engine_->CreateView(window_id, title_bar_top_padding);
-      title_bar_view_id_ = fl_view_get_id(title_bar);
-    } else {
-      // Safe default while the experimental shared-engine GL lifecycle is
-      // unverified on supported Linux graphics stacks.
-      g_autoptr(FlDartProject) project = fl_dart_project_new();
-      g_autofree gchar *id = g_strdup_printf("%" G_GINT64_FORMAT, window_id);
-      g_autofree gchar *padding = g_strdup_printf("%d", title_bar_top_padding);
-      const char *args[] = {"web_view_title_bar", id, padding, nullptr};
-      fl_dart_project_set_dart_entrypoint_arguments(project,
-                                                    const_cast<char **>(args));
-      title_bar = fl_view_new(project);
-      g_autoptr(FlPluginRegistrar) registrar =
-          fl_plugin_registry_get_registrar_for_plugin(
-              FL_PLUGIN_REGISTRY(title_bar), "DesktopWebviewWindowPlugin");
-      client_message_channel_plugin_register_with_registrar(registrar);
-    }
+    title_bar = title_bar_views_->CreateView(window_id, title_bar_top_padding);
+    title_bar_view_id_ = fl_view_get_id(title_bar);
     g_debug("desktop_webview_window toolbar webview=%" G_GINT64_FORMAT
             " engine=%p view=%" G_GINT64_FORMAT,
             window_id, fl_view_get_engine(title_bar), fl_view_get_id(title_bar));
@@ -235,8 +220,8 @@ void WebviewWindow::DisconnectCallbacks() {
     }
     js_channel_handler_ids_.clear();
   }
-  if (title_bar_engine_ != nullptr && title_bar_view_id_ >= 0) {
-    title_bar_engine_->RemoveView(title_bar_view_id_);
+  if (title_bar_views_ != nullptr && title_bar_view_id_ >= 0) {
+    title_bar_views_->RemoveView(title_bar_view_id_);
     title_bar_view_id_ = -1;
   }
 }

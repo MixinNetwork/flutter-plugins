@@ -19,10 +19,8 @@ add_library(${PLUGIN_NAME} SHARED
         "desktop_webview_window_plugin.cc"
         webview_window.cc
         webview_window.h
-        title_bar_engine.cc
-        title_bar_engine.h
-        message_channel_plugin.h
-        message_channel_plugin.cc
+        title_bar_views.cc
+        title_bar_views.h
         )
 apply_standard_settings(${PLUGIN_NAME})
 set_target_properties(${PLUGIN_NAME} PROPERTIES

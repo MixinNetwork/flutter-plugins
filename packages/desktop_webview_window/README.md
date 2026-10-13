@@ -12,23 +12,18 @@ Show a webview window on your flutter desktop application.
 
 ## Getting Started
 
-1. To enable the optional webview title-bar controls, modify your `main` method.
+1. Run the main application and optional browser titlebars on one engine:
+
    ```dart
    import 'package:desktop_webview_window/desktop_webview_window.dart';
-   
-   void main(List<String> args) async {
-     WidgetsFlutterBinding.ensureInitialized();
-     
-     // Add this your main method.
-     // used to show a webview title bar.
-     if (runWebViewTitleBarWidget(args)) {
-       return;
-     }
-   
-     runApp(MyApp());
+
+   void main() {
+     runWebviewWindowApp(const MyApp());
    }
-   
    ```
+
+   For a custom titlebar, pass `titleBarBuilder`. Startup arguments and the old
+   `runWebViewTitleBarWidget` hook are no longer used.
 
 2. launch WebViewWindow
 
@@ -37,58 +32,53 @@ Show a webview window on your flutter desktop application.
      webview.launch("https://example.com");
    ```
 
-## Shared titlebar engine (Flutter 3.47.6 or newer)
+## One application engine (Flutter 3.47.6 or newer)
 
-Windows and macOS now create **one dedicated Flutter engine/isolate for all
-webview titlebars**, lazily when the first titlebar is needed. Your application's
-main Flutter engine remains independent. Each browser keeps its native WebView2,
-WKWebView or WebKit widget below a non-overlapping Flutter titlebar.
-`WebviewWindow.create`, `Webview` and `runWebViewTitleBarWidget` keep their existing
-calling conventions; no change from `runApp` to `runWidget` is required in your
-application. Keep the entrypoint hook above **before** application initialization
-and `runApp`. A custom `builder` is used for every titlebar in the shared isolate.
+The main application and every browser titlebar use the same Flutter engine and
+Dart isolate. `runWebviewWindowApp` replaces `runApp` with a multi-view root.
+Each browser has a separate Flutter view above its native WebView2, WKWebView or
+WebKit content. Closing a browser removes only its titlebar view.
 
-- Every titlebar has its own Flutter view ID and browser controller ID. These are
-  different namespaces; the package routes state and commands by browser ID.
-- Static variables in a custom titlebar builder are now shared across titlebars
-  on Windows/macOS. Use per-widget state for window-specific values.
-- Calling `create` without the entrypoint hook now creates a browser without a
-  Flutter titlebar instead of accidentally starting another copy of your app.
-  `CreateConfiguration(titleBarHeight: 0)` also skips titlebar engine creation.
-- Closing one browser removes only its view. The dedicated engine stays alive
-  until the owning plugin is disposed, so closing/reopening all browser windows
-  does not restart the titlebar isolate. No per-window plugins are auto-registered
-  into that isolate; this retains the old titlebar plugin-registration contract.
-- The minimum Flutter version is deliberately raised to 3.47.6. Windows uses a
-  runtime-resolved internal exported controller constructor; macOS uses guarded
-  internal multi-view activation. These are stock-engine APIs, not a custom
-  engine fork, but they are **not a stable public embedding contract**. Future
-  Flutter upgrades require native validation. Unsupported runtimes return an
-  error rather than attaching a second owning controller to the same engine.
+Application initialization runs once. There is no dedicated titlebar engine,
+startup-argument dispatch, cross-engine message bridge, or renderer fallback.
+Titlebar state and commands are delivered within the same Dart isolate. Each
+widget retains its own state; static/global variables are shared with the main
+application. A titlebar's Flutter view ID and browser ID are distinct.
 
-### Linux renderer safety
+To install inherited dependencies above both the main application and titlebars,
+use `runWidget` with `WebviewWindowApp` as the multi-view child. Dependencies
+inside `MyApp` remain scoped to the main view.
 
-Linux retains its existing **per-window titlebar engines by default**. Rapid
-secondary-view destruction/recreation reproduced `GLX BadAccess` with the stock
-OpenGL renderer in a standalone shared-engine experiment, including with Impeller
-disabled. A software-renderer pass does not establish production GPU safety.
-The existing Linux close/use-after-free bug is fixed independently of this gate.
+Using ordinary `runApp` without this root creates browsers without Flutter
+titlebars. `CreateConfiguration(titleBarHeight: 0)` also omits the titlebar.
 
-For explicitly experimental validation only:
+### macOS runner setup
 
-```dart
-final webview = await WebviewWindow.create(
-  configuration: const CreateConfiguration(
-    useSharedTitleBarEngineLinux: true,
-  ),
-);
+macOS must enable multi-view before its first controller is created. In
+`macos/Runner/MainFlutterWindow.swift`, import the plugin and replace the default
+controller construction:
+
+```swift
+import desktop_webview_window
+
+let flutterViewController = try! DesktopWebviewWindowPlugin.createMainViewController()
 ```
 
-Do not enable this flag for production until your renderer/platform has been
-validated. It does not force software rendering or hide a fallback. This change
-does not implement an embedded Flutter `WebView` widget or transparent-hole
-composition. See [validation and manual regression plan](doc/shared_titlebar_engine.md)
-for what has and has not been tested.
+Keep the existing window assignment and `RegisterGeneratedPlugins` call after
+this line. The helper creates the application's only engine and main controller.
+Windows and Linux reuse their normal runner engine without a runner change.
+
+Windows uses runtime-resolved borrowing APIs; macOS uses guarded internal
+multi-view selectors. Future Flutter upgrades require native validation.
+Legacy macOS plugins that assume an implicit controller need separate checking.
+See [design and validation](doc/shared_titlebar_engine.md).
+
+### Linux rendering
+
+Linux uses the public `fl_view_new_for_engine` API on the main application engine.
+X11/GLX rendering has related upstream failures, including
+[Flutter #186577](https://github.com/flutter/flutter/issues/186577).
+See [the Linux investigation](doc/linux_shared_titlebar_engine.md) for evidence.
 
 ## linux requirement
 
