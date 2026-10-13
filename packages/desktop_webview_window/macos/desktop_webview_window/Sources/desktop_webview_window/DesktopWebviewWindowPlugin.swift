@@ -2,12 +2,15 @@ import Cocoa
 import FlutterMacOS
 import WebKit
 
-private var viewId: Int64 = 0
+// Browser IDs remain process-wide because the message bridge spans engines.
+private var nextWebViewId: Int64 = 0
 
 public class DesktopWebviewWindowPlugin: NSObject, FlutterPlugin {
   private let methodChannel: FlutterMethodChannel
 
   private var webviews: [Int64: WebviewWindowController] = [:]
+
+  private var titleBarEngine: SharedTitleBarEngine?
 
   public init(methodChannel: FlutterMethodChannel) {
     self.methodChannel = methodChannel
@@ -23,6 +26,11 @@ public class DesktopWebviewWindowPlugin: NSObject, FlutterPlugin {
 
   public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     switch call.method {
+    #if DEBUG
+    case "debugTitleBarState":
+      result(titleBarEngine?.debugState() ?? ["views": []])
+      return
+    #endif
     case "create":
       guard let argument = call.arguments as? [String: Any?] else {
         result(FlutterError(code: "0", message: "arg is not map", details: nil))
@@ -32,18 +40,43 @@ public class DesktopWebviewWindowPlugin: NSObject, FlutterPlugin {
       let height = argument["windowHeight"] as? Int ?? 720
       let title = argument["title"] as? String ?? ""
       let titleBarHeight = argument["titleBarHeight"] as? Int ?? 50
-      let titleBarTopPadding = argument["titleBarTopPadding"] as? Int ?? 0
+      let titleBarTopPadding = max(0, argument["titleBarTopPadding"] as? Int ?? 0)
+      let useTitleBar = argument["useTitleBar"] as? Bool ?? true
+      let viewId = nextWebViewId
+      nextWebViewId += 1
+
+      var titleBarController: FlutterViewController?
+      if useTitleBar && titleBarHeight > 0 {
+        do {
+          if titleBarEngine == nil {
+            titleBarEngine = try SharedTitleBarEngine()
+          }
+          titleBarController = titleBarEngine?.createView(
+            webViewId: viewId, titleBarTopPadding: titleBarTopPadding)
+        } catch SharedTitleBarEngine.StartupError.multiViewUnavailable {
+          result(FlutterError(
+            code: "titlebar_multiview_unavailable",
+            message: "Shared titlebars require Flutter 3.47.6 or a compatible macOS engine with multi-view support",
+            details: nil))
+          return
+        } catch {
+          result(FlutterError(
+            code: "titlebar_engine_start_failed", message: "Could not start the shared titlebar engine",
+            details: nil))
+          return
+        }
+      }
 
       let controller = WebviewWindowController(
         viewId: viewId, methodChannel: methodChannel,
         width: width, height: height, title: title,
-        titleBarHeight: titleBarHeight, titleBarTopPadding: titleBarTopPadding
+        titleBarHeight: titleBarController == nil ? 0 : titleBarHeight + titleBarTopPadding,
+        titleBarController: titleBarController, titleBarEngine: titleBarEngine
       )
       controller.webviewPlugin = self
       webviews[viewId] = controller
       controller.showWindow(nil)
       result(viewId)
-      viewId += 1
       break
     case "launch":
       guard let argument = call.arguments as? [String: Any?] else {
@@ -248,10 +281,13 @@ public class DesktopWebviewWindowPlugin: NSObject, FlutterPlugin {
         return
       }
       guard let wc = webviews[viewId] else {
-        result(FlutterError(code: "0", message: "can not find webview for id: \(viewId)", details: nil))
+        // Closing an already closed window is harmless, including a duplicate
+        // request while a native close event is being delivered.
+        result(nil)
         return
       }
       wc.close()
+      result(nil)
       break
     case "evaluateJavaScript":
       guard let argument = call.arguments as? [String: Any?] else {
@@ -293,6 +329,16 @@ public class DesktopWebviewWindowPlugin: NSObject, FlutterPlugin {
   }
 
   func onWebviewWindowClose(viewId: Int64, wc: WebviewWindowController) {
+    guard webviews[viewId] === wc else { return }
     webviews.removeValue(forKey: viewId)
+  }
+
+  deinit {
+    // Controllers must detach before the one shared engine shuts down.
+    for controller in webviews.values {
+      controller.destroy()
+    }
+    webviews.removeAll()
+    titleBarEngine?.shutdown()
   }
 }

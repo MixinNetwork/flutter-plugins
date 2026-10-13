@@ -16,6 +16,7 @@ class WebviewImpl extends Webview {
   final Map<String, JavaScriptMessageHandler> _javaScriptMessageHandlers = {};
 
   bool _closed = false;
+  bool _closing = false;
 
   PromptHandler? _promptHandler;
 
@@ -35,7 +36,15 @@ class WebviewImpl extends Webview {
   Future<void> get onClose => _closeCompleter.future;
 
   void onClosed() {
+    if (_closed) return;
     _closed = true;
+    _closing = true;
+    _javaScriptMessageHandlers.clear();
+    _onWebMessageReceivedCallbacks.clear();
+    _onHistoryChanged = null;
+    _onUrlRequestCallback = null;
+    _promptHandler = null;
+    _isNavigating.value = false;
     _closeCompleter.complete();
   }
 
@@ -47,7 +56,9 @@ class WebviewImpl extends Webview {
   }
 
   String onRunJavaScriptTextInputPanelWithPrompt(
-      String prompt, String defaultText) {
+    String prompt,
+    String defaultText,
+  ) {
     assert(!_closed);
     return _promptHandler?.call(prompt, defaultText) ?? defaultText;
   }
@@ -84,7 +95,9 @@ class WebviewImpl extends Webview {
 
   @override
   void registerJavaScriptMessageHandler(
-      String name, JavaScriptMessageHandler handler) {
+    String name,
+    JavaScriptMessageHandler handler,
+  ) {
     if (!Platform.isMacOS && !Platform.isLinux) {
       return;
     }
@@ -257,10 +270,16 @@ class WebviewImpl extends Webview {
 
   @override
   void close() {
-    if (_closed) {
+    if (_closed || _closing) {
       return;
     }
-    channel.invokeMethod("close", {"viewId": viewId});
+    _closing = true;
+    channel.invokeMethod("close", {"viewId": viewId}).catchError((
+      Object error,
+    ) {
+      _closing = false;
+      FlutterError.reportError(FlutterErrorDetails(exception: error));
+    });
   }
 
   @override

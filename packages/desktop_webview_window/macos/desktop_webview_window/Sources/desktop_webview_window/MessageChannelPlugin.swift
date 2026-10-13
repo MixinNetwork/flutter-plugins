@@ -37,20 +37,20 @@ public class ClientMessageChannelPlugin: NSObject, FlutterPlugin {
 class ServerMessageChannel {
   static let shared: ServerMessageChannel = ServerMessageChannel()
 
-  private var clients: [ClientMessageChannelPlugin] = []
+  // Registrars retain the plugins for the lifetime of their engine. The relay
+  // must not keep dead engines' clients alive after the owner has shut down.
+  private let clients = NSHashTable<ClientMessageChannelPlugin>.weakObjects()
 
   func addClient(client: ClientMessageChannelPlugin) {
-    clients.append(client)
+    clients.add(client)
   }
 
   func removeClient(client: ClientMessageChannelPlugin) {
-    if let index = clients.firstIndex(of: client) {
-      clients.remove(at: index)
-    }
+    clients.remove(client)
   }
 
   func dispatchMethodCall(call: FlutterMethodCall, from clientFrom: ClientMessageChannelPlugin) {
-    for client in clients {
+    for client in clients.allObjects {
       if client != clientFrom {
         client.invokeMethod(call)
       }

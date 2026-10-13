@@ -32,35 +32,41 @@ const auto kWebViewClassName = _T("web_view_window_web_view");
 using namespace Microsoft::WRL;
 
 WebView::WebView(
-    std::shared_ptr<flutter::MethodChannel<flutter::EncodableValue>>
-        method_channel,
-    int64_t web_view_id, std::wstring userDataFolder,
-    bool deny_camera_and_microphone,
-    std::function<void(HRESULT)> on_web_view_created)
+    std::shared_ptr<flutter::MethodChannel<flutter::EncodableValue>> method_channel,
+    int64_t web_view_id, std::wstring userDataFolder, bool deny_camera_and_microphone)
     : method_channel_(std::move(method_channel)),
       web_view_id_(web_view_id),
       user_data_folder_(std::move(userDataFolder)),
-      deny_camera_and_microphone_(deny_camera_and_microphone),
-      on_web_view_created_callback_(std::move(on_web_view_created)) {
+      deny_camera_and_microphone_(deny_camera_and_microphone) {
   RegisterWindowClass(kWebViewClassName, WndProc);
   view_window_ = wil::unique_hwnd(::CreateWindowEx(
       0, kWebViewClassName, L"", WS_CHILD | WS_VISIBLE, 0, 0, 0, 0,
       HWND_MESSAGE, nullptr, ::GetModuleHandle(nullptr), nullptr));
-  assert(view_window_ != nullptr);
-  if (!view_window_) {
-    on_web_view_created_callback_(S_FALSE);
+}
+
+void WebView::Create(std::function<void(HRESULT)> callback) {
+  auto keep_alive = shared_from_this();
+  on_web_view_created_callback_ = std::move(callback);
+  if (closed_ || !view_window_) {
+    CompleteCreation(E_FAIL);
     return;
   }
-
-  CreateCoreWebView2EnvironmentWithOptions(
+  // WebView2 completions may arrive after the native window has closed. Each
+  // callback holds only a weak reference, and promotes it on the platform thread.
+  auto weak = weak_from_this();
+  HRESULT hr = CreateCoreWebView2EnvironmentWithOptions(
       nullptr, user_data_folder_.c_str(), nullptr,
       Callback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler>(
-          [this](HRESULT result, ICoreWebView2Environment *env) -> HRESULT {
-            if (!SUCCEEDED(result)) {
-              on_web_view_created_callback_(result);
+          [weak](HRESULT result, ICoreWebView2Environment *env) -> HRESULT {
+            auto self = weak.lock();
+            if (!self || self->closed_) {
               return S_OK;
             }
-            if (deny_camera_and_microphone_) {
+            if (FAILED(result) || !env) {
+              self->CompleteCreation(FAILED(result) ? result : E_FAIL);
+              return S_OK;
+            }
+            if (self->deny_camera_and_microphone_) {
               // SavesInProfile is available in Runtime 111 and later. Do not
               // silently turn a window-scoped policy into a persistent denial
               // on older runtimes.
@@ -72,29 +78,45 @@ WebView::WebView(
                                             &comparison);
               }
               if (FAILED(hr) || comparison < 0) {
-                auto callback = std::move(on_web_view_created_callback_);
-                callback(FAILED(hr) ? hr : HRESULT_FROM_WIN32(ERROR_OLD_WIN_VERSION));
+                self->CompleteCreation(FAILED(hr) ? hr : HRESULT_FROM_WIN32(ERROR_OLD_WIN_VERSION));
                 return S_OK;
               }
             }
-            env->CreateCoreWebView2Controller(
-                view_window_.get(),
-                Callback<
-                    ICoreWebView2CreateCoreWebView2ControllerCompletedHandler>(
-                    [this](HRESULT result,
-                           ICoreWebView2Controller *controller) -> HRESULT {
-                      if (SUCCEEDED(result)) {
-                        webview_controller_ = controller;
-                        result = OnWebviewControllerCreated();
+            HRESULT create_result = env->CreateCoreWebView2Controller(
+                self->view_window_.get(),
+                Callback<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler>(
+                    [weak](HRESULT result, ICoreWebView2Controller *controller) -> HRESULT {
+                      auto self = weak.lock();
+                      if (!self || self->closed_) {
+                        if (controller) {
+                          controller->Close();
+                        }
+                        return S_OK;
                       }
-                      auto callback = std::move(on_web_view_created_callback_);
-                      callback(result);
+                      if (FAILED(result) || !controller) {
+                        self->CompleteCreation(FAILED(result) ? result : E_FAIL);
+                        return S_OK;
+                      }
+                      self->webview_controller_ = controller;
+                      // Configure the browser before completing the Dart create.
+                      self->CompleteCreation(self->OnWebviewControllerCreated());
                       return S_OK;
-                    })
-                    .Get());
+                    }).Get());
+            if (FAILED(create_result)) {
+              self->CompleteCreation(create_result);
+            }
             return S_OK;
-          })
-          .Get());
+          }).Get());
+  if (FAILED(hr)) {
+    CompleteCreation(hr);
+  }
+}
+
+void WebView::CompleteCreation(HRESULT result) {
+  auto callback = std::exchange(on_web_view_created_callback_, nullptr);
+  if (callback) {
+    callback(result);
+  }
 }
 
 HRESULT WebView::OnWebviewControllerCreated() {
@@ -183,16 +205,18 @@ HRESULT WebView::OnWebviewControllerCreated() {
 
   webview_->add_HistoryChanged(
       Callback<ICoreWebView2HistoryChangedEventHandler>(
-          [this](ICoreWebView2 *sender, IUnknown *args) {
+          [weak = weak_from_this()](ICoreWebView2 *sender, IUnknown *args) {
+            auto self = weak.lock();
+            if (!self || self->closed_) return S_OK;
             auto method_args = flutter::EncodableMap{
                 {flutter::EncodableValue("id"),
-                 flutter::EncodableValue(web_view_id_)},
+                 flutter::EncodableValue(self->web_view_id_)},
                 {flutter::EncodableValue("canGoBack"),
-                 flutter::EncodableValue(CanGoBack())},
+                 flutter::EncodableValue(self->CanGoBack())},
                 {flutter::EncodableValue("canGoForward"),
-                 flutter::EncodableValue(CanGoForward())},
+                 flutter::EncodableValue(self->CanGoForward())},
             };
-            method_channel_->InvokeMethod(
+            self->method_channel_->InvokeMethod(
                 "onHistoryChanged",
                 std::make_unique<flutter::EncodableValue>(method_args));
             return S_OK;
@@ -202,19 +226,21 @@ HRESULT WebView::OnWebviewControllerCreated() {
 
   webview_->add_NavigationStarting(
       Callback<ICoreWebView2NavigationStartingEventHandler>(
-          [this](ICoreWebView2 *sender,
+          [weak = weak_from_this()](ICoreWebView2 *sender,
                  ICoreWebView2NavigationStartingEventArgs *args) {
-            method_channel_->InvokeMethod(
+            auto self = weak.lock();
+            if (!self || self->closed_) return S_OK;
+            self->method_channel_->InvokeMethod(
                 "onNavigationStarted",
                 std::make_unique<flutter::EncodableValue>(flutter::EncodableMap{
                     {flutter::EncodableValue("id"),
-                     flutter::EncodableValue(web_view_id_)},
+                     flutter::EncodableValue(self->web_view_id_)},
                 }));
 
             // Every new navigation supersedes pending approval, including
             // navigations that intentionally bypass the Dart callback.
-            CancelPendingNavigation();
-            if (triggerOnUrlRequestedEvent) {
+            self->CancelPendingNavigation();
+            if (self->triggerOnUrlRequestedEvent) {
               wil::unique_cotaskmem_string uri;
               HRESULT hr = args->get_Uri(&uri);
               if (FAILED(hr) || !uri) {
@@ -227,40 +253,41 @@ HRESULT WebView::OnWebviewControllerCreated() {
 
               UINT64 navigation_id = 0;
               args->get_NavigationId(&navigation_id);
-              awaiting_cancelled_navigation_ = true;
-              cancelled_navigation_id_ = navigation_id;
-              deferred_navigation_.reset();
-              const auto generation = navigation_generation_;
+              self->awaiting_cancelled_navigation_ = true;
+              self->cancelled_navigation_id_ = navigation_id;
+              self->deferred_navigation_.reset();
+              const auto generation = self->navigation_generation_;
 
               auto result_handler =
                   std::make_unique<flutter::MethodResultFunctions<>>(
-                      [uri_string, generation,
-                       this](const flutter::EncodableValue *success_value) {
+                      [uri_string, generation, weak](const flutter::EncodableValue *success_value) {
+                        auto self = weak.lock();
+                        if (!self || self->closed_) return;
                         bool letPass = false;
                         if (success_value && 
                             std::holds_alternative<bool>(*success_value)) {
                           letPass = std::get<bool>(*success_value);
                         }
                         // A later navigation has superseded this one.
-                        if (generation != navigation_generation_) {
+                        if (generation != self->navigation_generation_) {
                           return;
                         }
                         if (letPass) {
-                          if (awaiting_cancelled_navigation_) {
-                            deferred_navigation_ = uri_string;
+                          if (self->awaiting_cancelled_navigation_) {
+                            self->deferred_navigation_ = uri_string;
                           } else {
-                            NavigateAllowed(uri_string);
+                            self->NavigateAllowed(uri_string);
                           }
                         }
                       },
                       nullptr, nullptr);
 
-              method_channel_->InvokeMethod(
+              self->method_channel_->InvokeMethod(
                   "onUrlRequested",
                   std::make_unique<flutter::EncodableValue>(
                       flutter::EncodableMap{
                           {flutter::EncodableValue("id"),
-                           flutter::EncodableValue(web_view_id_)},
+                           flutter::EncodableValue(self->web_view_id_)},
                           {flutter::EncodableValue("url"),
                            flutter::EncodableValue(
                                wide_to_utf8(uri_string))},
@@ -272,7 +299,7 @@ HRESULT WebView::OnWebviewControllerCreated() {
               args->put_Cancel(true);
             } else {
               args->put_Cancel(false);
-              triggerOnUrlRequestedEvent = true;
+              self->triggerOnUrlRequestedEvent = true;
             }
             return S_OK;
           })
@@ -280,25 +307,27 @@ HRESULT WebView::OnWebviewControllerCreated() {
       nullptr);
   webview_->add_NavigationCompleted(
       Callback<ICoreWebView2NavigationCompletedEventHandler>(
-          [this](ICoreWebView2 *sender,
+          [weak = weak_from_this()](ICoreWebView2 *sender,
                  ICoreWebView2NavigationCompletedEventArgs *args) {
+            auto self = weak.lock();
+            if (!self || self->closed_) return S_OK;
             UINT64 navigation_id = 0;
             args->get_NavigationId(&navigation_id);
-            if (awaiting_cancelled_navigation_ &&
-                navigation_id == cancelled_navigation_id_) {
-              awaiting_cancelled_navigation_ = false;
-              if (deferred_navigation_) {
-                auto url = std::move(*deferred_navigation_);
-                deferred_navigation_.reset();
-                NavigateAllowed(url);
+            if (self->awaiting_cancelled_navigation_ &&
+                navigation_id == self->cancelled_navigation_id_) {
+              self->awaiting_cancelled_navigation_ = false;
+              if (self->deferred_navigation_) {
+                auto url = std::move(*self->deferred_navigation_);
+                self->deferred_navigation_.reset();
+                self->NavigateAllowed(url);
               }
             }
 
             auto method_args = flutter::EncodableMap{
                 {flutter::EncodableValue("id"),
-                 flutter::EncodableValue(web_view_id_)},
+                 flutter::EncodableValue(self->web_view_id_)},
             };
-            method_channel_->InvokeMethod(
+            self->method_channel_->InvokeMethod(
                 "onNavigationCompleted",
                 std::make_unique<flutter::EncodableValue>(method_args));
             return S_OK;
@@ -307,8 +336,10 @@ HRESULT WebView::OnWebviewControllerCreated() {
       nullptr);
   webview_->add_WebMessageReceived(
       Callback<ICoreWebView2WebMessageReceivedEventHandler>(
-          [this](ICoreWebView2 *sender,
+          [weak = weak_from_this()](ICoreWebView2 *sender,
                  ICoreWebView2WebMessageReceivedEventArgs *args) {
+            auto self = weak.lock();
+            if (!self || self->closed_) return S_OK;
             wil::unique_cotaskmem_string messageRaw;
             HRESULT hrString = args->TryGetWebMessageAsString(&messageRaw);
             if (FAILED(hrString)) {
@@ -323,11 +354,11 @@ HRESULT WebView::OnWebviewControllerCreated() {
                 return hrString;
               }
             }
-            method_channel_->InvokeMethod(
+            self->method_channel_->InvokeMethod(
                 "onWebMessageReceived",
                 std::make_unique<flutter::EncodableValue>(flutter::EncodableMap{
                     {flutter::EncodableValue("id"),
-                     flutter::EncodableValue(web_view_id_)},
+                     flutter::EncodableValue(self->web_view_id_)},
                     {flutter::EncodableValue("message"),
                      flutter::EncodableValue(
                          wide_to_utf8(std::wstring(messageRaw.get())))},
@@ -621,13 +652,26 @@ void WebView::setTriggerOnUrlRequestedEvent(const bool value) {
   this->triggerOnUrlRequestedEvent = value;
 }
 
-WebView::~WebView() {
+void WebView::Close() {
+  if (closed_) {
+    return;
+  }
+  closed_ = true;
+  // The window resolves its pending create result; abandon the backend callback.
+  on_web_view_created_callback_ = nullptr;
   if (webview_) {
     webview_->Stop();
   }
   if (webview_controller_) {
     webview_controller_->Close();
   }
+  webview_.reset();
+  webview_controller_.reset();
+  view_window_.reset();
+}
+
+WebView::~WebView() {
+  Close();
 }
 
 }  // namespace webview_window

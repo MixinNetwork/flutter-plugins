@@ -34,7 +34,7 @@ void get_cookies_callback(WebKitCookieManager *manager, GAsyncResult *res,
 GList *get_cookies_sync(WebKitWebView *web_view) {
   WebKitCookieManager *cookie_manager;
   GMainLoop *loop;
-  CookieData data = {0};
+  CookieData data = {};
 
   cookie_manager = webkit_web_context_get_cookie_manager(
       webkit_web_view_get_context(web_view));
@@ -105,13 +105,16 @@ gboolean decide_policy_cb(WebKitWebView *web_view,
 WebviewWindow::WebviewWindow(FlMethodChannel *method_channel, int64_t window_id,
                              std::function<void()> on_close_callback,
                              const std::string &title, int width, int height,
-                             int title_bar_height, GtkWindow *parent)
+                             int title_bar_height, int title_bar_top_padding,
+                             TitleBarEngine *title_bar_engine, GtkWindow *parent)
     : method_channel_(method_channel),
       window_id_(window_id),
       on_close_callback_(std::move(on_close_callback)),
-      default_user_agent_() {
+      default_user_agent_(),
+      title_bar_engine_(title_bar_engine) {
   g_object_ref(method_channel_);
 
+  javascript_cancellable_ = g_cancellable_new();
   window_ = gtk_window_new(GTK_WINDOW_TOPLEVEL);
   if (parent != nullptr) {
     // Declared as a child of the app window, so window managers treat it like
@@ -119,22 +122,11 @@ WebviewWindow::WebviewWindow(FlMethodChannel *method_channel, int64_t window_id,
     // floated instead of tiled on tiling ones.
     gtk_window_set_transient_for(GTK_WINDOW(window_), parent);
   }
+  g_object_ref_sink(window_);
   g_signal_connect(G_OBJECT(window_), "destroy",
                    G_CALLBACK(+[](GtkWidget *, gpointer arg) {
                      auto *window = static_cast<WebviewWindow *>(arg);
-                     // on_close_callback_ erases this window from the plugin's
-                     // map, which deletes it, so notify Dart first and run the
-                     // callback last, from a local copy.
-                     auto on_close = std::move(window->on_close_callback_);
-                     auto *args = fl_value_new_map();
-                     fl_value_set(args, fl_value_new_string("id"),
-                                  fl_value_new_int(window->window_id_));
-                     fl_method_channel_invoke_method(
-                         FL_METHOD_CHANNEL(window->method_channel_),
-                         "onWindowClose", args, nullptr, nullptr, nullptr);
-                     if (on_close) {
-                       on_close();
-                     }
+                     window->OnDestroyed();
                    }),
                    this);
   gtk_window_set_title(GTK_WINDOW(window_), title.c_str());
@@ -146,25 +138,35 @@ WebviewWindow::WebviewWindow(FlMethodChannel *method_channel, int64_t window_id,
   box_ = GTK_BOX(gtk_box_new(GTK_ORIENTATION_VERTICAL, 0));
   gtk_container_add(GTK_CONTAINER(window_), GTK_WIDGET(box_));
 
-  // initial flutter_view
-  // The title bar is a second Flutter engine. Tearing it down when the window
-  // closes breaks the host app's GL context, so a title_bar_height of 0 skips
-  // it for apps that draw their own controls.
   FlView *title_bar = nullptr;
   if (title_bar_height > 0) {
-    g_autoptr(FlDartProject) project = fl_dart_project_new();
-    const char *args[] = {"web_view_title_bar",
-                          g_strdup_printf("%ld", window_id), nullptr};
-    fl_dart_project_set_dart_entrypoint_arguments(project,
-                                                  const_cast<char **>(args));
-    title_bar = fl_view_new(project);
-
-    g_autoptr(FlPluginRegistrar) desktop_webview_window_registrar =
-        fl_plugin_registry_get_registrar_for_plugin(
-            FL_PLUGIN_REGISTRY(title_bar), "DesktopWebviewWindowPlugin");
-    client_message_channel_plugin_register_with_registrar(
-        desktop_webview_window_registrar);
-
+    if (title_bar_engine_ != nullptr) {
+      title_bar = title_bar_engine_->CreateView(window_id, title_bar_top_padding);
+      title_bar_view_id_ = fl_view_get_id(title_bar);
+    } else {
+      // Safe default while the experimental shared-engine GL lifecycle is
+      // unverified on supported Linux graphics stacks.
+      g_autoptr(FlDartProject) project = fl_dart_project_new();
+      g_autofree gchar *id = g_strdup_printf("%" G_GINT64_FORMAT, window_id);
+      g_autofree gchar *padding = g_strdup_printf("%d", title_bar_top_padding);
+      const char *args[] = {"web_view_title_bar", id, padding, nullptr};
+      fl_dart_project_set_dart_entrypoint_arguments(project,
+                                                    const_cast<char **>(args));
+      title_bar = fl_view_new(project);
+      g_autoptr(FlPluginRegistrar) registrar =
+          fl_plugin_registry_get_registrar_for_plugin(
+              FL_PLUGIN_REGISTRY(title_bar), "DesktopWebviewWindowPlugin");
+      client_message_channel_plugin_register_with_registrar(registrar);
+    }
+    g_debug("desktop_webview_window toolbar webview=%" G_GINT64_FORMAT
+            " engine=%p view=%" G_GINT64_FORMAT,
+            window_id, fl_view_get_engine(title_bar), fl_view_get_id(title_bar));
+    g_signal_connect(title_bar, "first-frame",
+                     G_CALLBACK(+[](FlView *view, gpointer) {
+                       g_debug("desktop_webview_window toolbar first-frame "
+                               "engine=%p view=%" G_GINT64_FORMAT,
+                               fl_view_get_engine(view), fl_view_get_id(view));
+                     }), nullptr);
     gtk_widget_set_size_request(GTK_WIDGET(title_bar), -1, title_bar_height);
     gtk_widget_set_vexpand(GTK_WIDGET(title_bar), FALSE);
     gtk_box_pack_start(box_, GTK_WIDGET(title_bar), FALSE, FALSE, 0);
@@ -172,6 +174,9 @@ WebviewWindow::WebviewWindow(FlMethodChannel *method_channel, int64_t window_id,
 
   // initial web_view
   webview_ = webkit_web_view_new();
+  g_object_ref_sink(webview_);
+  content_manager_ = WEBKIT_USER_CONTENT_MANAGER(g_object_ref(
+      webkit_web_view_get_user_content_manager(WEBKIT_WEB_VIEW(webview_))));
   g_signal_connect(G_OBJECT(webview_), "load-failed-with-tls-errors",
                    G_CALLBACK(on_load_failed_with_tls_errors), this);
   g_signal_connect(G_OBJECT(webview_), "create", G_CALLBACK(on_create), this);
@@ -192,61 +197,108 @@ WebviewWindow::WebviewWindow(FlMethodChannel *method_channel, int64_t window_id,
   // Disconnect all delete-event handlers first in flutter 3.10.1, which causes
   // delete_event not working. Issues from flutter/engine:
   // https://github.com/flutter/engine/pull/40033
-  if (title_bar != nullptr) {
-    guint handler_id = g_signal_handler_find(window_, G_SIGNAL_MATCH_DATA, 0,
-                                             0, NULL, NULL, title_bar);
-    if (handler_id > 0) {
-      g_signal_handler_disconnect(window_, handler_id);
-    }
+  gulong handler_id = title_bar == nullptr ? 0 : g_signal_handler_find(window_, G_SIGNAL_MATCH_DATA, 0, 0,
+                                           NULL, NULL, title_bar);
+  if (handler_id > 0) {
+    g_signal_handler_disconnect(window_, handler_id);
   }
 }
 
 WebviewWindow::~WebviewWindow() {
+  // The plugin can also dispose a still-open window during engine shutdown.
+  // Remove callbacks first so GTK destruction cannot re-enter its owner map.
+  on_close_callback_ = nullptr;
+  DisconnectCallbacks();
+  if (window_ != nullptr) {
+    g_signal_handlers_disconnect_by_data(window_, this);
+    gtk_widget_destroy(window_);
+    g_clear_object(&window_);
+  }
+  g_clear_object(&webview_);
+  g_clear_object(&content_manager_);
+  g_clear_object(&javascript_cancellable_);
+  g_clear_object(&method_channel_);
+}
+
+void WebviewWindow::DisconnectCallbacks() {
+  if (javascript_cancellable_ != nullptr) {
+    g_cancellable_cancel(javascript_cancellable_);
+  }
   if (webview_ != nullptr) {
-    WebKitUserContentManager *manager = webkit_web_view_get_user_content_manager(WEBKIT_WEB_VIEW(webview_));
-    for (auto &entry : js_channel_handler_ids_) {
-      g_signal_handler_disconnect(manager, entry.second);
+    g_signal_handlers_disconnect_by_data(webview_, this);
+  }
+  if (content_manager_ != nullptr) {
+    for (const auto &entry : js_channel_handler_ids_) {
+      g_signal_handler_disconnect(content_manager_, entry.second);
+      webkit_user_content_manager_unregister_script_message_handler(
+          content_manager_, entry.first.c_str());
     }
     js_channel_handler_ids_.clear();
   }
-  g_object_unref(method_channel_);
-  printf("~WebviewWindow\n");
+  if (title_bar_engine_ != nullptr && title_bar_view_id_ >= 0) {
+    title_bar_engine_->RemoveView(title_bar_view_id_);
+    title_bar_view_id_ = -1;
+  }
+}
+
+void WebviewWindow::OnDestroyed() {
+  if (closed_) return;
+  closed_ = true;
+  closing_ = true;
+  DisconnectCallbacks();
+
+  g_autoptr(FlValue) args = fl_value_new_map();
+  fl_value_set_string_take(args, "id", fl_value_new_int(window_id_));
+  fl_method_channel_invoke_method(method_channel_, "onWindowClose", args,
+                                  nullptr, nullptr, nullptr);
+
+  // This erases the owning unique_ptr. Move the callable off the object and
+  // perform ALL member access, notifications and cleanup before invoking it.
+  // In particular, do not read window_id_ or method_channel_ after this call.
+  auto on_close = std::move(on_close_callback_);
+  if (on_close) on_close();
 }
 
 void WebviewWindow::Navigate(const char *url) {
+  if (closing_ || closed_) return;
   webkit_web_view_load_uri(WEBKIT_WEB_VIEW(webview_), url);
 }
 
 void WebviewWindow::RunJavaScriptWhenContentReady(const char *java_script) {
-  auto *manager =
-      webkit_web_view_get_user_content_manager(WEBKIT_WEB_VIEW(webview_));
-  webkit_user_content_manager_add_script(
-      manager,
-      webkit_user_script_new(java_script, WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
-                             WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
-                             nullptr, nullptr));
+  if (closing_ || closed_) return;
+  WebKitUserScript *script = webkit_user_script_new(
+      java_script, WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
+      WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START, nullptr, nullptr);
+  webkit_user_content_manager_add_script(content_manager_, script);
+  webkit_user_script_unref(script);
 }
 
 void WebviewWindow::SetApplicationNameForUserAgent(
     const std::string &app_name) {
+  if (closing_ || closed_) return;
   auto *setting = webkit_web_view_get_settings(WEBKIT_WEB_VIEW(webview_));
   webkit_settings_set_user_agent(setting,
                                  (default_user_agent_ + app_name).c_str());
 }
 
-void WebviewWindow::Close() { gtk_window_close(GTK_WINDOW(window_)); }
+void WebviewWindow::Close() {
+  if (closing_ || closed_ || window_ == nullptr) return;
+  closing_ = true;
+  gtk_widget_destroy(window_);
+}
 
 void WebviewWindow::OnLoadChanged(WebKitLoadEvent load_event) {
+  if (closing_ || closed_) return;
   // notify history changed event.
   {
     auto can_go_back = webkit_web_view_can_go_back(WEBKIT_WEB_VIEW(webview_));
     auto can_go_forward =
         webkit_web_view_can_go_forward(WEBKIT_WEB_VIEW(webview_));
-    auto *args = fl_value_new_map();
-    fl_value_set(args, fl_value_new_string("id"), fl_value_new_int(window_id_));
-    fl_value_set(args, fl_value_new_string("canGoBack"),
+    g_autoptr(FlValue) args = fl_value_new_map();
+    fl_value_set_take(args, fl_value_new_string("id"), fl_value_new_int(window_id_));
+    fl_value_set_take(args, fl_value_new_string("canGoBack"),
                  fl_value_new_bool(can_go_back));
-    fl_value_set(args, fl_value_new_string("canGoForward"),
+    fl_value_set_take(args, fl_value_new_string("canGoForward"),
                  fl_value_new_bool(can_go_forward));
     fl_method_channel_invoke_method(FL_METHOD_CHANNEL(method_channel_),
                                     "onHistoryChanged", args, nullptr, nullptr,
@@ -256,8 +308,8 @@ void WebviewWindow::OnLoadChanged(WebKitLoadEvent load_event) {
   // notify load start/finished event.
   switch (load_event) {
     case WEBKIT_LOAD_STARTED: {
-      auto *args = fl_value_new_map();
-      fl_value_set(args, fl_value_new_string("id"),
+      g_autoptr(FlValue) args = fl_value_new_map();
+      fl_value_set_take(args, fl_value_new_string("id"),
                    fl_value_new_int(window_id_));
       fl_method_channel_invoke_method(FL_METHOD_CHANNEL(method_channel_),
                                       "onNavigationStarted", args, nullptr,
@@ -265,8 +317,8 @@ void WebviewWindow::OnLoadChanged(WebKitLoadEvent load_event) {
       break;
     }
     case WEBKIT_LOAD_FINISHED: {
-      auto *args = fl_value_new_map();
-      fl_value_set(args, fl_value_new_string("id"),
+      g_autoptr(FlValue) args = fl_value_new_map();
+      fl_value_set_take(args, fl_value_new_string("id"),
                    fl_value_new_int(window_id_));
       fl_method_channel_invoke_method(FL_METHOD_CHANNEL(method_channel_),
                                       "onNavigationCompleted", args, nullptr,
@@ -279,18 +331,22 @@ void WebviewWindow::OnLoadChanged(WebKitLoadEvent load_event) {
 }
 
 void WebviewWindow::GoForward() {
+  if (closing_ || closed_) return;
   webkit_web_view_go_forward(WEBKIT_WEB_VIEW(webview_));
 }
 
 void WebviewWindow::GoBack() {
+  if (closing_ || closed_) return;
   webkit_web_view_go_back(WEBKIT_WEB_VIEW(webview_));
 }
 
 void WebviewWindow::Reload() {
+  if (closing_ || closed_) return;
   webkit_web_view_reload(WEBKIT_WEB_VIEW(webview_));
 }
 
 void WebviewWindow::StopLoading() {
+  if (closing_ || closed_) return;
   webkit_web_view_stop_loading(WEBKIT_WEB_VIEW(webview_));
 }
 
@@ -316,9 +372,14 @@ FlValue *WebviewWindow::GetAllCookies() {
     fl_value_set_string_take(cookie_map, "path",
                              fl_value_new_string(soup_cookie_get_path(cookie)));
 
-    gdouble expires = g_date_time_get_seconds(soup_cookie_get_expires(cookie));
+    auto *expiration = soup_cookie_get_expires(cookie);
 
-    if (expires >= 0) {
+    if (expiration != nullptr) {
+#if SOUP_MAJOR_VERSION >= 3
+      const gdouble expires = g_date_time_to_unix(expiration);
+#else
+      const gdouble expires = soup_date_to_time_t(expiration);
+#endif
       fl_value_set_string_take(cookie_map, "expires",
                                fl_value_new_float(expires));
     } else {
@@ -337,13 +398,14 @@ FlValue *WebviewWindow::GetAllCookies() {
     soup_cookie_free(cookie);
   }
 
-  g_free(cookies);
+  g_list_free(cookies);
 
   return cookie_list;
 }
 
 gboolean WebviewWindow::DecidePolicy(WebKitPolicyDecision *decision,
                                      WebKitPolicyDecisionType type) {
+  if (closing_ || closed_) return false;
   if (type == WEBKIT_POLICY_DECISION_TYPE_NAVIGATION_ACTION) {
     auto *navigation_decision = WEBKIT_NAVIGATION_POLICY_DECISION(decision);
     auto *navigation_action =
@@ -351,9 +413,9 @@ gboolean WebviewWindow::DecidePolicy(WebKitPolicyDecision *decision,
             navigation_decision);
     auto *request = webkit_navigation_action_get_request(navigation_action);
     auto *uri = webkit_uri_request_get_uri(request);
-    auto *args = fl_value_new_map();
-    fl_value_set(args, fl_value_new_string("id"), fl_value_new_int(window_id_));
-    fl_value_set(args, fl_value_new_string("url"), fl_value_new_string(uri));
+    g_autoptr(FlValue) args = fl_value_new_map();
+    fl_value_set_take(args, fl_value_new_string("id"), fl_value_new_int(window_id_));
+    fl_value_set_take(args, fl_value_new_string("url"), fl_value_new_string(uri));
     fl_method_channel_invoke_method(FL_METHOD_CHANNEL(method_channel_),
                                     "onUrlRequested", args, nullptr, nullptr,
                                     nullptr);
@@ -363,6 +425,11 @@ gboolean WebviewWindow::DecidePolicy(WebKitPolicyDecision *decision,
 
 void WebviewWindow::EvaluateJavaScript(const char *java_script,
                                        FlMethodCall *call) {
+  if (closing_ || closed_) {
+    fl_method_call_respond_error(call, "closed", "Webview has closed", nullptr,
+                                 nullptr);
+    return;
+  }
 #ifdef WEBKIT_OLD_USED
   webkit_web_view_run_javascript(
 #else
@@ -372,7 +439,7 @@ void WebviewWindow::EvaluateJavaScript(const char *java_script,
 #ifndef WEBKIT_OLD_USED
       -1, nullptr, nullptr,
 #endif
-      nullptr,
+      javascript_cancellable_,
       [](GObject *object, GAsyncResult *result, gpointer user_data) {
         auto *call = static_cast<FlMethodCall *>(user_data);
         GError *error = nullptr;
@@ -385,18 +452,24 @@ void WebviewWindow::EvaluateJavaScript(const char *java_script,
                 WEBKIT_WEB_VIEW(object), result, &error);
         if (!js_result) {
           fl_method_call_respond_error(call, "failed to evaluate javascript.",
-                                       error->message, nullptr, nullptr);
-          g_error_free(error);
+                                       error ? error->message : "Unknown error",
+                                       nullptr, nullptr);
+          g_clear_error(&error);
         } else {
-          auto *js_value = jsc_value_to_json(
+          g_autofree gchar *js_value = jsc_value_to_json(
 #ifdef WEBKIT_OLD_USED
               webkit_javascript_result_get_js_value
 #endif
               (js_result),
               0);
-          fl_method_call_respond_success(
-              call, js_value ? fl_value_new_string(js_value) : nullptr,
-              nullptr);
+          g_autoptr(FlValue) value =
+              js_value ? fl_value_new_string(js_value) : nullptr;
+          fl_method_call_respond_success(call, value, nullptr);
+#ifdef WEBKIT_OLD_USED
+          webkit_javascript_result_unref(js_result);
+#else
+          g_object_unref(js_result);
+#endif
         }
         g_object_unref(call);
       },
@@ -404,11 +477,9 @@ void WebviewWindow::EvaluateJavaScript(const char *java_script,
 }
 
 void WebviewWindow::RegisterJavaScriptChannel(const std::string &name) {
+  if (closing_ || closed_) return;
     WebKitUserContentManager *manager =
             webkit_web_view_get_user_content_manager(WEBKIT_WEB_VIEW(webview_));
-
-    webkit_user_content_manager_register_script_message_handler(
-            manager, name.c_str());
 
     struct HandlerData {
         WebviewWindow *self;
@@ -420,7 +491,11 @@ void WebviewWindow::RegisterJavaScriptChannel(const std::string &name) {
     if (it != js_channel_handler_ids_.end()) {
         g_signal_handler_disconnect(manager, it->second);
         js_channel_handler_ids_.erase(it);
+        webkit_user_content_manager_unregister_script_message_handler(
+            manager, name.c_str());
     }
+    webkit_user_content_manager_register_script_message_handler(
+        manager, name.c_str());
 
     gulong handler_id = g_signal_connect_data(
             manager,
@@ -430,6 +505,7 @@ void WebviewWindow::RegisterJavaScriptChannel(const std::string &name) {
                            gpointer user_data) {
                 HandlerData *data = static_cast<HandlerData *>(user_data);
                 WebviewWindow *self = data->self;
+                if (self->closing_ || self->closed_) return;
                 const std::string &handler_name = data->name;
 
                 JSCValue *value = webkit_javascript_result_get_js_value(result);
@@ -437,12 +513,12 @@ void WebviewWindow::RegisterJavaScriptChannel(const std::string &name) {
                 if (jsc_value_is_string(value)) {
                     gchar *str_value = jsc_value_to_string(value);
                     if (str_value != nullptr) {
-                        FlValue *args = fl_value_new_map();
-                        fl_value_set_string(args, "name",
+                        g_autoptr(FlValue) args = fl_value_new_map();
+                        fl_value_set_string_take(args, "name",
                                             fl_value_new_string(handler_name.c_str()));
-                        fl_value_set_string(args, "body",
+                        fl_value_set_string_take(args, "body",
                                             fl_value_new_string(str_value));
-                        fl_value_set_string(args, "id",
+                        fl_value_set_string_take(args, "id",
                                             fl_value_new_int(self->window_id_));
 
                         fl_method_channel_invoke_method(
@@ -468,6 +544,7 @@ void WebviewWindow::RegisterJavaScriptChannel(const std::string &name) {
 
 
 void WebviewWindow::UnregisterJavaScriptChannel(const std::string &name) {
+  if (closing_ || closed_) return;
     WebKitUserContentManager *manager =
             webkit_web_view_get_user_content_manager(WEBKIT_WEB_VIEW(webview_));
 

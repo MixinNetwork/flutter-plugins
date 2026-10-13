@@ -7,21 +7,20 @@ project(${PROJECT_NAME} LANGUAGES CXX)
 set(PLUGIN_NAME "desktop_webview_window_plugin")
 
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(WebKit IMPORTED_TARGET webkit2gtk-4.1) 
-if (NOT WebKit_FOUND)
-  pkg_check_modules(WebKit REQUIRED IMPORTED_TARGET webkit2gtk-4.0)  # for backward compatibility
-endif ()
-
-pkg_check_modules(LibSoup REQUIRED IMPORTED_TARGET libsoup-3.0)
-if (NOT LibSoup_FOUND)
+pkg_check_modules(WebKit IMPORTED_TARGET webkit2gtk-4.1)
+if (WebKit_FOUND)
+  pkg_check_modules(LibSoup REQUIRED IMPORTED_TARGET libsoup-3.0)
+else ()
+  pkg_check_modules(WebKit REQUIRED IMPORTED_TARGET webkit2gtk-4.0)
   pkg_check_modules(LibSoup REQUIRED IMPORTED_TARGET libsoup-2.4)
-endif()
-
+endif ()
 
 add_library(${PLUGIN_NAME} SHARED
         "desktop_webview_window_plugin.cc"
         webview_window.cc
         webview_window.h
+        title_bar_engine.cc
+        title_bar_engine.h
         message_channel_plugin.h
         message_channel_plugin.cc
         )
@@ -33,7 +32,7 @@ target_include_directories(${PLUGIN_NAME} INTERFACE
         "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_link_libraries(${PLUGIN_NAME} PRIVATE flutter)
 target_link_libraries(${PLUGIN_NAME} PRIVATE PkgConfig::GTK)
-target_link_libraries(${PLUGIN_NAME} PRIVATE PkgConfig::WebKit)
+target_link_libraries(${PLUGIN_NAME} PRIVATE PkgConfig::WebKit PkgConfig::LibSoup)
 
 # List of absolute paths to libraries that should be bundled with the plugin
 set(desktop_webview_window_bundled_libraries

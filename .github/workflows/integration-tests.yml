@@ -68,7 +68,14 @@ jobs:
       - name: Run integration tests
         working-directory: packages/${{ matrix.package }}/example
         shell: bash
-        run: flutter test "${{ matrix.test }}" -d "${{ matrix.platform }}" --timeout 5m 2>&1 | tee integration-test.log
+        env:
+          TEST_DRIVER: ${{ matrix.driver }}
+        run: |
+          if [[ -n "$TEST_DRIVER" ]]; then
+            flutter drive --driver="$TEST_DRIVER" --target="${{ matrix.test }}" -d "${{ matrix.platform }}" 2>&1 | tee integration-test.log
+          else
+            flutter test "${{ matrix.test }}" -d "${{ matrix.platform }}" --timeout 5m 2>&1 | tee integration-test.log
+          fi
       - name: Upload test log
         if: always()
         uses: actions/upload-artifact@v4

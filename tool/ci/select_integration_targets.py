@@ -16,7 +16,7 @@ def load_targets(root):
         raise ValueError('Register at least one integration target')
     seen = set()
     for target in targets:
-        if set(target) - {'package', 'platform', 'runner', 'test', 'setup'}:
+        if set(target) - {'package', 'platform', 'runner', 'test', 'setup', 'driver'}:
             raise ValueError(f'Unknown target fields: {target}')
         package = target['package']
         platform = target['platform']
@@ -32,8 +32,8 @@ def load_targets(root):
             raise ValueError(f'Duplicate target: {key}')
         seen.add(key)
         package_root = root / 'packages' / package
-        for field, base in [('test', package_root / 'example'), ('setup', package_root)]:
-            if field == 'setup' and field not in target:
+        for field, base in [('test', package_root / 'example'), ('setup', package_root), ('driver', package_root / 'example')]:
+            if field in {'setup', 'driver'} and field not in target:
                 continue
             path = target[field]
             if not re.fullmatch(r'[a-zA-Z0-9_./-]+', path) or Path(path).is_absolute() or '..' in Path(path).parts:
@@ -42,6 +42,8 @@ def load_targets(root):
                 raise ValueError(f'Missing {field}: {base / path}')
         if not target['test'].startswith('integration_test/') or not target['test'].endswith('_test.dart'):
             raise ValueError('Test must be an integration_test/*_test.dart entry point')
+        if 'driver' in target and not target['driver'].endswith('.dart'):
+            raise ValueError('Driver must be a Dart entry point')
         if 'setup' in target and not target['setup'].endswith('.ps1'):
             raise ValueError('Setup scripts must use PowerShell (.ps1)')
     return targets

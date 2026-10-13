@@ -93,6 +93,32 @@ class TargetSelectionTest(unittest.TestCase):
                     with self.assertRaises(ValueError):
                         load_targets(root)
 
+    def test_driver_manifest_and_existing_target(self):
+        macos = next(target for target in self.targets if target['platform'] == 'macos')
+        windows = next(target for target in self.targets if target['platform'] == 'windows')
+        self.assertEqual(macos['driver'], 'test_driver/integration_test.dart')
+        self.assertNotIn('driver', windows)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / '.github').mkdir()
+            example = root / 'packages' / macos['package'] / 'example'
+            test = example / macos['test']
+            test.parent.mkdir(parents=True)
+            test.write_text('fixture')
+            driver = example / macos['driver']
+            driver.parent.mkdir(parents=True)
+            driver.write_text('fixture')
+            manifest = root / '.github/integration-tests.json'
+            manifest.write_text(json.dumps({'targets': [macos]}))
+            self.assertEqual(load_targets(root), [macos])
+            invalid = example / 'test_driver/not_dart.txt'
+            invalid.write_text('fixture')
+            for path in ['../escape.dart', 'test_driver/missing.dart', 'test_driver/not_dart.txt']:
+                with self.subTest(driver=path):
+                    manifest.write_text(json.dumps({'targets': [{**macos, 'driver': path}]}))
+                    with self.assertRaises(ValueError):
+                        load_targets(root)
+
     def test_workflow_result_gate(self):
         workflow = (ROOT / '.github/workflows/integration-tests.yml').read_text()
         # Execute the actual gate, including its failure and unexpected-skip paths.

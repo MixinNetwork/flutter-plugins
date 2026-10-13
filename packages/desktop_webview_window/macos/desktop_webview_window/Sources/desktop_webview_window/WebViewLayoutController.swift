@@ -10,12 +10,9 @@ import FlutterMacOS
 import WebKit
 
 class WebViewLayoutController: NSViewController {
-  private lazy var titleBarController: FlutterViewController? = {
-    guard titleBarHeight + titleBarTopPadding > 0 else { return nil }
-    let project = FlutterDartProject()
-    project.dartEntrypointArguments = ["web_view_title_bar", "\(viewId)", "\(titleBarTopPadding)"]
-    return FlutterViewController(project: project)
-  }()
+  private var titleBarController: FlutterViewController?
+
+  private weak var titleBarEngine: SharedTitleBarEngine?
 
   private lazy var webView: WKWebView = {
     WKWebView()
@@ -23,7 +20,9 @@ class WebViewLayoutController: NSViewController {
 
   private var javaScriptHandlerNames: [String] = []
 
-  weak var webViewPlugin: DesktopWebviewWindowPlugin?
+  private var observesNavigation = false
+
+  private var isDestroyed = false
 
   private var defaultUserAgent: String?
 
@@ -33,13 +32,13 @@ class WebViewLayoutController: NSViewController {
 
   private let titleBarHeight: Int
 
-  private let titleBarTopPadding: Int
-
-  public init(methodChannel: FlutterMethodChannel, viewId: Int64, titleBarHeight: Int, titleBarTopPadding: Int) {
+  init(methodChannel: FlutterMethodChannel, viewId: Int64, titleBarHeight: Int,
+       titleBarController: FlutterViewController?, titleBarEngine: SharedTitleBarEngine?) {
     self.viewId = viewId
     self.methodChannel = methodChannel
     self.titleBarHeight = titleBarHeight
-    self.titleBarTopPadding = titleBarTopPadding
+    self.titleBarController = titleBarController
+    self.titleBarEngine = titleBarEngine
     #if SWIFT_PACKAGE
     // SwiftPM places resources in a per-module bundle exposed as `Bundle.module`.
     super.init(nibName: "WebViewLayoutController", bundle: Bundle.module)
@@ -55,27 +54,25 @@ class WebViewLayoutController: NSViewController {
 
   override func loadView() {
     super.loadView()
+    guard !isDestroyed else { return }
 
     var webViewTopAnchor = view.topAnchor
     if let titleBarController = titleBarController {
       addChild(titleBarController)
-
-      // Register titlebar plugins
-      ClientMessageChannelPlugin.register(with: titleBarController.registrar(forPlugin: "DesktopWebviewWindowPlugin"))
-
       let flutterView = titleBarController.view
       flutterView.translatesAutoresizingMaskIntoConstraints = false
       view.addSubview(flutterView)
-
       NSLayoutConstraint.activate([
         flutterView.topAnchor.constraint(equalTo: view.topAnchor),
         flutterView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
         flutterView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-        flutterView.heightAnchor.constraint(equalToConstant: CGFloat(titleBarHeight + titleBarTopPadding)),
+        flutterView.heightAnchor.constraint(equalToConstant: CGFloat(titleBarHeight)),
       ])
       webViewTopAnchor = flutterView.bottomAnchor
     }
 
+    // WKWebView occupies its own native rectangle. Flutter only owns the optional
+    // titlebar above it; a toolbar-less window reserves no Flutter layout space.
     view.addSubview(webView)
     webView.translatesAutoresizingMaskIntoConstraints = false
     NSLayoutConstraint.activate([
@@ -88,6 +85,7 @@ class WebViewLayoutController: NSViewController {
 
   override func viewDidLoad() {
     super.viewDidLoad()
+    guard !isDestroyed else { return }
 
     webView.navigationDelegate = self
     webView.uiDelegate = self
@@ -102,11 +100,13 @@ class WebViewLayoutController: NSViewController {
     webView.addObserver(self, forKeyPath: "canGoBack", options: .new, context: nil)
     webView.addObserver(self, forKeyPath: "canGoForward", options: .new, context: nil)
     webView.addObserver(self, forKeyPath: "loading", options: .new, context: nil)
+    observesNavigation = true
 
     defaultUserAgent = webView.value(forKey: "userAgent") as? String
   }
 
   override func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey: Any]?, context: UnsafeMutableRawPointer?) {
+    guard !isDestroyed else { return }
     if keyPath == "canGoBack" || keyPath == "canGoForward" {
       methodChannel.invokeMethod("onHistoryChanged", arguments: [
         "id": viewId,
@@ -153,9 +153,34 @@ class WebViewLayoutController: NSViewController {
   }
 
   func destroy() {
-    webView.stopLoading(self)
-    webView.removeFromSuperview()
-    titleBarController?.engine.shutDownEngine()
+    guard !isDestroyed else { return }
+    isDestroyed = true
+    // Do not force either lazy native view to load while closing an early window.
+    if isViewLoaded {
+      if observesNavigation {
+        webView.removeObserver(self, forKeyPath: "canGoBack")
+        webView.removeObserver(self, forKeyPath: "canGoForward")
+        webView.removeObserver(self, forKeyPath: "loading")
+        observesNavigation = false
+      }
+      webView.navigationDelegate = nil
+      webView.uiDelegate = nil
+      for name in javaScriptHandlerNames {
+        webView.configuration.userContentController.removeScriptMessageHandler(forName: name)
+      }
+      javaScriptHandlerNames.removeAll()
+      webView.stopLoading()
+      webView.removeFromSuperview()
+    }
+    if let titleBarController = titleBarController {
+      if titleBarController.isViewLoaded {
+        titleBarController.view.removeFromSuperview()
+      }
+      titleBarController.removeFromParent()
+      titleBarEngine?.removeView(titleBarController)
+    }
+    titleBarController = nil
+    titleBarEngine = nil
   }
 
   func reload() {

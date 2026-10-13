@@ -14,27 +14,25 @@ class WebviewWindowController: NSWindowController {
 
   private let viewId: Int64
 
-  private let width, height: Int
+  let webViewController: WebViewLayoutController
 
-  private let titleBarHeight: Int
+  private var isClosed = false
 
-  private let titleBarTopPadding: Int
-
-  private let title: String
+  private var isDestroyed = false
 
   public weak var webviewPlugin: DesktopWebviewWindowPlugin?
 
   init(viewId: Int64, methodChannel: FlutterMethodChannel,
        width: Int, height: Int,
        title: String, titleBarHeight: Int,
-       titleBarTopPadding: Int) {
+       titleBarController: FlutterViewController?,
+       titleBarEngine: SharedTitleBarEngine?) {
     self.viewId = viewId
     self.methodChannel = methodChannel
-    self.width = width
-    self.height = height
-    self.titleBarHeight = titleBarHeight
-    self.titleBarTopPadding = titleBarTopPadding
-    self.title = title
+    webViewController = WebViewLayoutController(
+      methodChannel: methodChannel, viewId: viewId,
+      titleBarHeight: titleBarHeight,
+      titleBarController: titleBarController, titleBarEngine: titleBarEngine)
     super.init(window: nil)
 
     let newWindow = NSWindow(contentRect: NSRect(x: 0, y: 0, width: width, height: height), styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
@@ -42,11 +40,7 @@ class WebviewWindowController: NSWindowController {
     newWindow.title = title
     newWindow.titlebarAppearsTransparent = true
 
-    let contentViewController = WebViewLayoutController(
-      methodChannel: methodChannel,
-      viewId: viewId, titleBarHeight: titleBarHeight,
-      titleBarTopPadding: titleBarTopPadding)
-    newWindow.contentViewController = contentViewController
+    newWindow.contentViewController = webViewController
     newWindow.setContentSize(NSSize(width: width, height: height))
     newWindow.center()
 
@@ -57,8 +51,12 @@ class WebviewWindowController: NSWindowController {
     fatalError("init(coder:) has not been implemented")
   }
 
-  public var webViewController: WebViewLayoutController {
-    window?.contentViewController as! WebViewLayoutController
+  override func close() {
+    guard !isClosed, !isDestroyed else { return }
+    super.close()
+    // Ensure programmatic close completes even if AppKit did not send the
+    // delegate callback (for example, when the window was never shown).
+    finishClose()
   }
 
   override func keyDown(with event: NSEvent) {
@@ -67,11 +65,27 @@ class WebviewWindowController: NSWindowController {
     }
   }
 
-  func destroy() {
+  func destroy(closeWindow: Bool = true) {
+    guard !isDestroyed else { return }
+    isDestroyed = true
     webViewController.destroy()
     webviewPlugin = nil
     window?.delegate = nil
+    window?.contentViewController = nil
+    if closeWindow {
+      window?.close()
+    }
     window = nil
+  }
+
+  private func finishClose() {
+    guard !isClosed, !isDestroyed else { return }
+    isClosed = true
+    // Remove the browser first: detaching a Flutter view can pump platform
+    // messages, which must no longer be able to operate on this window.
+    webviewPlugin?.onWebviewWindowClose(viewId: viewId, wc: self)
+    destroy(closeWindow: false)
+    methodChannel.invokeMethod("onWindowClose", arguments: ["id": viewId])
   }
 
   func setAppearance(brightness: Int) {
@@ -101,9 +115,6 @@ class WebviewWindowController: NSWindowController {
 
 extension WebviewWindowController: NSWindowDelegate {
   func windowWillClose(_ notification: Notification) {
-    webViewController.destroy()
-    methodChannel.invokeMethod("onWindowClose", arguments: ["id": viewId])
-    webviewPlugin?.onWebviewWindowClose(viewId: viewId, wc: self)
-    destroy()
+    finishClose()
   }
 }

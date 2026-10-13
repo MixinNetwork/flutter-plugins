@@ -64,6 +64,7 @@ void main() {
       ...configuration.toMap(),
       'titleBarHeight': 0,
       'titleBarTopPadding': 0,
+      'useTitleBar': false,
     });
     expect(configuration.titleBarHeight, 60);
     expect(configuration.titleBarTopPadding, 24);
@@ -80,14 +81,14 @@ void main() {
       expect(runWebViewTitleBarWidget(args), isFalse);
 
       await WebviewWindow.create();
-      expect(createArguments.last, CreateConfiguration.platform().toMap());
+      expect(createArguments.last, {...CreateConfiguration.platform().toMap(), 'useTitleBar': true});
 
       const configuration = CreateConfiguration(
         titleBarHeight: 60,
         titleBarTopPadding: 24,
       );
       await WebviewWindow.create(configuration: configuration);
-      expect(createArguments.last, configuration.toMap());
+      expect(createArguments.last, {...configuration.toMap(), 'useTitleBar': true});
     });
   }
 }

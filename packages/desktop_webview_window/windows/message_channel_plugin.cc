@@ -19,6 +19,10 @@ class ClientMessageChannelPlugin {
  public:
   explicit ClientMessageChannelPlugin(FlutterMethodChannel channel);
 
+  ~ClientMessageChannelPlugin() {
+    channel_->SetMethodCallHandler(nullptr);
+  }
+
   void InvokeMethod(
       const std::string &method,
       std::unique_ptr<flutter::EncodableValue> arguments) {
@@ -97,11 +101,14 @@ ClientMessageChannelPlugin::ClientMessageChannelPlugin(
 void ServerMessageChannelPlugin::DispatchMethodCall(
     const flutter::MethodCall<> &call,
     ClientMessageChannelPlugin *client_from) {
-  for (const auto &item: client_set_) {
+  // A dispatch can reenter native code and remove an engine's client.
+  const auto clients = client_set_;
+  for (const auto &item: clients) {
     if (item.get() != client_from) {
       item->InvokeMethod(
           call.method_name(),
-          std::make_unique<flutter::EncodableValue>(*call.arguments()));
+          call.arguments() ? std::make_unique<flutter::EncodableValue>(*call.arguments())
+                           : nullptr);
     }
   }
 }

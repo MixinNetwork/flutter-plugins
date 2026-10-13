@@ -13,11 +13,12 @@ import 'package:path/path.dart' as p;
 import 'src/create_configuration.dart';
 import 'src/message_channel.dart';
 import 'src/title_bar_state.dart';
+import 'src/title_bar_runtime.dart';
 import 'src/webview.dart';
 import 'src/webview_impl.dart';
 
 export 'src/create_configuration.dart';
-export 'src/title_bar.dart';
+export 'src/title_bar.dart' hide SharedTitleBarViews;
 export 'src/webview.dart';
 
 final List<WebviewImpl> _webviews = [];
@@ -28,6 +29,25 @@ class WebviewWindow {
   static const _otherIsolateMessageHandler = ClientMessageChannel();
 
   static bool _inited = false;
+  static int _pendingCreates = 0;
+  static final Set<int> _closedDuringCreate = {};
+  static final Map<int, Map<String, Map<String, Object?>>> _titleBarStates = {};
+
+  static Future<void> _sendTitleBarEvent(
+    String method,
+    Map<String, Object?> args,
+  ) async {
+    final id = args['webViewId'] as int;
+    (_titleBarStates[id] ??= {})[method] = args;
+    // Loading-start and loading-complete are one state, not two replay events.
+    if (method == 'onNavigationStarted') {
+      _titleBarStates[id]!.remove('onNavigationCompleted');
+    }
+    if (method == 'onNavigationCompleted') {
+      _titleBarStates[id]!.remove('onNavigationStarted');
+    }
+    await _otherIsolateMessageHandler.invokeMethod(method, args);
+  }
 
   static void _init() {
     if (_inited) {
@@ -60,9 +80,7 @@ class WebviewWindow {
     return true;
   }
 
-  static Future<Webview> create({
-    CreateConfiguration? configuration,
-  }) async {
+  static Future<Webview> create({CreateConfiguration? configuration}) async {
     configuration ??= CreateConfiguration.platform();
     _init();
     final arguments = configuration.toMap();
@@ -70,24 +88,44 @@ class WebviewWindow {
       arguments['titleBarHeight'] = 0;
       arguments['titleBarTopPadding'] = 0;
     }
-    final viewId = await _channel.invokeMethod(
-      "create",
-      arguments,
-    ) as int;
-    final webview = WebviewImpl(viewId, _channel);
-    _webviews.add(webview);
-    return webview;
+    _pendingCreates++;
+    try {
+      final viewId = await _channel.invokeMethod("create", {
+        ...arguments,
+        'useTitleBar': titleBarHookRegistered && titleBarInitialized,
+      }) as int;
+      final webview = WebviewImpl(viewId, _channel);
+      if (_closedDuringCreate.remove(viewId)) {
+        webview.onClosed();
+      } else {
+        _webviews.add(webview);
+      }
+      return webview;
+    } finally {
+      _pendingCreates--;
+      if (_pendingCreates == 0) _closedDuringCreate.clear();
+    }
   }
 
   static Future<dynamic> _handleOtherIsolateMethodCall(MethodCall call) async {
     final webViewId = call.arguments['webViewId'] as int;
-    final webView = _webviews
-        .cast<WebviewImpl?>()
-        .firstWhere((w) => w?.viewId == webViewId, orElse: () => null);
+    final webView = _webviews.cast<WebviewImpl?>().firstWhere(
+      (w) => w?.viewId == webViewId,
+      orElse: () => null,
+    );
     if (webView == null) {
       return;
     }
     switch (call.method) {
+      case 'onTitleBarReady':
+        final state = _titleBarStates[webViewId];
+        if (state != null) {
+          await Future.wait([
+            for (final entry in List.of(state.entries))
+              _otherIsolateMessageHandler.invokeMethod(entry.key, entry.value),
+          ]);
+        }
+        break;
       case 'onBackPressed':
         await webView.back();
         break;
@@ -109,16 +147,20 @@ class WebviewWindow {
   static Future<dynamic> _handleMethodCall(MethodCall call) async {
     final args = call.arguments as Map;
     final viewId = args['id'] as int;
-    final webview = _webviews
-        .cast<WebviewImpl?>()
-        .firstWhere((e) => e?.viewId == viewId, orElse: () => null);
-    assert(webview != null);
+    final webview = _webviews.cast<WebviewImpl?>().firstWhere(
+      (e) => e?.viewId == viewId,
+      orElse: () => null,
+    );
     if (webview == null) {
+      if (call.method == 'onWindowClose' && _pendingCreates > 0) {
+        _closedDuringCreate.add(viewId);
+      }
       return;
     }
     switch (call.method) {
       case "onWindowClose":
         _webviews.remove(webview);
+        _titleBarStates.remove(viewId);
         webview.onClosed();
         break;
       case "onJavaScriptMessage":
@@ -131,7 +173,7 @@ class WebviewWindow {
         );
       case "onHistoryChanged":
         webview.onHistoryChanged(args['canGoBack'], args['canGoForward']);
-        await _otherIsolateMessageHandler.invokeMethod('onHistoryChanged', {
+        await _sendTitleBarEvent('onHistoryChanged', {
           'webViewId': viewId,
           'canGoBack': args['canGoBack'] as bool,
           'canGoForward': args['canGoForward'] as bool,
@@ -139,14 +181,12 @@ class WebviewWindow {
         break;
       case "onNavigationStarted":
         webview.onNavigationStarted();
-        await _otherIsolateMessageHandler.invokeMethod('onNavigationStarted', {
-          'webViewId': viewId,
-        });
+        await _sendTitleBarEvent('onNavigationStarted', {'webViewId': viewId});
         break;
       case "onUrlRequested":
         final url = args['url'] as String;
         final ret = webview.notifyUrlChanged(url);
-        await _otherIsolateMessageHandler.invokeMethod('onUrlRequested', {
+        await _sendTitleBarEvent('onUrlRequested', {
           'webViewId': viewId,
           'url': url,
         });
@@ -161,10 +201,10 @@ class WebviewWindow {
         break;
       case "onNavigationCompleted":
         webview.onNavigationCompleted();
-        await _otherIsolateMessageHandler
-            .invokeMethod('onNavigationCompleted', {
-          'webViewId': viewId,
-        });
+        await _sendTitleBarEvent(
+          'onNavigationCompleted',
+          {'webViewId': viewId},
+        );
         break;
       default:
         return;
@@ -184,8 +224,9 @@ class WebviewWindow {
       if (p.isAbsolute(userDataFolderWindows)) {
         webview2Dir = Directory(userDataFolderWindows);
       } else {
-        webview2Dir = Directory(p.join(
-            p.dirname(Platform.resolvedExecutable), userDataFolderWindows));
+        webview2Dir = Directory(
+          p.join(p.dirname(Platform.resolvedExecutable), userDataFolderWindows),
+        );
       }
 
       if (await (webview2Dir.exists())) {

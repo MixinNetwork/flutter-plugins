@@ -6,6 +6,7 @@
 #include "message_channel_plugin.h"
 
 #include <set>
+#include <vector>
 
 #include "glib.h"
 
@@ -16,10 +17,8 @@ class ClientMessageChannelPlugin {
  public:
   explicit ClientMessageChannelPlugin(FlMethodChannel *channel);
 
-  void DispatchMethodCall(FlMethodCall *call) {
-    auto *name = fl_method_call_get_name(call);
-    auto *args = fl_method_call_get_args(call);
-    fl_method_channel_invoke_method(channel_, name, args, nullptr, nullptr, nullptr);
+  FlMethodChannel *RefChannel() const {
+    return FL_METHOD_CHANNEL(g_object_ref(channel_));
   }
 
   ~ClientMessageChannelPlugin();
@@ -41,10 +40,17 @@ class ServerMessageChannelPlugin {
   }
 
   void DispatchMethodCall(FlMethodCall *call, ClientMessageChannelPlugin *client_from) {
-    for (auto client: clients_) {
-      if (client != client_from) {
-        client->DispatchMethodCall(call);
-      }
+    // Sending may re-enter GTK and remove another client. Snapshot owned
+    // channel references rather than iterating raw client pointers while sending.
+    std::vector<FlMethodChannel *> channels;
+    for (auto *client : clients_) {
+      if (client != client_from) channels.push_back(client->RefChannel());
+    }
+    for (auto *channel : channels) {
+      fl_method_channel_invoke_method(channel, fl_method_call_get_name(call),
+                                      fl_method_call_get_args(call), nullptr,
+                                      nullptr, nullptr);
+      g_object_unref(channel);
     }
   }
 
@@ -61,8 +67,8 @@ ClientMessageChannelPlugin::ClientMessageChannelPlugin(FlMethodChannel *channel)
 }
 
 ClientMessageChannelPlugin::~ClientMessageChannelPlugin() {
-  g_object_unref(channel_);
   g_server_message_channel_plugin->RemoveClient(this);
+  g_object_unref(channel_);
 }
 
 void client_plugin_proxy_dispatch_method_call(FlMethodChannel *channel, FlMethodCall *call, gpointer user_data) {
@@ -75,11 +81,17 @@ void client_plugin_proxy_dispatch_method_call(FlMethodChannel *channel, FlMethod
 }
 
 void client_message_channel_plugin_register_with_registrar(FlPluginRegistrar *registrar) {
-  if (!g_server_message_channel_plugin) {
-    g_server_message_channel_plugin = new ServerMessageChannelPlugin();
-  }
+  // A shared engine has many FlViews, but exactly one message client. Key
+  // registration to its messenger rather than to a view or registrar.
+  FlBinaryMessenger *messenger = fl_plugin_registrar_get_messenger(registrar);
+  const char *registration_key = "desktop-webview-window-message-client";
+  if (g_object_get_data(G_OBJECT(messenger), registration_key) != nullptr) return;
+  g_object_set_data(G_OBJECT(messenger), registration_key, GINT_TO_POINTER(1));
+
+  static ServerMessageChannelPlugin server;
+  g_server_message_channel_plugin = &server;
   g_autoptr(FlStandardMethodCodec) codec = fl_standard_method_codec_new();
-  FlMethodChannel *channel = fl_method_channel_new(fl_plugin_registrar_get_messenger(registrar),
+  g_autoptr(FlMethodChannel) channel = fl_method_channel_new(messenger,
                                                    "webview_message/client_channel",
                                                    FL_METHOD_CODEC(codec));
   auto *client_message_channel_plugin = new ClientMessageChannelPlugin(channel);

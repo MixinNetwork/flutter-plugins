@@ -14,6 +14,8 @@
 #include <string>
 #include <unordered_map>
 
+#include "title_bar_engine.h"
+
 typedef struct {
     GMainLoop *loop;
     GList *cookies;
@@ -29,7 +31,8 @@ class WebviewWindow {
   WebviewWindow(FlMethodChannel *method_channel, int64_t window_id,
                 std::function<void()> on_close_callback,
                 const std::string &title, int width, int height,
-                int title_bar_height, GtkWindow *parent);
+                int title_bar_height, int title_bar_top_padding,
+                TitleBarEngine *title_bar_engine, GtkWindow *parent);
 
   virtual ~WebviewWindow();
 
@@ -63,6 +66,9 @@ class WebviewWindow {
   void UnregisterJavaScriptChannel(const std::string &name);
 
  private:
+  void OnDestroyed();
+  void DisconnectCallbacks();
+
   FlMethodChannel *method_channel_;
   int64_t window_id_;
   std::function<void()> on_close_callback_;
@@ -72,6 +78,12 @@ class WebviewWindow {
   GtkWidget *window_ = nullptr;
   GtkWidget *webview_ = nullptr;
   GtkBox *box_ = nullptr;
+  WebKitUserContentManager *content_manager_ = nullptr;
+  GCancellable *javascript_cancellable_ = nullptr;
+  TitleBarEngine *title_bar_engine_ = nullptr;  // Owned by the plugin.
+  int64_t title_bar_view_id_ = -1;
+  bool closing_ = false;
+  bool closed_ = false;
 
   std::unordered_map<std::string, gulong> js_channel_handler_ids_;
 };

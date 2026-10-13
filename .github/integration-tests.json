@@ -6,6 +6,13 @@
       "runner": "windows-latest",
       "test": "integration_test/windows_webview_test.dart",
       "setup": "tool/ci/setup_windows.ps1"
+    },
+    {
+      "package": "desktop_webview_window",
+      "platform": "macos",
+      "runner": "macos-latest",
+      "test": "integration_test/shared_engine_test.dart",
+      "driver": "test_driver/integration_test.dart"
     }
   ]
 }

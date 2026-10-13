@@ -11,7 +11,12 @@ class CreateConfiguration {
   /// the title of window
   final String title;
 
+  /// Set to zero to omit Flutter toolbar UI and its engine entirely.
   final int titleBarHeight;
+
+  /// Experimental Linux shared-engine rendering. Disabled by default because
+  /// rapid view destruction/recreation can fail in the stock GLX renderer.
+  final bool useSharedTitleBarEngineLinux;
 
   final int titleBarTopPadding;
 
@@ -43,6 +48,7 @@ class CreateConfiguration {
     this.windowPosY = 0,
     this.title = "",
     this.titleBarHeight = 40,
+    this.useSharedTitleBarEngineLinux = false,
     this.titleBarTopPadding = 0,
     this.userDataFolderWindows = 'webview_window_WebView2',
     this.useWindowPositionAndSize = false,
@@ -52,9 +58,7 @@ class CreateConfiguration {
   });
 
   factory CreateConfiguration.platform() {
-    return CreateConfiguration(
-      titleBarTopPadding: Platform.isMacOS ? 24 : 0,
-    );
+    return CreateConfiguration(titleBarTopPadding: Platform.isMacOS ? 24 : 0);
   }
 
   Map toMap() => {
@@ -64,6 +68,7 @@ class CreateConfiguration {
         "windowPosY": windowPosY,
         "title": title,
         "titleBarHeight": titleBarHeight,
+        "useSharedTitleBarEngineLinux": useSharedTitleBarEngineLinux,
         "titleBarTopPadding": titleBarTopPadding,
         "userDataFolderWindows": userDataFolderWindows,
         "useWindowPositionAndSize": useWindowPositionAndSize,

@@ -33,7 +33,13 @@ class WebviewWindowPlugin: public flutter::Plugin {
 
   MethodChannelPtr method_channel_;
 
-  std::map<int64_t, std::unique_ptr<WebviewWindow>> windows_;
+  // Declared before windows_ so every borrowed view dies before this engine.
+  webview_window::SharedToolbarEngine toolbar_engine_;
+
+  std::map<int64_t, std::shared_ptr<WebviewWindow>> windows_;
+
+  // Guards native close callbacks during plugin teardown.
+  std::shared_ptr<bool> lifetime_ = std::make_shared<bool>(true);
 
 };
 

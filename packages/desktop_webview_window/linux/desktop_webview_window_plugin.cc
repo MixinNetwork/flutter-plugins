@@ -7,6 +7,7 @@
 #include <cstring>
 #include <map>
 #include <memory>
+#include <vector>
 
 #include "message_channel_plugin.h"
 #include "webview_window.h"
@@ -27,6 +28,7 @@ struct _WebviewWindowPlugin {
   std::map<int64_t, std::unique_ptr<WebviewWindow>> *windows;
   // The app's view, used to find the window webview windows belong to.
   FlView *view;
+  TitleBarEngine *title_bar_engine;
 };
 
 G_DEFINE_TYPE(WebviewWindowPlugin, webview_window_plugin, g_object_get_type())
@@ -57,20 +59,37 @@ static void webview_window_plugin_handle_method_call(
         parent = GTK_WINDOW(toplevel);
       }
     }
+    auto *use_title_bar = fl_value_lookup_string(args, "useTitleBar");
+    if ((use_title_bar != nullptr &&
+         fl_value_get_type(use_title_bar) == FL_VALUE_TYPE_BOOL &&
+         !fl_value_get_bool(use_title_bar)) || title_bar_height <= 0) {
+      title_bar_height = 0;
+    }
+    auto *padding = fl_value_lookup_string(args, "titleBarTopPadding");
+    const int title_bar_top_padding =
+        padding == nullptr ? 0 : fl_value_get_int(padding);
+    auto *shared = fl_value_lookup_string(args, "useSharedTitleBarEngineLinux");
+    // Opt-in only: the stock Linux GLX backend has a reproducible rapid
+    // remove/recreate crash. Retaining the implicit view does not fix it.
+    const bool use_shared_engine = title_bar_height > 0 && shared != nullptr &&
+        fl_value_get_type(shared) == FL_VALUE_TYPE_BOOL &&
+        fl_value_get_bool(shared);
+    if (use_shared_engine && self->title_bar_engine == nullptr) {
+      self->title_bar_engine = new TitleBarEngine();
+    }
 
     auto window_id = next_window_id_;
-    g_object_ref(self);
     auto webview = std::make_unique<WebviewWindow>(
         self->method_channel, window_id,
         [self, window_id]() {
           self->windows->erase(window_id);
-          g_object_unref(self);
         },
-        title, width, height, title_bar_height, parent);
+        title, width, height, title_bar_height, title_bar_top_padding,
+        use_shared_engine ? self->title_bar_engine : nullptr, parent);
     self->windows->insert({window_id, std::move(webview)});
     next_window_id_++;
-    fl_method_call_respond_success(method_call, fl_value_new_int(window_id),
-                                   nullptr);
+    g_autoptr(FlValue) result = fl_value_new_int(window_id);
+    fl_method_call_respond_success(method_call, result, nullptr);
   } else if (strcmp(method, "launch") == 0) {
     auto *args = fl_method_call_get_args(method_call);
     if (fl_value_get_type(args) != FL_VALUE_TYPE_MAP) {
@@ -110,13 +129,19 @@ static void webview_window_plugin_handle_method_call(
     self->windows->at(window_id)->RunJavaScriptWhenContentReady(java_script);
     fl_method_call_respond_success(method_call, nullptr, nullptr);
   } else if (strcmp(method, "clearAll") == 0) {
-    for (const auto &item : *self->windows) {
-      item.second->Close();
+    // Closing destroys each window synchronously and erases its map entry.
+    // Iterate a snapshot, not an iterator invalidated by that callback.
+    std::vector<int64_t> ids;
+    for (const auto &item : *self->windows) ids.push_back(item.first);
+    for (int64_t id : ids) {
+      auto found = self->windows->find(id);
+      if (found != self->windows->end()) found->second->Close();
     }
     // If application didn't create a webview, but we called
     // webkit_website_data_manager_clear, there will be a segment fault. To
     // avoid crash, we create a fake webview first and then clear all data.
-    auto *web_view = webkit_web_view_new();
+    g_autoptr(WebKitWebView) web_view = WEBKIT_WEB_VIEW(webkit_web_view_new());
+    g_object_ref_sink(web_view);
     auto *context = webkit_web_view_get_context(WEBKIT_WEB_VIEW(web_view));
     auto *website_data_manager =
         webkit_web_context_get_website_data_manager(context);
@@ -246,9 +271,8 @@ static void webview_window_plugin_handle_method_call(
     }
     auto window_id = fl_value_get_int(fl_value_lookup_string(args, "viewId"));
     if (!self->windows->count(window_id)) {
-      fl_method_call_respond_error(method_call, "0",
-                                   "can not found webview for viewId", nullptr,
-                                   nullptr);
+      // A duplicated or delayed close is already satisfied.
+      fl_method_call_respond_success(method_call, nullptr, nullptr);
       return;
     }
     self->windows->at(window_id)->Close();
@@ -309,8 +333,14 @@ static void webview_window_plugin_handle_method_call(
 }
 
 static void webview_window_plugin_dispose(GObject *object) {
-  delete WEBVIEW_WINDOW_PLUGIN(object)->windows;
-  g_object_unref(WEBVIEW_WINDOW_PLUGIN(object)->method_channel);
+  auto *self = WEBVIEW_WINDOW_PLUGIN(object);
+  // Destructors disconnect native callbacks before destroying GTK widgets.
+  // Windows must release their views before the shared host is destroyed.
+  delete self->windows;
+  self->windows = nullptr;
+  delete self->title_bar_engine;
+  self->title_bar_engine = nullptr;
+  g_clear_object(&self->method_channel);
   G_OBJECT_CLASS(webview_window_plugin_parent_class)->dispose(object);
 }
 
