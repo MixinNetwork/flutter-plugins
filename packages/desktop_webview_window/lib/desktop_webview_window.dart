@@ -94,12 +94,15 @@ class WebviewWindow {
       final viewId = await _channel.invokeMethod("create", {
         ...arguments,
         'useTitleBar': initialization != null,
+        if (defaultTitleBarTheme.value case final theme?)
+          'titleBarBrightness': theme.brightness.index,
       }) as int;
       final webview = WebviewImpl(viewId, _channel);
       if (_closedDuringCreate.remove(viewId)) {
         webview.onClosed();
       } else {
         _webviews.add(webview);
+        await webview.syncTitleBarBrightness();
       }
       return webview;
     } finally {
@@ -119,6 +122,12 @@ class WebviewWindow {
     }
     switch (call.method) {
       case 'onTitleBarReady':
+        if (webView.titleBarTheme != null) {
+          await _titleBarMessages.invokeMethod('onTitleBarThemeChanged', {
+            'webViewId': webViewId,
+            'theme': webView.titleBarTheme,
+          });
+        }
         final state = _titleBarStates[webViewId];
         if (state != null) {
           await Future.wait([

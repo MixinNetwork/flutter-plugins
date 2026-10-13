@@ -4,8 +4,11 @@ import 'dart:io';
 
 import 'package:desktop_webview_window/src/cookie.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' show ThemeData;
 import 'package:flutter/services.dart';
 
+import 'title_bar_messages.dart';
+import 'title_bar_runtime.dart';
 import 'webview.dart';
 
 class WebviewImpl extends Webview {
@@ -30,13 +33,49 @@ class WebviewImpl extends Webview {
 
   final Set<OnWebMessageReceivedCallback> _onWebMessageReceivedCallbacks = {};
 
-  WebviewImpl(this.viewId, this.channel);
+  ThemeData? _titleBarTheme;
+
+  ThemeData? get titleBarTheme => _titleBarTheme;
+  Brightness? _appliedTitleBarBrightness;
+
+  WebviewImpl(this.viewId, this.channel) {
+    defaultTitleBarTheme.addListener(_onDefaultTitleBarThemeChanged);
+  }
+
+  void _onDefaultTitleBarThemeChanged() {
+    unawaited(
+        syncTitleBarBrightness().catchError((Object error, StackTrace stack) {
+      FlutterError.reportError(
+          FlutterErrorDetails(exception: error, stack: stack));
+    }));
+  }
+
+  Future<void> syncTitleBarBrightness() async {
+    if (_closed || _closing) return;
+    final brightness =
+        (titleBarTheme ?? defaultTitleBarTheme.value)?.brightness;
+    if (brightness == _appliedTitleBarBrightness) return;
+    _appliedTitleBarBrightness = brightness;
+    await _setNativeBrightness(brightness);
+  }
+
+  @override
+  Future<void> setTitleBarTheme(ThemeData? theme) async {
+    if (_closed || _closing) return;
+    _titleBarTheme = theme;
+    await const TitleBarMessages().invokeMethod('onTitleBarThemeChanged', {
+      'webViewId': viewId,
+      'theme': theme,
+    });
+    await syncTitleBarBrightness();
+  }
 
   @override
   Future<void> get onClose => _closeCompleter.future;
 
   void onClosed() {
     if (_closed) return;
+    defaultTitleBarTheme.removeListener(_onDefaultTitleBarThemeChanged);
     _closed = true;
     _closing = true;
     _javaScriptMessageHandlers.clear();
@@ -147,13 +186,15 @@ class WebviewImpl extends Webview {
 
   @override
   void setBrightness(Brightness? brightness) {
-    /// -1 : system default
-    /// 0 : dark
-    /// 1 : light
-    if (!Platform.isMacOS) {
+    _appliedTitleBarBrightness = brightness;
+    unawaited(_setNativeBrightness(brightness));
+  }
+
+  Future<void> _setNativeBrightness(Brightness? brightness) async {
+    if (_closed || _closing || !(Platform.isMacOS || Platform.isWindows)) {
       return;
     }
-    channel.invokeMethod("setBrightness", {
+    await channel.invokeMethod("setBrightness", {
       "viewId": viewId,
       "brightness": brightness?.index ?? -1,
     });

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:desktop_webview_window/desktop_webview_window.dart';
@@ -40,12 +41,14 @@ class _Binding extends AutomatedTestWidgetsFlutterBinding {
 }
 
 class _ExtraView extends TestFlutterView {
-  _ExtraView(TestFlutterView main, _Dispatcher dispatcher)
+  _ExtraView(TestFlutterView main, _Dispatcher dispatcher, [this.id = 100])
       : super(
             view: main, platformDispatcher: dispatcher, display: main.display);
 
+  final int id;
+
   @override
-  int get viewId => 100;
+  int get viewId => id;
 
   @override
   void render(ui.Scene scene, {ui.Size? size}) {}
@@ -164,6 +167,113 @@ void main() {
     binding.platformDispatcher.showMainView = true;
     await tester.pumpWidget(const SizedBox.shrink());
     expect(titleBarInitialization, isNull);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('global and per-window themes update toolbars and native windows',
+      (tester) async {
+    final messenger = binding.defaultBinaryMessenger;
+    const native = MethodChannel('webview_window');
+    final nativeCalls = <MethodCall>[];
+    var nextId = 101;
+    var visible = false;
+    messenger.setMockMethodCallHandler(native, (call) async {
+      if (call.method == 'create') return nextId++;
+      nativeCalls.add(call);
+      return null;
+    });
+    messenger.setMockMethodCallHandler(control, (call) async {
+      if (call.method == 'initialize') return tester.view.viewId;
+      return [
+        if (visible)
+          {'viewId': 100, 'webViewId': 101, 'titleBarTopPadding': 24},
+        if (visible) {'viewId': 200, 'webViewId': 102, 'titleBarTopPadding': 0},
+      ];
+    });
+    binding.platformDispatcher.extraViews.addAll([
+      _ExtraView(tester.view, binding.platformDispatcher),
+      _ExtraView(tester.view, binding.platformDispatcher, 200),
+    ]);
+    final global = ValueNotifier<ThemeData?>(ThemeData.light());
+    await tester.pumpWidget(
+        ValueListenableBuilder<ThemeData?>(
+          valueListenable: global,
+          builder: (context, theme, _) => WebviewWindowApp(
+            titleBarTheme: theme,
+            titleBarBuilder: (context) => Text(
+              Theme.of(context).brightness.name,
+              key: const ValueKey('theme'),
+            ),
+            child: const MaterialApp(home: SizedBox.shrink()),
+          ),
+        ),
+        wrapWithView: false);
+    await tester.pumpAndSettle();
+    final first = await WebviewWindow.create();
+    final second = await WebviewWindow.create();
+    final toolbarless = await WebviewWindow.create(
+      configuration: const CreateConfiguration(titleBarHeight: 0),
+    );
+    // The override must survive a toolbar mounting after the API call.
+    await first.setTitleBarTheme(ThemeData.dark());
+    visible = true;
+    await sendNative(control.name, 'viewsChanged');
+    await tester.pumpAndSettle();
+    expect(find.text('dark'), findsOneWidget);
+    expect(find.text('light'), findsOneWidget);
+    final darkContext = tester.element(find.text('dark'));
+    expect(Material.of(darkContext).color,
+        ThemeData.dark().scaffoldBackgroundColor);
+    global.value = ThemeData.dark();
+    await tester.pumpAndSettle();
+    expect(find.text('dark'), findsNWidgets(2));
+    global.value = ThemeData.light();
+    await tester.pumpAndSettle();
+    expect(find.text('dark'), findsOneWidget);
+    expect(find.text('light'), findsOneWidget);
+    await first.setTitleBarTheme(null);
+    await tester.pumpAndSettle();
+    expect(find.text('light'), findsNWidgets(2));
+    if (Platform.isMacOS || Platform.isWindows) {
+      expect(
+          nativeCalls
+              .where((call) => call.method == 'setBrightness')
+              .map((call) => call.arguments),
+          [
+            {'viewId': 101, 'brightness': 1},
+            {'viewId': 102, 'brightness': 1},
+            {'viewId': 103, 'brightness': 1},
+            {'viewId': 101, 'brightness': 0},
+            {'viewId': 102, 'brightness': 0},
+            {'viewId': 103, 'brightness': 0},
+            {'viewId': 102, 'brightness': 1},
+            {'viewId': 103, 'brightness': 1},
+            {'viewId': 101, 'brightness': 1},
+          ]);
+    }
+    global.value = null;
+    await tester.pumpAndSettle();
+    if (Platform.isMacOS || Platform.isWindows) {
+      expect(nativeCalls.last.arguments, {'viewId': 103, 'brightness': -1});
+    }
+    for (final view in [first, second, toolbarless]) {
+      view.close();
+      await sendNative(native.name, 'onWindowClose', {
+        'id': view == first
+            ? 101
+            : view == second
+                ? 102
+                : 103,
+      });
+    }
+    final callsAfterClose = nativeCalls.length;
+    global.value = ThemeData.dark();
+    await tester.pumpAndSettle();
+    expect(nativeCalls.length, callsAfterClose);
+    await first.setTitleBarTheme(ThemeData.dark());
+    expect(nativeCalls.length, callsAfterClose);
+    await tester.pumpWidget(const SizedBox.shrink());
+    global.dispose();
+    messenger.setMockMethodCallHandler(native, null);
     expect(tester.takeException(), isNull);
   });
 }

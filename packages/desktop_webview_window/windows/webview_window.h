@@ -100,6 +100,7 @@ class WebviewWindow : public std::enable_shared_from_this<WebviewWindow> {
   bool destroyed_ = false;
 
   int title_bar_height_;
+  int brightness_ = -2;
 
   void CompleteCreation(bool success, const std::string& error = "");
 

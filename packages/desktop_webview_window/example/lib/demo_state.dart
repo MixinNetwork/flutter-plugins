@@ -32,6 +32,16 @@ class DemoState extends ChangeNotifier {
   final DemoPageServer pages;
   final String userDataFolder;
   final darkMode = ValueNotifier(false);
+
+  ThemeData get theme => ThemeData(
+        useMaterial3: true,
+        colorSchemeSeed: Colors.indigo,
+        brightness: darkMode.value ? Brightness.dark : Brightness.light,
+        inputDecorationTheme: const InputDecorationTheme(
+          border: OutlineInputBorder(),
+          isDense: true,
+        ),
+      );
   final windows = <DemoWindow>[];
   final events = <DemoEvent>[];
   int? selectedId;

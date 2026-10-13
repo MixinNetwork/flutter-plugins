@@ -46,15 +46,7 @@ class _DemoAppState extends State<DemoApp> {
         valueListenable: state.darkMode,
         builder: (context, dark, _) => MaterialApp(
           debugShowCheckedModeBanner: false,
-          theme: ThemeData(
-            useMaterial3: true,
-            colorSchemeSeed: Colors.indigo,
-            brightness: dark ? Brightness.dark : Brightness.light,
-            inputDecorationTheme: const InputDecorationTheme(
-              border: OutlineInputBorder(),
-              isDense: true,
-            ),
-          ),
+          theme: state.theme,
           home: AnimatedBuilder(
             animation: state,
             builder: (context, _) => Scaffold(
@@ -291,13 +283,11 @@ class _DemoAppState extends State<DemoApp> {
               style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 12),
           Wrap(spacing: 8, runSpacing: 8, children: [
-            if (Platform.isMacOS) ...[
-              action('Light page',
-                  () async => view.setBrightness(Brightness.light)),
-              action(
-                  'Dark page', () async => view.setBrightness(Brightness.dark)),
-              action('System page theme', () async => view.setBrightness(null)),
-            ],
+            action('Light titlebar',
+                () => view.setTitleBarTheme(ThemeData.light())),
+            action(
+                'Dark titlebar', () => view.setTitleBarTheme(ThemeData.dark())),
+            action('Follow shared theme', () => view.setTitleBarTheme(null)),
             if (Platform.isWindows) ...[
               action('Show', () => view.setWebviewWindowVisibility(true)),
               action('Hide', () => view.setWebviewWindowVisibility(false)),

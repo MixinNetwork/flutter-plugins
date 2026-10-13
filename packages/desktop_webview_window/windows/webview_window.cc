@@ -3,6 +3,7 @@
 //
 
 #include <windows.h>
+#include <dwmapi.h>
 
 #include "webview_window.h"
 
@@ -93,6 +94,7 @@ void WebviewWindow::CreateAndShow(const std::wstring &title, int height, int wid
     OnClosed();
     return;
   }
+  if (brightness_ != -2) SetBrightness(brightness_);
   if (!useWindowPositionAndSize && !openMaximized) {
     ClipOrCenterWindowToMonitor(hwnd_.get(), MONITOR_CENTER);
   }
@@ -208,6 +210,21 @@ void WebviewWindow::ResizeChildren(HWND window) {
 }
 
 void WebviewWindow::SetBrightness(int brightness) {
+  brightness_ = brightness;
+  if (!hwnd_) return;
+  BOOL dark = brightness == 0;
+  if (brightness < 0) {
+    DWORD light = 1;
+    DWORD size = sizeof(light);
+    RegGetValueW(HKEY_CURRENT_USER,
+        L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+        L"AppsUseLightTheme", RRF_RT_REG_DWORD, nullptr, &light, &size);
+    dark = light == 0;
+  }
+  // Older Windows versions may not support this attribute; leave their native
+  // titlebar unchanged in that case. 20 is DWMWA_USE_IMMERSIVE_DARK_MODE.
+  DwmSetWindowAttribute(hwnd_.get(), static_cast<DWMWINDOWATTRIBUTE>(20),
+                        &dark, sizeof(dark));
 }
 
 void WebviewWindow::setVisibility(bool visible)
@@ -310,6 +327,11 @@ WebviewWindow::MessageHandler(
     case WM_SIZE: {
       ResizeChildren(hwnd);
       return 0;
+    }
+    case WM_DWMCOLORIZATIONCOLORCHANGED:
+    case WM_SETTINGCHANGE: {
+      if (brightness_ == -1) SetBrightness(-1);
+      break;
     }
     case WM_FONTCHANGE: {
       if (flutter_action_bar_) {

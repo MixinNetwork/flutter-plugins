@@ -17,8 +17,13 @@ Future<void> main() async {
       : 'webview_window_WebView2';
   final state =
       DemoState(await DemoPageServer.start(), userDataFolder: profile);
-  runWebviewWindowApp(
-    DemoApp(state: state),
-    titleBarBuilder: (_) => DemoTitleBar(darkMode: state.darkMode),
-  );
+  runWidget(ValueListenableBuilder<bool>(
+    valueListenable: state.darkMode,
+    child: DemoApp(state: state),
+    builder: (context, dark, child) => WebviewWindowApp(
+      titleBarTheme: state.theme,
+      titleBarBuilder: (_) => const DemoTitleBar(),
+      child: child!,
+    ),
+  ));
 }

@@ -18,9 +18,11 @@ void runWebviewWindowApp(
   Widget app, {
   WidgetBuilder? titleBarBuilder,
   Color? titleBarBackgroundColor,
+  ThemeData? titleBarTheme,
 }) {
   WidgetsFlutterBinding.ensureInitialized();
   runWidget(WebviewWindowApp(
+    titleBarTheme: titleBarTheme,
     titleBarBuilder: titleBarBuilder,
     titleBarBackgroundColor: titleBarBackgroundColor,
     child: app,
@@ -35,11 +37,20 @@ class WebviewWindowApp extends StatefulWidget {
     required this.child,
     this.titleBarBuilder,
     this.titleBarBackgroundColor,
+    this.titleBarTheme,
   });
 
   final Widget child;
   final WidgetBuilder? titleBarBuilder;
+
+  /// Explicit background color, taking precedence over the titlebar theme.
   final Color? titleBarBackgroundColor;
+
+  /// Theme for all browser toolbars and native titlebars (macOS and Windows).
+  /// Rebuild this widget to update existing windows. Per-window overrides take
+  /// precedence. Without any configured theme, native appearance is unchanged.
+  /// Clearing a previously configured theme restores the platform default.
+  final ThemeData? titleBarTheme;
 
   @override
   State<WebviewWindowApp> createState() => _WebviewWindowAppState();
@@ -57,6 +68,7 @@ class _WebviewWindowAppState extends State<WebviewWindowApp>
   @override
   void initState() {
     super.initState();
+    defaultTitleBarTheme.value = widget.titleBarTheme;
     final dispatcher = WidgetsBinding.instance.platformDispatcher;
     _initialization = _channel.invokeMethod<int>('initialize', {
       // Test bindings may simulate engine IDs; native borrowing needs the real ID.
@@ -79,6 +91,12 @@ class _WebviewWindowAppState extends State<WebviewWindowApp>
       }
     });
     unawaited(_refresh());
+  }
+
+  @override
+  void didUpdateWidget(WebviewWindowApp oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    defaultTitleBarTheme.value = widget.titleBarTheme;
   }
 
   Future<void> _refresh() async {
@@ -124,6 +142,7 @@ class _WebviewWindowAppState extends State<WebviewWindowApp>
   void dispose() {
     if (identical(titleBarInitialization, _initialization)) {
       titleBarInitialization = null;
+      defaultTitleBarTheme.value = null;
     }
     WidgetsBinding.instance.removeObserver(this);
     _channel.setMethodCallHandler(null);
@@ -157,6 +176,7 @@ class _WebviewWindowAppState extends State<WebviewWindowApp>
                       descriptor['titleBarTopPadding'] as int? ?? 0,
                   builder: widget.titleBarBuilder ?? _defaultTitleBar,
                   backgroundColor: widget.titleBarBackgroundColor,
+                  theme: widget.titleBarTheme,
                 ),
               ),
       ],
@@ -240,6 +260,7 @@ class _TitleBarApp extends StatefulWidget {
     required this.titleBarTopPadding,
     required this.builder,
     this.backgroundColor,
+    this.theme,
   });
 
   final int webViewId;
@@ -249,6 +270,7 @@ class _TitleBarApp extends StatefulWidget {
   final WidgetBuilder builder;
 
   final Color? backgroundColor;
+  final ThemeData? theme;
 
   @override
   State<_TitleBarApp> createState() => _TitleBarAppState();
@@ -262,6 +284,7 @@ class _TitleBarAppState extends State<_TitleBarApp>
   bool _isLoading = false;
 
   String? _url;
+  ThemeData? _themeOverride;
 
   @override
   int get _webViewId => widget.webViewId;
@@ -282,6 +305,9 @@ class _TitleBarAppState extends State<_TitleBarApp>
       return;
     }
     switch (call.method) {
+      case 'onTitleBarThemeChanged':
+        setState(() => _themeOverride = args['theme'] as ThemeData?);
+        break;
       case "onHistoryChanged":
         setState(() {
           _canGoBack = args['canGoBack'] as bool;
@@ -316,20 +342,23 @@ class _TitleBarAppState extends State<_TitleBarApp>
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: Material(
-        color:
-            widget.backgroundColor ?? Theme.of(context).scaffoldBackgroundColor,
-        child: Padding(
-          padding: EdgeInsets.only(top: widget.titleBarTopPadding.toDouble()),
-          child: TitleBarWebViewState(
-            isLoading: _isLoading,
-            canGoBack: _canGoBack,
-            canGoForward: _canGoForward,
-            url: _url,
-            child: Builder(builder: widget.builder),
-          ),
-        ),
-      ),
+      theme: _themeOverride ?? widget.theme,
+      home: Builder(
+          builder: (context) => Material(
+                color: widget.backgroundColor ??
+                    Theme.of(context).scaffoldBackgroundColor,
+                child: Padding(
+                  padding: EdgeInsets.only(
+                      top: widget.titleBarTopPadding.toDouble()),
+                  child: TitleBarWebViewState(
+                    isLoading: _isLoading,
+                    canGoBack: _canGoBack,
+                    canGoForward: _canGoForward,
+                    url: _url,
+                    child: Builder(builder: widget.builder),
+                  ),
+                ),
+              )),
     );
   }
 }

@@ -1,5 +1,6 @@
 import 'package:desktop_webview_window/src/cookie.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' show ThemeData;
 
 /// Handle custom message from JavaScript in your app.
 typedef JavaScriptMessageHandler = void Function(String name, dynamic body);
@@ -40,9 +41,14 @@ abstract class Webview {
   /// Navigates to the given URL.
   void launch(String url, {bool triggerOnUrlRequestEvent = true});
 
-  /// change webview theme.
-  ///
-  /// available only: macOS (Brightness.dark only 10.14+)
+  /// Overrides this window's toolbar theme and native titlebar brightness.
+  /// Pass null to resume following WebviewWindowApp.titleBarTheme.
+  /// Native titlebar synchronization is supported on macOS and Windows.
+  Future<void> setTitleBarTheme(ThemeData? theme);
+
+  /// Changes native window appearance on macOS and Windows.
+  /// Pass null to restore the platform default. Does not theme Flutter widgets.
+  /// macOS may also apply this appearance to web content.
   void setBrightness(Brightness? brightness);
 
   void addScriptToExecuteOnDocumentCreated(String javaScript);

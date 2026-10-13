@@ -116,6 +116,10 @@ void WebviewWindowPlugin::HandleMethodCall(
     windows_.emplace(window_id, window);
     std::shared_ptr<flutter::MethodResult<flutter::EncodableValue>> pending_result(
         std::move(result));
+    const auto brightness = arguments->find(flutter::EncodableValue("titleBarBrightness"));
+    if (brightness != arguments->end()) {
+      window->SetBrightness(static_cast<int>(brightness->second.LongValue()));
+    }
     window->CreateAndShow(
         utf8_to_wide(title), int(height), int(width),
         utf8_to_wide(userDataFolder), int(windowPosX), int(windowPosY),
@@ -344,6 +348,17 @@ void WebviewWindowPlugin::HandleMethodCall(
       return;
     }
     windows_[window_id]->GetWebView()->GetAllCookies(std::move(result));
+  } else if (method_call.method_name() == "setBrightness") {
+    const auto* arguments = std::get_if<flutter::EncodableMap>(method_call.arguments());
+    const auto window_id = arguments->at(flutter::EncodableValue("viewId")).LongValue();
+    const auto found = windows_.find(window_id);
+    if (found == windows_.end()) {
+      result->Error("0", "can not find webview window for id");
+      return;
+    }
+    const auto brightness = arguments->at(flutter::EncodableValue("brightness")).LongValue();
+    found->second->SetBrightness(static_cast<int>(brightness));
+    result->Success();
   } else if (method_call.method_name() == "close") {
     auto *arguments =
         std::get_if<flutter::EncodableMap>(method_call.arguments());

@@ -67,6 +67,9 @@ public class DesktopWebviewWindowPlugin: NSObject, FlutterPlugin {
       )
       controller.webviewPlugin = self
       webviews[viewId] = controller
+      if let brightness = argument["titleBarBrightness"] as? Int {
+        controller.setAppearance(brightness: brightness)
+      }
       controller.showWindow(nil)
       result(viewId)
       break

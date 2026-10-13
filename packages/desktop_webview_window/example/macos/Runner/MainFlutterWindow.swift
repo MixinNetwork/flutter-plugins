@@ -32,6 +32,7 @@ class MainFlutterWindow: NSWindow {
           return
         }
         result([
+          "nativeDark": window.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua,
           "titled": window.styleMask.contains(.titled),
           "fullSizeContentView": window.styleMask.contains(.fullSizeContentView),
           "transparentTitlebar": window.titlebarAppearsTransparent,
