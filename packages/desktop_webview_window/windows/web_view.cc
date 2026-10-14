@@ -73,10 +73,12 @@ WebView::WebView(
               }
               if (FAILED(hr) || comparison < 0) {
                 auto callback = std::move(on_web_view_created_callback_);
-                callback(FAILED(hr) ? hr : HRESULT_FROM_WIN32(ERROR_OLD_WIN_VERSION));
+                callback(FAILED(hr) ? hr
+                                    : HRESULT_FROM_WIN32(ERROR_OLD_WIN_VERSION));
                 return S_OK;
               }
             }
+            environment_ = env;
             env->CreateCoreWebView2Controller(
                 view_window_.get(),
                 Callback<
@@ -216,44 +218,52 @@ HRESULT WebView::OnWebviewControllerCreated() {
             CancelPendingNavigation();
             if (triggerOnUrlRequestedEvent) {
               wil::unique_cotaskmem_string uri;
+              UINT64 navigation_id;
               HRESULT hr = args->get_Uri(&uri);
-              if (FAILED(hr) || !uri) {
+              if (FAILED(hr) || !uri ||
+                  FAILED(args->get_NavigationId(&navigation_id))) {
                 args->put_Cancel(true);
                 return S_OK;
               }
 
               // Capture URI string before async callback
               std::wstring uri_string(uri.get());
+              auto navigation = std::make_shared<NavigationRequest>(
+                  uri_string, navigation_id);
+              pending_navigation_ = navigation;
 
-              UINT64 navigation_id = 0;
-              args->get_NavigationId(&navigation_id);
-              awaiting_cancelled_navigation_ = true;
-              cancelled_navigation_id_ = navigation_id;
-              deferred_navigation_.reset();
-              const auto generation = navigation_generation_;
+              if (!navigation->IsHttp()) {
+                // Keep non-HTTP navigation canceled until Dart allows it.
+                args->put_Cancel(true);
+                wil::com_ptr<ICoreWebView2> webview = sender;
+                // Closing or superseding the request completes it with false,
+                // so a late reply cannot access this view or restart navigation.
+                navigation->OnDecision(
+                    [this, uri_string, webview](bool allow) {
+                      if (allow) {
+                        setTriggerOnUrlRequestedEvent(false);
+                        webview->Navigate(uri_string.c_str());
+                      }
+                    });
+              }
 
+              // HTTP(S) must continue with its original method, body and headers.
+              // WebResourceRequested below defers it until this reply arrives.
               auto result_handler =
                   std::make_unique<flutter::MethodResultFunctions<>>(
-                      [uri_string, generation,
-                       this](const flutter::EncodableValue *success_value) {
+                      [navigation](const flutter::EncodableValue *success_value) {
                         bool letPass = false;
-                        if (success_value && 
+                        if (success_value &&
                             std::holds_alternative<bool>(*success_value)) {
                           letPass = std::get<bool>(*success_value);
                         }
-                        // A later navigation has superseded this one.
-                        if (generation != navigation_generation_) {
-                          return;
-                        }
-                        if (letPass) {
-                          if (awaiting_cancelled_navigation_) {
-                            deferred_navigation_ = uri_string;
-                          } else {
-                            NavigateAllowed(uri_string);
-                          }
-                        }
+                        navigation->Complete(letPass);
                       },
-                      nullptr, nullptr);
+                      [navigation](const std::string &, const std::string &,
+                                   const flutter::EncodableValue *) {
+                        navigation->Complete(false);
+                      },
+                      [navigation]() { navigation->Complete(false); });
 
               method_channel_->InvokeMethod(
                   "onUrlRequested",
@@ -266,10 +276,6 @@ HRESULT WebView::OnWebviewControllerCreated() {
                                wide_to_utf8(uri_string))},
                       }),
                   std::move(result_handler));
-
-              // navigation is canceled here and retriggered later from the
-              // callback passed to the method channel
-              args->put_Cancel(true);
             } else {
               args->put_Cancel(false);
               triggerOnUrlRequestedEvent = true;
@@ -278,22 +284,65 @@ HRESULT WebView::OnWebviewControllerCreated() {
           })
           .Get(),
       nullptr);
+  webview_->AddWebResourceRequestedFilter(
+      L"*", COREWEBVIEW2_WEB_RESOURCE_CONTEXT_DOCUMENT);
+  webview_->add_WebResourceRequested(
+      Callback<ICoreWebView2WebResourceRequestedEventHandler>(
+          [this](ICoreWebView2 *sender,
+                 ICoreWebView2WebResourceRequestedEventArgs *args) -> HRESULT {
+            const auto navigation = pending_navigation_;
+            if (!navigation || !navigation->IsHttp()) {
+              return S_OK;
+            }
+            wil::com_ptr<ICoreWebView2WebResourceRequest> request;
+            wil::unique_cotaskmem_string uri;
+            if (FAILED(args->get_Request(&request)) || !request ||
+                FAILED(request->get_Uri(&uri)) || !uri ||
+                !navigation->MatchesResource(uri.get())) {
+              return S_OK;
+            }
+
+            wil::com_ptr<ICoreWebView2Deferral> deferral;
+            HRESULT hr = args->GetDeferral(&deferral);
+            if (FAILED(hr)) {
+              sender->Stop();
+              return hr;
+            }
+            wil::com_ptr<ICoreWebView2WebResourceRequestedEventArgs> event = args;
+            wil::com_ptr<ICoreWebView2> webview = sender;
+            auto environment = environment_;
+            navigation->OnDecision(
+                [event, deferral, environment, webview](bool allow) {
+                  if (!allow) {
+                    // A synthetic 204 prevents the network request and keeps
+                    // the current document, just like canceled navigation.
+                    wil::com_ptr<ICoreWebView2WebResourceResponse> response;
+                    HRESULT hr = environment->CreateWebResourceResponse(
+                        nullptr, 204, L"No Content", L"", &response);
+                    if (FAILED(hr) ||
+                        FAILED(event->put_Response(response.get()))) {
+                      webview->Stop();
+                    }
+                  }
+                  // Without a replacement response, WebView2 sends the
+                  // original request, including POST data, exactly once.
+                  deferral->Complete();
+                });
+            return S_OK;
+          })
+          .Get(),
+      nullptr);
   webview_->add_NavigationCompleted(
       Callback<ICoreWebView2NavigationCompletedEventHandler>(
           [this](ICoreWebView2 *sender,
                  ICoreWebView2NavigationCompletedEventArgs *args) {
-            UINT64 navigation_id = 0;
-            args->get_NavigationId(&navigation_id);
-            if (awaiting_cancelled_navigation_ &&
-                navigation_id == cancelled_navigation_id_) {
-              awaiting_cancelled_navigation_ = false;
-              if (deferred_navigation_) {
-                auto url = std::move(*deferred_navigation_);
-                deferred_navigation_.reset();
-                NavigateAllowed(url);
-              }
+            UINT64 navigation_id;
+            if (pending_navigation_ && pending_navigation_->IsHttp() &&
+                SUCCEEDED(args->get_NavigationId(&navigation_id)) &&
+                pending_navigation_->id == navigation_id) {
+              pending_navigation_->Complete(false);
+              pending_navigation_.reset();
             }
-
             auto method_args = flutter::EncodableMap{
                 {flutter::EncodableValue("id"),
                  flutter::EncodableValue(web_view_id_)},
@@ -363,16 +412,11 @@ void WebView::SetVisible(bool visible) {
   }
 }
 
-// Issues a navigation Dart allowed, without asking about it again.
-void WebView::NavigateAllowed(const std::wstring &url) {
-  setTriggerOnUrlRequestedEvent(false);
-  Navigate(url);
-}
-
 void WebView::CancelPendingNavigation() {
-  ++navigation_generation_;
-  awaiting_cancelled_navigation_ = false;
-  deferred_navigation_.reset();
+  if (pending_navigation_) {
+    pending_navigation_->Complete(false);
+    pending_navigation_.reset();
+  }
 }
 
 void WebView::AddScriptToExecuteOnDocumentCreated(
@@ -622,6 +666,10 @@ void WebView::setTriggerOnUrlRequestedEvent(const bool value) {
 }
 
 WebView::~WebView() {
+  if (pending_navigation_) {
+    pending_navigation_->Complete(false);
+    pending_navigation_.reset();
+  }
   if (webview_) {
     webview_->Stop();
   }

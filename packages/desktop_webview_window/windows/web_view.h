@@ -7,7 +7,6 @@
 
 #include <windows.h>
 
-#include <optional>
 #include <string>
 
 #include <flutter/method_channel.h>
@@ -17,6 +16,7 @@
 #include "wil/com.h"
 
 #include "WebView2.h"
+#include "navigation_request.h"
 
 namespace webview_window {
 
@@ -80,6 +80,10 @@ class WebView {
   // Pointer to WebView
   wil::com_ptr<ICoreWebView2> webview_;
 
+  wil::com_ptr<ICoreWebView2Environment> environment_;
+
+  std::shared_ptr<NavigationRequest> pending_navigation_;
+
   std::wstring default_user_agent_;
 
   std::shared_ptr<flutter::MethodChannel<flutter::EncodableValue>> method_channel_;
@@ -96,16 +100,6 @@ class WebView {
 
   // Applied when the controller is created, if SetVisible came first.
   bool visible_{true};
-
-  // A navigation cancelled so Dart could be asked about it, until WebView2
-  // reports it finished. Re-navigating before then is dropped together with
-  // the cancelled navigation, so an allowed URL waits here for it.
-  bool awaiting_cancelled_navigation_{false};
-  uint64_t cancelled_navigation_id_{0};
-  uint64_t navigation_generation_{0};
-  std::optional<std::wstring> deferred_navigation_;
-
-  void NavigateAllowed(const std::wstring &url);
 
   void CancelPendingNavigation();
 
