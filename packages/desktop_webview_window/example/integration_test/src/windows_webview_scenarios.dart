@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:desktop_webview_window/desktop_webview_window.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:integration_test/integration_test.dart';
 
 Future<Object?> readScript(Webview view, String script) async {
   final result = await view.evaluateJavaScript(script);
@@ -22,17 +21,26 @@ Future<void> waitForScript(Webview view, String script, Object expected) async {
   expect(actual, expected, reason: script);
 }
 
-void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
-
+void registerWindowsWebviewTests() {
   late HttpServer server;
   late Directory profile;
   final views = <Webview>[];
+  final requests = <String>[];
 
   setUp(() async {
+    requests.clear();
     profile = await Directory.systemTemp.createTemp('webview-regression-');
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     server.listen((request) async {
+      final body = await utf8.decoder.bind(request).join();
+      requests.add('${request.method} ${request.uri.path} $body');
+      if (request.uri.path == '/redirect') {
+        request.response.statusCode = 302;
+        request.response.headers.set('Location', '/blocked');
+        await request.response.close();
+        return;
+      }
+      request.response.headers.set('Cache-Control', 'max-age=3600');
       request.response.headers.contentType = ContentType.html;
       request.response.write(
         '<!doctype html><title>WebView regression</title>',
@@ -165,6 +173,100 @@ void main() {
         ''');
         await waitForScript(normal, 'window.permissionResult', 'prompt');
       }
+    });
+  });
+  testWidgets('allowed form preserves POST body exactly once', (tester) async {
+    await runScenario(tester, () async {
+      final view = await create();
+      view.setOnUrlRequestCallback((_) => true);
+      view.launch(url('/form'));
+      await waitForScript(view, 'location.pathname', '/form');
+      await view.evaluateJavaScript("""
+        const form = document.createElement('form');
+        form.method = 'POST'; form.action = '/posted';
+        const input = document.createElement('input');
+        input.name = 'token'; input.value = 'hello world';
+        form.appendChild(input); document.body.appendChild(form); form.submit();
+      """);
+      await waitForScript(view, 'location.pathname', '/posted');
+      expect(requests.where((r) => r.contains('/posted')).toList(),
+          ['POST /posted token=hello+world']);
+    });
+  });
+
+  testWidgets('denied GET stays on current document', (tester) async {
+    await runScenario(tester, () async {
+      final view = await create();
+      view.launch(url('/initial'), triggerOnUrlRequestEvent: false);
+      await waitForScript(view, 'location.pathname', '/initial');
+      var denied = false;
+      view.setOnUrlRequestCallback((u) {
+        denied = true;
+        return false;
+      });
+      view.launch(url('/blocked'));
+      await Future<void>.delayed(const Duration(seconds: 2));
+      expect(denied, true);
+      expect(requests.any((r) => r.contains('/blocked')), false);
+      expect(await readScript(view, 'location.pathname'), '/initial');
+    });
+  });
+
+  testWidgets('denied redirect never reaches server', (tester) async {
+    await runScenario(tester, () async {
+      final view = await create();
+      view.launch(url('/initial'), triggerOnUrlRequestEvent: false);
+      await waitForScript(view, 'location.pathname', '/initial');
+      final decisions = <String>[];
+      view.setOnUrlRequestCallback((u) {
+        decisions.add(u);
+        return !u.endsWith('/blocked');
+      });
+      view.launch(url('/redirect'));
+      await Future<void>.delayed(const Duration(seconds: 2));
+      expect(decisions, contains(url('/blocked')));
+      expect(requests.any((r) => r.contains('/blocked')), false);
+      expect(await readScript(view, 'location.pathname'), '/initial');
+    });
+  });
+
+  testWidgets('denied cached navigation stays on current document',
+      (tester) async {
+    await runScenario(tester, () async {
+      final view = await create();
+      view.launch(url('/cached'), triggerOnUrlRequestEvent: false);
+      await waitForScript(view, 'location.pathname', '/cached');
+      view.launch(url('/initial'), triggerOnUrlRequestEvent: false);
+      await waitForScript(view, 'location.pathname', '/initial');
+      final decisions = <String>[];
+      view.setOnUrlRequestCallback((u) {
+        decisions.add(u);
+        return false;
+      });
+      view.launch(url('/cached'));
+      await Future<void>.delayed(const Duration(seconds: 2));
+      expect(decisions, contains(url('/cached')));
+      expect(await readScript(view, 'location.pathname'), '/initial');
+    });
+  });
+
+  testWidgets('denied back navigation stays on current document',
+      (tester) async {
+    await runScenario(tester, () async {
+      final view = await create();
+      view.launch(url('/cached'), triggerOnUrlRequestEvent: false);
+      await waitForScript(view, 'location.pathname', '/cached');
+      view.launch(url('/initial'), triggerOnUrlRequestEvent: false);
+      await waitForScript(view, 'location.pathname', '/initial');
+      final decisions = <String>[];
+      view.setOnUrlRequestCallback((u) {
+        decisions.add(u);
+        return false;
+      });
+      await view.back();
+      await Future<void>.delayed(const Duration(seconds: 2));
+      expect(decisions, contains(url('/cached')));
+      expect(await readScript(view, 'location.pathname'), '/initial');
     });
   });
 }
