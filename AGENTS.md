@@ -5,7 +5,7 @@
 This file describes repository-wide guidance for the `flutter-plugins` monorepo. Package-specific guidance may exist deeper in the tree and should be treated as higher-priority context for that subtree.
 
 Detailed guidance for `mixin_markdown_widget` lives in [packages/mixin_markdown_widget/AGENTS.md](packages/mixin_markdown_widget/AGENTS.md).
-Release preparation guidance for pub packages lives in [.codex/skills/flutter-pub-release/SKILL.md](.codex/skills/flutter-pub-release/SKILL.md).
+Release preparation, publication, and verification guidance for pub packages lives in [.agents/skills/flutter-pub-release/SKILL.md](.agents/skills/flutter-pub-release/SKILL.md).
 
 ## Repository Overview
 
@@ -46,8 +46,8 @@ Release preparation guidance for pub packages lives in [.codex/skills/flutter-pu
 
 ## Release Metadata Ownership
 
-- Keep ordinary feature and fix pull requests focused on the implementation. Do not bump a package version, add the next release section to `CHANGELOG.md`, or update an example lockfile solely to prepare a release.
-- Treat package versions, release changelog sections, and release-related lockfile updates as maintainer-owned release work. Update them together only when the task explicitly asks to prepare or publish a release, following `.codex/skills/flutter-pub-release/SKILL.md`.
+- Keep ordinary feature and fix pull requests focused on the implementation. Do not bump a package version, add the next release section to `CHANGELOG.md`, or update the workspace lockfile solely to prepare a release.
+- Treat package versions, release changelog sections, and release-related lockfile updates as maintainer-owned release work. Update them together only when the task explicitly asks to prepare or publish a release, following `.agents/skills/flutter-pub-release/SKILL.md`.
 - Use clear package-scoped commit and pull request titles because release preparation derives candidate entries from commits since the latest package tag. During release preparation, inspect the actual changes and rewrite the final changelog for package users instead of copying contributor wording mechanically.
 - Changes whose explicit purpose is to correct existing release metadata are exempt from this separation.
 

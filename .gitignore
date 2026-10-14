@@ -11,3 +11,6 @@ build/
 
 # macOS Finder metadata.
 .DS_Store
+
+# Python test caches.
+__pycache__/
