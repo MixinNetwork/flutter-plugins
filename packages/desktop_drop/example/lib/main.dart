@@ -13,7 +13,7 @@ void main() {
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({Key? key}) : super(key: key);
+  const MyApp({super.key});
 
   void loadFile(BuildContext context, bool bookmarkEnable) async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
@@ -33,11 +33,11 @@ class MyApp extends StatelessWidget {
         bool grantedPermission = await DesktopDrop.instance
             .startAccessingSecurityScopedResource(bookmark: appleBookmark);
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("file permission :" + grantedPermission.toString()),
-          ),
-        );
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("file permission :$grantedPermission")),
+          );
+        }
       }
 
       var file = File(path);
@@ -51,12 +51,12 @@ class MyApp extends StatelessWidget {
         );
       }
 
-      final snackBar = SnackBar(
-        content: Text('file size:' + fileSize.toString()),
-      );
+      final snackBar = SnackBar(content: Text('file size:$fileSize'));
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(snackBar);
     } catch (e) {
-      final snackBar = SnackBar(content: Text('error:' + e.toString()));
+      final snackBar = SnackBar(content: Text('error:$e'));
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(snackBar);
     }
   }
@@ -111,10 +111,10 @@ class MyApp extends StatelessWidget {
 }
 
 class ExampleDragTarget extends StatefulWidget {
-  const ExampleDragTarget({Key? key}) : super(key: key);
+  const ExampleDragTarget({super.key});
 
   @override
-  _ExampleDragTargetState createState() => _ExampleDragTargetState();
+  State<ExampleDragTarget> createState() => _ExampleDragTargetState();
 }
 
 class _ExampleDragTargetState extends State<ExampleDragTarget> {
@@ -207,6 +207,7 @@ class _ExampleDragTargetState extends State<ExampleDragTarget> {
                         await SharedPreferences.getInstance();
                     prefs.setString("apple-bookmark", jsonStr);
 
+                    if (!context.mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
                         content: Text(

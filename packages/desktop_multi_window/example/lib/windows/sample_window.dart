@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class SampleWindow extends StatelessWidget {
-  const SampleWindow({Key? key}) : super(key: key);
+  const SampleWindow({super.key});
 
   @override
   Widget build(BuildContext context) {

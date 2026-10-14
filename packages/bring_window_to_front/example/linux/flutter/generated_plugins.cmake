@@ -4,7 +4,7 @@
 
 list(APPEND FLUTTER_PLUGIN_LIST
   bring_window_to_front
-  screen_retriever
+  screen_retriever_linux
   window_manager
 )
 
