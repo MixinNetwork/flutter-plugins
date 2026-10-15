@@ -13,10 +13,16 @@ A new flutter plugin project.
   s.license          = { :file => '../LICENSE' }
   s.author           = { 'Your Company' => 'email@example.com' }
   s.source           = { :path => '.' }
-  s.source_files     = 'desktop_drop/Sources/desktop_drop/**/*.{h,m,swift}'
+  s.source_files     = 'desktop_drop/Sources/**/*.{h,m,c,cc,swift}'
+  s.exclude_files = 'desktop_drop/Sources/desktop_drop_ffi/vendor/dart_api_dl.c'
+  s.private_header_files = 'desktop_drop/Sources/desktop_drop_ffi/vendor/**/*.h', 'desktop_drop/Sources/desktop_drop_ffi/dart_bridge_api.h'
   s.dependency 'FlutterMacOS'
 
   s.platform = :osx, '10.13'
-  s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES' }
+  s.pod_target_xcconfig = {
+    'DEFINES_MODULE' => 'YES',
+    'CLANG_CXX_LANGUAGE_STANDARD' => 'c++17'
+  }
+  s.libraries = 'c++'
   s.swift_version = '5.0'
 end

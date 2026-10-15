@@ -11,14 +11,24 @@ let package = Package(
     products: [
         .library(name: "desktop-drop", targets: ["desktop_drop"])
     ],
-    dependencies: [],
+    dependencies: [
+        .package(name: "FlutterFramework", path: "../FlutterFramework")
+    ],
     targets: [
         .target(
             name: "desktop_drop",
-            dependencies: [],
+            dependencies: ["desktop_drop_ffi",
+                .product(name: "FlutterFramework", package: "FlutterFramework")
+            ],
             resources: [
                 .process("PrivacyInfo.xcprivacy"),
             ]
+        ),
+        .target(
+            name: "desktop_drop_ffi",
+            exclude: ["vendor/README.md", "vendor/LICENSE", "vendor/dart_api_dl.c"],
+            publicHeadersPath: "include"
         )
-    ]
+    ],
+    cxxLanguageStandard: .cxx17
 )

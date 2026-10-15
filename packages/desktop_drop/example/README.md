@@ -1,66 +1,62 @@
-# desktop_drop_example
+# Desktop Drop playground
 
-Demonstrates how to use the desktop_drop plugin.
+A small app for checking independent drop rules, nested targets, and received
+content. Requires the Flutter/Dart versions specified in `pubspec.yaml`.
 
-## Getting Started
-
-This project is a starting point for a Flutter application.
-
-A few resources to get you started if this is your first Flutter project:
-
-- [Lab: Write your first Flutter app](https://flutter.dev/docs/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://flutter.dev/docs/cookbook)
-
-For help getting started with Flutter, view our
-[online documentation](https://flutter.dev/docs), which offers tutorials, samples, guidance on mobile development, and a
-full API reference.
-
-## Example
-
-```dart
-class ExampleDragTarget extends StatefulWidget {
-  const ExampleDragTarget({Key? key}) : super(key: key);
-
-  @override
-  _ExampleDragTargetState createState() => _ExampleDragTargetState();
-}
-
-class _ExampleDragTargetState extends State<ExampleDragTarget> {
-  final List<Uri> _list = [];
-
-  bool _dragging = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return DropTarget(
-      onDragDone: (urls) {
-        setState(() {
-          for (final uri in urls) {
-            debugPrint("uri: ${uri.toFilePath()} "
-                "${File(uri.toFilePath()).existsSync()}");
-          }
-          _list.addAll(urls);
-        });
-      },
-      onDragEntered: () {
-        setState(() {
-          _dragging = true;
-        });
-      },
-      onDragExited: () {
-        setState(() {
-          _dragging = false;
-        });
-      },
-      child: Container(
-        height: 200,
-        width: 200,
-        color: _dragging ? Colors.blue.withOpacity(0.4) : Colors.black26,
-        child: _list.isEmpty
-            ? const Center(child: Text("Drop here"))
-            : Text(_list.join("\n")),
-      ),
-    );
-  }
-}
+```sh
+flutter pub get
+flutter run -d macos   # or windows, linux, chrome, or an Android device
 ```
+
+Wide windows show targets and the inspector side by side. Narrow windows use a
+single scrollable layout. Every target has an independent manual switch. The
+example does not change acceptance automatically.
+
+## Try these scenarios
+
+| Scenario | Expected behavior |
+|----------|-------------------|
+| File or folder onto **All files** | Inspector shows the receiving target and paths. |
+| TXT onto **TXT files**, PNG onto **PNG files** | Matching extension is accepted; mismatches are rejected. |
+| Mixed TXT/PNG selection onto **TXT files** | Rejected because every file must match. |
+| Plain text onto **Text** | Inspector shows the text, with no file required. |
+| Browser link onto **URLs** | Inspector shows the source's URL representation. |
+| TXT onto **Child · TXT** | Child receives it. |
+| PNG or link onto the child area | The parent receives it if its switch is on. |
+| Disable child, keep parent on | Content over the child falls back to the parent. |
+| Disable both parent and child | Content over the nested area is rejected. |
+| Toggle another target | Other targets retain their own rules. |
+| Drop, then move the pointer | Inspector retains the drop's original local/global positions. |
+
+Drag sources can advertise multiple representations. A browser link may also be
+plain text; the corresponding targets can both accept it at their own locations.
+Browsers hide filenames during hover. Extension targets tentatively accept an
+unknown browser preview and check actual filenames on release. Promised macOS
+files must advertise a usable name to match a filename rule.
+
+The inspector shows the latest accepted drop. **Read file** reads at most 64 bytes
+and reports the file size, so large files do not fill application memory. Directory
+entries are shown separately from regular files.
+
+## macOS bookmarks
+
+1. Drop a real file from Finder.
+2. Choose **Save bookmark** in its inspector entry.
+3. Restart the app.
+4. Use **Read with access** to request security-scoped access and verify a read.
+5. **Read without access** lets you compare sandbox behavior for the same file.
+
+A macOS promised file is delivered into the app's temporary directory and usually
+has no security-scoped bookmark. Its inspector entry identifies it as a promise.
+Saved bookmarks remain in this example's preferences until replaced.
+
+## Checks
+
+```sh
+flutter analyze --no-pub
+flutter test --no-pub
+```
+
+Widget tests cover 320/800/1200-pixel windows, larger text, scrolling, independent
+acceptance switches, and delivery into the inspector. Real OS drag behavior is a
+separate manual check; Flutter widget gestures are not native drag sources.

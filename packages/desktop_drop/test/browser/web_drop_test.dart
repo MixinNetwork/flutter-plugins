@@ -3,6 +3,8 @@ library;
 
 import 'dart:async';
 import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
+import 'dart:ui_web' as ui_web;
 
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:desktop_drop/desktop_drop_web.dart';
@@ -11,115 +13,292 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_web_plugins/flutter_web_plugins.dart';
 import 'package:web/web.dart' as web;
 
-/// Drops [data] on the window, where the web implementation listens, and
-/// returns the [DropDoneEvent] that reaches the Dart side.
-Future<DropDoneEvent> _drop(
-  web.DataTransfer data, {
-  Offset position = Offset.zero,
-}) {
-  final done = Completer<DropDoneEvent>();
-  void listener(DropEvent event) {
-    if (event is DropDoneEvent && !done.isCompleted) {
-      done.complete(event);
-    }
-  }
+@JS('DataTransferItem.prototype')
+external JSObject get _itemPrototype;
 
-  DesktopDrop.instance.addRawDropEventListener(listener);
-  addTearDown(() => DesktopDrop.instance.removeRawDropEventListener(listener));
-  web.window.dispatchEvent(web.DragEvent(
-    'drop',
-    web.DragEventInit(
-      dataTransfer: data,
-      clientX: position.dx.round(),
-      clientY: position.dy.round(),
-      bubbles: true,
-      cancelable: true,
+void useEntry(JSObject entry) {
+  final original = _itemPrototype.getProperty<JSAny?>('webkitGetAsEntry'.toJS);
+  _itemPrototype.setProperty('webkitGetAsEntry'.toJS, (() => entry).toJS);
+  addTearDown(
+    () => _itemPrototype.setProperty('webkitGetAsEntry'.toJS, original),
+  );
+}
+
+void send(String type, web.DataTransfer data, Offset position) {
+  (ui_web.views.getHostElement(0) as web.HTMLElement).dispatchEvent(
+    web.DragEvent(
+      type,
+      web.DragEventInit(
+        dataTransfer: data,
+        clientX: position.dx.round(),
+        clientY: position.dy.round(),
+        bubbles: true,
+        cancelable: true,
+      ),
     ),
-  ));
-  return done.future.timeout(const Duration(seconds: 5));
+  );
+}
+
+Future<Offset> mount(
+  WidgetTester tester, {
+  required bool Function(DropEventDetails) accepts,
+  required void Function(DropDoneDetails) done,
+  void Function(DropEventDetails)? entered,
+  void Function(DropEventDetails)? exited,
+}) async {
+  await tester.pumpWidget(
+    Directionality(
+      textDirection: TextDirection.ltr,
+      child: Center(
+        child: DropTarget(
+          onWillAccept: accepts,
+          onDragDone: done,
+          onDragEntered: entered,
+          onDragExited: exited,
+          child: const SizedBox(width: 200, height: 200),
+        ),
+      ),
+    ),
+  );
+  await tester.pump();
+  final host =
+      ui_web.views.getHostElement(tester.view.viewId) as web.HTMLElement;
+  host.style.width = '800px';
+  host.style.height = '600px';
+  final rect = host.getBoundingClientRect();
+  expect(rect.width, greaterThan(0));
+  final point = tester.getCenter(find.byType(DropTarget));
+  return point + Offset(rect.left, rect.top);
 }
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  setUpAll(() => DesktopDropWeb.registerWith(webPluginRegistrar));
 
-  setUpAll(() {
-    DesktopDropWeb.registerWith(webPluginRegistrar);
-    DesktopDrop.instance.init();
-  });
+  testWidgets(
+    'file plus string representations retains getAsFile fallback and bytes',
+    (tester) async {
+      final done = Completer<DropDoneDetails>();
+      final point = await mount(
+        tester,
+        accepts: (d) => d.offer.types.contains(DropType.file),
+        done: done.complete,
+      );
+      final data = web.DataTransfer()
+        ..setData('text/uri-list', 'https://example.com/photo.png')
+        ..setData('text/html', '<img src="https://example.com/photo.png">');
+      data.items.add(
+        web.File(
+          ['png'.toJS].toJS,
+          'photo.png',
+          web.FilePropertyBag(type: 'image/png'),
+        ),
+      );
+      send('drop', data, point);
+      await tester.pump();
+      await tester.runAsync(() async {
+        final event = await done.future.timeout(const Duration(seconds: 5));
+        final file = event.files.single;
+        expect(file.name, 'photo.png');
+        expect(file.mimeType, 'image/png');
+        expect(await file.readAsString(), 'png');
+        expect(event.urls.single.toString(), 'https://example.com/photo.png');
+        expect(event.globalPosition, point);
+      });
+    },
+  );
 
-  test('drops the file of a drag that also carries string items', () async {
-    // An image dragged from a web page carries its link and markup as string
-    // items next to the file. In a DataTransfer made by script the file item
-    // has no FileSystemEntry either, so this also covers getAsFile().
-    final data = web.DataTransfer()
-      ..setData('text/uri-list', 'https://example.com/photo.png')
-      ..setData('text/html', '<img src="https://example.com/photo.png">');
-    data.items.add(web.File(
-      ['png'.toJS].toJS,
-      'photo.png',
-      web.FilePropertyBag(type: 'image/png'),
-    ));
+  testWidgets(
+    'text and URL values are available for the final synchronous decision',
+    (tester) async {
+      final done = Completer<DropDoneDetails>();
+      final offers = <DropOffer>[];
+      final point = await mount(
+        tester,
+        accepts: (d) {
+          offers.add(d.offer);
+          return !d.offer.isComplete || d.offer.text == 'hello';
+        },
+        done: done.complete,
+      );
+      final data = web.DataTransfer()
+        ..setData('text/plain', 'hello')
+        ..setData('text/uri-list', '# comment\r\nhttps://example.com\r\n');
+      send('dragenter', data, point);
+      expect(offers.last.isComplete, false);
+      expect(offers.last.text, null);
+      expect(offers.last.types, containsAll([DropType.text, DropType.url]));
+      send('drop', data, point);
+      await tester.pump();
+      await tester.runAsync(() async {
+        final event = await done.future.timeout(const Duration(seconds: 5));
+        expect(event.text, 'hello');
+        expect(event.files, isEmpty);
+        expect(event.urls.single.toString(), 'https://example.com');
+        expect(offers.last.isComplete, true);
+      });
+    },
+  );
 
-    final event = await _drop(data);
-
-    final file = event.files.single;
-    expect(file.name, 'photo.png');
-    expect(file.mimeType, 'image/png');
-    expect(await file.readAsString(), 'png');
-  });
-
-  test('a drop without a file item is done with no files', () async {
+  testWidgets('state changes while dragging reject drop and clear hover', (
+    tester,
+  ) async {
+    var allowed = true, hovering = false, drops = 0;
+    final point = await mount(
+      tester,
+      accepts: (_) => allowed,
+      done: (_) => drops++,
+      entered: (_) => hovering = true,
+      exited: (_) => hovering = false,
+    );
     final data = web.DataTransfer()..setData('text/plain', 'hello');
-
-    final event = await _drop(data);
-
-    expect(event.files, isEmpty);
+    send('dragenter', data, point);
+    expect(hovering, true);
+    allowed = false;
+    send('drop', data, point);
+    await tester.pump();
+    expect(hovering, false);
+    expect(drops, 0);
   });
 
-  testWidgets('a text-only drop clears the target hover state', (tester) async {
+  testWidgets('accepted empty-file drop clears hover even without dragleave', (
+    tester,
+  ) async {
     var hovering = false;
-    DropDoneDetails? received;
-    await tester.pumpWidget(
-      Directionality(
-        textDirection: TextDirection.ltr,
-        child: Center(
-          child: StatefulBuilder(
-            builder: (context, setState) => DropTarget(
-              onDragEntered: (_) => setState(() => hovering = true),
-              onDragExited: (_) => setState(() => hovering = false),
-              onDragDone: (details) => received = details,
-              child: SizedBox(
-                width: 100,
-                height: 100,
-                child: Text(hovering ? 'Hovering' : 'Idle'),
-              ),
-            ),
-          ),
-        ),
-      ),
+    final done = Completer<DropDoneDetails>();
+    final point = await mount(
+      tester,
+      accepts: (_) => true,
+      done: done.complete,
+      entered: (_) => hovering = true,
+      exited: (_) => hovering = false,
     );
-    final position = tester.getCenter(find.byType(DropTarget));
     final data = web.DataTransfer()..setData('text/plain', 'hello');
-    web.window.dispatchEvent(
-      web.DragEvent(
-        'dragenter',
-        web.DragEventInit(
-          dataTransfer: data,
-          clientX: position.dx.round(),
-          clientY: position.dy.round(),
-          bubbles: true,
-          cancelable: true,
-        ),
-      ),
-    );
+    send('dragenter', data, point);
+    expect(hovering, true);
+    send('drop', data, point);
     await tester.pump();
-    expect(find.text('Hovering'), findsOneWidget);
-
-    // Browsers need not send dragleave after drop. Completion must clear it.
-    await tester.runAsync(() => _drop(data, position: position));
-    await tester.pump();
-    expect(received, isNotNull);
-    expect(received!.files, isEmpty);
-    expect(find.text('Idle'), findsOneWidget);
+    await tester.runAsync(() async {
+      expect(
+        (await done.future.timeout(const Duration(seconds: 5))).files,
+        isEmpty,
+      );
+    });
+    expect(hovering, false);
   });
+  testWidgets('directory reads consume every batch beyond 100 entries', (
+    tester,
+  ) async {
+    final done = Completer<DropDoneDetails>();
+    final point = await mount(
+      tester,
+      accepts: (_) => true,
+      done: done.complete,
+    );
+    final entries = List.generate(251, (index) {
+      final file = web.File(['$index'.toJS].toJS, '$index.txt');
+      return <String, Object?>{
+            'name': '$index.txt',
+            'fullPath': '/folder/$index.txt',
+            'isDirectory': false,
+            'isFile': true,
+            'file': ((JSFunction success, JSFunction? error) {
+              success.callAsFunction(null, file);
+            }).toJS,
+          }.jsify()
+          as JSObject;
+    });
+    var batches = 0;
+    final root =
+        <String, Object?>{
+              'name': 'folder',
+              'fullPath': '/folder',
+              'isDirectory': true,
+              'isFile': false,
+              'createReader': (() {
+                var position = 0;
+                return <String, Object?>{
+                  'readEntries': ((JSFunction success, JSFunction? error) {
+                    batches++;
+                    final end = (position + 100).clamp(0, entries.length);
+                    final batch = entries.sublist(position, end).toJS;
+                    position = end;
+                    success.callAsFunction(null, batch);
+                  }).toJS,
+                }.jsify();
+              }).toJS,
+            }.jsify()
+            as JSObject;
+    final data = web.DataTransfer();
+    data.items.add(web.File(<JSAny>[].toJS, 'folder'));
+    useEntry(root);
+    send('drop', data, point);
+    await tester.pump();
+    expect(done.isCompleted, true);
+    final event = await done.future;
+    final directory = event.files.single as DropItemDirectory;
+    expect(directory.children.length, 251);
+    expect(directory.children.last.name, '250.txt');
+    expect(batches, 4);
+    await tester.runAsync(() async {
+      expect(await directory.children.last.readAsString(), '250');
+    });
+  });
+
+  testWidgets('asynchronous file reads retain the committed drop position', (
+    tester,
+  ) async {
+    final done = Completer<DropDoneDetails>();
+    final point = await mount(
+      tester,
+      accepts: (_) => true,
+      done: done.complete,
+    );
+    JSFunction? finish;
+    final entry =
+        <String, Object?>{
+              'name': 'slow.txt',
+              'fullPath': '/slow.txt',
+              'isDirectory': false,
+              'isFile': true,
+              'file': ((JSFunction success, JSFunction? error) {
+                finish = success;
+              }).toJS,
+            }.jsify()
+            as JSObject;
+    final data = web.DataTransfer();
+    final file = web.File(['contents'.toJS].toJS, 'slow.txt');
+    data.items.add(file);
+    useEntry(entry);
+    send('drop', data, point);
+    await tester.pump();
+    expect(done.isCompleted, false);
+    send('dragenter', data, point + const Offset(40, 40));
+    finish!.callAsFunction(null, file);
+    await tester.pump();
+    expect(done.isCompleted, true);
+    expect((await done.future).globalPosition, point);
+  });
+  testWidgets(
+    're-registering keeps other DOM listeners and delivers only once',
+    (tester) async {
+      var drops = 0;
+      var otherEvents = 0;
+      final point = await mount(
+        tester,
+        accepts: (_) => true,
+        done: (_) => drops++,
+      );
+      final other = ((web.Event event) => otherEvents++).toJS;
+      web.window.addEventListener('drop', other);
+      addTearDown(() => web.window.removeEventListener('drop', other));
+      DesktopDropWeb.registerWith(webPluginRegistrar);
+      DesktopDropWeb.registerWith(webPluginRegistrar);
+      final data = web.DataTransfer()..setData('text/plain', 'hello');
+      send('drop', data, point);
+      await tester.pump();
+      expect(drops, 1);
+      expect(otherEvents, 1);
+    },
+  );
 }
