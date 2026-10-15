@@ -128,8 +128,10 @@ void main() {
       ..setData('text/html', '<img src="$source">');
     send('dragenter', data, point);
     expect(done.isCompleted, false);
+    send('drop', data, point);
+    await tester.pump();
+    expect(done.isCompleted, true);
     await tester.runAsync(() async {
-      send('drop', data, point);
       final drop = await done.future.timeout(const Duration(seconds: 5));
       expect(drop.files.single.name, 'image.png');
       expect(await drop.files.single.readAsString(), 'png');

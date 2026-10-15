@@ -155,6 +155,16 @@ class DesktopDropWeb {
   Future<DropItem?> _readImage(Uri uri) async {
     final controller = web.AbortController();
     try {
+      if (uri.scheme == 'data') {
+        final data = uri.data!;
+        return _BrowserDropFile(
+          web.Blob(
+            [data.contentAsBytes().toJS].toJS,
+            web.BlobPropertyBag(type: data.mimeType),
+          ),
+          name: _imageName(uri),
+        );
+      }
       return await (() async {
         final response = await web.window
             .fetch(

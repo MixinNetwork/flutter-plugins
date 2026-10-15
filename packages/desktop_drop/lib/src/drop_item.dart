@@ -94,7 +94,7 @@ abstract class DropItem {
     if (bytes == null) {
       yield* reader.openRead(path, from, end);
     } else {
-      final until = RangeError.checkValidRange(from, end, bytes.length);
+      final until = (end ?? bytes.length).clamp(0, bytes.length);
       for (var offset = from; offset < until; offset += 1024 * 1024) {
         final next = (offset + 1024 * 1024).clamp(0, until);
         yield Uint8List.sublistView(bytes, offset, next);

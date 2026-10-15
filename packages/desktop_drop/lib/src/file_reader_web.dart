@@ -21,7 +21,10 @@ Stream<Uint8List> openRead(String path, int start, int? end) async* {
 /// Retain the original Blob and read bounded slices, without fetching its URL.
 Stream<Uint8List> readBlob(web.Blob blob, int? start, int? end) async* {
   final from = start ?? 0;
-  final until = RangeError.checkValidRange(from, end, blob.size);
+  if (from < 0 || (end != null && end < from)) {
+    throw RangeError('Invalid byte range: $from..$end');
+  }
+  final until = (end ?? blob.size).clamp(0, blob.size);
   for (var offset = from; offset < until; offset += 1024 * 1024) {
     final next = (offset + 1024 * 1024).clamp(0, until);
     final buffer = await blob.slice(offset, next).arrayBuffer().toDart;

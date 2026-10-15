@@ -37,6 +37,11 @@ void main() {
         3,
       ]);
       expect(await item.openRead(0, 0).toList(), isEmpty);
+      expect(await item.openRead(1, 100).expand((chunk) => chunk).toList(), [
+        2,
+        3,
+      ]);
+      expect(await item.openRead(100).toList(), isEmpty);
       await expectLater(item.openRead(-1).toList(), throwsRangeError);
       await expectLater(item.openRead(2, 1).toList(), throwsRangeError);
       expect(await DropItemFile.fromData(Uint8List(0)).readAsBytes(), isEmpty);
