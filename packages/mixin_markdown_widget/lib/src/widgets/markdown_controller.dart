@@ -11,14 +11,24 @@ import '../parser/markdown_document_parser.dart';
 import '../streaming/streaming_state.dart';
 
 class MarkdownController extends ChangeNotifier {
+  /// Creates a controller for [data]. A [document] from [parseDocument] of
+  /// the same [data] skips the parse, so an app can parse in an isolate.
   MarkdownController({
     String data = '',
+    MarkdownDocument? document,
     MarkdownDocumentParser? parser,
     MarkdownCopySerializer? plainTextSerializer,
   })  : _parser = parser ?? const MarkdownDocumentParser(),
         _plainTextSerializer =
             plainTextSerializer ?? const MarkdownPlainTextSerializer() {
-    _replaceData(data);
+    _replaceData(data, document: document);
+  }
+
+  /// Parses [data] as a new controller with the default parser does. It uses
+  /// no Flutter bindings, so it can run in an isolate.
+  static MarkdownDocument parseDocument(String data) {
+    final source = _MarkdownSourceBuffer()..set(data);
+    return const MarkdownDocumentParser().parseLines(source.lines, version: 1);
   }
 
   final MarkdownDocumentParser _parser;
@@ -126,12 +136,14 @@ class MarkdownController extends ChangeNotifier {
     _documentVersionNotifier.value = _version;
   }
 
-  void _replaceData(String data) {
+  void _replaceData(String data, {MarkdownDocument? document}) {
     _source.set(data);
     _version += 1;
     final parseStopwatch = Stopwatch()..start();
     const parseMode = 'full';
-    _document = _parser.parseLines(_source.lines, version: _version);
+    _document = document != null && document.version == _version
+        ? document
+        : _parser.parseLines(_source.lines, version: _version);
     parseStopwatch.stop();
     if (mixinMarkdownDebugLogging) {
       debugPrint(
