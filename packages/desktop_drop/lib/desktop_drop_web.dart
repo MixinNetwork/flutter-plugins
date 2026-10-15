@@ -83,12 +83,21 @@ class DesktopDropWeb {
 
     final web.File file = await fileCompleter.future;
 
+    return _fileToWebDropItem(file, relativePath: entry.fullPath);
+  }
+
+  /// Builds a [WebDropItem] straight from a [web.File].
+  ///
+  /// Used for drag sources that expose a file but no FileSystemEntry, such as
+  /// the browser's own downloads menu. Those items have no path relative to a
+  /// dropped folder, so [relativePath] is null.
+  WebDropItem _fileToWebDropItem(web.File file, {String? relativePath}) {
     return WebDropItem(
       uri: web.URL.createObjectURL(file),
       name: file.name,
       size: file.size,
       lastModified: DateTime.fromMillisecondsSinceEpoch(file.lastModified),
-      relativePath: entry.fullPath,
+      relativePath: relativePath,
       type: file.type,
       children: [],
     );
@@ -100,14 +109,29 @@ class DesktopDropWeb {
 
       final items = event.dataTransfer!.items;
 
-      Future.wait(List.generate(items.length, (index) {
+      Future.wait(List<Future<WebDropItem?>>.generate(items.length, (index) {
         final item = items[index];
-        final entry = item.webkitGetAsEntry()!;
-        return _entryToWebDropItem(entry);
+        // A drag can carry string items alongside its files -- the browser's
+        // downloads menu sends text/uri-list and text/plain next to the file.
+        // webkitGetAsEntry() returns null for those, and for file items that
+        // have no FileSystemEntry backing them, so fall back to getAsFile()
+        // rather than asserting. Anything that yields neither is skipped.
+        final entry = item.webkitGetAsEntry();
+        if (entry != null) {
+          return _entryToWebDropItem(entry);
+        }
+        final file = item.getAsFile();
+        if (file != null) {
+          return Future<WebDropItem?>.value(_fileToWebDropItem(file));
+        }
+        return Future<WebDropItem?>.value(null);
       })).then((webItems) {
+        // Always notify, even with nothing usable: the event is what resets
+        // the drop target's state, so swallowing it leaves the drag highlight
+        // stuck until the page is rebuilt.
         channel.invokeMethod(
           "performOperation_web",
-          webItems.map((e) => e.toJson()).toList(),
+          webItems.whereType<WebDropItem>().map((e) => e.toJson()).toList(),
         );
       }).catchError((e, s) {
         debugPrint('desktop_drop_web: $e $s');
