@@ -145,7 +145,7 @@ class DesktopDrop {
               return '';
             }
             if (uri.scheme == 'file') {
-              return uri.toFilePath();
+              return uri.toFilePath(windows: false);
             }
             // smb://, http://, etc. - keep as-is (not portal keys)
             return e;

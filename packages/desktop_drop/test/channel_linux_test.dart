@@ -39,6 +39,27 @@ void main() {
     expect(event.files.single.path, 'smb://server/share/file.txt');
   });
 
+  test('native-resolved portal paths preserve the original transfer key',
+      () async {
+    final events = <DropEvent>[];
+    void listener(DropEvent event) => events.add(event);
+    DesktopDrop.instance.addRawDropEventListener(listener);
+    addTearDown(
+        () => DesktopDrop.instance.removeRawDropEventListener(listener));
+
+    await _invokePlatformMethod(const MethodCall('performOperation_linux', [
+      'file:///run/user/1000/doc/transfer/report%20one.pdf\r\n',
+      [12.0, 34.0],
+      'original-portal-transfer-key',
+    ]));
+
+    final event = events.single as DropDoneEvent;
+    expect(
+        event.files.single.path, '/run/user/1000/doc/transfer/report one.pdf');
+    expect(event.rawText, 'original-portal-transfer-key');
+    expect(event.location, const Offset(12.0, 34.0));
+  });
+
   test('linux drop still converts file uri to local path', () async {
     final events = <DropEvent>[];
     void listener(DropEvent event) => events.add(event);
