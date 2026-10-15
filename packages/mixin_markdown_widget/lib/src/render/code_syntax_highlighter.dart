@@ -5,8 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:re_highlight/languages/all.dart';
 import 'package:re_highlight/re_highlight.dart';
 
-import 'pretext_text_block.dart';
+import '../core/document.dart';
 import '../widgets/markdown_theme.dart';
+import 'pretext_text_block.dart';
 
 class MarkdownCodeSyntaxHighlighter {
   const MarkdownCodeSyntaxHighlighter();
@@ -621,10 +622,74 @@ class _MarkdownHighlightSegmentRenderer implements HighlightRenderer {
   }
 }
 
+// One highlighter for each isolate: registering every language takes a while,
+// and an app's background isolates highlight many code blocks.
+final _isolateHighlighter = Highlight()..registerLanguages(builtinAllLanguages);
+
+/// Finds the highlight segments of the code blocks of [document] on the
+/// calling isolate. See [cacheCodeHighlights].
+List<Map<String, Object?>> highlightCodeBlocks(
+  MarkdownDocument document, {
+  required int maxLines,
+}) {
+  const highlighter = MarkdownCodeSyntaxHighlighter();
+  final highlights = <Map<String, Object?>>[];
+  late final void Function(List<BlockNode>) visitAll;
+  void visit(BlockNode block) {
+    switch (block) {
+      case CodeBlock(:final code, :final language):
+        if (code.isEmpty || highlighter.lineCountOf(code) > maxLines) return;
+        final normalized = highlighter._normalizeLanguage(language);
+        highlights.add(<String, Object?>{
+          'source': code,
+          'language': normalized,
+          'segments': _highlightSegmentsInBackground(<String, Object?>{
+            'source': code,
+            'language': normalized,
+          }),
+        });
+      case QuoteBlock(:final children) || DetailsBlock(:final children):
+        visitAll(children);
+      case ListBlock(:final items) || FootnoteListBlock(:final items):
+        for (final item in items) {
+          visitAll(item.children);
+        }
+      case DefinitionListBlock(:final items):
+        for (final item in items) {
+          item.definitions.forEach(visitAll);
+        }
+      default:
+    }
+  }
+
+  visitAll = (blocks) => blocks.forEach(visit);
+  visitAll(document.blocks);
+  return highlights;
+}
+
+/// Stores highlights from [highlightCodeBlocks] for the code blocks that show
+/// later on this isolate.
+void cacheCodeHighlights(List<Map<String, Object?>> highlights) {
+  final cache = MarkdownCodeSyntaxHighlighter._segmentCache;
+  for (final highlight in highlights) {
+    if (cache.length >= MarkdownCodeSyntaxHighlighter._maxSegmentCacheEntries) {
+      cache.remove(cache.keys.first);
+    }
+    cache[_MarkdownHighlightRequestKey(
+      source: highlight['source']! as String,
+      language: highlight['language'] as String?,
+    )] = (highlight['segments']! as List<Object?>)
+        .map((segment) => _MarkdownHighlightSegment.fromMessage(
+              segment! as Map<String, Object?>,
+            ))
+        .toList(growable: false);
+  }
+}
+
 List<Map<String, Object?>> _highlightSegmentsInBackground(
   Map<String, Object?> request,
 ) {
-  final highlighter = Highlight()..registerLanguages(builtinAllLanguages);
+  final highlighter = _isolateHighlighter;
   final source = request['source']! as String;
   final language = request['language'] as String?;
   final result = _runHighlightInBackground(

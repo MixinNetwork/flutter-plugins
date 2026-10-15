@@ -8,6 +8,7 @@ import '../clipboard/plain_text_serializer.dart';
 import '../core/document.dart';
 import '../debug.dart';
 import '../parser/markdown_document_parser.dart';
+import '../render/code_syntax_highlighter.dart' as highlighter;
 import '../streaming/streaming_state.dart';
 
 class MarkdownController extends ChangeNotifier {
@@ -30,6 +31,22 @@ class MarkdownController extends ChangeNotifier {
     final source = _MarkdownSourceBuffer()..set(data);
     return const MarkdownDocumentParser().parseLines(source.lines, version: 1);
   }
+
+  /// Finds the syntax highlight of the code blocks of [document], for an app
+  /// that parses with [parseDocument] in its own isolate. Pass the result to
+  /// [cacheCodeHighlights] on the UI isolate, and the code blocks show
+  /// highlighted in their first frame instead of a frame after they mount.
+  /// Blocks longer than [maxLines] stay plain, as with
+  /// [MarkdownThemeData.codeHighlightMaxLines].
+  static List<Map<String, Object?>> highlightCodeBlocks(
+    MarkdownDocument document, {
+    int maxLines = 120,
+  }) =>
+      highlighter.highlightCodeBlocks(document, maxLines: maxLines);
+
+  /// Stores the result of [highlightCodeBlocks] on this isolate.
+  static void cacheCodeHighlights(List<Map<String, Object?>> highlights) =>
+      highlighter.cacheCodeHighlights(highlights);
 
   final MarkdownDocumentParser _parser;
   final MarkdownCopySerializer _plainTextSerializer;
