@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:cross_file/cross_file.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -600,7 +599,7 @@ class _DropPlaygroundState extends State<DropPlayground> {
               onPressed: _bookmark == null || _reading
                   ? null
                   : () => _readFile(
-                      XFile(_bookmark!.$1),
+                      DropItemFile(_bookmark!.$1),
                       bookmark: _bookmark!.$2,
                     ),
               child: const Text('Read with access'),
@@ -608,7 +607,7 @@ class _DropPlaygroundState extends State<DropPlayground> {
             TextButton(
               onPressed: _bookmark == null || _reading
                   ? null
-                  : () => _readFile(XFile(_bookmark!.$1)),
+                  : () => _readFile(DropItemFile(_bookmark!.$1)),
               child: const Text('Read without access'),
             ),
           ],
@@ -630,7 +629,7 @@ class _DropPlaygroundState extends State<DropPlayground> {
     _message('Bookmark saved. Restart the app to test persistent access.');
   }
 
-  Future<void> _readFile(XFile file, {Uint8List? bookmark}) async {
+  Future<void> _readFile(DropItem file, {Uint8List? bookmark}) async {
     setState(() => _reading = true);
     var accessed = false;
     try {

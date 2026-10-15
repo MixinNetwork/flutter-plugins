@@ -127,7 +127,7 @@ class DesktopDropPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, Activi
             channel?.invokeMethod("feedback", args + ("target" to target))
             if (target <= 0) { permission?.release(); return@query }
             // Android grants URI access only for this drag. Materialize while
-            // the permission is held so XFile remains readable after drop.
+            // the permission is held so DropItem remains readable after drop.
             io.execute {
                 val materialized = mutableListOf<Map<String, Any?>>()
                 val directories = mutableListOf<File>()

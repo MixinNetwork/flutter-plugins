@@ -21,6 +21,7 @@ example does not change acceptance automatically.
 | Mixed TXT/PNG selection onto **TXT files** | Rejected because every file must match. |
 | Plain text onto **Text** | Inspector shows the text, with no file required. |
 | Browser link onto **URLs** | Inspector shows the source's URL representation. |
+| Browser image or image data URL onto **All files** | Readable image is delivered when browser/source permissions allow it; its URL is retained. |
 | TXT onto **Child · TXT** | Child receives it. |
 | PNG or link onto the child area | The parent receives it if its switch is on. |
 | Disable child, keep parent on | Content over the child falls back to the parent. |
@@ -49,6 +50,24 @@ entries are shown separately from regular files.
 A macOS promised file is delivered into the app's temporary directory and usually
 has no security-scoped bookmark. Its inspector entry identifies it as a promise.
 Saved bookmarks remain in this example's preferences until replaced.
+
+## Additional manual regression
+
+- Drag several Apple Music tracks together; verify every advertised file or
+  promise is delivered once, including multiple files with the same type.
+- Drop a folder into an inactive macOS window after interacting with another
+  application; verify the inspector updates without clicking the window.
+- Register the plugin for a `desktop_multi_window` child engine using the package
+  README instructions, then drop into the main and child windows independently.
+- Serve a release/profile web build and drag files over both the Flutter surface
+  and a descendant DOM element that handles its own events. Verify no navigation
+  occurs and the matching target receives the drop.
+- Try an image source that permits CORS, an image data URL, and a source that
+  blocks CORS. For the blocked source, verify the URL remains available and the
+  read error is reported without navigating away.
+- Check large browser files using **Read file**; it should read only the requested
+  range. Native Android debug/release builds and window-manager coexistence need
+  the application's actual host configuration.
 
 ## Checks
 

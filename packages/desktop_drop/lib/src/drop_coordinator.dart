@@ -9,7 +9,6 @@ import 'bridge_stub.dart' if (dart.library.ffi) 'bridge_native.dart';
 import 'drop_item.dart';
 import 'drop_offer.dart';
 import 'drop_target.dart';
-import 'web_drop_item.dart';
 
 abstract interface class DropTargetClient {
   int get id;
@@ -168,7 +167,7 @@ class DropCoordinator {
           offer: offer,
           localPosition: details.localPosition,
           globalPosition: position,
-          files: _files(data),
+          files: (event['items'] as List<DropItem>?) ?? _files(data),
           rawText: data['rawText'] as String?,
         ),
       );
@@ -213,10 +212,6 @@ class DropCoordinator {
 
   List<DropItem> _files(Map<Object?, Object?> offer) =>
       (offer['files'] as List? ?? const []).cast<Map>().map((file) {
-        if (file.containsKey('uri')) {
-          return WebDropItem.fromJson(file.cast<String, dynamic>())
-              .toDropItem();
-        }
         final path = file['path'] as String;
         final name = file['name'] as String?;
         final bookmark = file['apple-bookmark'] as Uint8List?;

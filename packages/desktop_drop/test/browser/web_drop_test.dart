@@ -4,6 +4,7 @@ library;
 import 'dart:async';
 import 'dart:js_interop';
 import 'dart:js_interop_unsafe';
+import 'dart:typed_data';
 import 'dart:ui_web' as ui_web;
 
 import 'package:desktop_drop/desktop_drop.dart';
@@ -74,6 +75,100 @@ Future<Offset> mount(
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(() => DesktopDropWeb.registerWith(webPluginRegistrar));
+
+  testWidgets(
+    'retained browser files survive URL revocation and stream bounded slices',
+    (tester) async {
+      final done = Completer<DropDoneDetails>();
+      final point = await mount(
+        tester,
+        accepts: (_) => true,
+        done: done.complete,
+      );
+      final bytes = Uint8List(2 * 1024 * 1024 + 3)
+        ..fillRange(0, 2 * 1024 * 1024 + 3, 42);
+      final data = web.DataTransfer();
+      data.items.add(web.File([bytes.toJS].toJS, 'large.bin'));
+      send('drop', data, point);
+      await tester.pump();
+      await tester.runAsync(() async {
+        final file = (await done.future.timeout(const Duration(seconds: 5)))
+            .files
+            .single;
+        web.URL.revokeObjectURL(file.path);
+        final chunks = await file.openRead().toList();
+        expect(chunks.map((chunk) => chunk.length).toList(), [
+          1024 * 1024,
+          1024 * 1024,
+          3,
+        ]);
+        expect(chunks.last, [42, 42, 42]);
+        expect(await file.openRead(1, 4).expand((chunk) => chunk).toList(), [
+          42,
+          42,
+          42,
+        ]);
+        expect(await file.openRead(0, 0).toList(), isEmpty);
+      });
+    },
+  );
+
+  testWidgets('data image URLs are materialized only after final acceptance', (
+    tester,
+  ) async {
+    final done = Completer<DropDoneDetails>();
+    final point = await mount(
+      tester,
+      accepts: (details) => details.offer.types.contains(DropType.file),
+      done: done.complete,
+    );
+    const source = 'data:image/png;base64,cG5n';
+    final data = web.DataTransfer()
+      ..setData('text/uri-list', source)
+      ..setData('text/html', '<img src="$source">');
+    send('dragenter', data, point);
+    expect(done.isCompleted, false);
+    await tester.runAsync(() async {
+      send('drop', data, point);
+      final drop = await done.future.timeout(const Duration(seconds: 5));
+      expect(drop.files.single.name, 'image.png');
+      expect(await drop.files.single.readAsString(), 'png');
+      expect(drop.urls, contains(Uri.parse(source)));
+      web.URL.revokeObjectURL(drop.files.single.path);
+    });
+  });
+
+  testWidgets(
+    'capture listeners prevent file navigation even when a descendant stops bubbling',
+    (tester) async {
+      final done = Completer<DropDoneDetails>();
+      final point = await mount(
+        tester,
+        accepts: (_) => true,
+        done: done.complete,
+      );
+      final host =
+          ui_web.views.getHostElement(tester.view.viewId) as web.HTMLElement;
+      final blocker = ((web.Event event) => event.stopPropagation()).toJS;
+      host.addEventListener('drop', blocker);
+      addTearDown(() => host.removeEventListener('drop', blocker));
+      final data = web.DataTransfer()..setData('text/plain', 'hello');
+      final event = web.DragEvent(
+        'drop',
+        web.DragEventInit(
+          dataTransfer: data,
+          clientX: point.dx.round(),
+          clientY: point.dy.round(),
+          bubbles: true,
+          cancelable: true,
+        ),
+      );
+      host.dispatchEvent(event);
+      await tester.pump();
+      expect(event.defaultPrevented, true);
+      expect((await done.future).text, 'hello');
+    },
+  );
 
   testWidgets(
     'file plus string representations retains getAsFile fallback and bytes',
