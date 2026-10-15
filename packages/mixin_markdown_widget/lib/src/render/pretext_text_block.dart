@@ -1304,20 +1304,41 @@ InlineSpan _buildLineSpanFromFragments(
   required TextStyle fallbackStyle,
 }) {
   final children = <InlineSpan>[];
+  // Each CJK character is a fragment. Plain fragments that look and act the
+  // same share one span, so the line has one style run instead of dozens.
+  _MarkdownPretextLineFragment? plain;
+  final plainText = StringBuffer();
+  void flushPlain() {
+    final fragment = plain;
+    if (fragment == null) return;
+    children.add(
+      TextSpan(
+        text: plainText.toString(),
+        style: fragment.style,
+        mouseCursor: fragment.mouseCursor,
+        recognizer: fragment.recognizer,
+      ),
+    );
+    plain = null;
+    plainText.clear();
+  }
+
   for (final fragment in fragments) {
-    if (fragment.renderSpan != null) {
-      children.add(fragment.renderSpan!);
+    if (fragment.renderSpan == null && fragment.decoration == null) {
+      final current = plain;
+      if (current != null &&
+          (!identical(current.style, fragment.style) ||
+              current.mouseCursor != fragment.mouseCursor ||
+              !identical(current.recognizer, fragment.recognizer))) {
+        flushPlain();
+      }
+      plain ??= fragment;
+      plainText.write(fragment.text);
       continue;
     }
-    if (fragment.decoration == null) {
-      children.add(
-        TextSpan(
-          text: fragment.text,
-          style: fragment.style,
-          mouseCursor: fragment.mouseCursor,
-          recognizer: fragment.recognizer,
-        ),
-      );
+    flushPlain();
+    if (fragment.renderSpan != null) {
+      children.add(fragment.renderSpan!);
       continue;
     }
     children.add(
@@ -1333,6 +1354,7 @@ InlineSpan _buildLineSpanFromFragments(
     );
   }
 
+  flushPlain();
   if (children.isEmpty) {
     return TextSpan(style: fallbackStyle, text: ' ');
   }
