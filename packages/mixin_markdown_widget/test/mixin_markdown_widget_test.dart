@@ -2837,6 +2837,44 @@ const value = 42;
     expect(customPaints, isNotEmpty);
   });
 
+  test('pretext lines of mixed text keep their order and fit', () {
+    const style = TextStyle(fontSize: 14, height: 1.2);
+    const runs = <MarkdownPretextInlineRun>[
+      MarkdownPretextInlineRun(
+        text: '请先运行 flutter analyze\t再提交，然后确认 ',
+        style: style,
+      ),
+      MarkdownPretextInlineRun(
+        text: 'pubspec.lock',
+        style: style,
+        decoration: MarkdownPretextInlineDecoration(
+          backgroundColor: Color(0xFFE9EDF2),
+          borderRadius: BorderRadius.all(Radius.circular(6)),
+          padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        ),
+      ),
+      MarkdownPretextInlineRun(text: ' 没有多余的变化。', style: style),
+    ];
+
+    final layout = computeMarkdownPretextLayoutFromRuns(
+      runs: runs,
+      fallbackStyle: style,
+      maxWidth: 120,
+      textScaleFactor: 1,
+    );
+
+    expect(layout.lines.length, greaterThan(1));
+    var offset = 0;
+    for (final line in layout.lines) {
+      expect(line.startOffset, offset);
+      expect(line.width, lessThanOrEqualTo(120));
+      final right = line.segments.isEmpty ? 0.0 : line.segments.last.right;
+      expect(right, closeTo(line.width, 0.01));
+      offset = line.endOffset;
+    }
+    expect(offset, layout.plainText.length);
+  });
+
   test('partial selection on decorated inline uses partial text geometry', () {
     final layout = computeMarkdownPretextLayoutFromRuns(
       runs: const <MarkdownPretextInlineRun>[
