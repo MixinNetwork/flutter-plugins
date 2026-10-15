@@ -1,0 +1,18 @@
+{
+  "targets": [
+    {
+      "package": "desktop_webview_window",
+      "platform": "windows",
+      "runner": "windows-latest",
+      "test": "integration_test/app_test.dart",
+      "setup": "tool/ci/setup_windows.ps1"
+    },
+    {
+      "package": "desktop_webview_window",
+      "platform": "macos",
+      "runner": "macos-latest",
+      "test": "integration_test/app_test.dart",
+      "driver": "test_driver/integration_test.dart"
+    }
+  ]
+}

@@ -8,3 +8,5 @@ analyzer:
     deprecated_member_use: ignore
     unnecessary_library_name: ignore
     use_super_parameters: ignore
+  exclude:
+    - build/**

@@ -5,7 +5,7 @@
 This file describes repository-wide guidance for the `flutter-plugins` monorepo. Package-specific guidance may exist deeper in the tree and should be treated as higher-priority context for that subtree.
 
 Detailed guidance for `mixin_markdown_widget` lives in [packages/mixin_markdown_widget/AGENTS.md](packages/mixin_markdown_widget/AGENTS.md).
-Release preparation guidance for pub packages lives in [.codex/skills/flutter-pub-release/SKILL.md](.codex/skills/flutter-pub-release/SKILL.md).
+Release preparation, publication, and verification guidance for pub packages lives in [.agents/skills/flutter-pub-release/SKILL.md](.agents/skills/flutter-pub-release/SKILL.md).
 
 ## Repository Overview
 
@@ -37,10 +37,17 @@ Release preparation guidance for pub packages lives in [.codex/skills/flutter-pu
 - For Flutter UI packages, pair automated tests with an `example/` sanity check when interaction or rendering is involved.
 - Keep unrelated packages untouched unless there is a verified cross-package dependency.
 
+## Integration Test Entry Points
+
+- Each package with integration tests must have exactly one integration test application entry point: `example/integration_test/app_test.dart`.
+- Register all scenarios through that entry point, with platform dispatch when needed. Put reusable/platform scenarios under `integration_test/src/`; those files must not define `main()` or create additional `*_test.dart` entry points.
+- Every platform target for a package in `.github/integration-tests.json` must reference the same entry point. Add scenarios to the shared suite instead of adding scenario-specific CI steps or targets.
+- A `test_driver/integration_test.dart` adapter may run that suite when a platform needs `flutter drive`; it must not register a separate set of scenarios.
+
 ## Release Metadata Ownership
 
-- Keep ordinary feature and fix pull requests focused on the implementation. Do not bump a package version, add the next release section to `CHANGELOG.md`, or update an example lockfile solely to prepare a release.
-- Treat package versions, release changelog sections, and release-related lockfile updates as maintainer-owned release work. Update them together only when the task explicitly asks to prepare or publish a release, following `.codex/skills/flutter-pub-release/SKILL.md`.
+- Keep ordinary feature and fix pull requests focused on the implementation. Do not bump a package version, add the next release section to `CHANGELOG.md`, or update the workspace lockfile solely to prepare a release.
+- Treat package versions, release changelog sections, and release-related lockfile updates as maintainer-owned release work. Update them together only when the task explicitly asks to prepare or publish a release, following `.agents/skills/flutter-pub-release/SKILL.md`.
 - Use clear package-scoped commit and pull request titles because release preparation derives candidate entries from commits since the latest package tag. During release preparation, inspect the actual changes and rewrite the final changelog for package users instead of copying contributor wording mechanically.
 - Changes whose explicit purpose is to correct existing release metadata are exempt from this separation.
 

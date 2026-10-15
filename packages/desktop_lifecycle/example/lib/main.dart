@@ -6,7 +6,7 @@ void main() {
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({Key? key}) : super(key: key);
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -26,7 +26,7 @@ class MyApp extends StatelessWidget {
 }
 
 class FocusLifecycleState extends StatelessWidget {
-  const FocusLifecycleState({Key? key}) : super(key: key);
+  const FocusLifecycleState({super.key});
 
   @override
   Widget build(BuildContext context) {

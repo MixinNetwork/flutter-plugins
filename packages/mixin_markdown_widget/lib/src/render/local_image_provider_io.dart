@@ -8,6 +8,12 @@ ImageProvider<Object>? resolveMarkdownLocalImageProvider(String source) {
     return null;
   }
 
+  // Windows drive letters are parsed as URI schemes, so check paths first.
+  final file = File(trimmed);
+  if (file.isAbsolute) {
+    return FileImage(file);
+  }
+
   final uri = Uri.tryParse(trimmed);
   if (uri != null) {
     if (uri.scheme == 'file') {
@@ -18,8 +24,7 @@ ImageProvider<Object>? resolveMarkdownLocalImageProvider(String source) {
     }
   }
 
-  final file = File(trimmed);
-  if (file.isAbsolute || file.existsSync()) {
+  if (file.existsSync()) {
     return FileImage(file);
   }
 

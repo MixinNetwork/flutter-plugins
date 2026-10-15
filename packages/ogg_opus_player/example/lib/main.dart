@@ -36,8 +36,7 @@ Future<void> main() async {
 }
 
 class _PlayAssetExample extends StatefulWidget {
-  const _PlayAssetExample({Key? key, required this.directory})
-      : super(key: key);
+  const _PlayAssetExample({required this.directory});
   final String directory;
 
   @override
@@ -91,7 +90,7 @@ class _PlayAssetExampleState extends State<_PlayAssetExample> {
 }
 
 class _OpusOggPlayerWidget extends StatefulWidget {
-  const _OpusOggPlayerWidget({Key? key, required this.path}) : super(key: key);
+  const _OpusOggPlayerWidget({super.key, required this.path});
 
   final String path;
 
@@ -196,10 +195,7 @@ class _OpusOggPlayerWidgetState extends State<_OpusOggPlayerWidget> {
 }
 
 class _RecorderExample extends StatefulWidget {
-  const _RecorderExample({
-    Key? key,
-    required this.dir,
-  }) : super(key: key);
+  const _RecorderExample({required this.dir});
 
   final String dir;
 
@@ -255,7 +251,7 @@ class _RecorderExampleState extends State<_RecorderExample> {
             onPressed: () async {
               final isGranted = await _requestMicrophonePermission();
               if (!isGranted) {
-                if (mounted) {
+                if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('need microphone permission')),
                   );

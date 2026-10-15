@@ -8,3 +8,9 @@ pubspec_overrides.yaml
 build/
 .build/
 .swiftpm/
+
+# macOS Finder metadata.
+.DS_Store
+
+# Python test caches.
+__pycache__/

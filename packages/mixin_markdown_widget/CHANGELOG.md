@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.2
+
+* Hide HTML comments and GitHub review metadata in rendered and copied Markdown while preserving literal comments in code and escaped text.
+* Preserve fallback text inside `relative-time`, `local-time`, and `time` HTML elements.
+* Support self-closing HTML line breaks such as `<br/>`, including inside expandable details.
+* Preserve source ranges and incremental streaming behavior around hidden HTML comments.
+* Fix local images using absolute Windows paths being mistaken for URI schemes.
+
 ## 0.3.1
 
 * mixin_markdown_widget: fix contextual inline styling

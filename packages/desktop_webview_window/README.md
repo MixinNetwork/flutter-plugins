@@ -6,17 +6,17 @@ Show a webview window on your flutter desktop application.
 
 |          |       |     |
 | -------- | ------- | ---- |
-| Windows  | ✅     | [Webview2](https://www.nuget.org/packages/Microsoft.Web.WebView2) 1.0.992.28 |
+| Windows  | ✅     | [WebView2 SDK](https://www.nuget.org/packages/Microsoft.Web.WebView2/1.0.4258.31) 1.0.4258.31 |
 | Linux    | ✅    |  [WebKitGTK-4.1](https://webkitgtk.org/reference/webkit2gtk/stable/index.html) or [WebKitGTK-4.0](https://webkitgtk.org/reference/webkit2gtk/2.5.1/) |
 | macOS    | ✅     |  WKWebview |
 
 ## Getting Started
 
-1. modify your `main` method.
+1. To enable the optional webview title-bar controls, modify your `main` method.
    ```dart
    import 'package:desktop_webview_window/desktop_webview_window.dart';
    
-   void main() async {
+   void main(List<String> args) async {
      WidgetsFlutterBinding.ensureInitialized();
      
      // Add this your main method.
@@ -72,11 +72,38 @@ you can use `WebviewWindow.create()` to create a webview with a custom user data
 
 ```dart
 final webview = await WebviewWindow.create(
-  confiruation: CreateConfiguration(
+  configuration: CreateConfiguration(
     userDataFolderWindows: 'your_custom_user_data_folder',
   ),
 );
 ```
+
+### Window and media options
+
+`CreateConfiguration(openHidden: true)` creates a Windows WebView without
+showing its window. Show it later with `setWebviewWindowVisibility(true)` or
+`bringToForeground(maximized: true)`.
+
+`CreateConfiguration(denyCameraAndMicrophone: true)` denies camera and microphone
+requests for that window without saving the denial in the shared profile.
+This option requires WebView2 Runtime 111.0.1661.34 or later. Window creation
+fails on older runtimes when this option is enabled. Both options default to
+`false`.
+
+### Windows regression tests
+
+Run from `example/` on Windows with WebView2 Runtime installed:
+
+```powershell
+$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--use-fake-device-for-media-stream'
+flutter test integration_test/windows_webview_test.dart -d windows --timeout 5m
+```
+
+The tests use local pages, temporary profiles, and fake media devices. They do
+not require a physical camera or microphone.
+
+The bundled Windows SDK headers, loader DLL, and import library come from
+Microsoft.Web.WebView2 SDK 1.0.4258.31.
 
 ## License
 

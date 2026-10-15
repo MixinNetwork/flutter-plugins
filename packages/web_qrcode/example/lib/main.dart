@@ -6,7 +6,7 @@ void main() {
 }
 
 class MyApp extends StatefulWidget {
-  const MyApp({Key? key}) : super(key: key);
+  const MyApp({super.key});
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -60,7 +60,7 @@ Future<String?> showQrScannerDialog({
 }
 
 class QrScannerDialog extends StatefulWidget {
-  const QrScannerDialog({Key? key}) : super(key: key);
+  const QrScannerDialog({super.key});
 
   @override
   State<QrScannerDialog> createState() => _QrScannerDialogState();
@@ -77,6 +77,7 @@ class _QrScannerDialogState extends State<QrScannerDialog> {
         key: qrCodeReaderKey,
         successCallback: (decoded) async {
           await qrCodeReaderKey.currentState?.stopScanner();
+          if (!context.mounted) return;
           Navigator.pop(context, decoded);
         },
         cameraNotAvaliableCallback: (e) {

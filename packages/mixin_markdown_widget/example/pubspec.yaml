@@ -1,10 +1,11 @@
 name: mixin_markdown_widget_example
+resolution: workspace
 description: Demonstrates the mixin_markdown_widget package.
 publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.4.0
+  sdk: ^3.6.0
   flutter: ">=3.13.0"
 
 dependencies:

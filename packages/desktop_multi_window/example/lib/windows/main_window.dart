@@ -7,7 +7,7 @@ import '../widgets/window_list.dart';
 import 'argumet.dart';
 
 class ExampleMainWindow extends StatefulWidget {
-  const ExampleMainWindow({Key? key}) : super(key: key);
+  const ExampleMainWindow({super.key});
 
   @override
   State<ExampleMainWindow> createState() => _ExampleMainWindowState();
