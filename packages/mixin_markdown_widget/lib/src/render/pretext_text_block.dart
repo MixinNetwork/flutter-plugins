@@ -1797,6 +1797,17 @@ double _measureLineHeight(
   double textScaleFactor, {
   EdgeInsets? padding,
 }) {
+  return _cachedMeasure(
+    (#lineHeight, style, textScaleFactor, padding),
+    () => _measureUncachedLineHeight(style, textScaleFactor, padding: padding),
+  );
+}
+
+double _measureUncachedLineHeight(
+  TextStyle style,
+  double textScaleFactor, {
+  EdgeInsets? padding,
+}) {
   if (padding != null) {
     final metrics = _measureTightTextMetrics(' ', style, textScaleFactor);
     return metrics.tightHeight + padding.vertical;
@@ -2467,8 +2478,31 @@ class _MarkdownPretextLineFragment {
   }
 }
 
+// Segment widths and line heights depend only on their inputs, so layouts
+// share them. A pretext layout measures every word and CJK character, and
+// measures each line again while it fits the line, which laid out thousands of
+// text painters for one long paragraph.
+final Map<Object, double> _measureCache = <Object, double>{};
+const int _measureCacheLimit = 20000;
+var _clearsMeasureCacheOnFontChange = false;
+
+double _cachedMeasure(Object key, double Function() measure) {
+  if (!_clearsMeasureCacheOnFontChange) {
+    _clearsMeasureCacheOnFontChange = true;
+    // A newly loaded font can change the widths of text measured before.
+    PaintingBinding.instance.systemFonts.addListener(_measureCache.clear);
+  }
+  final cached = _measureCache[key];
+  if (cached != null) {
+    return cached;
+  }
+  if (_measureCache.length >= _measureCacheLimit) {
+    _measureCache.clear();
+  }
+  return _measureCache[key] = measure();
+}
+
 class _TextPainterSegmentMeasurer {
-  final Map<Object, double> _cache = <Object, double>{};
   final TextPainter _textPainter = TextPainter(
     textDirection: TextDirection.ltr,
     maxLines: 1,
@@ -2480,8 +2514,7 @@ class _TextPainterSegmentMeasurer {
     double textScaleFactor, {
     EdgeInsets? padding,
   }) {
-    final key = Object.hash(segment, style, textScaleFactor, padding);
-    return _cache.putIfAbsent(key, () {
+    return _cachedMeasure((segment, style, textScaleFactor, padding), () {
       _textPainter.text = TextSpan(text: segment, style: style);
       _textPainter.textScaler = TextScaler.linear(textScaleFactor);
       _textPainter.layout(maxWidth: double.infinity);
