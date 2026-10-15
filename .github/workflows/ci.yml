@@ -68,6 +68,14 @@ jobs:
         if: github.event_name == 'pull_request'
         run: dart run melos run test:flutter --diff="$MELOS_DIFF"
 
+      - name: Run desktop_drop browser regression tests
+        run: |
+          args=(--scope=desktop_drop)
+          if [[ -n "${MELOS_DIFF:-}" ]]; then
+            args+=(--diff="$MELOS_DIFF")
+          fi
+          dart run melos exec "${args[@]}" -- "flutter test --no-pub --platform chrome test/web_drop_test.dart"
+
       - name: Run Dart tests
         if: github.event_name != 'pull_request'
         run: dart run melos run test:dart
