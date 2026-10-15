@@ -3,6 +3,9 @@
 
 #include <windows.h>
 #include <shellapi.h>
+#include <shobjidl.h>
+#include <shlguid.h>
+#include <wrl/client.h>
 #include <flutter/method_channel.h>
 #include <flutter/plugin_registrar_windows.h>
 #include <flutter/standard_method_codec.h>
@@ -137,11 +140,17 @@ class Destination final : public IDropTarget {
  public:
   Destination(HWND window, int64_t view, Channel* channel)
       : window_(window), view_(view), channel_(channel), functions_(dd_bridge_create()) {
+    // Keep the source's drag image visible while it is over this window.
+    CoCreateInstance(CLSID_DragDropHelper, nullptr, CLSCTX_INPROC_SERVER,
+        IID_PPV_ARGS(drag_image_.GetAddressOf()));
     status_ = RegisterDragDrop(window_, this);
   }
   const DDBridgeFunctions& functions() const { return functions_; }
   HRESULT status() const { return status_; }
   void Shutdown() {
+    if (drag_image_active_) drag_image_->DragLeave();
+    drag_image_active_ = false;
+    drag_image_.Reset();
     if (SUCCEEDED(status_)) RevokeDragDrop(window_);
     dd_bridge_destroy(functions_.context);
   }
@@ -162,13 +171,23 @@ class Destination final : public IDropTarget {
     source_actions_ = *effect;
     offer_ = ReadOffer(data);
     Decide(0, position, effect);
+    if (drag_image_) {
+      POINT point{position.x, position.y};
+      drag_image_active_ = SUCCEEDED(drag_image_->DragEnter(window_, data, &point, *effect));
+    }
     return S_OK;
   }
   HRESULT STDMETHODCALLTYPE DragOver(DWORD, POINTL position, DWORD* effect) override {
     Decide(1, position, effect);
+    if (drag_image_active_) {
+      POINT point{position.x, position.y};
+      drag_image_->DragOver(&point, *effect);
+    }
     return S_OK;
   }
   HRESULT STDMETHODCALLTYPE DragLeave() override {
+    if (drag_image_active_) drag_image_->DragLeave();
+    drag_image_active_ = false;
     channel_->InvokeMethod("exit", std::make_unique<Value>(Map{
       {Value("view"), Value(view_)}, {Value("session"), Value(session_)},
       {Value("generation"), Value(dd_bridge_generation(functions_.context))}}));
@@ -177,6 +196,11 @@ class Destination final : public IDropTarget {
   HRESULT STDMETHODCALLTYPE Drop(IDataObject* data, DWORD, POINTL position, DWORD* effect) override {
     offer_ = ReadOffer(data, true);
     auto args = Decide(2, position, effect);
+    if (drag_image_active_) {
+      POINT point{position.x, position.y};
+      drag_image_->Drop(data, &point, *effect);
+      drag_image_active_ = false;
+    }
     if (*effect == DROPEFFECT_COPY) channel_->InvokeMethod("drop", std::move(args));
     return S_OK;
   }
@@ -206,6 +230,8 @@ class Destination final : public IDropTarget {
   int64_t session_ = 0;
   DWORD source_actions_ = 0;
   Offer offer_;
+  Microsoft::WRL::ComPtr<IDropTargetHelper> drag_image_;
+  bool drag_image_active_ = false;
 };
 
 class DesktopDropPlugin final : public flutter::Plugin {

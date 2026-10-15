@@ -29,4 +29,4 @@ set(desktop_drop_bundled_libraries
 
 target_compile_features(${PLUGIN_NAME} PRIVATE cxx_std_17)
 target_include_directories(${PLUGIN_NAME} PRIVATE "${DROP_BRIDGE}/include")
-target_link_libraries(${PLUGIN_NAME} PRIVATE ole32 shell32)
+target_link_libraries(${PLUGIN_NAME} PRIVATE ole32 shell32 uuid)

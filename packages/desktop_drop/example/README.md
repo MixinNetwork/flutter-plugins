@@ -21,6 +21,7 @@ example does not change acceptance automatically.
 | Mixed TXT/PNG selection onto **TXT files** | Rejected because every file must match. |
 | Plain text onto **Text** | Inspector shows the text, with no file required. |
 | Browser link onto **URLs** | Inspector shows the source's URL representation. |
+| Chrome selected text dragged into the Windows example | The source text preview remains visible over the window and follows the cursor; accepted and rejected targets still show the corresponding operation. |
 | Browser image or image data URL onto **All files** | Readable image is delivered when browser/source permissions allow it; its URL is retained. |
 | TXT onto **Child · TXT** | Child receives it. |
 | PNG or link onto the child area | The parent receives it if its switch is on. |
