@@ -1851,6 +1851,16 @@ _TightTextMetrics _measureTightTextMetrics(
   String text,
   TextStyle style,
   double textScaleFactor,
+) =>
+    _cachedMeasure(
+      (#tightMetrics, text, style, textScaleFactor),
+      () => _measureUncachedTightTextMetrics(text, style, textScaleFactor),
+    );
+
+_TightTextMetrics _measureUncachedTightTextMetrics(
+  String text,
+  TextStyle style,
+  double textScaleFactor,
 ) {
   final sampleText = text.isEmpty ? ' ' : text;
   final textPainter = TextPainter(
@@ -2478,15 +2488,15 @@ class _MarkdownPretextLineFragment {
   }
 }
 
-// Segment widths and line heights depend only on their inputs, so layouts
-// share them. A pretext layout measures every word and CJK character, and
+// Segment widths, line heights, and tight text metrics depend only on their
+// inputs, so layouts share them. A pretext layout measures every word and CJK character, and
 // measures each line again while it fits the line, which laid out thousands of
 // text painters for one long paragraph.
-final Map<Object, double> _measureCache = <Object, double>{};
+final Map<Object, Object> _measureCache = <Object, Object>{};
 const int _measureCacheLimit = 20000;
 var _clearsMeasureCacheOnFontChange = false;
 
-double _cachedMeasure(Object key, double Function() measure) {
+T _cachedMeasure<T extends Object>(Object key, T Function() measure) {
   if (!_clearsMeasureCacheOnFontChange) {
     _clearsMeasureCacheOnFontChange = true;
     // A newly loaded font can change the widths of text measured before.
@@ -2494,12 +2504,14 @@ double _cachedMeasure(Object key, double Function() measure) {
   }
   final cached = _measureCache[key];
   if (cached != null) {
-    return cached;
+    return cached as T;
   }
   if (_measureCache.length >= _measureCacheLimit) {
     _measureCache.clear();
   }
-  return _measureCache[key] = measure();
+  final measured = measure();
+  _measureCache[key] = measured;
+  return measured;
 }
 
 class _TextPainterSegmentMeasurer {
