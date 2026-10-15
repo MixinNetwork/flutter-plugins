@@ -24,31 +24,31 @@ class WebDropItem {
   final DateTime lastModified;
 
   factory WebDropItem.fromJson(Map<String, dynamic> json) => WebDropItem(
-        uri: json['uri'],
-        children: json['children'] == null
-            ? []
-            : (json['children'] as List)
-                .cast<Map>()
-                .map((e) => WebDropItem.fromJson(e.cast<String, dynamic>()))
-                .toList(),
-        data: json['data'] != null ? Uint8List.fromList(json['data']) : null,
-        name: json['name'],
-        type: json['type'],
-        size: json['size'],
-        relativePath: json['relativePath'],
-        lastModified: DateTime.fromMillisecondsSinceEpoch(json['lastModified']),
-      );
+    uri: json['uri'],
+    children: json['children'] == null
+        ? []
+        : (json['children'] as List)
+              .cast<Map>()
+              .map((e) => WebDropItem.fromJson(e.cast<String, dynamic>()))
+              .toList(),
+    data: json['data'] != null ? Uint8List.fromList(json['data']) : null,
+    name: json['name'],
+    type: json['type'],
+    size: json['size'],
+    relativePath: json['relativePath'],
+    lastModified: DateTime.fromMillisecondsSinceEpoch(json['lastModified']),
+  );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'uri': uri,
-        'children': children.map((e) => e.toJson()).toList(),
-        'data': data?.toList(),
-        'name': name,
-        'type': type,
-        'size': size,
-        'relativePath': relativePath,
-        'lastModified': lastModified.millisecondsSinceEpoch,
-      };
+    'uri': uri,
+    'children': children.map((e) => e.toJson()).toList(),
+    'data': data?.toList(),
+    'name': name,
+    'type': type,
+    'size': size,
+    'relativePath': relativePath,
+    'lastModified': lastModified.millisecondsSinceEpoch,
+  };
 
   DropItem toDropItem() {
     if (type == 'directory') {
