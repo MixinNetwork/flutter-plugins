@@ -9,6 +9,8 @@ environment:
   flutter: ">=3.47.7"
 
 dependencies:
+  cross_file: ^0.4.0
+  cross_file_web: ^1.0.0
   flutter:
     sdk: flutter
   flutter_web_plugins:
@@ -16,6 +18,7 @@ dependencies:
   web: ^1.1.1
 
 dev_dependencies:
+  cross_file_io: ^1.0.0
   ffigen: ^23.0.0
   flutter_test:
     sdk: flutter

@@ -7,6 +7,7 @@ import 'dart:js_interop_unsafe';
 import 'dart:typed_data';
 import 'dart:ui_web' as ui_web;
 
+import 'package:cross_file_web/cross_file_web.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:desktop_drop/desktop_drop_web.dart';
 import 'package:flutter/widgets.dart';
@@ -74,10 +75,13 @@ Future<Offset> mount(
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  setUpAll(() => DesktopDropWeb.registerWith(webPluginRegistrar));
+  setUpAll(() {
+    CrossFileWeb.registerWith(webPluginRegistrar);
+    DesktopDropWeb.registerWith(webPluginRegistrar);
+  });
 
   testWidgets(
-    'retained browser files survive URL revocation and stream bounded slices',
+    'retained browser files survive URL revocation and stream complete contents',
     (tester) async {
       final done = Completer<DropDoneDetails>();
       final point = await mount(
@@ -97,12 +101,8 @@ void main() {
             .single;
         web.URL.revokeObjectURL(file.path);
         final chunks = await file.openRead().toList();
-        expect(chunks.map((chunk) => chunk.length).toList(), [
-          1024 * 1024,
-          1024 * 1024,
-          3,
-        ]);
-        expect(chunks.last, [42, 42, 42]);
+        // Chunk boundaries are owned by the browser's Blob stream.
+        expect(chunks.expand((chunk) => chunk).toList(), bytes);
         expect(await file.openRead(1, 4).expand((chunk) => chunk).toList(), [
           42,
           42,

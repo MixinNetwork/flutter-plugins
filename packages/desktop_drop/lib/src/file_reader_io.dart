@@ -1,16 +1,23 @@
 import 'dart:io';
 import 'dart:typed_data';
 
-Future<int> length(String path) => File(path).length();
-Future<DateTime> lastModified(String path) => File(path).lastModified();
-Stream<Uint8List> openRead(String path, int start, int? end) =>
-    File(path)
-        .openRead(start, end)
-        .map((chunk) => chunk is Uint8List ? chunk : Uint8List.fromList(chunk));
-Future<void> saveTo(String path, String destination, Uint8List? bytes) async {
+import 'package:cross_file/cross_file.dart';
+
+XFile fromPath(String path) => XFile.fileSystem(path: path);
+
+// XFile 0.4 no longer provides saveTo; preserve the DropItem convenience API.
+Future<void> saveTo(XFile? source, String destination, Uint8List? bytes) async {
+  final target = File(destination);
   if (bytes != null) {
-    await File(destination).writeAsBytes(bytes);
+    await target.writeAsBytes(bytes);
+  } else if (source is FileSystemXFile) {
+    await File(source.path).copy(destination);
   } else {
-    await File(path).copy(destination);
+    final sink = target.openWrite();
+    try {
+      await sink.addStream(source!.openRead());
+    } finally {
+      await sink.close();
+    }
   }
 }

@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:js_interop';
 import 'dart:js_interop_unsafe';
 import 'dart:ui' as ui;
-import 'dart:typed_data';
 import 'dart:ui_web' as ui_web;
 
 import 'package:flutter/widgets.dart';
@@ -12,7 +11,7 @@ import 'package:web/web.dart' as web;
 import 'src/drop_coordinator.dart';
 import 'src/drop_offer.dart';
 import 'src/drop_item.dart';
-import 'src/file_reader_web.dart' as reader;
+import 'src/file_reader_web.dart' as file_reader;
 
 // DOM listeners outlive Dart statics during a browser hot restart. Keep raw JS
 // references so a new registration can remove the previous runtime's callbacks.
@@ -75,9 +74,11 @@ class DesktopDropWeb {
                   element.name == '.DS_Store' && element.mimeType == '',
             );
 
+      final file = file_reader.fromBlob(web.Blob());
       return DropItemDirectory(
-        web.URL.createObjectURL(web.Blob()),
+        file.uri,
         children,
+        file: file,
         name: entry.name,
         length: 0,
         mimeType: 'directory',
@@ -105,11 +106,27 @@ class DesktopDropWeb {
     return _fileToDropItem(file);
   }
 
-  DropItemFile _fileToDropItem(web.File file) => _BrowserDropFile(
+  DropItemFile _fileToDropItem(web.File file) => _blobToDropItem(
     file,
     name: file.name,
     modified: DateTime.fromMillisecondsSinceEpoch(file.lastModified),
   );
+
+  DropItemFile _blobToDropItem(
+    web.Blob blob, {
+    required String name,
+    DateTime? modified,
+  }) {
+    final file = file_reader.fromBlob(blob);
+    return DropItemFile(
+      file.uri,
+      file: file,
+      name: name,
+      mimeType: blob.type,
+      length: blob.size,
+      lastModified: modified ?? DateTime.fromMillisecondsSinceEpoch(0),
+    );
+  }
 
   List<Uri> _imageUris(web.DataTransfer data) {
     final candidates = <String>{};
@@ -157,7 +174,7 @@ class DesktopDropWeb {
     try {
       if (uri.scheme == 'data') {
         final data = uri.data!;
-        return _BrowserDropFile(
+        return _blobToDropItem(
           web.Blob(
             [data.contentAsBytes().toJS].toJS,
             web.BlobPropertyBag(type: data.mimeType),
@@ -177,7 +194,7 @@ class DesktopDropWeb {
         if (!blob.type.startsWith('image/')) {
           throw StateError('Source did not provide an image');
         }
-        return _BrowserDropFile(blob, name: _imageName(uri));
+        return _blobToDropItem(blob, name: _imageName(uri));
       })().timeout(
         const Duration(seconds: 10),
         onTimeout: () {
@@ -429,23 +446,4 @@ class DesktopDropWeb {
 
 extension DataTransferItemListExt on web.DataTransferItemList {
   external web.DataTransferItem operator [](int index);
-}
-
-/// Owns the source Blob even if an application revokes the display URL.
-class _BrowserDropFile extends DropItemFile {
-  _BrowserDropFile(this.blob, {required String name, DateTime? modified})
-    : super(
-        web.URL.createObjectURL(blob),
-        name: name,
-        mimeType: blob.type,
-        length: blob.size,
-        lastModified: modified ?? DateTime.fromMillisecondsSinceEpoch(0),
-      );
-  final web.Blob blob;
-  @override
-  Stream<Uint8List> openRead([int? start, int? end]) =>
-      reader.readBlob(blob, start, end);
-  @override
-  Future<void> saveTo(String destination) =>
-      reader.downloadBlob(blob, destination);
 }

@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:cross_file/cross_file.dart';
+
 import 'file_reader_io.dart'
     if (dart.library.js_interop) 'file_reader_web.dart'
     as reader;
@@ -8,6 +10,8 @@ import 'file_reader_io.dart'
 /// A dropped item.
 ///
 /// On desktop, this is usually a filesystem path (file or directory).
+/// File-backed contents are read through XFile; byte-backed constructors retain
+/// their in-memory data for compatibility with the previous API.
 ///
 /// macOS specifics:
 /// - If the drag source provided a real file URL (e.g. Finder/JetBrains),
@@ -24,6 +28,8 @@ abstract class DropItem {
   final int? _length;
   final DateTime? _lastModified;
   final Uint8List? _bytes;
+  final XFile? _source;
+  late final XFile _file = _source ?? reader.fromPath(path);
 
   /// Security-scoped bookmark bytes for the dropped item (macOS only).
   ///
@@ -47,7 +53,9 @@ abstract class DropItem {
     DateTime? lastModified,
     this.extraAppleBookmark,
     this.fromPromise = false,
+    XFile? file,
   }) : name = name ?? path.split(RegExp(r'[/\\]')).last,
+       _source = file,
        // Keep the existing public parameter names for these private fields.
        // ignore: prefer_initializing_formals
        _length = length,
@@ -77,44 +85,41 @@ abstract class DropItem {
        );
 
   Future<int> length() async =>
-      _length ?? _bytes?.length ?? await reader.length(path);
+      _length ??
+      _bytes?.length ??
+      await _file.length() ??
+      (throw StateError('Cannot determine dropped file length: $path'));
 
   Future<DateTime> lastModified() async =>
       _lastModified ??
-      (_bytes != null
-          ? DateTime.fromMillisecondsSinceEpoch(0)
-          : await reader.lastModified(path));
+      (_bytes == null ? await _file.lastModified() : null) ??
+      DateTime.fromMillisecondsSinceEpoch(0);
 
   Stream<Uint8List> openRead([int? start, int? end]) async* {
     final from = start ?? 0;
     if (from < 0 || (end != null && end < from)) {
       throw RangeError('Invalid byte range: $from..$end');
     }
+    // XFile 0.4 rejects equal bounds; retain the existing empty-range behavior.
+    if (end == from) return;
     final bytes = _bytes;
     if (bytes == null) {
-      yield* reader.openRead(path, from, end);
+      yield* _file.openRead(from, end);
     } else {
       final until = (end ?? bytes.length).clamp(0, bytes.length);
-      for (var offset = from; offset < until; offset += 1024 * 1024) {
-        final next = (offset + 1024 * 1024).clamp(0, until);
-        yield Uint8List.sublistView(bytes, offset, next);
-      }
+      if (from < until) yield Uint8List.sublistView(bytes, from, until);
     }
   }
 
-  Future<Uint8List> readAsBytes() async {
-    final bytes = BytesBuilder(copy: false);
-    await for (final chunk in openRead()) {
-      bytes.add(chunk);
-    }
-    return bytes.takeBytes();
-  }
+  Future<Uint8List> readAsBytes() async => _bytes ?? await _file.readAsBytes();
 
   Future<String> readAsString({Encoding encoding = utf8}) async =>
-      encoding.decode(await readAsBytes());
+      _bytes == null
+      ? await _file.readAsString(encoding: encoding)
+      : encoding.decode(_bytes);
 
   Future<void> saveTo(String destination) =>
-      reader.saveTo(path, destination, _bytes);
+      reader.saveTo(_bytes == null ? _file : null, destination, _bytes);
 }
 
 class DropItemFile extends DropItem {
@@ -127,6 +132,7 @@ class DropItemFile extends DropItem {
     super.lastModified,
     super.extraAppleBookmark,
     super.fromPromise,
+    super.file,
   });
 
   DropItemFile.fromData(
@@ -154,6 +160,7 @@ class DropItemDirectory extends DropItem {
     super.lastModified,
     super.extraAppleBookmark,
     super.fromPromise,
+    super.file,
   });
 
   DropItemDirectory.fromData(

@@ -1,28 +1,34 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:cross_file_io/cross_file_io.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('local dropped files read ranges and save without cross_file', () async {
-    final directory = await Directory.systemTemp.createTemp('desktop_drop_');
-    addTearDown(() => directory.delete(recursive: true));
-    final source = File('${directory.path}/source.txt');
-    await source.writeAsString('hello 世界');
-    final item = DropItemFile(source.path);
-    expect(item.name, 'source.txt');
-    expect(await item.readAsString(), 'hello 世界');
-    expect(await item.length(), await source.length());
-    expect(await item.openRead(1, 4).expand((chunk) => chunk).toList(), [
-      101,
-      108,
-      108,
-    ]);
-    final destination = '${directory.path}/saved.txt';
-    await item.saveTo(destination);
-    expect(await File(destination).readAsString(), 'hello 世界');
-  });
+  setUpAll(CrossFileIO.registerWith);
+
+  test(
+    'local dropped files delegate reads to XFile and preserve saveTo',
+    () async {
+      final directory = await Directory.systemTemp.createTemp('desktop_drop_');
+      addTearDown(() => directory.delete(recursive: true));
+      final source = File('${directory.path}/source.txt');
+      await source.writeAsString('hello 世界');
+      final item = DropItemFile(source.path);
+      expect(item.name, 'source.txt');
+      expect(await item.readAsString(), 'hello 世界');
+      expect(await item.length(), await source.length());
+      expect(await item.openRead(1, 4).expand((chunk) => chunk).toList(), [
+        101,
+        108,
+        108,
+      ]);
+      final destination = '${directory.path}/saved.txt';
+      await item.saveTo(destination);
+      expect(await File(destination).readAsString(), 'hello 世界');
+    },
+  );
 
   test(
     'memory files support empty and bounded reads and invalid ranges',

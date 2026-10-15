@@ -177,6 +177,54 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.15.0"
+  cross_file:
+    dependency: transitive
+    description:
+      name: cross_file
+      sha256: "3bde17bce71488fc4dc99216da1d990642a726472874dcce4db700eb103d3fa4"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.4.0"
+  cross_file_android:
+    dependency: transitive
+    description:
+      name: cross_file_android
+      sha256: "7143b2d4451b21aef10a20a651ba99e85b6f73c17c269a23a72fa4a8c2d543dd"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.0"
+  cross_file_darwin:
+    dependency: transitive
+    description:
+      name: cross_file_darwin
+      sha256: "5ae2e0165199c4dd09bd2a21733817b6fda390692ad6bf3ffd69be2bb9c37330"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.0"
+  cross_file_io:
+    dependency: transitive
+    description:
+      name: cross_file_io
+      sha256: b8d6af657ed47860d603130e2908f76c062c13b4764fd0ae3190243c55c396bc
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.0"
+  cross_file_platform_interface:
+    dependency: transitive
+    description:
+      name: cross_file_platform_interface
+      sha256: "6f8fd6dc53835107ca38f7f2226985b7730c26bb8dedc313de19ed6a68feac84"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.0"
+  cross_file_web:
+    dependency: transitive
+    description:
+      name: cross_file_web
+      sha256: de01eb6f6bec735f3e501770cceb89638cd50298ef5dd1a58aa04b4c254b3f85
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.0"
   crypto:
     dependency: transitive
     description:

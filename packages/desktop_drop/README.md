@@ -115,11 +115,13 @@ Remote reads omit credentials and require the source server to allow CORS; a
 blocked or failed read is reported through `FlutterError`, and the source URL
 remains in `DropDoneDetails.urls`. No request runs for a rejected drop.
 
-`DropItemFile` retains the browser's original Blob and reads it in 1 MiB slices.
+`DropItemFile` wraps XFile 0.4 for file reads. On Web, `cross_file_web` retains the
+browser's original Blob and reads it through the browser's native Blob stream.
 Reading no longer depends on fetching its Blob URL. `readAsBytes()` still loads
 the complete file into memory; use `openRead(start, end)` for large files. The
-browser `path` remains a Blob URL for previews. Applications can revoke it when
-finished; the delivered item's read methods continue to use the retained Blob.
+browser `path` remains a Blob URL for previews. XFile releases its URL when the
+file is garbage collected. Applications can also revoke it when finished; the
+delivered item's read methods continue to use the retained Blob.
 
 Android remains a preview implementation for the primary Flutter view. Its
 synchronous `OnDragListener` cannot return the later Dart result to the source;
@@ -171,10 +173,12 @@ reporting it; changing Dart acceptance rules cannot repair that build failure.
 - Use `DropEventDetails` for hover callbacks. Read metadata from `details.offer`.
 - Continue using `DropDoneDetails.files` for file contents, directories, and macOS
   bookmarks. `text` and `urls` provide the newly supported content.
-- `DropItem` is now owned by this package and no longer extends `cross_file.XFile`.
+- `DropItem` now wraps `cross_file.XFile` 0.4 instead of extending it.
   Its synchronous `name`, `path`, and `mimeType` remain available, together with
   `length()`, `lastModified()`, `openRead()`, `readAsBytes()`, `readAsString()`, and
   `saveTo()`. Use `DropItem` rather than `XFile` in callback parameter types.
+  The byte-backed constructors and `saveTo()` remain convenience APIs provided
+  by this package because XFile 0.4 no longer provides them.
 - `behavior` replaces the former hit-test setting. Raw event listeners and the old
   broadcast event classes are removed. Selection is owned by the widget hit test.
 
