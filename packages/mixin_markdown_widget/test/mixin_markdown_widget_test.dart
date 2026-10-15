@@ -2287,8 +2287,8 @@ return value;
       (tester) async {
     const input = '''
 ```dart
-const value = 42;
-return value;
+const firstFrameValue = 42;
+return firstFrameValue;
 ```
 ''';
 
@@ -2303,7 +2303,7 @@ return value;
     final richTextFinder = find.byWidgetPredicate(
       (widget) =>
           widget is RichText &&
-          widget.text.toPlainText().contains('const value = 42;'),
+          widget.text.toPlainText().contains('const firstFrameValue = 42;'),
     );
     expect(richTextFinder, findsOneWidget);
 
@@ -2366,7 +2366,8 @@ return value;
     );
     addTearDown(cache.dispose);
 
-    const source = 'const value = 42;\nreturn value;';
+    // The segment cache is shared by every test, so the source is unique.
+    const source = 'const themeValue = 7;\nreturn themeValue;';
 
     var presentation = cache.resolve(
       blockId: 'block-1',
@@ -2407,6 +2408,66 @@ return value;
       language: 'dart',
     );
     expect(presentation.isHighlighted, isTrue);
+  });
+
+  testWidgets('a code block with cached segments highlights in its first frame',
+      (tester) async {
+    late MarkdownThemeData theme;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) {
+            theme = MarkdownThemeData.fallback(context);
+            return const SizedBox.shrink();
+          },
+        ),
+      ),
+    );
+
+    const source = 'final remounted = true;\nprint(remounted);';
+    final first = MarkdownCodeHighlightCache(
+      highlighter: const MarkdownCodeSyntaxHighlighter(),
+    );
+    addTearDown(first.dispose);
+    expect(
+      first
+          .resolve(
+            blockId: 'block-1',
+            source: source,
+            baseStyle: theme.codeBlockStyle,
+            theme: theme,
+            language: 'dart',
+          )
+          .isHighlighted,
+      isFalse,
+    );
+    await _pumpUntilCacheHighlighted(
+      tester,
+      cache: first,
+      blockId: 'block-1',
+      source: source,
+      baseStyle: theme.codeBlockStyle,
+      theme: theme,
+      language: 'dart',
+    );
+
+    // A view that mounts later, such as the same post in another list.
+    final second = MarkdownCodeHighlightCache(
+      highlighter: const MarkdownCodeSyntaxHighlighter(),
+    );
+    addTearDown(second.dispose);
+    var notified = false;
+    second.addListener(() => notified = true);
+    final presentation = second.resolve(
+      blockId: 'block-1',
+      source: source,
+      baseStyle: theme.codeBlockStyle,
+      theme: theme,
+      language: 'dart',
+    );
+    expect(presentation.isHighlighted, isTrue);
+    await tester.pump();
+    expect(notified, isFalse);
   });
 
   testWidgets('code highlight link tokens keep the code block font size', (

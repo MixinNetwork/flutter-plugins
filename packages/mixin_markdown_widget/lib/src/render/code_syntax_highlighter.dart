@@ -70,6 +70,38 @@ class MarkdownCodeSyntaxHighlighter {
     );
   }
 
+  /// The highlighted presentation of [source] when its segments are cached,
+  /// or null when they still have to be found.
+  ///
+  /// A code block that mounts again, such as a post scrolled back into view
+  /// or shown in another list, then shows highlighted in its first frame
+  /// instead of rebuilding the whole document a frame later.
+  MarkdownCodeHighlightPresentation? cachedPresentation({
+    required String source,
+    required TextStyle baseStyle,
+    required MarkdownThemeData theme,
+    String? language,
+  }) {
+    if (source.isEmpty ||
+        shouldDegradeHighlight(source: source, theme: theme)) {
+      return null;
+    }
+    final segments = _segmentCache[_MarkdownHighlightRequestKey(
+      source: source,
+      language: _normalizeLanguage(language),
+    )];
+    if (segments == null) {
+      return null;
+    }
+    return _presentationFromSegments(
+      segments,
+      source: source,
+      baseStyle: baseStyle,
+      theme: theme,
+      isHighlighted: segments.isNotEmpty,
+    );
+  }
+
   TextSpan buildTextSpan({
     required String source,
     required TextStyle baseStyle,
@@ -353,6 +385,23 @@ class MarkdownCodeHighlightCache extends ChangeNotifier {
         isPending: false,
       );
       return plainPresentation;
+    }
+
+    final cachedPresentation = _highlighter.cachedPresentation(
+      source: source,
+      baseStyle: baseStyle,
+      theme: theme,
+      language: language,
+    );
+    if (cachedPresentation != null) {
+      _entries[blockId] = _MarkdownCodeHighlightCacheEntry(
+        contentSignature: contentSignature,
+        presentationSignature: presentationSignature,
+        requestId: requestId,
+        presentation: cachedPresentation,
+        isPending: false,
+      );
+      return cachedPresentation;
     }
 
     final placeholderPresentation = existing != null &&
