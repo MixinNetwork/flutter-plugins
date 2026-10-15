@@ -16,23 +16,26 @@ class TargetSelectionTest(unittest.TestCase):
         self.targets = load_targets(ROOT)
 
     def test_related_and_unrelated_paths(self):
+        native = [target for target in self.targets if target['package'] == 'desktop_webview_window']
+        browser = [target for target in self.targets if target['package'] == 'desktop_drop']
         cases = {
-            'packages/desktop_webview_window/windows/web_view.cc': True,
-            'packages/desktop_webview_window/example/integration_test/new_test.dart': True,
-            'packages/desktop_webview_window/tool/ci/setup_windows.ps1': True,
-            'packages/desktop_drop/lib/desktop_drop.dart': False,
-            'packages/desktop_webview_window_other/lib/test.dart': False,
-            'README.md': False,
-            'pubspec.yaml': True,
-            'pubspec.lock': True,
-            'packages/desktop_drop/pubspec.yaml': True,
-            '.github/integration-tests.json': True,
-            '.github/workflows/integration-tests.yml': True,
-            'tool/ci/select_integration_targets.py': True,
+            'packages/desktop_webview_window/windows/web_view.cc': native,
+            'packages/desktop_webview_window/example/integration_test/new_test.dart': native,
+            'packages/desktop_webview_window/tool/ci/setup_windows.ps1': native,
+            'packages/desktop_drop/lib/desktop_drop.dart': browser,
+            'packages/desktop_drop/test/browser/web_drop_test.dart': browser,
+            'packages/desktop_webview_window_other/lib/test.dart': [],
+            'README.md': [],
+            'pubspec.yaml': self.targets,
+            'pubspec.lock': self.targets,
+            'packages/desktop_drop/pubspec.yaml': self.targets,
+            '.github/integration-tests.json': self.targets,
+            '.github/workflows/integration-tests.yml': self.targets,
+            'tool/ci/select_integration_targets.py': self.targets,
         }
         for path, expected in cases.items():
             with self.subTest(path=path):
-                self.assertEqual(bool(select_targets(self.targets, [path])), expected)
+                self.assertEqual(select_targets(self.targets, [path]), expected)
 
     def test_all_and_empty(self):
         self.assertEqual(select_targets(self.targets, None), self.targets)
@@ -46,6 +49,36 @@ class TargetSelectionTest(unittest.TestCase):
         ]
         self.assertEqual(select_targets(targets, ['packages/first/lib/a.dart']), targets[:2])
         self.assertEqual(select_targets(targets, ['pubspec.lock']), targets)
+
+    def test_browser_suite_registration(self):
+        target = {
+            'package': 'browser_plugin',
+            'platform': 'web',
+            'runner': 'ubuntu-latest',
+            'test': 'test/browser',
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / '.github').mkdir()
+            manifest = root / '.github/integration-tests.json'
+            manifest.write_text(json.dumps({'targets': [target]}))
+            suite = root / 'packages/browser_plugin/test/browser'
+            suite.mkdir(parents=True)
+            with self.assertRaises(ValueError):
+                load_targets(root)
+            (suite / 'drop_test.dart').write_text('fixture')
+            self.assertEqual(load_targets(root), [target])
+            for override in [
+                {'test': '../escape'},
+                {'test': 'test/other'},
+                {'runner': 'windows-latest'},
+                {'driver': 'test_driver/integration_test.dart'},
+                {'setup': 'setup.ps1'},
+            ]:
+                with self.subTest(override=override):
+                    manifest.write_text(json.dumps({'targets': [{**target, **override}]}))
+                    with self.assertRaises(ValueError):
+                        load_targets(root)
 
     def test_git_diff_uses_pr_merge_base_and_includes_deleted_paths(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -69,16 +102,19 @@ class TargetSelectionTest(unittest.TestCase):
             # The base branch advances with a relevant change after the PR forks.
             base = commit('packages/desktop_webview_window/base_only.dart')
             git('checkout', '-b', 'unrelated', original)
-            head = commit('packages/desktop_drop/source.dart')
+            head = commit('packages/unrelated_plugin/source.dart')
             paths = changed_files(root, base, head)
-            self.assertEqual(paths, ['packages/desktop_drop/source.dart'])
+            self.assertEqual(paths, ['packages/unrelated_plugin/source.dart'])
             self.assertEqual(select_targets(self.targets, paths), [])
             # Moving a file out still affects the original package.
             git('mv', 'packages/desktop_webview_window/source.dart', 'moved.dart')
             git('commit', '-m', 'move fixture')
             paths = changed_files(root, base, 'HEAD')
             self.assertIn('packages/desktop_webview_window/source.dart', paths)
-            self.assertEqual(select_targets(self.targets, paths), self.targets)
+            self.assertEqual(
+                select_targets(self.targets, paths),
+                [target for target in self.targets if target['package'] == 'desktop_webview_window'],
+            )
             with self.assertRaises(subprocess.CalledProcessError):
                 changed_files(root, 'missing-base', 'HEAD')
 

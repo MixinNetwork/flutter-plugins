@@ -62,14 +62,16 @@ jobs:
         shell: bash
         run: dart pub get
       - name: Prepare package environment
-        if: matrix.setup != ''
+        if: matrix.platform != 'web' && matrix.setup != ''
         shell: pwsh
         run: '& "./packages/${{ matrix.package }}/${{ matrix.setup }}"'
       - name: Install example dependencies
+        if: matrix.platform != 'web'
         working-directory: packages/${{ matrix.package }}/example
         shell: bash
         run: flutter pub get
       - name: Validate example
+        if: matrix.platform != 'web'
         working-directory: packages/${{ matrix.package }}/example
         shell: bash
         run: |
@@ -77,7 +79,13 @@ jobs:
           if [[ -d test ]]; then
             flutter test --no-pub
           fi
+      - name: Run browser tests
+        if: matrix.platform == 'web'
+        working-directory: packages/${{ matrix.package }}
+        shell: bash
+        run: flutter test --no-pub --platform chrome "${{ matrix.test }}" --timeout 5m 2>&1 | tee browser-test.log
       - name: Run integration tests
+        if: matrix.platform != 'web'
         working-directory: packages/${{ matrix.package }}/example
         shell: bash
         env:
@@ -93,7 +101,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: integration-${{ matrix.package }}-${{ matrix.platform }}
-          path: packages/${{ matrix.package }}/example/integration-test.log
+          path: |
+            packages/${{ matrix.package }}/browser-test.log
+            packages/${{ matrix.package }}/example/integration-test.log
           if-no-files-found: ignore
           retention-days: 7
 
