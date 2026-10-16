@@ -1,104 +1,91 @@
-import 'dart:typed_data';
-
 import 'package:cross_file/cross_file.dart';
+import 'package:flutter/foundation.dart';
 
-/// A dropped item.
-///
-/// On desktop, this is usually a filesystem path (file or directory).
-///
-/// macOS specifics:
-/// - If the drag source provided a real file URL (e.g. Finder/JetBrains),
-///   [extraAppleBookmark] will typically be non-null and allow security-scoped
-///   access when running sandboxed.
-/// - If the drag source used a file promise (e.g. VS Code/Electron), the
-///   system delivers bytes into a per-drop temporary folder inside your app's
-///   container. In that case [fromPromise] is true and [extraAppleBookmark]
-///   is usually null/empty. There is no original source path in this flow.
-abstract class DropItem extends XFile {
-  /// Security-scoped bookmark bytes for the dropped item (macOS only).
-  ///
-  /// Use with [DesktopDrop.startAccessingSecurityScopedResource] to gain
-  /// temporary access to files outside your sandbox. When empty or null,
-  /// you typically don't need to call start/stop (e.g. promise files in
-  /// your app's container).
-  Uint8List? extraAppleBookmark;
+import 'file_mime_type.dart';
 
-  /// True when this item was delivered via a macOS file promise and was
-  /// written into your app's temporary Drops directory.
-  ///
-  /// In this case, the original source path is not available by design.
-  final bool fromPromise;
-  DropItem(
-    super.path, {
-    super.mimeType,
-    super.name,
-    super.length,
-    super.bytes,
-    super.lastModified,
-    this.extraAppleBookmark,
-    this.fromPromise = false,
-  });
-
-  DropItem.fromData(
-    super.bytes, {
-    super.mimeType,
-    super.name,
-    super.length,
-    super.lastModified,
-    super.path,
-    this.extraAppleBookmark,
-    this.fromPromise = false,
-  }) : super.fromData();
+/// One representation supplied by the drag source. Multiple representations
+/// can describe the same content; applications choose which ones to consume.
+@immutable
+sealed class DropItem {
+  const DropItem();
+  String? get mimeType;
 }
 
-class DropItemFile extends DropItem {
-  DropItemFile(
-    super.path, {
-    super.mimeType,
-    super.name,
-    super.length,
-    super.bytes,
-    super.lastModified,
-    super.extraAppleBookmark,
-    super.fromPromise,
-  });
+/// A file reference backed by a local file, browser Blob, or native provider.
+/// Some systems start native transfers at drop time. Consume provider-backed
+/// content during onDrop; the source may already have expired afterward.
+/// A file need not have a filesystem path. Reads are provided by [file].
+final class DropFileItem extends DropItem {
+  const DropFileItem({
+    required this.file,
+    required this.name,
+    String? mimeType,
+    this.localPath,
+    this.appleBookmark,
+    this.isPromised = false,
+  }) : // Preserve the public constructor parameter name.
+       // ignore: prefer_initializing_formals
+       _mimeType = mimeType;
 
-  DropItemFile.fromData(
-    super.bytes, {
-    super.mimeType,
-    super.name,
-    super.length,
-    super.lastModified,
-    super.path,
-    super.fromPromise,
-  }) : super.fromData();
+  factory DropFileItem.fromPath(
+    String path, {
+    String? name,
+    String? mimeType,
+    Uint8List? appleBookmark,
+    bool isPromised = false,
+  }) => DropFileItem(
+    file: XFile.fileSystem(path: path),
+    name: name ?? path.split(RegExp(r'[/\\]')).last,
+    mimeType: mimeType,
+    localPath: path,
+    appleBookmark: appleBookmark,
+    isPromised: isPromised,
+  );
+
+  final XFile file;
+  final String name;
+  final String? _mimeType;
+
+  /// The source's MIME type, or a filename-based guess when it is missing.
+  /// This does not read or validate the file's contents.
+  @override
+  String? get mimeType => fileMimeType(_mimeType, name, localPath);
+
+  /// Present only when this item has an actual local filesystem path.
+  final String? localPath;
+
+  /// macOS security-scoped bookmark. Balance successful access with a stop.
+  final Uint8List? appleBookmark;
+  final bool isPromised;
 }
 
-/// A dropped directory.
-class DropItemDirectory extends DropItem {
-  final List<DropItem> children;
+/// A string representation, including text/plain, text/html, text/uri-list,
+/// and custom string MIME types. Referenced resources are never downloaded.
+final class DropStringItem extends DropItem {
+  const DropStringItem({required this.mimeType, required this.value});
+  @override
+  final String mimeType;
+  final String value;
+}
 
-  DropItemDirectory(
-    super.path,
-    this.children, {
-    super.mimeType,
-    super.name,
-    super.length,
-    super.bytes,
-    super.lastModified,
-    super.extraAppleBookmark,
-    super.fromPromise,
+/// A directory whose immediate children can be read on demand.
+final class DropDirectoryItem extends DropItem {
+  const DropDirectoryItem({
+    required this.directory,
+    required this.name,
+    this.localPath,
+    this.appleBookmark,
+    this.isPromised = false,
   });
 
-  DropItemDirectory.fromData(
-    super.bytes,
-    this.children, {
-    super.mimeType,
-    super.name,
-    super.length,
-    super.lastModified,
-    super.path,
-    super.extraAppleBookmark,
-    super.fromPromise,
-  }) : super.fromData();
+  /// Lists immediate children as XFile or XDirectory without reading file
+  /// contents. Native sandbox directories can require access through
+  /// [appleBookmark] while listing and reading their children.
+  final XDirectory directory;
+  final String name;
+  final String? localPath;
+  final Uint8List? appleBookmark;
+  final bool isPromised;
+  @override
+  String? get mimeType => null;
 }

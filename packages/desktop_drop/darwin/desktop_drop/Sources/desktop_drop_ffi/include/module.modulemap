@@ -1,0 +1,4 @@
+module desktop_drop_ffi {
+  header "desktop_drop_ffi.h"
+  export *
+}
