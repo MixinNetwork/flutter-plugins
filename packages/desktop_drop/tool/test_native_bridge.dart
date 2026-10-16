@@ -4,7 +4,7 @@ import 'dart:io';
 /// macOS/Linux: dart run tool/test_native_bridge.dart
 Future<void> main() async {
   final root = Platform.script.resolve('../').toFilePath();
-  final bridge = '${root}macos/desktop_drop/Sources/desktop_drop_ffi';
+  final bridge = '${root}src';
   final temporary = await Directory.systemTemp.createTemp(
     'desktop_drop_bridge_',
   );
@@ -35,7 +35,7 @@ Future<void> main() async {
       '-Wall',
       '-Wextra',
       '-Werror',
-      '-I$bridge/include',
+      '-I$bridge',
       '-I$bridge/vendor',
       '$bridge/desktop_drop_ffi.cc',
       '${root}test/native/bridge_test.cc',

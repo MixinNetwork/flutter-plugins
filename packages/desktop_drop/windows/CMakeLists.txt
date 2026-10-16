@@ -6,7 +6,7 @@ project(${PROJECT_NAME} LANGUAGES C CXX)
 # not be changed
 set(PLUGIN_NAME "desktop_drop_plugin")
 
-set(DROP_BRIDGE "${CMAKE_CURRENT_SOURCE_DIR}/../macos/desktop_drop/Sources/desktop_drop_ffi")
+set(DROP_BRIDGE "${CMAKE_CURRENT_SOURCE_DIR}/../src")
 
 add_library(${PLUGIN_NAME} SHARED
   "desktop_drop_plugin.cpp"
@@ -28,5 +28,5 @@ set(desktop_drop_bundled_libraries
 )
 
 target_compile_features(${PLUGIN_NAME} PRIVATE cxx_std_17)
-target_include_directories(${PLUGIN_NAME} PRIVATE "${DROP_BRIDGE}/include")
-target_link_libraries(${PLUGIN_NAME} PRIVATE ole32 shell32 uuid)
+target_include_directories(${PLUGIN_NAME} PRIVATE "${DROP_BRIDGE}")
+target_link_libraries(${PLUGIN_NAME} PRIVATE ole32 shell32 uuid gdi32)

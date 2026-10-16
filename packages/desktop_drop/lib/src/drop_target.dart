@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 
 import 'drop_coordinator.dart';
@@ -10,50 +12,50 @@ class DropEventDetails {
     required this.offer,
     required this.localPosition,
     required this.globalPosition,
+    this.operation = DropOperation.reject,
   });
 
   final DropOffer offer;
   final Offset localPosition;
   final Offset globalPosition;
+  Set<DropOperation> get allowedOperations => offer.allowedOperations;
+
+  /// Reject while deciding; the selected operation in hover and drop callbacks.
+  final DropOperation operation;
 }
 
+/// An accepted drop. Provider references are valid only during [DropTarget.onDrop].
 @immutable
-class DropDoneDetails extends DropEventDetails {
-  DropDoneDetails({
+class DropEvent extends DropEventDetails {
+  DropEvent({
     required super.offer,
     required super.localPosition,
     required super.globalPosition,
-    required List<DropItem> files,
-    this.rawText,
-  }) : files = List.unmodifiable(files);
+    required List<DropItem> items,
+    required super.operation,
+  }) : items = List.unmodifiable(items);
 
-  final List<DropItem> files;
-  String? get text => offer.text;
-  List<Uri> get urls => offer.urls;
-
-  /// Original Linux URI-list or portal transfer key. Portal keys have already
-  /// been resolved by native code and must not be retrieved a second time.
-  final String? rawText;
+  final List<DropItem> items;
 }
 
-typedef OnDragDoneCallback = void Function(DropDoneDetails details);
+typedef OnDropCallback = FutureOr<void> Function(DropEvent event);
 typedef OnDragCallback<T> = void Function(T details);
-typedef DropAcceptPredicate = bool Function(DropEventDetails details);
+typedef DropDecisionCallback = DropOperation Function(DropEventDetails details);
 
 /// An OS drop destination selected using Flutter's actual hit-test path.
 ///
-/// The first enabled target whose [onWillAccept] returns true receives the
-/// event. A rejecting child can fall back to an accepting ancestor. Opaque
+/// The first enabled target whose [onDropDecision] returns an allowed operation
+/// receives the event. A rejecting child can fall back to an accepting ancestor. Opaque
 /// widgets still occlude siblings behind them, just as for Flutter pointer
 /// events.
 class DropTarget extends StatefulWidget {
   const DropTarget({
     super.key,
     required this.child,
-    required this.onWillAccept,
+    required this.onDropDecision,
     this.onDragEntered,
     this.onDragExited,
-    this.onDragDone,
+    this.onDrop,
     this.onDragUpdated,
     this.enable = true,
     this.behavior = HitTestBehavior.translucent,
@@ -63,13 +65,19 @@ class DropTarget extends StatefulWidget {
 
   /// A short, synchronous decision using the offer and current application
   /// state. Do not change widget state, perform I/O, or wait on platform calls
-  /// here. Exceptions reject this candidate. Returning false allows the next
-  /// target in the hit-test path to decide.
-  final DropAcceptPredicate onWillAccept;
+  /// here. Reject, unsupported operations, and exceptions allow the next target
+  /// in the hit-test path to decide. The operation is reported to the source;
+  /// the final native acceptance can precede asynchronous processing.
+  final DropDecisionCallback onDropDecision;
   final OnDragCallback<DropEventDetails>? onDragEntered;
   final OnDragCallback<DropEventDetails>? onDragExited;
   final OnDragCallback<DropEventDetails>? onDragUpdated;
-  final OnDragDoneCallback? onDragDone;
+
+  /// Reads that depend on the drag source must be awaited in this callback.
+  /// Adapters automatically release event resources when it completes, including
+  /// on failure. Save any needed content before returning. Native completion is
+  /// deferred where the source protocol supports it. Throw to report failure.
+  final OnDropCallback? onDrop;
   final bool enable;
   final HitTestBehavior behavior;
 
@@ -108,7 +116,8 @@ class _DropTargetState extends State<DropTarget> implements DropTargetClient {
   }
 
   @override
-  bool accepts(DropEventDetails details) => widget.onWillAccept(details);
+  DropOperation decide(DropEventDetails details) =>
+      widget.onDropDecision(details);
   @override
   void entered(DropEventDetails details) => widget.onDragEntered?.call(details);
   @override
@@ -116,7 +125,7 @@ class _DropTargetState extends State<DropTarget> implements DropTargetClient {
   @override
   void exited(DropEventDetails details) => widget.onDragExited?.call(details);
   @override
-  void dropped(DropDoneDetails details) => widget.onDragDone?.call(details);
+  FutureOr<void> dropped(DropEvent details) => widget.onDrop?.call(details);
 
   @override
   void dispose() {

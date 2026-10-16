@@ -10,11 +10,13 @@ environment:
 
 dependencies:
   cross_file: ^0.4.0
+  cross_file_platform_interface: ^1.0.0
   cross_file_web: ^1.0.0
   flutter:
     sdk: flutter
   flutter_web_plugins:
     sdk: flutter
+  mime: ^2.0.0
   web: ^1.1.1
 
 dev_dependencies:
@@ -27,8 +29,12 @@ dev_dependencies:
 flutter:
   plugin:
     platforms:
+      ios:
+        pluginClass: DesktopDropPlugin
+        sharedDarwinSource: true
       macos:
         pluginClass: DesktopDropPlugin
+        sharedDarwinSource: true
       linux:
         pluginClass: DesktopDropPlugin
       windows:

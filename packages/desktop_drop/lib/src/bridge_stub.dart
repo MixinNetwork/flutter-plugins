@@ -1,14 +1,10 @@
 import 'bridge.dart';
+import 'drop_coordinator.dart';
 
-DropBridge createDropBridge(
-  int view,
-  DropDecision decide,
-  DropPlatformEvent event,
-) => _WebBridge();
+DropBridge createDropBridge(int view, DropCoordinator coordinator) =>
+    _WebBridge();
 
 class _WebBridge implements DropBridge {
-  @override
-  int get generation => 0;
   @override
   Future<void> initialize() async {}
   @override

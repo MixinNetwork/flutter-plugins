@@ -21,18 +21,41 @@ class DropBridgeBindings {
     ffi.Pointer<T> Function<T extends ffi.NativeType>(String symbolName) lookup,
   ) : _lookup = lookup;
 
-  int dd_bridge_complete(int context, int generation, int request, int target) {
-    return _dd_bridge_complete(context, generation, request, target);
+  ffi.Pointer<ffi.Uint8> dd_alloc(int length) {
+    return _dd_alloc(length);
+  }
+
+  late final _dd_allocPtr =
+      _lookup<ffi.NativeFunction<ffi.Pointer<ffi.Uint8> Function(ffi.Int32)>>(
+        'dd_alloc',
+      );
+  late final _dd_alloc = _dd_allocPtr
+      .asFunction<ffi.Pointer<ffi.Uint8> Function(int)>();
+
+  int dd_bridge_complete(
+    int context,
+    int generation,
+    int request,
+    int target,
+    int operation,
+  ) {
+    return _dd_bridge_complete(context, generation, request, target, operation);
   }
 
   late final _dd_bridge_completePtr =
       _lookup<
         ffi.NativeFunction<
-          ffi.Int32 Function(ffi.Int64, ffi.Int64, ffi.Int64, ffi.Int64)
+          ffi.Int32 Function(
+            ffi.Int64,
+            ffi.Int64,
+            ffi.Int64,
+            ffi.Int64,
+            ffi.Int32,
+          )
         >
       >('dd_bridge_complete');
   late final _dd_bridge_complete = _dd_bridge_completePtr
-      .asFunction<int Function(int, int, int, int)>();
+      .asFunction<int Function(int, int, int, int, int)>();
 
   int dd_bridge_register(
     int context,
@@ -73,11 +96,113 @@ class DropBridgeBindings {
       );
   late final _dd_bridge_unregister = _dd_bridge_unregisterPtr
       .asFunction<void Function(int, int)>();
+
+  void dd_free(ffi.Pointer<ffi.Uint8> bytes) {
+    return _dd_free(bytes);
+  }
+
+  late final _dd_freePtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Uint8>)>>(
+        'dd_free',
+      );
+  late final _dd_free = _dd_freePtr
+      .asFunction<void Function(ffi.Pointer<ffi.Uint8>)>();
+
+  void dd_rpc_call(
+    int context,
+    int request,
+    ffi.Pointer<ffi.Uint8> bytes,
+    int length,
+  ) {
+    return _dd_rpc_call(context, request, bytes, length);
+  }
+
+  late final _dd_rpc_callPtr =
+      _lookup<
+        ffi.NativeFunction<
+          ffi.Void Function(
+            ffi.Int64,
+            ffi.Int64,
+            ffi.Pointer<ffi.Uint8>,
+            ffi.Int32,
+          )
+        >
+      >('dd_rpc_call');
+  late final _dd_rpc_call = _dd_rpc_callPtr
+      .asFunction<void Function(int, int, ffi.Pointer<ffi.Uint8>, int)>();
+
+  void dd_rpc_complete(
+    int context,
+    int request,
+    ffi.Pointer<ffi.Uint8> bytes,
+    int length,
+  ) {
+    return _dd_rpc_complete(context, request, bytes, length);
+  }
+
+  late final _dd_rpc_completePtr =
+      _lookup<
+        ffi.NativeFunction<
+          ffi.Void Function(
+            ffi.Int64,
+            ffi.Int64,
+            ffi.Pointer<ffi.Uint8>,
+            ffi.Int32,
+          )
+        >
+      >('dd_rpc_complete');
+  late final _dd_rpc_complete = _dd_rpc_completePtr
+      .asFunction<void Function(int, int, ffi.Pointer<ffi.Uint8>, int)>();
+
+  int dd_rpc_open(int engine, ffi.Pointer<ffi.Void> api, int port) {
+    return _dd_rpc_open(engine, api, port);
+  }
+
+  late final _dd_rpc_openPtr =
+      _lookup<
+        ffi.NativeFunction<
+          ffi.Int64 Function(ffi.Int64, ffi.Pointer<ffi.Void>, ffi.Int64)
+        >
+      >('dd_rpc_open');
+  late final _dd_rpc_open = _dd_rpc_openPtr
+      .asFunction<int Function(int, ffi.Pointer<ffi.Void>, int)>();
 }
 
 typedef DDDecide = ffi.Pointer<ffi.NativeFunction<DDDecideFunction>>;
-typedef DDDecideFunction = ffi.Int64 Function(ffi.Pointer<DDRequest> request);
-typedef DartDDDecideFunction = int Function(ffi.Pointer<DDRequest> request);
+typedef DDDecideFunction = ffi.Void Function(
+  ffi.Pointer<DDRequest> request,
+  ffi.Pointer<DDDecision> decision,
+);
+typedef DartDDDecideFunction = void Function(
+  ffi.Pointer<DDRequest> request,
+  ffi.Pointer<DDDecision> decision,
+);
+
+final class DDDecision extends ffi.Struct {
+  @ffi.Int64()
+  external int generation;
+
+  @ffi.Int64()
+  external int request;
+
+  @ffi.Int64()
+  external int target;
+
+  @ffi.Int32()
+  external int operation;
+
+  static ffi.Pointer<DDDecision> $allocate(
+    ffi.Allocator $allocator, {
+    required int generation,
+    required int request,
+    required int target,
+    required int operation,
+  }) => $allocator<DDDecision>()
+    ..ref.generation = generation
+    ..ref.request = request
+    ..ref.target = target
+    ..ref.operation = operation;
+}
 
 final class DDRequest extends ffi.Struct {
   @ffi.Int64()
@@ -107,7 +232,7 @@ final class DDRequest extends ffi.Struct {
   @ffi.Double()
   external double y;
 
-  external ffi.Pointer<ffi.Char> payload;
+  external ffi.Pointer<ffi.Uint8> payload;
 
   static ffi.Pointer<DDRequest> $allocate(
     ffi.Allocator $allocator, {
@@ -120,7 +245,7 @@ final class DDRequest extends ffi.Struct {
     required int length,
     required double x,
     required double y,
-    required ffi.Pointer<ffi.Char> payload,
+    required ffi.Pointer<ffi.Uint8> payload,
   }) => $allocator<DDRequest>()
     ..ref.context = context
     ..ref.generation = generation

@@ -1,82 +1,109 @@
 # Desktop Drop playground
 
-A small app for checking independent drop rules, nested targets, and received
-content. Requires the Flutter/Dart versions specified in `pubspec.yaml`.
+A single desktop page for checking drop decisions, overlapping targets and
+source content. Requires the Flutter/Dart versions in `pubspec.yaml`.
 
 ```sh
-flutter pub get
 flutter run -d macos   # or windows, linux, chrome, or an Android device
 ```
 
-Wide windows show targets and the inspector side by side. Narrow windows use a
-single scrollable layout. Every target has an independent manual switch. The
-example does not change acceptance automatically.
+The drop area and received content stay side by side. Drag the divider to resize
+the panes. Lists and content scroll independently; the page never moves the
+results below the targets. The macOS window opens at 1180 × 740 with a minimum
+content size of 900 × 620. Hosts narrower than 800 pixels can pan horizontally.
 
-## Try these scenarios
+## Targets
+
+Parent contains two partially overlapping sibling targets, Child A and Child B.
+Each target has its own acceptance preset and enabled switch. Parent accepts any
+content by default; Child A accepts `text/plain` files, and Child B accepts
+`image/png` files. Both presets use only the MIME type exposed by the plugin,
+including during hover. Unknown types are rejected by these child targets.
+Child B starts in front. **Swap layers** exchanges their stacking order without
+changing their settings. The shared Action selector chooses reject/copy/move/link.
+An operation unsupported by the source is rejected rather than substituted.
 
 | Scenario | Expected behavior |
 |----------|-------------------|
-| File or folder onto **All files** | Inspector shows the receiving target and paths. |
-| TXT onto **TXT files**, PNG onto **PNG files** | Matching extension is accepted; mismatches are rejected. |
-| Mixed TXT/PNG selection onto **TXT files** | Rejected because every file must match. |
-| Plain text onto **Text** | Inspector shows the text, with no file required. |
-| Browser link onto **URLs** | Inspector shows the source's URL representation. |
-| Chrome selected text dragged into the Windows example | The source text preview remains visible over the window and follows the cursor; accepted and rejected targets still show the corresponding operation. |
-| Browser image or image data URL onto **All files** | Readable image is delivered when browser/source permissions allow it; its URL is retained. |
-| TXT onto **Child · TXT** | Child receives it. |
-| PNG or link onto the child area | The parent receives it if its switch is on. |
-| Disable child, keep parent on | Content over the child falls back to the parent. |
-| Disable both parent and child | Content over the nested area is rejected. |
-| Toggle another target | Other targets retain their own rules. |
-| Drop, then move the pointer | Inspector retains the drop's original local/global positions. |
+| A `text/plain` file onto the exposed part of Child A | Child A receives it. |
+| PNG onto Child B | Child B receives it. |
+| A `text/plain` file onto the overlap with Child B in front | Child B rejects; Parent receives it. The obscured Child A is not hit. |
+| Swap layers, then a `text/plain` file onto the overlap | Child A receives it. |
+| Swap layers, then PNG onto the overlap | Child A rejects; Parent receives it. |
+| Drop onto Parent's background | Parent decides using its own preset. |
+| Disable the front child | Its card still obscures the sibling; Parent can receive the drop. |
+| Disable Parent and both children | Rejected. |
+| Mixed text/PNG selection onto a plain-text-only target | Rejected by that target. |
+| Source does not support the selected Action | Rejected. Android and iOS advertise copy only. |
 
-Drag sources can advertise multiple representations. A browser link may also be
-plain text; the corresponding targets can both accept it at their own locations.
-Browsers hide filenames during hover. Extension targets tentatively accept an
-unknown browser preview and check actual filenames on release. Promised macOS
-files must advertise a usable name to match a filename rule.
+Hover highlights the selected target and shows its operation. Received content
+remains unchanged until another drop. On macOS, changing the action only at the
+final decision rather than during hover rejects the drop.
 
-The inspector shows the latest accepted drop. **Read file** reads at most 64 bytes
-and reports the file size, so large files do not fill application memory. Directory
-entries are shown separately from regular files.
+## Content
+
+The async `onDrop` callback reads each file and recursively lists and reads
+directories. The plugin releases the sources when the callback completes.
+Only the latest drop's content and read errors are retained. Original
+representations are listed separately: a browser
+image can include a file, HTML and a URI list. Selecting an item shows the
+already received content in the adjacent viewer. The plugin does not merge
+representations or invent a file from an image URL.
+
+- Image and text previews use the received bytes. Images use a checkerboard
+  background, with Fit and 100% views. Text previews show at most 64 KiB and mark
+  truncation. Unsupported image decoders report that content was read but cannot
+  be previewed; the bytes remain available in the hex view.
+- The hex view displays the first 256 received bytes with offsets and ASCII.
+- Directories show the children discovered during `onDrop`. Clicking a child
+  opens its received content; Back returns to the containing directory.
+- String items display their original values immediately. HTML is source text.
+  URI lists show one line per entry, preserve comments, and support copying.
+  No external images, previews or URLs are downloaded.
+- **Details** shows MIME type, local path or source reference, promise status,
+  allowed operations and original positions. It does not read file content.
+- Clear and replacement discard the example's stored content. Selecting an item
+  does not request the native source again. Read errors are shown in the viewer;
+  retry by dropping the source again.
+
+On macOS, reading a file promise during `onDrop` requests its reception into a
+temporary directory. Once received, files and directories use the existing
+`XFile` and `XDirectory` filesystem implementations. Callback completion removes
+the temporary files after pending reception finishes; the example keeps its own
+received bytes. A receiver is requested only once, even for concurrent reads.
+
+## iOS
+
+The example includes an iOS host. Run it with `flutter run -d <ios-device-id>`.
+Drop files/folders from Files, photos from Photos, or text/URLs from another app
+where the system supports dragging. Select **Copy**; the iOS adapter does not
+offer move or link. UIKit starts file transfers at drop time. The plugin retains
+its temporary copies through the async `onDrop` callback, and the example keeps
+its own received bytes for later display.
 
 ## macOS bookmarks
 
-1. Drop a real file from Finder.
-2. Choose **Save bookmark** in its inspector entry.
-3. Restart the app.
-4. Use **Read with access** to request security-scoped access and verify a read.
-5. **Read without access** lets you compare sandbox behavior for the same file.
+Drop a real Finder file, open **Details**, and choose **Save bookmark**. The
+bookmark button beside Received opens the saved reference even after restarting
+the app. **Read with access** and **Read without access** compare sandbox behavior
+using an explicit 64-byte read. Successful access is balanced with a stop. Normal
+file and folder reads also keep security-scoped access active while reading.
 
-A macOS promised file is delivered into the app's temporary directory and usually
-has no security-scoped bookmark. Its inspector entry identifies it as a promise.
-Saved bookmarks remain in this example's preferences until replaced.
+## Manual regression
 
-## Additional manual regression
+- Drag from Finder, Explorer, browsers and text editors. Check files, folders,
+  selected text, URLs, HTML, native images, virtual files and file promises.
+- On Windows, Chrome's text/image drag preview should remain visible over the
+  window, including when the hovered target rejects it.
+- On macOS, check that file promises are received during `onDrop` or report a
+  read error without a crash. Also test a drop into an inactive window and source
+  expiry.
+- On Web, check folders with more than 100 entries and verify that image URL/HTML
+  drops make no network request. MIME presets reject mismatched or unknown types
+  during hover and drop, even when the browser protects filenames.
+- Test the overlap in both layer orders, independent switches, parent fallback,
+  unsupported actions, and viewing received content after the source is released.
 
-- Drag several Apple Music tracks together; verify every advertised file or
-  promise is delivered once, including multiple files with the same type.
-- Drop a folder into an inactive macOS window after interacting with another
-  application; verify the inspector updates without clicking the window.
-- Register the plugin for a `desktop_multi_window` child engine using the package
-  README instructions, then drop into the main and child windows independently.
-- Serve a release/profile web build and drag files over both the Flutter surface
-  and a descendant DOM element that handles its own events. Verify no navigation
-  occurs and the matching target receives the drop.
-- Try an image source that permits CORS, an image data URL, and a source that
-  blocks CORS. For the blocked source, verify the URL remains available and the
-  read error is reported without navigating away.
-- Check large browser files using **Read file**; it should read only the requested
-  range. Native Android debug/release builds and window-manager coexistence need
-  the application's actual host configuration.
-
-## Checks
-
-```sh
-flutter analyze --no-pub
-flutter test --no-pub
-```
-
-Widget tests cover 320/800/1200-pixel windows, larger text, scrolling, independent
-acceptance switches, and delivery into the inspector. Real OS drag behavior is a
-separate manual check; Flutter widget gestures are not native drag sources.
+Widget coverage follows the same target decision/delivery path and checks the
+fixed desktop layout and overlap behavior. Real OS drag acceptance is a separate
+manual check. This example does not synthesize native drags.

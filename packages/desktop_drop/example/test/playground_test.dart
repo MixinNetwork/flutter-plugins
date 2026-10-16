@@ -1,158 +1,166 @@
-import 'dart:async';
-
+import 'package:cross_file_io/cross_file_io.dart';
+import 'package:desktop_drop/src/native_transport.dart';
 import 'package:desktop_drop_example/main.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+final transport = NativeTransport.testing();
+
 Future<Object?> native(String method, Map<String, Object?> args) async {
-  const codec = StandardMethodCodec();
-  final response = Completer<ByteData?>();
-  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-      .handlePlatformMessage(
-        'desktop_drop',
-        codec.encodeMethodCall(MethodCall(method, args)),
-        response.complete,
-      );
-  final bytes = await response.future;
-  return bytes == null ? null : codec.decodeEnvelope(bytes);
+  final result = await transport.onEvent!(MethodCall(method, args));
+  return method == 'query' ? (result as Map)['target'] : result;
 }
+
+Map<String, Object?> args(
+  Offset point,
+  String name, {
+  String? mimeType,
+  bool isComplete = true,
+}) => {
+  'view': 0,
+  'generation': 0,
+  'session': 1,
+  'request': 1,
+  'phase': 2,
+  'operation': 1,
+  'x': point.dx,
+  'y': point.dy,
+  'offer': {
+    'allowedOperations': ['copy'],
+    'isComplete': isComplete,
+    'files': [
+      {'name': name, 'source': 0, 'mimeType': mimeType},
+    ],
+  },
+};
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  setUpAll(() {
+    CrossFileIO.registerWith();
+    NativeTransport.debugOverride = transport;
+  });
   setUp(() {
     SharedPreferences.setMockInitialValues({});
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(
-          const MethodChannel('desktop_drop'),
-          (call) async => {'view': 0},
-        );
+    transport.invokeHandler = (call) async =>
+        call.method == 'initialize' ? {'view': 0, 'generation': 0} : null;
   });
-  tearDown(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(const MethodChannel('desktop_drop'), null);
-  });
+  tearDown(() => transport.invokeHandler = null);
 
-  for (final size in [
-    const Size(320, 568),
-    const Size(800, 600),
-    const Size(1200, 760),
-  ]) {
-    testWidgets(
-      'playground fits ${size.width} by ${size.height} and remains scrollable',
-      (tester) async {
-        tester.view.devicePixelRatio = 1;
-        tester.view.physicalSize = size;
-        addTearDown(tester.view.resetDevicePixelRatio);
-        addTearDown(tester.view.resetPhysicalSize);
-        await tester.pumpWidget(const MyApp());
-        await tester.pumpAndSettle();
-        expect(find.text('Desktop Drop'), findsOneWidget);
-        expect(tester.takeException(), isNull);
-        await tester.ensureVisible(
-          find.byKey(const ValueKey('toggle-All files')),
-        );
-        await tester.tap(find.byKey(const ValueKey('toggle-All files')));
-        await tester.pumpAndSettle();
-        expect(find.text('Acceptance off'), findsOneWidget);
-        if (size.width < 780) {
-          await tester.scrollUntilVisible(
-            find.text('Drop inspector'),
-            300,
-            scrollable: find.byType(Scrollable).first,
-          );
-        } else {
-          await tester.ensureVisible(find.text('Drop inspector'));
-        }
-        expect(tester.takeException(), isNull);
-      },
-    );
+  for (final size in [const Size(800, 600), const Size(1200, 760)]) {
+    testWidgets('targets and results stay side by side at $size', (
+      tester,
+    ) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = size;
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+      await tester.pumpWidget(const MyApp());
+      await tester.pumpAndSettle();
+      final parent = tester.getRect(
+        find.byKey(const ValueKey('target-Parent')),
+      );
+      final result = tester.getRect(find.text('Nothing dropped yet'));
+      expect(parent.right, lessThan(result.left));
+      expect(parent.bottom, lessThanOrEqualTo(size.height));
+      expect(find.text('Swap layers'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
   }
 
-  testWidgets('large text scales target cards without overflow', (
-    tester,
-  ) async {
-    tester.platformDispatcher.textScaleFactorTestValue = 1.6;
-    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
-    await tester.pumpWidget(const MyApp());
-    await tester.pumpAndSettle();
-    expect(tester.takeException(), isNull);
-  });
-
   testWidgets(
-    'real target decisions drive inspector and independent switches',
+    'overlapping siblings obey layer order and read content during drop',
     (tester) async {
       tester.view.devicePixelRatio = 1;
       tester.view.physicalSize = const Size(1200, 760);
       addTearDown(tester.view.resetDevicePixelRatio);
       addTearDown(tester.view.resetPhysicalSize);
+      final sourceOperations = <String>[];
+      var consumed = false;
+      transport.invokeHandler = (call) async {
+        if (call.method == 'initialize') {
+          return {'view': 0, 'generation': 0};
+        }
+        if (call.method == 'readSource') {
+          final operation = (call.arguments as Map)['op'] as String;
+          sourceOperations.add(operation);
+          switch (operation) {
+            case 'open':
+              consumed = false;
+              return 1;
+            case 'read':
+              if (consumed) return Uint8List(0);
+              consumed = true;
+              return Uint8List.fromList('Hello drop'.codeUnits);
+          }
+        }
+        return null;
+      };
       await tester.pumpWidget(const MyApp());
       await tester.pumpAndSettle();
-      final point = tester.getCenter(
-        find.byKey(const ValueKey('target-TXT files')),
-      );
-      final args = <String, Object?>{
-        'view': 0,
-        'generation': 0,
-        'session': 1,
-        'request': 1,
-        'phase': 2,
-        'x': point.dx,
-        'y': point.dy,
-        'offer': {
-          'types': ['file'],
-          'files': [
-            {'name': 'notes.txt', 'path': '/tmp/notes.txt'},
-          ],
-          'isComplete': true,
-        },
-      };
+      final a = tester.getRect(find.byKey(const ValueKey('target-Child A')));
+      final b = tester.getRect(find.byKey(const ValueKey('target-Child B')));
+      final overlap = a.intersect(b).center;
+      final parent = await native(
+        'query',
+        args(a.topRight + const Offset(10, 70), 'notes.txt'),
+      ) as int;
+      final frontB = await native('query', args(overlap, 'image.png')) as int;
+      expect(parent, greaterThan(0));
+      expect(frontB, isNot(parent));
+      expect(await native('query', args(overlap, 'notes.txt')), parent);
       expect(
-        await native('query', {
-          ...args,
-          'offer': {
-            'types': ['file'],
-            'files': [],
-            'isComplete': false,
-          },
-        }),
-        greaterThan(0),
+        await native(
+          'query',
+          args(overlap, 'notes.txt', mimeType: 'image/png'),
+        ),
+        frontB,
       );
       expect(
-        await native('query', {
-          ...args,
-          'offer': {
-            'types': ['file'],
-            'files': [
-              {'name': 'photo.png'},
-            ],
-            'isComplete': true,
-          },
-        }),
-        0,
-      );
-      final target = await native('query', args) as int;
-      expect(target, greaterThan(0));
-      await native('feedback', {...args, 'target': target});
-      await native('drop', {...args, 'target': target});
-      await tester.pumpAndSettle();
-      expect(find.text('Drop #1'), findsOneWidget);
-      expect(find.text('notes.txt'), findsOneWidget);
-      expect(find.text('TXT files'), findsNWidgets(2));
-      await tester.tap(find.byKey(const ValueKey('toggle-TXT files')));
-      await tester.pumpAndSettle();
-      expect(await native('query', args), 0);
-      final all = tester.getCenter(
-        find.byKey(const ValueKey('target-All files')),
+        await native(
+          'query',
+          args(overlap, '', mimeType: 'image/png', isComplete: false),
+        ),
+        frontB,
       );
       expect(
-        await native('query', {...args, 'x': all.dx, 'y': all.dy}),
-        greaterThan(0),
+        await native('query', args(overlap, '', isComplete: false)),
+        parent,
       );
-      await tester.tap(find.byTooltip('Clear last drop'));
+      await tester.tap(find.byKey(const ValueKey('swap-layers')));
       await tester.pumpAndSettle();
-      expect(find.text('No drops yet'), findsOneWidget);
+      final frontA = await native('query', args(overlap, 'notes.txt')) as int;
+      expect(frontA, greaterThan(0));
+      expect(frontA, isNot(parent));
+      expect(await native('query', args(overlap, 'image.png')), parent);
+      expect(
+        await native(
+          'query',
+          args(overlap, 'image.png', mimeType: 'text/plain'),
+        ),
+        frontA,
+      );
+      expect(
+        await native(
+          'query',
+          args(overlap, '', mimeType: 'text/plain', isComplete: false),
+        ),
+        frontA,
+      );
+      await native('drop', {...args(overlap, 'notes.txt'), 'target': frontA});
+      await tester.pumpAndSettle();
+      expect(find.text('Received by Child A · copy'), findsOneWidget);
+      expect(find.text('Hello drop'), findsOneWidget);
+      expect(find.text('Preview'), findsNothing);
+      expect(find.text('Read bytes'), findsNothing);
+      expect(find.text('List contents'), findsNothing);
+      expect(sourceOperations, ['open', 'read', 'read', 'close']);
+      await tester.tap(find.text('Clear'));
+      await tester.pumpAndSettle();
+      expect(find.text('Nothing dropped yet'), findsOneWidget);
+      expect(sourceOperations, ['open', 'read', 'read', 'close']);
       expect(tester.takeException(), isNull);
     },
   );

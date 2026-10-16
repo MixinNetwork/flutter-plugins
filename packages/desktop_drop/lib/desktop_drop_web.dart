@@ -4,6 +4,8 @@ import 'dart:js_interop_unsafe';
 import 'dart:ui' as ui;
 import 'dart:ui_web' as ui_web;
 
+import 'package:cross_file/cross_file.dart';
+import 'package:cross_file_web/cross_file_web.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_web_plugins/flutter_web_plugins.dart';
 import 'package:web/web.dart' as web;
@@ -11,7 +13,8 @@ import 'package:web/web.dart' as web;
 import 'src/drop_coordinator.dart';
 import 'src/drop_offer.dart';
 import 'src/drop_item.dart';
-import 'src/file_reader_web.dart' as file_reader;
+import 'src/drop_target.dart';
+import 'src/virtual_directory.dart';
 
 // DOM listeners outlive Dart statics during a browser hot restart. Keep raw JS
 // references so a new registration can remove the previous runtime's callbacks.
@@ -24,10 +27,10 @@ external set _registeredListeners(JSObject? value);
 /// dropEffect are returned to the browser. File reads happen after acceptance.
 class DesktopDropWeb {
   static DesktopDropWeb? _instance;
-  // Targets can survive re-registration, so feedback IDs must keep increasing.
-  static int _session = 0, _request = 0;
+  static int _session = 0;
   final _listeners = <String, JSFunction>{};
   int? _hoverView;
+  DropOffer? _hoverOffer;
 
   static void registerWith(Registrar registrar) {
     _instance?._dispose();
@@ -39,12 +42,12 @@ class DesktopDropWeb {
   // caller must call readEntries() repeatedly until it returns an empty batch.
   // Calling it only once silently truncates directories with >100 files.
   // See: https://wicg.github.io/entries-api/#dom-filesystemdirectoryreader-readentries
-  Future<List<dynamic>> _readAllEntries(
+  Future<List<web.FileSystemEntry>> _readAllEntries(
     web.FileSystemDirectoryReader reader,
   ) async {
-    final allEntries = <dynamic>[];
+    final allEntries = <web.FileSystemEntry>[];
     while (true) {
-      final completer = Completer<List<dynamic>>();
+      final completer = Completer<List<web.FileSystemEntry>>();
       reader.readEntries(
         (JSArray<web.FileSystemEntry> batch) {
           completer.complete(batch.toDart);
@@ -60,30 +63,24 @@ class DesktopDropWeb {
     return allEntries;
   }
 
-  Future<DropItem> _entryToDropItem(web.FileSystemEntry entry) async {
-    if (entry.isDirectory == true) {
-      entry = entry as web.FileSystemDirectoryEntry;
-      final web.FileSystemDirectoryReader reader = entry.createReader();
-
-      final List<dynamic> entries = await _readAllEntries(reader);
-
-      final children =
-          await Future.wait(entries.map((e) => _entryToDropItem(e)))
-            ..removeWhere(
-              (element) =>
-                  element.name == '.DS_Store' && element.mimeType == '',
-            );
-
-      final file = file_reader.fromBlob(web.Blob());
-      return DropItemDirectory(
-        file.uri,
-        children,
-        file: file,
-        name: entry.name,
-        length: 0,
-        mimeType: 'directory',
-        lastModified: DateTime.now(),
-      );
+  Future<DropItem> _entryToDropItem(
+    web.FileSystemEntry entry,
+    void Function(XEntity) retain,
+  ) async {
+    if (entry.isDirectory) {
+      final directory = entry as web.FileSystemDirectoryEntry;
+      final resource = virtualDirectory(entry.name, () async* {
+        final entries = await _readAllEntries(directory.createReader());
+        for (final entry in entries) {
+          yield switch (await _entryToDropItem(entry, retain)) {
+            DropFileItem(:final file) => file,
+            DropDirectoryItem(:final directory) => directory,
+            DropStringItem() => throw StateError('Not a directory entry'),
+          };
+        }
+      });
+      retain(resource);
+      return DropDirectoryItem(name: entry.name, directory: resource);
     }
 
     entry = entry as web.FileSystemFileEntry;
@@ -103,181 +100,72 @@ class DesktopDropWeb {
 
     final web.File file = await fileCompleter.future;
 
-    return _fileToDropItem(file);
+    return _fileToDropItem(file, retain);
   }
 
-  DropItemFile _fileToDropItem(web.File file) => _blobToDropItem(
-    file,
-    name: file.name,
-    modified: DateTime.fromMillisecondsSinceEpoch(file.lastModified),
-  );
-
-  DropItemFile _blobToDropItem(
-    web.Blob blob, {
-    required String name,
-    DateTime? modified,
-  }) {
-    final file = file_reader.fromBlob(blob);
-    return DropItemFile(
-      file.uri,
-      file: file,
-      name: name,
-      mimeType: blob.type,
-      length: blob.size,
-      lastModified: modified ?? DateTime.fromMillisecondsSinceEpoch(0),
+  DropFileItem _fileToDropItem(web.File file, void Function(XEntity) retain) {
+    final resource = ScopedStorageXFile.fromCreationParams(
+      WebScopedStorageXFileCreationParams.fromBlob(file),
+    );
+    retain(resource);
+    return DropFileItem(
+      file: resource,
+      name: file.name,
+      mimeType: file.type.isEmpty ? null : file.type,
     );
   }
 
-  List<Uri> _imageUris(web.DataTransfer data) {
-    final candidates = <String>{};
-    final html = data.getData('text/html');
-    if (html.isNotEmpty) {
-      // Template contents are inert: parsing must not load source images.
-      final template =
-          web.document.createElement('template') as web.HTMLTemplateElement;
-      template.innerHTML = html.toJS;
-      final images = template.content.querySelectorAll('img[src]');
-      for (var i = 0; i < images.length; i++) {
-        final source = (images.item(i) as web.Element).getAttribute('src');
-        if (source != null) candidates.add(source);
-      }
-    }
-    for (final line
-        in data.getData('text/uri-list').split(RegExp(r'[\r\n]+'))) {
-      if (line.startsWith('data:image/')) candidates.add(line);
-    }
-    return candidates
-        .map(Uri.tryParse)
-        .whereType<Uri>()
-        .where(
-          (uri) =>
-              uri.scheme == 'http' ||
-              uri.scheme == 'https' ||
-              uri.scheme == 'blob' ||
-              (uri.scheme == 'data' && uri.data!.mimeType.startsWith('image/')),
-        )
-        .toList();
+  Future<void> _disposeResource(XEntity entity) async {
+    if (entity is ScopedStorageXFile) await entity.dispose();
+    if (entity is ScopedStorageXDirectory) await entity.dispose();
   }
 
-  String _imageName(Uri uri) {
-    if (uri.scheme != 'data' &&
-        uri.pathSegments.isNotEmpty &&
-        uri.pathSegments.last.isNotEmpty) {
-      return uri.pathSegments.last;
-    }
-    final type = uri.data?.mimeType.split('/').last ?? 'png';
-    return 'image.${type == 'svg+xml' ? 'svg' : type}';
-  }
-
-  Future<DropItem?> _readImage(Uri uri) async {
-    final controller = web.AbortController();
-    try {
-      if (uri.scheme == 'data') {
-        final data = uri.data!;
-        return _blobToDropItem(
-          web.Blob(
-            [data.contentAsBytes().toJS].toJS,
-            web.BlobPropertyBag(type: data.mimeType),
-          ),
-          name: _imageName(uri),
-        );
-      }
-      return await (() async {
-        final response = await web.window
-            .fetch(
-              uri.toString().toJS,
-              web.RequestInit(signal: controller.signal, credentials: 'omit'),
-            )
-            .toDart;
-        if (!response.ok) throw StateError('HTTP ${response.status}');
-        final blob = await response.blob().toDart;
-        if (!blob.type.startsWith('image/')) {
-          throw StateError('Source did not provide an image');
-        }
-        return _blobToDropItem(blob, name: _imageName(uri));
-      })().timeout(
-        const Duration(seconds: 10),
-        onTimeout: () {
-          controller.abort();
-          throw TimeoutException('Timed out reading dragged image');
-        },
-      );
-    } catch (error, stack) {
-      FlutterError.reportError(
-        FlutterErrorDetails(
-          exception: error,
-          stack: stack,
-          library: 'desktop_drop',
-          context: ErrorDescription(
-            'while reading a dragged image; its URL remains available in DropDoneDetails.urls',
-          ),
-        ),
-      );
-      return null;
-    }
-  }
-
-  Map<String, Object?> _offer(
-    web.DataTransfer data, {
-    required bool finalDrop,
-  }) {
-    final types = <String>{};
-    final files = <Map<String, Object?>>[];
-    var hasHtml = false;
+  DropOffer _offer(web.DataTransfer data, {required bool finalDrop}) {
+    final strings = <DropItemPreview>[];
+    final files = <DropItemPreview>[];
     for (var i = 0; i < data.items.length; i++) {
       final item = data.items[i];
       if (item.kind == 'file') {
-        types.add('file');
         final file = item.getAsFile();
         final entry = finalDrop ? item.webkitGetAsEntry() : null;
-        files.add({
-          'name': file?.name ?? entry?.name ?? '',
-          'mimeType': item.type,
-          if (entry != null) 'isDirectory': entry.isDirectory,
-        });
-      } else if (item.type == 'text/plain') {
-        types.add('text');
-      } else if (item.type == 'text/uri-list') {
-        types.add('url');
-      } else if (item.type == 'text/html') {
-        hasHtml = true;
+        files.add(
+          DropItemPreview(
+            kind: entry?.isDirectory == true
+                ? DropItemKind.directory
+                : DropItemKind.file,
+            name: file?.name ?? entry?.name ?? '',
+            mimeType: item.type,
+          ),
+        );
+      } else if (item.kind == 'string') {
+        strings.add(
+          DropItemPreview(
+            kind: DropItemKind.string,
+            mimeType: item.type,
+            value: finalDrop ? data.getData(item.type) : null,
+          ),
+        );
       }
     }
-    // In protected mode getData is empty even though types are advertised.
-    final urls = finalDrop
-        ? data
-              .getData('text/uri-list')
-              .split(RegExp(r'[\r\n]+'))
-              .where((line) => line.isNotEmpty && !line.startsWith('#'))
-              .where((line) => Uri.tryParse(line)?.hasScheme == true)
-              .toList()
-        : <String>[];
-    if (files.isEmpty) {
-      if (finalDrop) {
-        for (final uri in _imageUris(data)) {
-          types.addAll(['file', 'url']);
-          final source = uri.toString();
-          if (!urls.contains(source)) urls.add(source);
-          files.add({
-            'name': _imageName(uri),
-            'imageUrl': source,
-            'mimeType': uri.scheme == 'data' ? uri.data!.mimeType : null,
-          });
-        }
-      } else if (hasHtml || types.contains('url')) {
-        // Protected-mode metadata cannot distinguish an image URL from a link.
-        types.add('file');
-      }
-    }
-    return {
-      'types': types.toList(),
-      'files': files,
-      'urls': urls,
-      'text': finalDrop && types.contains('text')
-          ? data.getData('text/plain')
-          : null,
-      'isComplete': finalDrop,
-    };
+    return DropOffer(
+      allowedOperations: switch (data.effectAllowed) {
+        'copy' => {DropOperation.copy},
+        'move' => {DropOperation.move},
+        'link' => {DropOperation.link},
+        'copyMove' => {DropOperation.copy, DropOperation.move},
+        'copyLink' => {DropOperation.copy, DropOperation.link},
+        'linkMove' => {DropOperation.link, DropOperation.move},
+        // The HTML standard treats uninitialized as allowing all operations.
+        'all' || 'uninitialized' => {
+          DropOperation.copy,
+          DropOperation.move,
+          DropOperation.link,
+        },
+        _ => <DropOperation>{},
+      },
+      items: [...files, ...strings],
+      isComplete: finalDrop,
+    );
   }
 
   (int, Offset)? _location(web.DragEvent event) {
@@ -305,13 +193,10 @@ class DesktopDropWeb {
 
   void _exit() {
     if (_hoverView case final int view) {
-      DropCoordinator.instance.platformEvent({
-        'event': 'exit',
-        'view': view,
-        'session': _session,
-      });
+      DropCoordinator.instance.exit(view, _session);
     }
     _hoverView = null;
+    _hoverOffer = null;
   }
 
   void _handle(web.DragEvent event) {
@@ -340,69 +225,80 @@ class DesktopDropWeb {
       _hoverView = view;
     }
     final finalDrop = event.type == 'drop';
-    final offer = _offer(data, finalDrop: finalDrop);
+    final offer = finalDrop
+        ? _offer(data, finalDrop: true)
+        : _hoverOffer ?? _offer(data, finalDrop: false);
+    _hoverOffer = offer;
     final coordinator = DropCoordinator.instance;
-    final target = coordinator.decide(view, DropOffer.fromMap(offer), position);
+    final selection = coordinator.decide(view, offer, position);
+    final target = selection.target;
     event.preventDefault();
-    data.dropEffect = target > 0 ? 'copy' : 'none';
-    final args = <Object?, Object?>{
-      'view': view,
-      'session': _session,
-      'request': ++_request,
-      'phase': finalDrop ? 2 : 1,
-      'target': target,
-      'x': position.dx,
-      'y': position.dy,
-      'offer': offer,
-    };
-    coordinator.platformEvent({...args, 'event': 'feedback'});
-    if (!finalDrop) return;
+    data.dropEffect = selection.operation == DropOperation.reject
+        ? 'none'
+        : selection.operation.name;
+    if (!finalDrop) {
+      coordinator.feedback(view, _session, selection, offer, position);
+      return;
+    }
+    final details = coordinator.details(view, selection, offer, position);
+    coordinator.exit(view);
     _hoverView = null;
-    if (target == 0) return;
+    _hoverOffer = null;
+    if (details == null) return;
+    final resources = <XEntity>[];
+    var active = true;
+    void retain(XEntity entity) {
+      if (!active) {
+        unawaited(_disposeResource(entity));
+        throw StateError('Dropped source has expired');
+      }
+      resources.add(entity);
+    }
+
     // Capture entries/files while the data store is readable. After this DOM
     // callback it becomes protected again. Keep the committed target/position.
     final pending = <Future<DropItem?>>[];
     for (var i = 0; i < data.items.length; i++) {
       final item = data.items[i];
+      if (item.kind == 'string') {
+        pending.add(
+          Future.value(
+            DropStringItem(mimeType: item.type, value: data.getData(item.type)),
+          ),
+        );
+        continue;
+      }
       if (item.kind != 'file') continue;
       final entry = item.webkitGetAsEntry();
       final file = entry == null ? item.getAsFile() : null;
       pending.add(
         entry != null
-            ? _entryToDropItem(entry)
-            : Future.value(file == null ? null : _fileToDropItem(file)),
+            ? _entryToDropItem(entry, retain)
+            : Future.value(file == null ? null : _fileToDropItem(file, retain)),
       );
-    }
-    if (pending.isEmpty) {
-      for (final file in offer['files'] as List<Map<String, Object?>>) {
-        if (file['imageUrl'] case final String source) {
-          pending.add(_readImage(Uri.parse(source)));
-        }
-      }
     }
     unawaited(
       Future.wait(pending)
-          .then((items) {
-            final materialized = {
-              ...offer,
-              'files': items
-                  .whereType<DropItem>()
-                  .map(
-                    (item) => {
-                      'path': item.path,
-                      'name': item.name,
-                      'mimeType': item.mimeType,
-                      'isDirectory': item is DropItemDirectory,
-                    },
-                  )
-                  .toList(),
-            };
-            coordinator.platformEvent({
-              ...args,
-              'event': 'drop',
-              'items': items.whereType<DropItem>().toList(),
-              'offer': materialized,
-            });
+          .then((items) async {
+            await coordinator.drop(
+              view,
+              target,
+              DropEvent(
+                offer: offer,
+                localPosition: details.localPosition,
+                globalPosition: details.globalPosition,
+                operation: selection.operation,
+                items: items.whereType<DropItem>().toList(),
+              ),
+            );
+          })
+          .whenComplete(() async {
+            active = false;
+            try {
+              await Future.wait(resources.map(_disposeResource));
+            } finally {
+              resources.clear();
+            }
           })
           .catchError((Object error, StackTrace stack) {
             FlutterError.reportError(

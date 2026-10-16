@@ -15,6 +15,30 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_web_plugins/flutter_web_plugins.dart';
 import 'package:web/web.dart' as web;
 
+@JS('Object.defineProperty')
+external JSObject _defineProperty(
+  JSObject object,
+  JSString key,
+  JSObject descriptor,
+);
+
+web.DataTransfer transfer({String allowed = 'all'}) {
+  final data = web.DataTransfer();
+  // Synthetic events do not have a browser-managed drag source. Supply its
+  // allowed operations explicitly rather than relying on protected setters.
+  for (final entry in {
+    'effectAllowed': allowed,
+    'dropEffect': 'none',
+  }.entries) {
+    _defineProperty(
+      data,
+      entry.key.toJS,
+      {'value': entry.value, 'writable': true}.jsify() as JSObject,
+    );
+  }
+  return data;
+}
+
 @JS('DataTransferItem.prototype')
 external JSObject get _itemPrototype;
 
@@ -41,10 +65,16 @@ void send(String type, web.DataTransfer data, Offset position) {
   );
 }
 
+String stringValue(DropEvent event, String mimeType) => event.items
+    .whereType<DropStringItem>()
+    .singleWhere((item) => item.mimeType == mimeType)
+    .value;
+
 Future<Offset> mount(
   WidgetTester tester, {
   required bool Function(DropEventDetails) accepts,
-  required void Function(DropDoneDetails) done,
+  DropOperation operation = DropOperation.copy,
+  required FutureOr<void> Function(DropEvent) done,
   void Function(DropEventDetails)? entered,
   void Function(DropEventDetails)? exited,
 }) async {
@@ -53,8 +83,9 @@ Future<Offset> mount(
       textDirection: TextDirection.ltr,
       child: Center(
         child: DropTarget(
-          onWillAccept: accepts,
-          onDragDone: done,
+          onDropDecision: (details) =>
+              accepts(details) ? operation : DropOperation.reject,
+          onDrop: done,
           onDragEntered: entered,
           onDragExited: exited,
           child: const SizedBox(width: 200, height: 200),
@@ -80,70 +111,161 @@ void main() {
     DesktopDropWeb.registerWith(webPluginRegistrar);
   });
 
+  for (final operation in [
+    DropOperation.copy,
+    DropOperation.move,
+    DropOperation.link,
+  ]) {
+    testWidgets(
+      'browser negotiates ${operation.name} within source operations',
+      (tester) async {
+        DropEvent? done;
+        final point = await mount(
+          tester,
+          accepts: (_) => true,
+          operation: operation,
+          done: (details) => done = details,
+        );
+        final data = transfer(allowed: operation.name)
+          ..setData('text/plain', 'hello');
+        send('dragover', data, point);
+        expect(data.dropEffect, operation.name);
+        send('drop', data, point);
+        await tester.pump();
+        expect(done!.operation, operation);
+        expect(done!.allowedOperations, {operation});
+        expect(stringValue(done!, 'text/plain'), 'hello');
+      },
+    );
+  }
+
   testWidgets(
-    'retained browser files survive URL revocation and stream complete contents',
+    'unsupported browser operation is rejected without copy fallback',
     (tester) async {
-      final done = Completer<DropDoneDetails>();
+      var drops = 0;
       final point = await mount(
         tester,
         accepts: (_) => true,
-        done: done.complete,
+        operation: DropOperation.move,
+        done: (_) => drops++,
       );
-      final bytes = Uint8List(2 * 1024 * 1024 + 3)
-        ..fillRange(0, 2 * 1024 * 1024 + 3, 42);
-      final data = web.DataTransfer();
-      data.items.add(web.File([bytes.toJS].toJS, 'large.bin'));
+      final data = transfer(allowed: 'copy')..setData('text/plain', 'hello');
+      send('dragover', data, point);
+      expect(data.dropEffect, 'none');
       send('drop', data, point);
       await tester.pump();
-      await tester.runAsync(() async {
-        final file = (await done.future.timeout(const Duration(seconds: 5)))
-            .files
-            .single;
-        web.URL.revokeObjectURL(file.path);
-        final chunks = await file.openRead().toList();
-        // Chunk boundaries are owned by the browser's Blob stream.
-        expect(chunks.expand((chunk) => chunk).toList(), bytes);
-        expect(await file.openRead(1, 4).expand((chunk) => chunk).toList(), [
-          42,
-          42,
-          42,
-        ]);
-        expect(await file.openRead(0, 0).toList(), isEmpty);
-      });
+      expect(drops, 0);
     },
   );
 
-  testWidgets('data image URLs are materialized only after final acceptance', (
+  testWidgets('browser files stream complete contents during async onDrop', (
     tester,
   ) async {
-    final done = Completer<DropDoneDetails>();
+    final done = Completer<DropEvent>();
+    final finish = Completer<void>();
     final point = await mount(
       tester,
-      accepts: (details) => details.offer.types.contains(DropType.file),
-      done: done.complete,
+      accepts: (_) => true,
+      done: (event) async {
+        done.complete(event);
+        await finish.future;
+      },
     );
-    const source = 'data:image/png;base64,cG5n';
-    final data = web.DataTransfer()
-      ..setData('text/uri-list', source)
-      ..setData('text/html', '<img src="$source">');
-    send('dragenter', data, point);
-    expect(done.isCompleted, false);
+    final bytes = Uint8List(2 * 1024 * 1024 + 3)
+      ..fillRange(0, 2 * 1024 * 1024 + 3, 42);
+    final data = transfer();
+    data.items.add(web.File([bytes.toJS].toJS, 'large.bin'));
     send('drop', data, point);
     await tester.pump();
-    expect(done.isCompleted, true);
     await tester.runAsync(() async {
-      final drop = await done.future.timeout(const Duration(seconds: 5));
-      expect(drop.files.single.name, 'image.png');
-      expect(await drop.files.single.readAsString(), 'png');
-      expect(drop.urls, contains(Uri.parse(source)));
-      web.URL.revokeObjectURL(drop.files.single.path);
+      final file = (await done.future.timeout(const Duration(seconds: 5))).items
+          .whereType<DropFileItem>()
+          .single
+          .file;
+      final chunks = await file.openRead().toList();
+      // Chunk boundaries are owned by the browser's Blob stream.
+      expect(chunks.expand((chunk) => chunk).toList(), bytes);
+      expect(await file.openRead(1, 4).expand((chunk) => chunk).toList(), [
+        42,
+        42,
+        42,
+      ]);
+      await expectLater(file.openRead(0, 0).toList(), throwsRangeError);
     });
+    finish.complete();
+    await tester.pump();
+  });
+
+  testWidgets(
+    'URL, HTML, and custom string formats pass through without creating files',
+    (tester) async {
+      final done = Completer<DropEvent>();
+      final offers = <DropOffer>[];
+      final point = await mount(
+        tester,
+        accepts: (event) {
+          offers.add(event.offer);
+          return event.offer.items.any(
+            (item) => item.kind == DropItemKind.string,
+          );
+        },
+        done: done.complete,
+      );
+      const source = 'data:image/png;base64,cG5n';
+      final data = transfer()
+        ..setData('text/uri-list', source)
+        ..setData('text/html', '<img src="$source">')
+        ..setData('application/x-example', 'custom');
+      send('dragenter', data, point);
+      expect(offers.last.items.every((item) => item.value == null), true);
+      expect(
+        offers.last.items.any((item) => item.kind == DropItemKind.file),
+        false,
+      );
+      send('drop', data, point);
+      await tester.pump();
+      final event = await done.future;
+      expect(event.items.whereType<DropFileItem>(), isEmpty);
+      expect(stringValue(event, 'text/uri-list'), source);
+      expect(stringValue(event, 'text/html'), '<img src="$source">');
+      expect(stringValue(event, 'application/x-example'), 'custom');
+    },
+  );
+
+  testWidgets('remote HTML resources are not fetched', (tester) async {
+    var requests = 0;
+    final original = web.window.getProperty<JSFunction>('fetch'.toJS);
+    JSAny? blockedFetch(JSAny? resource, JSAny? options) {
+      requests++;
+      throw StateError('The drop plugin must not fetch URLs');
+    }
+
+    web.window.setProperty('fetch'.toJS, blockedFetch.toJS);
+    addTearDown(() => web.window.setProperty('fetch'.toJS, original));
+    final done = Completer<DropEvent>();
+    final point = await mount(
+      tester,
+      accepts: (_) => true,
+      done: done.complete,
+    );
+    final data = transfer()
+      ..setData('text/html', '<img src="https://example.com/image.png">')
+      ..setData('text/uri-list', 'https://example.com/image.png');
+    send('drop', data, point);
+    await tester.pump();
+    final event = await done.future;
+    expect(requests, 0);
+    expect(event.items.whereType<DropFileItem>(), isEmpty);
+    expect(
+      stringValue(event, 'text/uri-list'),
+      'https://example.com/image.png',
+    );
   });
 
   testWidgets(
     'capture listeners prevent file navigation even when a descendant stops bubbling',
     (tester) async {
-      final done = Completer<DropDoneDetails>();
+      final done = Completer<DropEvent>();
       final point = await mount(
         tester,
         accepts: (_) => true,
@@ -154,7 +276,7 @@ void main() {
       final blocker = ((web.Event event) => event.stopPropagation()).toJS;
       host.addEventListener('drop', blocker);
       addTearDown(() => host.removeEventListener('drop', blocker));
-      final data = web.DataTransfer()..setData('text/plain', 'hello');
+      final data = transfer()..setData('text/plain', 'hello');
       final event = web.DragEvent(
         'drop',
         web.DragEventInit(
@@ -168,70 +290,93 @@ void main() {
       host.dispatchEvent(event);
       await tester.pump();
       expect(event.defaultPrevented, true);
-      expect((await done.future).text, 'hello');
+      expect(stringValue(await done.future, 'text/plain'), 'hello');
     },
   );
 
-  testWidgets(
-    'file plus string representations retains getAsFile fallback and bytes',
-    (tester) async {
-      final done = Completer<DropDoneDetails>();
-      final point = await mount(
-        tester,
-        accepts: (d) => d.offer.types.contains(DropType.file),
-        done: done.complete,
-      );
-      final data = web.DataTransfer()
-        ..setData('text/uri-list', 'https://example.com/photo.png')
-        ..setData('text/html', '<img src="https://example.com/photo.png">');
-      data.items.add(
-        web.File(
-          ['png'.toJS].toJS,
-          'photo.png',
-          web.FilePropertyBag(type: 'image/png'),
-        ),
-      );
-      send('drop', data, point);
-      await tester.pump();
-      await tester.runAsync(() async {
-        final event = await done.future.timeout(const Duration(seconds: 5));
-        final file = event.files.single;
-        expect(file.name, 'photo.png');
-        expect(file.mimeType, 'image/png');
-        expect(await file.readAsString(), 'png');
-        expect(event.urls.single.toString(), 'https://example.com/photo.png');
-        expect(event.globalPosition, point);
-      });
-    },
-  );
+  for (final (name, type, expectedMime) in [
+    ('photo.png', 'image/png', 'image/png'),
+    ('photo.avif', '', 'image/avif'),
+  ]) {
+    testWidgets(
+      'file $name retains MIME, getAsFile fallback and string representations',
+      (tester) async {
+        final done = Completer<DropEvent>();
+        final finish = Completer<void>();
+        final point = await mount(
+          tester,
+          accepts: (d) => d.offer.items.any(
+            (item) =>
+                item.kind == DropItemKind.file && item.mimeType == expectedMime,
+          ),
+          done: (event) async {
+            done.complete(event);
+            await finish.future;
+          },
+        );
+        final data = transfer()
+          ..setData('text/uri-list', 'https://example.com/photo.png')
+          ..setData('text/html', '<img src="https://example.com/photo.png">');
+        data.items.add(
+          web.File(['png'.toJS].toJS, name, web.FilePropertyBag(type: type)),
+        );
+        send('drop', data, point);
+        await tester.pump();
+        await tester.runAsync(() async {
+          final event = await done.future.timeout(const Duration(seconds: 5));
+          final file = event.items.whereType<DropFileItem>().single;
+          expect(file.name, name);
+          expect(file.mimeType, expectedMime);
+          expect(await file.file.readAsString(), 'png');
+          expect(
+            stringValue(event, 'text/uri-list'),
+            'https://example.com/photo.png',
+          );
+          expect(event.globalPosition, point);
+        });
+        finish.complete();
+        await tester.pump();
+      },
+    );
+  }
 
   testWidgets(
     'text and URL values are available for the final synchronous decision',
     (tester) async {
-      final done = Completer<DropDoneDetails>();
+      final done = Completer<DropEvent>();
       final offers = <DropOffer>[];
       final point = await mount(
         tester,
         accepts: (d) {
           offers.add(d.offer);
-          return !d.offer.isComplete || d.offer.text == 'hello';
+          return !d.offer.isComplete ||
+              d.offer.items.any(
+                (item) =>
+                    item.mimeType == 'text/plain' && item.value == 'hello',
+              );
         },
         done: done.complete,
       );
-      final data = web.DataTransfer()
+      final data = transfer()
         ..setData('text/plain', 'hello')
         ..setData('text/uri-list', '# comment\r\nhttps://example.com\r\n');
       send('dragenter', data, point);
       expect(offers.last.isComplete, false);
-      expect(offers.last.text, null);
-      expect(offers.last.types, containsAll([DropType.text, DropType.url]));
+      expect(offers.last.items.every((item) => item.value == null), true);
+      expect(
+        offers.last.items.map((item) => item.mimeType),
+        containsAll(['text/plain', 'text/uri-list']),
+      );
       send('drop', data, point);
       await tester.pump();
       await tester.runAsync(() async {
         final event = await done.future.timeout(const Duration(seconds: 5));
-        expect(event.text, 'hello');
-        expect(event.files, isEmpty);
-        expect(event.urls.single.toString(), 'https://example.com');
+        expect(stringValue(event, 'text/plain'), 'hello');
+        expect(event.items.whereType<DropFileItem>(), isEmpty);
+        expect(
+          stringValue(event, 'text/uri-list'),
+          '# comment\r\nhttps://example.com\r\n',
+        );
         expect(offers.last.isComplete, true);
       });
     },
@@ -248,7 +393,7 @@ void main() {
       entered: (_) => hovering = true,
       exited: (_) => hovering = false,
     );
-    final data = web.DataTransfer()..setData('text/plain', 'hello');
+    final data = transfer()..setData('text/plain', 'hello');
     send('dragenter', data, point);
     expect(hovering, true);
     allowed = false;
@@ -262,7 +407,7 @@ void main() {
     tester,
   ) async {
     var hovering = false;
-    final done = Completer<DropDoneDetails>();
+    final done = Completer<DropEvent>();
     final point = await mount(
       tester,
       accepts: (_) => true,
@@ -270,14 +415,15 @@ void main() {
       entered: (_) => hovering = true,
       exited: (_) => hovering = false,
     );
-    final data = web.DataTransfer()..setData('text/plain', 'hello');
+    final data = transfer()..setData('text/plain', 'hello');
     send('dragenter', data, point);
     expect(hovering, true);
     send('drop', data, point);
     await tester.pump();
     await tester.runAsync(() async {
       expect(
-        (await done.future.timeout(const Duration(seconds: 5))).files,
+        (await done.future.timeout(const Duration(seconds: 5))).items
+            .whereType<DropFileItem>(),
         isEmpty,
       );
     });
@@ -286,11 +432,15 @@ void main() {
   testWidgets('directory reads consume every batch beyond 100 entries', (
     tester,
   ) async {
-    final done = Completer<DropDoneDetails>();
+    final done = Completer<DropEvent>();
+    final finish = Completer<void>();
     final point = await mount(
       tester,
       accepts: (_) => true,
-      done: done.complete,
+      done: (event) async {
+        done.complete(event);
+        await finish.future;
+      },
     );
     final entries = List.generate(251, (index) {
       final file = web.File(['$index'.toJS].toJS, '$index.txt');
@@ -326,26 +476,32 @@ void main() {
               }).toJS,
             }.jsify()
             as JSObject;
-    final data = web.DataTransfer();
+    final data = transfer();
     data.items.add(web.File(<JSAny>[].toJS, 'folder'));
     useEntry(root);
     send('drop', data, point);
     await tester.pump();
     expect(done.isCompleted, true);
     final event = await done.future;
-    final directory = event.files.single as DropItemDirectory;
-    expect(directory.children.length, 251);
-    expect(directory.children.last.name, '250.txt');
-    expect(batches, 4);
+    final directory = event.items.single as DropDirectoryItem;
+    expect(batches, 0);
     await tester.runAsync(() async {
-      expect(await directory.children.last.readAsString(), '250');
+      final children = await directory.directory.list().toList();
+      expect(children.length, 251);
+      expect(await (children.last as XFile).name(), '250.txt');
+      expect(batches, 4);
+      expect(await (children.last as XFile).readAsString(), '250');
+      expect(await directory.directory.list().length, 251);
+      expect(batches, 8);
     });
+    finish.complete();
+    await tester.pump();
   });
 
   testWidgets('asynchronous file reads retain the committed drop position', (
     tester,
   ) async {
-    final done = Completer<DropDoneDetails>();
+    final done = Completer<DropEvent>();
     final point = await mount(
       tester,
       accepts: (_) => true,
@@ -363,7 +519,7 @@ void main() {
               }).toJS,
             }.jsify()
             as JSObject;
-    final data = web.DataTransfer();
+    final data = transfer();
     final file = web.File(['contents'.toJS].toJS, 'slow.txt');
     data.items.add(file);
     useEntry(entry);
@@ -391,7 +547,7 @@ void main() {
       addTearDown(() => web.window.removeEventListener('drop', other));
       DesktopDropWeb.registerWith(webPluginRegistrar);
       DesktopDropWeb.registerWith(webPluginRegistrar);
-      final data = web.DataTransfer()..setData('text/plain', 'hello');
+      final data = transfer()..setData('text/plain', 'hello');
       send('drop', data, point);
       await tester.pump();
       expect(drops, 1);

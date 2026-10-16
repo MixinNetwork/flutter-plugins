@@ -1,12 +1,10 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
 import 'bridge.dart';
 import 'bridge_stub.dart' if (dart.library.ffi) 'bridge_native.dart';
-import 'drop_item.dart';
 import 'drop_offer.dart';
 import 'drop_target.dart';
 
@@ -15,11 +13,11 @@ abstract interface class DropTargetClient {
   int get view;
   bool get enabled;
   RenderBox? get box;
-  bool accepts(DropEventDetails details);
+  DropOperation decide(DropEventDetails details);
   void entered(DropEventDetails details);
   void updated(DropEventDetails details);
   void exited(DropEventDetails details);
-  void dropped(DropDoneDetails details);
+  FutureOr<void> dropped(DropEvent details);
 }
 
 class _View {
@@ -28,13 +26,16 @@ class _View {
   final targets = <int>{};
   int? hovering;
   int? session;
-  int request = 0;
   DropEventDetails? details;
 }
 
 /// Owns selection and delivery for all native adapters and the browser.
 /// Public widget tests use the same decision/delivery seam as native callbacks.
-class DropCoordinator {
+class DropCoordinator with WidgetsBindingObserver {
+  DropCoordinator() {
+    WidgetsBinding.instance.addObserver(this);
+  }
+
   static final instance = DropCoordinator();
   static int _nextTarget = 1;
   static int nextTargetId() => _nextTarget++;
@@ -42,12 +43,37 @@ class DropCoordinator {
   final _targets = <int, DropTargetClient>{};
   final _views = <int, _View>{};
 
+  @override
+  void didChangeMetrics() {
+    final liveViews = WidgetsBinding.instance.platformDispatcher.views
+        .map((view) => view.viewId)
+        .toSet();
+    final removed = _views.keys.where((id) => !liveViews.contains(id)).toList();
+    for (final id in removed) {
+      final view = _views.remove(id)!;
+      for (final target in view.targets) {
+        _targets.remove(target);
+      }
+      view.bridge.dispose();
+    }
+  }
+
   void add(DropTargetClient target) {
     _targets[target.id] = target;
-    final view = _views.putIfAbsent(target.view, () {
-      final bridge = createDropBridge(target.view, decide, platformEvent);
+    final viewId = target.view;
+    final view = _views.putIfAbsent(viewId, () {
+      final bridge = createDropBridge(viewId, this);
+      final view = _View(bridge);
+      // A failed initialization can leave other targets mounted in this view.
+      view.targets.addAll(
+        _targets.values
+            .where((target) => target.view == viewId)
+            .map((target) => target.id),
+      );
       unawaited(
         bridge.initialize().catchError((Object error, StackTrace stack) {
+          if (identical(_views[viewId], view)) _views.remove(viewId);
+          bridge.dispose();
           FlutterError.reportError(
             FlutterErrorDetails(
               exception: error,
@@ -60,7 +86,7 @@ class DropCoordinator {
           );
         }),
       );
-      return _View(bridge);
+      return view;
     });
     view.targets.add(target.id);
   }
@@ -69,11 +95,16 @@ class DropCoordinator {
     _targets.remove(target.id);
     final view = _views[target.view];
     if (view == null) return;
-    if (view.hovering == target.id) view.hovering = null;
+    if (view.hovering == target.id) {
+      view.hovering = null;
+      view.details = null;
+    }
     view.targets.remove(target.id);
     if (view.targets.isEmpty) {
-      _views.remove(target.view);
-      view.bridge.dispose();
+      // Page changes must not invalidate sources already delivered to onDrop.
+      // The bridge is released when the Flutter view is removed instead.
+      view.details = null;
+      view.session = null;
     }
   }
 
@@ -90,8 +121,10 @@ class DropCoordinator {
     });
   }
 
-  int decide(int view, DropOffer offer, Offset position) {
-    if (!_views.containsKey(view)) return 0;
+  DropSelection decide(int view, DropOffer offer, Offset position) {
+    const rejected = (target: 0, operation: DropOperation.reject);
+    final state = _views[view];
+    if (state == null || state.targets.isEmpty) return rejected;
     final result = HitTestResult();
     WidgetsBinding.instance.hitTestInView(result, position, view);
     final visited = <int>{};
@@ -110,7 +143,11 @@ class DropCoordinator {
       final details = _details(target, offer, position);
       if (details == null) continue;
       try {
-        if (target.accepts(details)) return target.id;
+        final operation = target.decide(details);
+        if (operation != DropOperation.reject &&
+            offer.allowedOperations.contains(operation)) {
+          return (target: target.id, operation: operation);
+        }
       } catch (error, stack) {
         scheduleMicrotask(
           () => FlutterError.reportError(
@@ -118,88 +155,114 @@ class DropCoordinator {
               exception: error,
               stack: stack,
               library: 'desktop_drop',
-              context: ErrorDescription('in DropTarget.onWillAccept'),
+              context: ErrorDescription('in DropTarget.onDropDecision'),
             ),
           ),
         );
       }
     }
-    return 0;
+    return rejected;
   }
 
   DropEventDetails? _details(
     DropTargetClient target,
     DropOffer offer,
-    Offset position,
-  ) {
+    Offset position, [
+    DropOperation operation = DropOperation.reject,
+  ]) {
     final box = target.box;
     if (box == null || !box.attached || !box.hasSize) return null;
     return DropEventDetails(
       offer: offer,
       globalPosition: position,
       localPosition: box.globalToLocal(position),
+      operation: operation,
     );
   }
 
-  void platformEvent(Map<Object?, Object?> event) {
-    final viewId = event['view'] as int;
+  DropEventDetails? details(
+    int viewId,
+    DropSelection selection,
+    DropOffer offer,
+    Offset position,
+  ) {
+    final target = _targets[selection.target];
+    if (target == null ||
+        target.view != viewId ||
+        !target.enabled ||
+        !offer.allowedOperations.contains(selection.operation)) {
+      return null;
+    }
+    return _details(target, offer, position, selection.operation);
+  }
+
+  void exit(int viewId, [int? session]) {
     final view = _views[viewId];
     if (view == null) return;
-    final session = event['session'] as int;
-    final kind = event['event'];
-    if (kind == 'exit') {
-      if (view.session == session) _exit(view);
-      return;
+    if (session == null || view.session == session) _exit(view);
+  }
+
+  Future<bool> drop(int viewId, int targetId, DropEvent event) async {
+    final target = _targets[targetId];
+    if (target == null ||
+        target.view != viewId ||
+        !target.enabled ||
+        !event.allowedOperations.contains(event.operation)) {
+      return false;
     }
-    final position = Offset(
-      (event['x'] as num).toDouble(),
-      (event['y'] as num).toDouble(),
-    );
-    final data = (event['offer'] as Map).cast<Object?, Object?>();
-    final offer = DropOffer.fromMap(data);
-    final target = _targets[event['target']];
-    if (kind == 'drop') {
-      if (target == null || target.view != viewId || !target.enabled) return;
-      final details = _details(target, offer, position);
-      if (details == null) return;
-      target.dropped(
-        DropDoneDetails(
-          offer: offer,
-          localPosition: details.localPosition,
-          globalPosition: position,
-          files: (event['items'] as List<DropItem>?) ?? _files(data),
-          rawText: data['rawText'] as String?,
+    final box = target.box;
+    if (box == null || !box.attached || !box.hasSize) return false;
+    try {
+      await target.dropped(event);
+      return true;
+    } catch (error, stack) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stack,
+          library: 'desktop_drop',
+          context: ErrorDescription('in DropTarget.onDrop'),
         ),
       );
-      return;
+      return false;
     }
-    final request = event['request'] as int;
-    if (request <= view.request) return;
-    view.request = request;
+  }
+
+  bool feedback(
+    int viewId,
+    int session,
+    DropSelection selection,
+    DropOffer offer,
+    Offset position,
+  ) {
+    final view = _views[viewId];
+    if (view == null) return false;
     if (view.session != session) _exit(view);
     view.session = session;
-    if (event['phase'] == 2) {
-      _exit(view);
-      return;
-    }
-    final selected = target != null && target.enabled && target.view == viewId
+    final target = _targets[selection.target];
+    final selected =
+        target != null &&
+            target.enabled &&
+            target.view == viewId &&
+            offer.allowedOperations.contains(selection.operation)
         ? target
         : null;
     if (view.hovering != selected?.id) {
       _exit(view);
       if (selected != null) {
-        final details = _details(selected, offer, position);
-        if (details == null) return;
+        final details = this.details(viewId, selection, offer, position);
+        if (details == null) return false;
         view.hovering = selected.id;
         view.details = details;
         selected.entered(details);
       }
     } else if (selected != null) {
-      final details = _details(selected, offer, position);
-      if (details == null) return;
+      final details = this.details(viewId, selection, offer, position);
+      if (details == null) return false;
       view.details = details;
       selected.updated(details);
     }
+    return true;
   }
 
   void _exit(_View view) {
@@ -209,28 +272,4 @@ class DropCoordinator {
     view.details = null;
     if (previous != null && details != null) previous.exited(details);
   }
-
-  List<DropItem> _files(Map<Object?, Object?> offer) =>
-      (offer['files'] as List? ?? const []).cast<Map>().map((file) {
-        final path = file['path'] as String;
-        final name = file['name'] as String?;
-        final bookmark = file['apple-bookmark'] as Uint8List?;
-        final promised = file['isPromised'] as bool? ?? false;
-        if (file['isDirectory'] == true) {
-          return DropItemDirectory(
-            path,
-            const [],
-            name: name,
-            extraAppleBookmark: bookmark,
-            fromPromise: promised,
-          );
-        }
-        return DropItemFile(
-          path,
-          name: name,
-          mimeType: file['mimeType'] as String?,
-          extraAppleBookmark: bookmark,
-          fromPromise: promised,
-        );
-      }).toList();
 }
