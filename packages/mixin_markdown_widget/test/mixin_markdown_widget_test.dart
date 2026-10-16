@@ -2287,8 +2287,8 @@ return value;
       (tester) async {
     const input = '''
 ```dart
-const value = 42;
-return value;
+const firstFrameValue = 42;
+return firstFrameValue;
 ```
 ''';
 
@@ -2303,7 +2303,7 @@ return value;
     final richTextFinder = find.byWidgetPredicate(
       (widget) =>
           widget is RichText &&
-          widget.text.toPlainText().contains('const value = 42;'),
+          widget.text.toPlainText().contains('const firstFrameValue = 42;'),
     );
     expect(richTextFinder, findsOneWidget);
 
@@ -2366,7 +2366,8 @@ return value;
     );
     addTearDown(cache.dispose);
 
-    const source = 'const value = 42;\nreturn value;';
+    // The segment cache is shared by every test, so the source is unique.
+    const source = 'const themeValue = 7;\nreturn themeValue;';
 
     var presentation = cache.resolve(
       blockId: 'block-1',
@@ -2407,6 +2408,66 @@ return value;
       language: 'dart',
     );
     expect(presentation.isHighlighted, isTrue);
+  });
+
+  testWidgets('a code block with cached segments highlights in its first frame',
+      (tester) async {
+    late MarkdownThemeData theme;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) {
+            theme = MarkdownThemeData.fallback(context);
+            return const SizedBox.shrink();
+          },
+        ),
+      ),
+    );
+
+    const source = 'final remounted = true;\nprint(remounted);';
+    final first = MarkdownCodeHighlightCache(
+      highlighter: const MarkdownCodeSyntaxHighlighter(),
+    );
+    addTearDown(first.dispose);
+    expect(
+      first
+          .resolve(
+            blockId: 'block-1',
+            source: source,
+            baseStyle: theme.codeBlockStyle,
+            theme: theme,
+            language: 'dart',
+          )
+          .isHighlighted,
+      isFalse,
+    );
+    await _pumpUntilCacheHighlighted(
+      tester,
+      cache: first,
+      blockId: 'block-1',
+      source: source,
+      baseStyle: theme.codeBlockStyle,
+      theme: theme,
+      language: 'dart',
+    );
+
+    // A view that mounts later, such as the same post in another list.
+    final second = MarkdownCodeHighlightCache(
+      highlighter: const MarkdownCodeSyntaxHighlighter(),
+    );
+    addTearDown(second.dispose);
+    var notified = false;
+    second.addListener(() => notified = true);
+    final presentation = second.resolve(
+      blockId: 'block-1',
+      source: source,
+      baseStyle: theme.codeBlockStyle,
+      theme: theme,
+      language: 'dart',
+    );
+    expect(presentation.isHighlighted, isTrue);
+    await tester.pump();
+    expect(notified, isFalse);
   });
 
   testWidgets('code highlight link tokens keep the code block font size', (
@@ -2835,6 +2896,44 @@ const value = 42;
         .toList(growable: false);
 
     expect(customPaints, isNotEmpty);
+  });
+
+  test('pretext lines of mixed text keep their order and fit', () {
+    const style = TextStyle(fontSize: 14, height: 1.2);
+    const runs = <MarkdownPretextInlineRun>[
+      MarkdownPretextInlineRun(
+        text: '请先运行 flutter analyze\t再提交，然后确认 ',
+        style: style,
+      ),
+      MarkdownPretextInlineRun(
+        text: 'pubspec.lock',
+        style: style,
+        decoration: MarkdownPretextInlineDecoration(
+          backgroundColor: Color(0xFFE9EDF2),
+          borderRadius: BorderRadius.all(Radius.circular(6)),
+          padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        ),
+      ),
+      MarkdownPretextInlineRun(text: ' 没有多余的变化。', style: style),
+    ];
+
+    final layout = computeMarkdownPretextLayoutFromRuns(
+      runs: runs,
+      fallbackStyle: style,
+      maxWidth: 120,
+      textScaleFactor: 1,
+    );
+
+    expect(layout.lines.length, greaterThan(1));
+    var offset = 0;
+    for (final line in layout.lines) {
+      expect(line.startOffset, offset);
+      expect(line.width, lessThanOrEqualTo(120));
+      final right = line.segments.isEmpty ? 0.0 : line.segments.last.right;
+      expect(right, closeTo(line.width, 0.01));
+      offset = line.endOffset;
+    }
+    expect(offset, layout.plainText.length);
   });
 
   test('partial selection on decorated inline uses partial text geometry', () {

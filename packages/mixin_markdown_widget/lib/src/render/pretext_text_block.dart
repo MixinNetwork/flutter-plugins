@@ -574,6 +574,13 @@ MarkdownPretextLayoutResult computeMarkdownPretextLayoutFromRuns({
         plainText[originalEndOffset] == '\n') {
       originalEndOffset += 1;
     }
+    final lineWidth = math.min(
+      _measureRenderedFragmentWidth(
+        lineFragments,
+        textScaleFactor: textScaleFactor,
+      ),
+      safeMaxWidth,
+    );
     lines.add(
       MarkdownPretextLayoutLine(
         text: renderedLineText,
@@ -585,26 +592,14 @@ MarkdownPretextLayoutResult computeMarkdownPretextLayoutFromRuns({
           lineFragments,
           textScaleFactor: textScaleFactor,
         ),
-        width: math.min(
-          _measureRenderedFragmentWidth(
-            lineFragments,
-            textScaleFactor: textScaleFactor,
-          ),
-          safeMaxWidth,
-        ),
+        width: lineWidth,
         height: _measureRenderedFragmentLineHeight(
           lineFragments,
           fallbackStyle: fallbackStyle,
           textScaleFactor: textScaleFactor,
         ),
         leadingOffset: _resolveLineLeadingOffset(
-          lineWidth: math.min(
-            _measureRenderedFragmentWidth(
-              lineFragments,
-              textScaleFactor: textScaleFactor,
-            ),
-            safeMaxWidth,
-          ),
+          lineWidth: lineWidth,
           maxWidth: alignmentWidth,
           textAlign: textAlign,
           textDirection: textDirection,
@@ -1309,20 +1304,41 @@ InlineSpan _buildLineSpanFromFragments(
   required TextStyle fallbackStyle,
 }) {
   final children = <InlineSpan>[];
+  // Each CJK character is a fragment. Plain fragments that look and act the
+  // same share one span, so the line has one style run instead of dozens.
+  _MarkdownPretextLineFragment? plain;
+  final plainText = StringBuffer();
+  void flushPlain() {
+    final fragment = plain;
+    if (fragment == null) return;
+    children.add(
+      TextSpan(
+        text: plainText.toString(),
+        style: fragment.style,
+        mouseCursor: fragment.mouseCursor,
+        recognizer: fragment.recognizer,
+      ),
+    );
+    plain = null;
+    plainText.clear();
+  }
+
   for (final fragment in fragments) {
-    if (fragment.renderSpan != null) {
-      children.add(fragment.renderSpan!);
+    if (fragment.renderSpan == null && fragment.decoration == null) {
+      final current = plain;
+      if (current != null &&
+          (!identical(current.style, fragment.style) ||
+              current.mouseCursor != fragment.mouseCursor ||
+              !identical(current.recognizer, fragment.recognizer))) {
+        flushPlain();
+      }
+      plain ??= fragment;
+      plainText.write(fragment.text);
       continue;
     }
-    if (fragment.decoration == null) {
-      children.add(
-        TextSpan(
-          text: fragment.text,
-          style: fragment.style,
-          mouseCursor: fragment.mouseCursor,
-          recognizer: fragment.recognizer,
-        ),
-      );
+    flushPlain();
+    if (fragment.renderSpan != null) {
+      children.add(fragment.renderSpan!);
       continue;
     }
     children.add(
@@ -1338,6 +1354,7 @@ InlineSpan _buildLineSpanFromFragments(
     );
   }
 
+  flushPlain();
   if (children.isEmpty) {
     return TextSpan(style: fallbackStyle, text: ' ');
   }
@@ -1433,7 +1450,12 @@ List<_MarkdownPretextLineFragment> _buildLineFragmentsFromOffset({
         recognizer: segment.recognizer,
         renderSpan: segment.renderSpan,
         decoration: segment.decoration,
-        estimatedWidth: segment.renderSpan != null ? segment.width : null,
+        // A plain fragment of a whole segment has its measured width.
+        estimatedWidth: segment.renderSpan != null ||
+                (segment.decoration == null &&
+                    text.length == segment.displayText.length)
+            ? segment.width
+            : null,
         estimatedLineHeight: segment.estimatedLineHeight,
         padding: _paddingForDecoratedFragmentSlice(
           segment,
@@ -1646,7 +1668,17 @@ double _measureRenderedFragmentLineHeight(
   }
 
   var height = fallbackLineHeight;
+  TextStyle? previousStyle;
+  EdgeInsets? previousPadding;
   for (final fragment in fragments) {
+    // Each CJK character is a fragment, and most share one style.
+    if (fragment.renderSpan == null &&
+        identical(fragment.style, previousStyle) &&
+        fragment.padding == previousPadding) {
+      continue;
+    }
+    previousStyle = fragment.style;
+    previousPadding = fragment.padding;
     final measured = fragment.renderSpan != null
         ? fragment.estimatedLineHeight ??
             _measureLineHeight(fragment.style, textScaleFactor)
@@ -1797,6 +1829,17 @@ double _measureLineHeight(
   double textScaleFactor, {
   EdgeInsets? padding,
 }) {
+  return _cachedMeasure(
+    (#lineHeight, style, textScaleFactor, padding),
+    () => _measureUncachedLineHeight(style, textScaleFactor, padding: padding),
+  );
+}
+
+double _measureUncachedLineHeight(
+  TextStyle style,
+  double textScaleFactor, {
+  EdgeInsets? padding,
+}) {
   if (padding != null) {
     final metrics = _measureTightTextMetrics(' ', style, textScaleFactor);
     return metrics.tightHeight + padding.vertical;
@@ -1837,6 +1880,16 @@ class _TightTextMetrics {
 }
 
 _TightTextMetrics _measureTightTextMetrics(
+  String text,
+  TextStyle style,
+  double textScaleFactor,
+) =>
+    _cachedMeasure(
+      (#tightMetrics, text, style, textScaleFactor),
+      () => _measureUncachedTightTextMetrics(text, style, textScaleFactor),
+    );
+
+_TightTextMetrics _measureUncachedTightTextMetrics(
   String text,
   TextStyle style,
   double textScaleFactor,
@@ -1964,6 +2017,7 @@ class _MarkdownPretextSegmentBuilder {
 
     for (final run in runs) {
       final text = run.text;
+      final runWidths = _RunRangeWidths(text, run.style, textScaleFactor);
       if (run.renderSpan != null) {
         if (text.isEmpty) {
           continue;
@@ -2077,10 +2131,12 @@ class _MarkdownPretextSegmentBuilder {
             _MarkdownPretextMeasuredSegment(
               displayText: displayText,
               kind: pretext_segment.SegmentKind.word,
-              width: _measurer.measure(
+              width: _measurer.measureInRun(
                 displayText,
                 run.style,
                 textScaleFactor,
+                runWidths,
+                index,
               ),
               style: run.style,
               mouseCursor: run.mouseCursor,
@@ -2101,6 +2157,7 @@ class _MarkdownPretextSegmentBuilder {
         final isWhitespace = character.trim().isEmpty;
         final buffer = StringBuffer();
         final startOffset = plainTextOffset;
+        final startIndex = index;
         while (index < text.length) {
           final nextCharacter = text[index];
           if (nextCharacter == '\n') {
@@ -2133,12 +2190,22 @@ class _MarkdownPretextSegmentBuilder {
             kind: isWhitespace
                 ? pretext_segment.SegmentKind.space
                 : pretext_segment.SegmentKind.word,
-            width: _measurer.measure(
-              displayText,
-              run.style,
-              textScaleFactor,
-              padding: run.decoration?.padding,
-            ),
+            // A tab shows as a space, so its text differs from the run text.
+            width: displayText.length == index - startIndex &&
+                    !displayText.contains('\t')
+                ? _measurer.measureInRun(
+                    displayText,
+                    run.style,
+                    textScaleFactor,
+                    runWidths,
+                    startIndex,
+                  )
+                : _measurer.measure(
+                    displayText,
+                    run.style,
+                    textScaleFactor,
+                    padding: run.decoration?.padding,
+                  ),
             style: run.style,
             mouseCursor: run.mouseCursor,
             recognizer: run.recognizer,
@@ -2467,12 +2534,56 @@ class _MarkdownPretextLineFragment {
   }
 }
 
+// Segment widths, line heights, and tight text metrics depend only on their
+// inputs, so layouts share them. A pretext layout measures every word and CJK character, and
+// measures each line again while it fits the line, which laid out thousands of
+// text painters for one long paragraph.
+final Map<Object, Object> _measureCache = <Object, Object>{};
+const int _measureCacheLimit = 20000;
+var _clearsMeasureCacheOnFontChange = false;
+
+T _cachedMeasure<T extends Object>(Object key, T Function() measure) {
+  if (!_clearsMeasureCacheOnFontChange) {
+    _clearsMeasureCacheOnFontChange = true;
+    // A newly loaded font can change the widths of text measured before.
+    PaintingBinding.instance.systemFonts.addListener(_measureCache.clear);
+  }
+  final cached = _measureCache[key];
+  if (cached != null) {
+    return cached as T;
+  }
+  if (_measureCache.length >= _measureCacheLimit) {
+    _measureCache.clear();
+  }
+  final measured = measure();
+  _measureCache[key] = measured;
+  return measured;
+}
+
 class _TextPainterSegmentMeasurer {
-  final Map<Object, double> _cache = <Object, double>{};
   final TextPainter _textPainter = TextPainter(
     textDirection: TextDirection.ltr,
     maxLines: 1,
   );
+
+  /// Measures [segment], which starts at [start] in the text of [runWidths].
+  /// A cache miss lays out the whole run once instead of the segment alone.
+  ///
+  /// The entry is separate from [measure]: a width from inside a run can
+  /// differ from a width of the segment alone when a font shapes across the
+  /// segment edge, and the result must not depend on which one ran first.
+  double measureInRun(
+    String segment,
+    TextStyle style,
+    double textScaleFactor,
+    _RunRangeWidths runWidths,
+    int start,
+  ) {
+    return _cachedMeasure(
+      (#inRun, segment, style, textScaleFactor),
+      () => runWidths.width(start, start + segment.length),
+    );
+  }
 
   double measure(
     String segment,
@@ -2480,13 +2591,41 @@ class _TextPainterSegmentMeasurer {
     double textScaleFactor, {
     EdgeInsets? padding,
   }) {
-    final key = Object.hash(segment, style, textScaleFactor, padding);
-    return _cache.putIfAbsent(key, () {
+    // Plain fragments carry zero padding; share the entry of their segment.
+    final keyPadding = padding == EdgeInsets.zero ? null : padding;
+    return _cachedMeasure((segment, style, textScaleFactor, keyPadding), () {
       _textPainter.text = TextSpan(text: segment, style: style);
       _textPainter.textScaler = TextScaler.linear(textScaleFactor);
       _textPainter.layout(maxWidth: double.infinity);
       return _textPainter.width + (padding?.horizontal ?? 0);
     });
+  }
+}
+
+/// Widths of ranges of one run of text, from a single layout of the run.
+/// Measuring each CJK character or word on its own shaped the text once per
+/// segment, which took several milliseconds for a paragraph.
+class _RunRangeWidths {
+  _RunRangeWidths(this.text, this.style, this.textScaleFactor);
+
+  final String text;
+  final TextStyle style;
+  final double textScaleFactor;
+  TextPainter? _painter;
+
+  double width(int start, int end) {
+    final painter = _painter ??= TextPainter(
+      text: TextSpan(text: text, style: style),
+      textDirection: TextDirection.ltr,
+      textScaler: TextScaler.linear(textScaleFactor),
+    )..layout(maxWidth: double.infinity);
+    var width = 0.0;
+    for (final box in painter.getBoxesForSelection(
+      TextSelection(baseOffset: start, extentOffset: end),
+    )) {
+      width += box.right - box.left;
+    }
+    return width;
   }
 }
 
