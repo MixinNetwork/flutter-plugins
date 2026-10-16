@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.9.0
+
+### Breaking changes
+
+- Require Flutter 3.47.7 / Dart 3.13.5 or later and upgrade to `cross_file` 0.4.
+- Replace `onDragDone(DropDoneDetails)` with required, async-capable `onDrop(DropDetails)`. Consume typed `items` instead of `files`.
+- Replace `DropItemFile` and `DropItemDirectory` with `DropFileItem` and `DropDirectoryItem`. Read files through `item.file` and list directories through `item.directory.list()`. `DropItem` no longer extends `XFile`; forwarded file methods and byte-backed drop-item constructors are removed.
+- Limit provider access and temporary transfer files to the lifetime of `onDrop`. Await all reads and directory listings, and save content needed later before the callback returns.
+- Rename hover callbacks to `onEnter`, `onMove`, and `onLeave`, and rename `enable` to `enabled`. Hover callbacks receive `DragDetails`; `onLeave` takes no arguments and also clears hover on drop, rejection, or disabling.
+- Select one accepting target through Flutter hit testing, with parent fallback when a child rejects a drop. Overlapping targets no longer independently receive the same drop.
+- Rename `extraAppleBookmark` to `appleBookmark` and `fromPromise` to `isPromised`. Use nullable `localPath` only for filesystem-backed content.
+- Replace `rawText` with MIME-typed `DropStringItem` values. Linux portal keys are resolved by the plugin. Raw listener registration and the old broadcast event classes are removed. See the [migration guide](https://github.com/MixinNetwork/flutter-plugins/tree/desktop_drop-v0.9.0/packages/desktop_drop#migrating-from-08x-to-090).
+
+### Features
+
+- Receive files, directories, plain text, HTML, and URI lists as typed items. Read provider-backed files and directory contents through `XFile` and `XDirectory`; URLs remain strings without automatic downloads.
+- Add per-target `acceptedKinds` filtering and optional synchronous `onWillAccept` conditions. Configure copy, move, or link feedback with `operation`, subject to source and platform support.
+- Preserve source MIME types and infer missing file MIME types from names without reading file contents.
+- iOS: Add drag-and-drop support on iOS 13 and later, with copy-only acceptance and automatic cleanup of temporary transfers after `onDrop`.
+- Windows: Support virtual files, directories, and native image content, retaining source resources through asynchronous processing.
+- Android: Add synchronous drop acceptance, provider-backed file and directory reads, and explicit directory authorization through `DesktopDrop.instance.requestDirectoryAccess` when the source does not grant child access. Reads do not open permission UI.
+
+### Fixes
+
+- Web: Handle mixed file/string drags and files without filesystem entries, and clear hover state after file-less drops. ([#503](https://github.com/MixinNetwork/flutter-plugins/pull/503); thanks [jamesaorson](https://github.com/jamesaorson))
+- Linux: Keep portal transfers alive until file resolution completes so drops from sandboxed sources can succeed. ([#505](https://github.com/MixinNetwork/flutter-plugins/pull/505); thanks [sun-jiao](https://github.com/sun-jiao))
+- macOS: Preserve mouse interaction with embedded native views outside an active drag. ([#436](https://github.com/MixinNetwork/flutter-plugins/pull/436); thanks [gicha](https://github.com/gicha))
+
 ## 0.8.4
 
 * fix: use builtInKotlin property to conditionally apply KGP [#500](https://github.com/MixinNetwork/flutter-plugins/pull/500)

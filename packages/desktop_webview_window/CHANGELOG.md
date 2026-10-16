@@ -1,3 +1,7 @@
+## 0.3.2
+
+- Windows: Preserve the original HTTP method, POST body, and headers when `setOnUrlRequestCallback` approves navigation. ([#519](https://github.com/MixinNetwork/flutter-plugins/pull/519); thanks [FrankenApps](https://github.com/FrankenApps))
+
 ## 0.3.1
 
 * Add Windows `openHidden` and `denyCameraAndMicrophone` options, and fix blank pages when approving navigation requests [#508](https://github.com/MixinNetwork/flutter-plugins/pull/508)

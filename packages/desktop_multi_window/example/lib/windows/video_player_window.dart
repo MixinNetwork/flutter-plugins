@@ -27,7 +27,7 @@ class VideoPlayerWindow extends StatelessWidget {
 
 // example from video_player_win package
 class VideoPlayerView extends StatefulWidget {
-  const VideoPlayerView({Key? key}) : super(key: key);
+  const VideoPlayerView({super.key});
 
   @override
   State<VideoPlayerView> createState() => _VideoPlayerViewState();

@@ -7,6 +7,13 @@ analyzer:
     lines_longer_than_80_chars: ignore
     avoid_function_literals_in_foreach_calls: ignore
     control_flow_in_finally: true
+  exclude:
+    - build/**
+    - android/**
+    - ios/**
+    - windows/**
+    - macos/**
+    - linux/**
 
 linter:
   rules:

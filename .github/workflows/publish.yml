@@ -63,14 +63,27 @@ jobs:
         with:
           result-encoding: string
           script: |
+            const fs = require('fs')
+            let packageName = context.payload.inputs?.package
+            let tagVersion
             if (context.ref.startsWith('refs/tags/')) {
               const tag = context.ref.replace('refs/tags/', '')
-              const package = tag.split('-')[0]
-              console.log(`Tag found, using ${package}`)
-              return package
+              const match = /^([a-z][a-z0-9_]*)-v(\d+\.\d+\.\d+)$/.exec(tag)
+              if (!match) throw new Error(`Invalid release tag: ${tag}`)
+              packageName = match[1]
+              tagVersion = match[2]
             }
-            console.log(`No tag found, using input ${context.payload.inputs.package}`)
-            return context.payload.inputs.package
+            if (!/^[a-z][a-z0-9_]*$/.test(packageName ?? '')) {
+              throw new Error('Missing or invalid package name')
+            }
+            const pubspec = fs.readFileSync(`packages/${packageName}/pubspec.yaml`, 'utf8')
+            const name = /^name:\s*(\S+)/m.exec(pubspec)?.[1]
+            const version = /^version:\s*(\S+)/m.exec(pubspec)?.[1]
+            if (name !== packageName || (tagVersion && version !== tagVersion)) {
+              throw new Error(`Release mismatch: tag=${context.ref}, pubspec=${name}@${version}`)
+            }
+            console.log(`Validated ${name}@${version}`)
+            return packageName
 
       - name: Publish - dry run
         run: flutter pub publish --dry-run
@@ -79,5 +92,5 @@ jobs:
       # Publishing...
       - name: Publish to pub.dev
         run: flutter pub publish -f
-        if: startsWith(github.ref, 'refs/tags/')
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
         working-directory: 'packages/${{ steps.parse.outputs.result }}'

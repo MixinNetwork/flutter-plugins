@@ -3,37 +3,53 @@ publish_to: none
 repository: https://github.com/MixinNetwork/flutter-plugins
 
 environment:
-  sdk: ^3.11.0
+  sdk: ^3.12.0
 
 workspace:
   - packages/breakpad_client
+  - packages/breakpad_client/example
   - packages/bring_window_to_front
+  - packages/bring_window_to_front/example
   - packages/common_crypto
   - packages/data_detector
   - packages/debug_info_collector
   - packages/desktop_drop
+  - packages/desktop_drop/example
   - packages/desktop_keep_screen_on
+  - packages/desktop_keep_screen_on/example
   - packages/desktop_lifecycle
+  - packages/desktop_lifecycle/example
   - packages/desktop_multi_window
+  - packages/desktop_multi_window/example
   - packages/desktop_webview_window
+  - packages/desktop_webview_window/example
   - packages/fts5_simple
+  - packages/fts5_simple/example
   - packages/mixin_logger
+  - packages/mixin_logger/example
   - packages/mixin_markdown_widget
+  - packages/mixin_markdown_widget/example
   - packages/ogg_opus_player
+  - packages/ogg_opus_player/example
   - packages/pasteboard
+  - packages/pasteboard/example
   - packages/string_tokenizer
+  - packages/string_tokenizer/example
   - packages/ui_device
+  - packages/ui_device/example
   - packages/web_qrcode
+  - packages/web_qrcode/example
   - packages/win_toast
+  - packages/win_toast/example
 
 dev_dependencies:
-  melos: ^7.5.1
+  melos: ^8.9.0
 
 melos:
   scripts:
     analyze:
-      description: Run dart analyze in all workspace packages.
-      run: dart run melos exec -- "dart analyze ."
+      description: Analyze packages and their nested examples once per package.
+      run: dart run melos exec --ignore="*_example" -- "dart analyze ."
     example:
       description: Run the example app for the selected package.
       run: dart run melos exec -- "cd example && flutter run"
@@ -41,11 +57,11 @@ melos:
         flutter: true
         dirExists: example
     format:
-      description: Check formatting in all workspace packages.
-      run: dart run melos exec -- "dart format --output=none --set-exit-if-changed ."
+      description: Check formatting in packages and their nested examples.
+      run: dart run melos exec --ignore="*_example" -- "dart format --output=none --set-exit-if-changed ."
     test:flutter:
-      description: Run Flutter tests in Flutter packages.
-      run: dart run melos exec --flutter --dir-exists=test --concurrency=5 --fail-fast -- "flutter test"
+      description: Run Flutter tests in packages and examples with a test directory.
+      run: dart run melos exec --flutter --dir-exists=test --concurrency=5 --fail-fast -- "flutter test --no-pub"
     test:dart:
       description: Run Dart tests in Dart packages.
       run: dart run melos exec --depends-on=test --no-flutter --dir-exists=test --concurrency=5 --fail-fast -- "dart test"

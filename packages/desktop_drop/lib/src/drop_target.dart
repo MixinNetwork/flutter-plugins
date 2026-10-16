@@ -1,250 +1,158 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
-import 'package:universal_platform/universal_platform.dart';
 
-import 'channel.dart';
+import 'drop_coordinator.dart';
 import 'drop_item.dart';
-import 'events.dart';
+import 'drop_offer.dart';
 
+/// Metadata available while deciding or hovering. Preview fields may be absent.
 @immutable
-class DropDoneDetails {
-  const DropDoneDetails({
-    required this.files,
+class DragDetails {
+  DragDetails({
+    required List<DropItemPreview> items,
     required this.localPosition,
     required this.globalPosition,
-    this.rawText,
-  });
+  }) : items = List.unmodifiable(items);
 
-  final List<DropItem> files;
+  final List<DropItemPreview> items;
   final Offset localPosition;
-  final Offset globalPosition;
-
-  /// The raw text payload from the drag operation, passed through from [DropDoneEvent.rawText].
-  ///
-  /// Format: one URI per line for `text/uri-list` drops, or a single
-  /// transfer key when the drop was negotiated as
-  /// `application/vnd.portal.filetransfer`. GTK delivers one or the
-  /// other, never both mixed.
-  ///
-  /// URI payload example:
-  /// ```
-  /// file:///home/user/Documents/file.txt
-  /// file:///home/user/Pictures/photo.png
-  /// ```
-  ///
-  /// Portal payload example (Flatpak source app):
-  /// ```
-  /// f2c1ee0e-0547-4ea6-9c15-a9cf7dbfef98
-  /// ```
-  ///
-  /// The portal key is a token WITHOUT a URI scheme. It can be passed to
-  /// `org.freedesktop.portal.FileTransfer.RetrieveFiles` to obtain
-  /// sandbox-accessible paths. Lines with a scheme like `file://`,
-  /// `smb://`, or `http://` are URIs, not keys — distinguish by parsing
-  /// each line and checking `Uri.hasScheme`.
-  ///
-  /// Is `null` on platforms where raw text isn't exposed (Windows,
-  /// macOS, or when the platform channel doesn't provide it).
-  final String? rawText;
-}
-
-class DropEventDetails {
-  DropEventDetails({
-    required this.localPosition,
-    required this.globalPosition,
-  });
-
-  final Offset localPosition;
-
   final Offset globalPosition;
 }
 
-typedef OnDragDoneCallback = void Function(DropDoneDetails details);
+/// Received content. Await provider reads inside [DropTarget.onDrop].
+@immutable
+class DropDetails {
+  DropDetails({
+    required List<DropItem> items,
+    required this.localPosition,
+    required this.globalPosition,
+    required this.operation,
+  }) : items = List.unmodifiable(items);
 
-typedef OnDragCallback<Detail> = void Function(Detail details);
+  final List<DropItem> items;
+  final Offset localPosition;
+  final Offset globalPosition;
+  final DropOperation operation;
+}
 
-/// A widget that accepts draggable files.
+typedef OnDropCallback = FutureOr<void> Function(DropDetails details);
+typedef OnDragCallback = void Function(DragDetails details);
+typedef DropAcceptanceCallback = bool Function(DragDetails details);
+
+/// An OS drop destination selected using Flutter's actual hit-test path.
+///
+/// The first enabled target accepting the kinds, operation, and optional
+/// [onWillAccept] condition receives the event. A rejecting child can fall back
+/// to an accepting ancestor. Opaque widgets occlude siblings behind them.
 class DropTarget extends StatefulWidget {
   const DropTarget({
     super.key,
     required this.child,
-    this.onDragEntered,
-    this.onDragExited,
-    this.onDragDone,
-    this.onDragUpdated,
-    this.enable = true,
+    required this.onDrop,
+    this.acceptedKinds = const {
+      DropItemKind.file,
+      DropItemKind.string,
+      DropItemKind.directory,
+    },
+    this.onWillAccept,
+    this.operation = DropOperation.copy,
+    this.onEnter,
+    this.onMove,
+    this.onLeave,
+    this.enabled = true,
+    this.behavior = HitTestBehavior.translucent,
   });
 
   final Widget child;
 
-  /// Callback when drag entered target area.
-  final OnDragCallback<DropEventDetails>? onDragEntered;
+  /// Accept when at least one preview matches. Does not filter delivered items.
+  /// An empty set rejects all drags. Incomplete file previews are tentatively
+  /// allowed for directory targets until the source reveals their kind.
+  final Set<DropItemKind> acceptedKinds;
 
-  /// Callback when drag exited target area.
-  final OnDragCallback<DropEventDetails>? onDragExited;
+  /// An optional synchronous condition, checked after kinds and operation.
+  /// Keep it fast: do not change widget state, perform I/O, or make platform
+  /// calls. Missing preview fields do not necessarily mean missing content.
+  /// False or an exception lets the next target in the hit-test path decide.
+  final DropAcceptanceCallback? onWillAccept;
 
-  /// Callback when drag hover on target area.
-  final OnDragCallback<DropEventDetails>? onDragUpdated;
+  /// The operation reported to the source. Unsupported operations reject;
+  /// they are never substituted. Move can cause the source to remove its data.
+  /// Native acceptance can precede asynchronous application processing.
+  final DropOperation operation;
 
-  /// Callback when drag dropped on target area.
-  final OnDragDoneCallback? onDragDone;
+  final OnDragCallback? onEnter;
+  final OnDragCallback? onMove;
 
-  /// Whether to enable drop target.
-  ///
-  /// ATTENTION: You should disable drop target when you push a new page/widget in
-  /// front of this drop target, since the drop target will still receive drag events
-  /// even it is invisible.
-  /// https://github.com/MixinNetwork/flutter-plugins/issues/2
-  final bool enable;
+  /// Clears an accepted hover when leaving, rejecting, dropping, or disabling.
+  /// Not called after this target is disposed.
+  final VoidCallback? onLeave;
+
+  /// Await source reads and directory listings before returning. Resources are
+  /// released automatically on completion or failure. Save content here if it
+  /// is needed later. Completion cannot universally undo a native operation.
+  final OnDropCallback onDrop;
+  final bool enabled;
+  final HitTestBehavior behavior;
 
   @override
   State<DropTarget> createState() => _DropTargetState();
 }
 
-enum _DragTargetStatus {
-  enter,
-  update,
-  idle,
-}
-
-class _DropTargetState extends State<DropTarget> {
-  _DragTargetStatus _status = _DragTargetStatus.idle;
+class _DropTargetState extends State<DropTarget> implements DropTargetClient {
+  @override
+  final int id = DropCoordinator.nextTargetId();
+  int? _view;
 
   @override
-  void initState() {
-    super.initState();
-    DesktopDrop.instance.init();
-    if (widget.enable) {
-      DesktopDrop.instance.addRawDropEventListener(_onDropEvent);
-    }
+  int get view => _view!;
+  @override
+  bool get enabled => mounted && widget.enabled;
+  @override
+  DropOperation get operation => widget.operation;
+  @override
+  Set<DropItemKind> get acceptedKinds => widget.acceptedKinds;
+  @override
+  RenderBox? get box => context.findRenderObject() as RenderBox?;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final viewId = View.of(context).viewId;
+    if (_view == viewId) return;
+    if (_view != null) DropCoordinator.instance.remove(this);
+    _view = viewId;
+    DropCoordinator.instance.add(this);
   }
 
   @override
   void didUpdateWidget(DropTarget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.enable && !oldWidget.enable) {
-      DesktopDrop.instance.addRawDropEventListener(_onDropEvent);
-    } else if (!widget.enable && oldWidget.enable) {
-      DesktopDrop.instance.removeRawDropEventListener(_onDropEvent);
-      if (_status != _DragTargetStatus.idle) {
-        _updateStatus(
-          _DragTargetStatus.idle,
-          localLocation: Offset.zero,
-          globalLocation: Offset.zero,
-        );
-      }
-    }
-  }
-
-  void _onDropEvent(DropEvent event) {
-    final renderBox = context.findRenderObject() as RenderBox?;
-    if (renderBox == null) {
-      return;
-    }
-    final globalPosition = _scaleHoverPoint(context, event.location);
-    final position = renderBox.globalToLocal(globalPosition);
-    bool inBounds = renderBox.paintBounds.contains(position);
-    if (event is DropEnterEvent) {
-      if (!inBounds) {
-        assert(_status == _DragTargetStatus.idle);
-      } else {
-        _updateStatus(
-          _DragTargetStatus.enter,
-          globalLocation: globalPosition,
-          localLocation: position,
-        );
-      }
-    } else if (event is DropUpdateEvent) {
-      if (_status == _DragTargetStatus.idle && inBounds) {
-        _updateStatus(
-          _DragTargetStatus.enter,
-          globalLocation: globalPosition,
-          localLocation: position,
-        );
-      } else if ((_status == _DragTargetStatus.enter ||
-              _status == _DragTargetStatus.update) &&
-          inBounds) {
-        _updateStatus(
-          _DragTargetStatus.update,
-          globalLocation: globalPosition,
-          localLocation: position,
-          debugRequiredStatus: false,
-        );
-      } else if (_status != _DragTargetStatus.idle && !inBounds) {
-        _updateStatus(
-          _DragTargetStatus.idle,
-          globalLocation: globalPosition,
-          localLocation: position,
-        );
-      }
-    } else if (event is DropExitEvent && _status != _DragTargetStatus.idle) {
-      _updateStatus(
-        _DragTargetStatus.idle,
-        globalLocation: globalPosition,
-        localLocation: position,
-      );
-    } else if (event is DropDoneEvent &&
-        (_status != _DragTargetStatus.idle || UniversalPlatform.isLinux) &&
-        inBounds) {
-      _updateStatus(
-        _DragTargetStatus.idle,
-        debugRequiredStatus: false,
-        globalLocation: globalPosition,
-        localLocation: position,
-      );
-      widget.onDragDone?.call(DropDoneDetails(
-        files: event.files,
-        localPosition: position,
-        globalPosition: globalPosition,
-        rawText: event.rawText,
-      ));
-    }
-  }
-
-  void _updateStatus(
-    _DragTargetStatus status, {
-    bool debugRequiredStatus = true,
-    required Offset localLocation,
-    required Offset globalLocation,
-  }) {
-    assert(!debugRequiredStatus || _status != status);
-    _status = status;
-    final details = DropEventDetails(
-      localPosition: localLocation,
-      globalPosition: globalLocation,
-    );
-    switch (_status) {
-      case _DragTargetStatus.enter:
-        widget.onDragEntered?.call(details);
-        break;
-      case _DragTargetStatus.update:
-        widget.onDragUpdated?.call(details);
-        break;
-      case _DragTargetStatus.idle:
-        widget.onDragExited?.call(details);
-        break;
+    if (!widget.enabled && oldWidget.enabled) {
+      DropCoordinator.instance.disabled(this);
     }
   }
 
   @override
+  bool accepts(DragDetails details) =>
+      widget.onWillAccept?.call(details) ?? true;
+  @override
+  void entered(DragDetails details) => widget.onEnter?.call(details);
+  @override
+  void updated(DragDetails details) => widget.onMove?.call(details);
+  @override
+  void exited() => widget.onLeave?.call();
+  @override
+  FutureOr<void> dropped(DropDetails details) => widget.onDrop(details);
+
+  @override
   void dispose() {
-    if (widget.enable) {
-      DesktopDrop.instance.removeRawDropEventListener(_onDropEvent);
-    }
+    DropCoordinator.instance.remove(this);
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) {
-    return widget.child;
-  }
-}
-
-Offset _scaleHoverPoint(BuildContext context, Offset point) {
-  if (UniversalPlatform.isWindows || UniversalPlatform.isAndroid) {
-    return point.scale(
-      1 / MediaQuery.of(context).devicePixelRatio,
-      1 / MediaQuery.of(context).devicePixelRatio,
-    );
-  }
-  return point;
+  Widget build(BuildContext context) =>
+      MetaData(metaData: this, behavior: widget.behavior, child: widget.child);
 }

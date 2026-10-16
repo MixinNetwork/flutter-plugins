@@ -1,6 +1,12 @@
 {
   "targets": [
     {
+      "package": "desktop_drop",
+      "platform": "web",
+      "runner": "ubuntu-latest",
+      "test": "test/browser"
+    },
+    {
       "package": "desktop_webview_window",
       "platform": "windows",
       "runner": "windows-latest",

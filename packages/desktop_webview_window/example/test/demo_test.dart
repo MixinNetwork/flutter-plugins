@@ -30,6 +30,7 @@ void main() {
         .setMockMethodCallHandler(channel, (call) async {
       calls.add(call);
       if (call.method == 'create') return ++nextId;
+      if (call.method == 'isWebviewAvailable') return true;
       return null;
     });
   });

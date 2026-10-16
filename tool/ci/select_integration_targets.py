@@ -22,9 +22,9 @@ def load_targets(root):
         platform = target['platform']
         if not re.fullmatch(r'[a-z][a-z0-9_]*', package):
             raise ValueError(f'Invalid package: {package}')
-        if platform not in {'windows', 'macos', 'linux'}:
+        if platform not in {'windows', 'macos', 'linux', 'web'}:
             raise ValueError(f'Invalid platform: {platform}')
-        runner_prefix = {'windows': 'windows-', 'macos': 'macos-', 'linux': 'ubuntu-'}[platform]
+        runner_prefix = {'windows': 'windows-', 'macos': 'macos-', 'linux': 'ubuntu-', 'web': 'ubuntu-'}[platform]
         if not re.fullmatch(runner_prefix + r'[a-zA-Z0-9.-]+', target['runner']):
             raise ValueError(f'Invalid runner: {target["runner"]}')
         key = (package, platform)
@@ -33,6 +33,12 @@ def load_targets(root):
         seen.add(key)
         package_root = root / 'packages' / package
         entrypoint = target['test']
+        if platform == 'web':
+            if entrypoint != 'test/browser' or 'driver' in target or 'setup' in target:
+                raise ValueError('Browser targets must use test/browser without a driver or setup script')
+            if not any((package_root / entrypoint).rglob('*_test.dart')):
+                raise ValueError(f'Missing browser tests: {package_root / entrypoint}')
+            continue
         if entrypoint != 'integration_test/app_test.dart':
             raise ValueError('Each package must use integration_test/app_test.dart')
         actual_entries = sorted((package_root / 'example' / 'integration_test').rglob('*_test.dart'))
