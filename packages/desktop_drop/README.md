@@ -115,18 +115,69 @@ FlutterMultiWindowPlugin.setOnWindowCreatedCallback { controller in
 }
 ```
 
-## Migrating from the previous API
+## Migrating from 0.8.x to 0.9.0
 
-- Replace `onDropDecision` with optional boolean `onWillAccept` and a fixed
-  `operation` (defaults to copy). `DropOperation.reject` is removed.
-- Use `acceptedKinds` for basic type filtering and `details.items` for previews.
-  `DropOffer`, `offer`, and `isComplete` are no longer part of the public API.
-- Use `DragDetails` for hover/acceptance and `DropDetails` for `onDrop`.
-  Older `onDragDone` users should switch to `onDrop` and typed `items`.
-- Rename hover callbacks to `onEnter`, `onMove`, and `onLeave`; `onLeave` has no
-  arguments. Rename `enable` to `enabled`. `onDrop` is now required.
-- Read files through `DropFileItem.file` and directories through
-  `DropDirectoryItem.directory`. Await reads before `onDrop` returns.
+Version 0.9.0 changes the public API and requires Flutter 3.47.7 / Dart 3.13.5
+or later. Update existing targets and content handling using the mapping below.
+
+| 0.8.x | 0.9.0 |
+|-------|-------|
+| `onDragDone(DropDoneDetails)` | Required `onDrop(DropDetails)`, which can be async |
+| `details.files` | `details.items`, containing files, directories, and strings |
+| `onDragEntered` / `onDragUpdated` | `onEnter` / `onMove`, receiving `DragDetails` previews |
+| `onDragExited(details)` | `onLeave()`, with no arguments |
+| `enable` | `enabled` |
+| `DropItemFile` | `DropFileItem`; read through `item.file` (`XFile`) |
+| `DropItemDirectory.children` | `DropDirectoryItem.directory.list()`, a stream of immediate `XFile` / `XDirectory` children |
+| `item.path` | Optional `item.localPath`; use the file or directory API when null |
+| `item.extraAppleBookmark` / `item.fromPromise` | `item.appleBookmark` / `item.isPromised` |
+| `DropDoneDetails.rawText` | `DropStringItem.value`, with its `mimeType` |
+
+For an existing file-only receiver, replace `onDragDone` with an async `onDrop`:
+
+```dart
+DropTarget(
+  acceptedKinds: const {DropItemKind.file},
+  onDrop: (details) async {
+    for (final item in details.items.whereType<DropFileItem>()) {
+      final bytes = await item.file.readAsBytes();
+      // Save or process the bytes before this callback returns.
+      print('${item.name}: ${bytes.length} bytes');
+    }
+  },
+  child: const SizedBox(width: 200, height: 200),
+)
+```
+
+`DropItem` no longer extends `XFile`. Move file reads such as `readAsBytes()` and
+`openRead()` to `item.file`. The old byte-backed drop-item constructors and
+forwarded `saveTo()` method are removed. To retain content, read or copy it to
+application-owned storage inside `onDrop`. Await directory listings and all
+provider reads before returning: callback completion releases provider access
+and deletes temporary transfer files, including macOS promised files. Original
+local files are not deleted.
+
+Targets now accept all content kinds by default. Use `acceptedKinds` to keep a
+file-only receiver, and filter `details.items` as shown above because accepting
+a kind does not remove other representations from the delivered items. Use
+optional `onWillAccept` for additional synchronous conditions. Copy is the
+default operation; set `operation` explicitly to request move or link.
+
+Target selection now follows Flutter hit testing. Overlapping targets no longer
+each receive the same drop: the first enabled target that accepts it receives
+it, with parent fallback when a child rejects it. `onLeave` also clears hover
+on drop, rejection, or disabling. Use `behavior` to control hit testing.
+
+Plain text, HTML, and URI lists are delivered as `DropStringItem` with their MIME
+types. URLs are strings and are not downloaded into files. On Linux, portal
+transfers are resolved by the plugin; consume the resulting file items instead
+of resolving a portal key from `rawText`.
+
+Raw listener registration and the old broadcast event classes (`DropEvent`,
+`DropEnterEvent`, `DropUpdateEvent`, `DropExitEvent`, and `DropDoneEvent`) are
+removed. Use `DropTarget` callbacks instead. The macOS security-scoped access
+methods on `DesktopDrop.instance` remain available with the renamed
+`appleBookmark` field.
 
 ## License
 
