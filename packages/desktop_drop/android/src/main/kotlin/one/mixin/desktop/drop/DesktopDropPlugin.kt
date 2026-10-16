@@ -1,7 +1,9 @@
 package one.mixin.desktop.drop
 
 import android.app.Activity
+import android.content.Intent
 import android.content.ClipDescription
+import android.database.Cursor
 import android.net.Uri
 import android.os.Build
 import android.os.Handler
@@ -17,7 +19,9 @@ import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
 import io.flutter.plugin.common.MethodCall
+import io.flutter.plugin.common.PluginRegistry.ActivityResultListener
 import java.io.InputStream
+import java.io.File
 import java.util.concurrent.Executors
 
 class DesktopDropPlugin : FlutterPlugin, ActivityAware {
@@ -25,23 +29,73 @@ class DesktopDropPlugin : FlutterPlugin, ActivityAware {
     private var activity: Activity? = null
     private var dragView: FlutterView? = null
     private var session = 0L
-    private var request = 0L
-    private var generation = 0L
-    private var revision = 0L
-    private var inside = false
+    private val generation: Long get() = transport?.generation ?: 0L
     private var hoverOffer: Map<String, Any?>? = null
     private var offerSent = false
     private val main = Handler(Looper.getMainLooper())
     private val io = Executors.newSingleThreadExecutor()
-    private class Source(
-        val uris: List<Uri>,
-        val files: List<Map<String, Any?>>,
-        val typed: List<Boolean>,
-        val permission: DragAndDropPermissions?,
-    ) {
+    private class Entry(var uri: Uri, val metadata: Map<String, Any?>, val typed: Boolean = false)
+    private class Source(val entries: MutableList<Entry>, val permission: DragAndDropPermissions?) {
         @Volatile var released = false
-        val readers = mutableMapOf<Long, InputStream>() // IO executor only.
+        // Entries, URI indices, and readers belong to the IO executor after delivery.
+        val readers = mutableMapOf<Long, InputStream>()
+        private val indices = entries.withIndex().associate { it.value.uri to it.index }.toMutableMap()
+        fun add(entry: Entry): Int = indices.getOrPut(entry.uri) {
+            entries.add(entry)
+            entries.lastIndex
+        }
     }
+    private var activityBinding: ActivityPluginBinding? = null
+    private var pendingAccess: ((Int, Intent?) -> Unit)? = null
+    private var accessSource: Source? = null
+    private val directoryRequestCode = 0xDD01
+    private val accessListener = ActivityResultListener { request, result, data ->
+        if (request != directoryRequestCode || pendingAccess == null) false else {
+            val callback = pendingAccess
+            pendingAccess = null
+            accessSource = null
+            callback?.invoke(result, data)
+            true
+        }
+    }
+
+    private fun requestDirectoryAccess(result: FfiTransport.Result, source: Source, parent: Entry) {
+        val host = activity
+        if (host == null || source.released) {
+            result.error("source_expired", "Dropped source has expired", null); return
+        }
+        if (pendingAccess != null) {
+            result.error("directory_access_denied", "Directory access was not granted", null); return
+        }
+        val original = parent.uri
+        accessSource = source
+        pendingAccess = { code, data ->
+            val tree = data?.data
+            if (source.released) result.error("source_expired", "Dropped source has expired", null)
+            else if (code != Activity.RESULT_OK || tree == null) {
+                result.error("directory_access_denied", "Directory access was cancelled", null)
+            } else if (tree.authority != original.authority) {
+                result.error("directory_access_denied", "Select the directory that was dropped", null)
+            } else {
+                // Keep the dropped document ID: providers may use different IDs
+                // for the same folder in drag data and tree grants. The provider
+                // enforces that the original document belongs to the granted tree.
+                parent.uri = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getDocumentId(original))
+                result.success(null)
+            }
+        }
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PREFIX_URI_PERMISSION)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            intent.putExtra(DocumentsContract.EXTRA_INITIAL_URI, original)
+        }
+        try { host.startActivityForResult(intent, directoryRequestCode) }
+        catch (error: Exception) {
+            pendingAccess = null; accessSource = null
+            result.error("directory_access_denied", error.message, null)
+        }
+    }
+
     private val sources = mutableMapOf<Long, Source>()
     private var nextReader = 0L
 
@@ -50,153 +104,185 @@ class DesktopDropPlugin : FlutterPlugin, ActivityAware {
         for (type in listOf("text/plain", "text/html", "text/uri-list")) {
             if (description?.hasMimeType(type) == true) strings.add(mapOf("mimeType" to type, "value" to null))
         }
-        // Before ACTION_DROP, a MIME type can describe a content URI or text.
-        val files = if (description != null && description.mimeTypeCount > 0)
-            listOf(mapOf("name" to "")) else emptyList()
+        // A MIME type can describe either a URI file or a string. Preserve the
+        // advertised formats as tentative representations until ACTION_DROP.
+        val files = (0 until (description?.mimeTypeCount ?: 0)).map { index ->
+            val mime = description!!.getMimeType(index)
+            mapOf("name" to "", "mimeType" to mime,
+                "isDirectory" to (mime == DocumentsContract.Document.MIME_TYPE_DIR))
+        }
         return mapOf("files" to files, "strings" to strings,
             "isComplete" to false, "allowedOperations" to listOf("copy"))
     }
 
-    private fun args(event: DragEvent, offer: Map<String, Any?>?, final: Boolean): Map<String, Any?> {
-        val density = dragView?.resources?.displayMetrics?.density ?: 1f
-        val args = mutableMapOf<String, Any?>("view" to 0L, "generation" to generation, "session" to session,
-            "request" to ++request, "phase" to if (final) 2 else 1,
-            "x" to event.x.toDouble() / density, "y" to event.y.toDouble() / density,
-            "operationMask" to 1)
-        if (offer != null) args["offer"] = offer
-        return args
+    private val documentColumns = arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+        DocumentsContract.Document.COLUMN_DISPLAY_NAME, DocumentsContract.Document.COLUMN_MIME_TYPE,
+        DocumentsContract.Document.COLUMN_FLAGS, DocumentsContract.Document.COLUMN_SIZE)
+
+    private fun contentEntry(host: Activity, uri: Uri, cursor: Cursor?): Entry {
+        fun text(column: String): String? {
+            val index = cursor?.getColumnIndex(column) ?: -1
+            return if (index >= 0 && !cursor!!.isNull(index)) cursor.getString(index) else null
+        }
+        val name = text(OpenableColumns.DISPLAY_NAME) ?: uri.lastPathSegment ?: "drop"
+        var mime = text(DocumentsContract.Document.COLUMN_MIME_TYPE)
+            ?: runCatching { host.contentResolver.getType(uri) }.getOrNull()
+        val directory = mime == DocumentsContract.Document.MIME_TYPE_DIR
+        val flags = text(DocumentsContract.Document.COLUMN_FLAGS)?.toIntOrNull() ?: 0
+        val virtual = !directory && (flags and DocumentsContract.Document.FLAG_VIRTUAL_DOCUMENT) != 0
+        if (virtual) mime = host.contentResolver.getStreamTypes(uri, "*/*")?.firstOrNull()
+        return Entry(uri, mapOf("name" to name, "mimeType" to mime, "isDirectory" to directory,
+            "length" to text(OpenableColumns.SIZE)?.toLongOrNull()), virtual)
     }
 
-    private fun query(args: Map<String, Any?>, done: (Long, Int) -> Unit) {
-        val current = transport ?: return done(0, 0)
-        var finished = false
-        var nativeRequest = 0L
-        val timeout = Runnable { if (!finished) { finished = true; current.cancel(nativeRequest); done(0, 0) } }
-        main.postDelayed(timeout, 100)
-        nativeRequest = current.invoke("query", args, object : FfiTransport.Result {
-            private fun finish(target: Long, operation: Int) {
-                if (finished) return
-                finished = true
-                main.removeCallbacks(timeout)
-                val accepted = target > 0 && operation == 1
-                done(if (accepted) target else 0, if (accepted) 1 else 0)
+    private fun entry(host: Activity, sourceUri: Uri): Entry {
+        val uri = if (sourceUri.scheme == "content" && DocumentsContract.isTreeUri(sourceUri) &&
+            !DocumentsContract.isDocumentUri(host, sourceUri)) {
+            DocumentsContract.buildDocumentUriUsingTree(sourceUri, DocumentsContract.getTreeDocumentId(sourceUri))
+        } else sourceUri
+        if (uri.scheme == "file") {
+            val file = File(uri.path ?: error("Missing dropped file path"))
+            return Entry(uri, mapOf("name" to file.name, "isDirectory" to file.isDirectory,
+                "length" to file.length()))
+        }
+        val columns = if (DocumentsContract.isDocumentUri(host, uri)) documentColumns
+            else arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE)
+        return try {
+            host.contentResolver.query(uri, columns, null, null, null).use { cursor ->
+                contentEntry(host, uri, cursor?.takeIf { it.moveToFirst() })
             }
-            override fun success(result: Any?) {
-                val selection = result as? Map<*, *>
-                if (finished) return
-                val target = (selection?.get("target") as? Number)?.toLong() ?: 0
-                val currentSession = args["session"] == session && args["generation"] == generation
-                val offer = hoverOffer
-                if (target == -1L && args["offer"] == null && currentSession && offer != null) {
-                    finished = true
-                    main.removeCallbacks(timeout)
-                    offerSent = false
-                    query(args + mapOf("offer" to offer), done)
-                    return
+        } catch (_: Exception) {
+            // Some providers expose only the type until their data is opened.
+            contentEntry(host, uri, null)
+        }
+    }
+
+    private fun listDirectory(host: Activity, source: Source, parent: Entry): List<Map<String, Any?>> {
+        check(parent.metadata["isDirectory"] == true) { "Dropped item is not a directory" }
+        val children = mutableListOf<Map<String, Any?>>()
+        fun add(child: Entry) { children.add(child.metadata + mapOf("source" to source.add(child))) }
+        val uri = parent.uri
+        if (uri.scheme == "file") {
+            val files = File(uri.path!!).listFiles() ?: error("Cannot list dropped directory")
+            files.forEach { add(entry(host, Uri.fromFile(it))) }
+        } else {
+            val id = DocumentsContract.getDocumentId(uri)
+            val tree = DocumentsContract.isTreeUri(uri)
+            val childUri = if (tree) DocumentsContract.buildChildDocumentsUriUsingTree(uri, id)
+                else DocumentsContract.buildChildDocumentsUri(uri.authority!!, id)
+            val cursor = host.contentResolver.query(childUri, documentColumns, null, null, null)
+                ?: error("Provider did not return directory entries")
+            cursor.use {
+                val idColumn = it.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
+                while (it.moveToNext()) {
+                    val childId = it.getString(idColumn)
+                    val child = if (tree) DocumentsContract.buildDocumentUriUsingTree(uri, childId)
+                        else DocumentsContract.buildDocumentUri(uri.authority!!, childId)
+                    add(contentEntry(host, child, it))
                 }
-                if (target >= 0 && selection != null && currentSession && offer != null && args["offer"] === offer) {
-                    offerSent = true
-                }
-                finish(target, (selection?.get("operation") as? Number)?.toInt() ?: 0)
             }
-            override fun error(code: String, message: String?, details: Any?) = finish(0, 0)
-            override fun notImplemented() = finish(0, 0)
-        })
+        }
+        return children
+    }
+
+    private fun choose(event: DragEvent, offer: Map<String, Any?>, phase: Int): Map<String, Any?> {
+        val current = transport ?: return mapOf("target" to 0L, "operation" to 0)
+        val density = dragView?.resources?.displayMetrics?.density ?: 1f
+        val x = event.x.toDouble() / density
+        val y = event.y.toDouble() / density
+        fun request(full: Boolean): FfiTransport.Decision {
+            val payload = mutableMapOf<String, Any?>("operationMask" to 1)
+            if (full) payload["offer"] = offer
+            return current.decide(session, phase, x, y, payload)
+        }
+        var decision = request(phase != 1 || !offerSent)
+        if (decision.target == -1L) decision = request(true)
+        offerSent = true
+        val accepted = decision.target > 0 && decision.operation == 1 && decision.generation == current.generation
+        val args = mapOf("view" to 0L, "generation" to decision.generation, "session" to session,
+            "request" to decision.request, "phase" to phase,
+            "x" to x, "y" to y, "operationMask" to 1,
+            "target" to if (accepted) decision.target else 0L, "operation" to if (accepted) 1 else 0)
+        current.invoke("feedback", args)
+        return args
     }
 
     private val listener = View.OnDragListener { _, event ->
         when (event.action) {
             DragEvent.ACTION_DRAG_STARTED -> {
-                session++; revision++; inside = true
+                session++
                 hoverOffer = preview(event.clipDescription); offerSent = false
-                true
+                // Subscribe to the drag. Acceptance is decided at its location,
+                // and ACTION_DROP returns the final synchronous Dart decision.
+                generation != 0L
             }
             DragEvent.ACTION_DRAG_ENTERED, DragEvent.ACTION_DRAG_LOCATION -> {
-                inside = true
-                val serial = ++revision
                 val offer = hoverOffer ?: preview(event.clipDescription).also { hoverOffer = it }
-                val args = args(event, if (offerSent) null else offer, false)
-                query(args) { target, operation ->
-                    if (inside && revision == serial) transport?.invoke("feedback", (args - "offer") + mapOf("target" to target, "operation" to operation))
-                }
+                choose(event, offer, if (event.action == DragEvent.ACTION_DRAG_ENTERED) 0 else 1)
                 true
             }
             DragEvent.ACTION_DRAG_EXITED, DragEvent.ACTION_DRAG_ENDED -> {
-                inside = false; revision++
                 transport?.invoke("exit", mapOf("view" to 0L, "generation" to generation, "session" to session))
                 true
             }
-            DragEvent.ACTION_DROP -> { drop(event); true }
+            DragEvent.ACTION_DROP -> drop(event)
             else -> false
         }
     }
 
-    private fun drop(event: DragEvent) {
-        val host = activity ?: return
-        val data = event.clipData ?: return
+    private fun drop(event: DragEvent): Boolean {
+        val host = activity ?: return false
+        val data = event.clipData ?: return false
         val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
             host.requestDragAndDropPermissions(event) else null
         val files = mutableListOf<Map<String, Any?>>()
-        val fileUris = mutableListOf<Uri>()
+        val entries = mutableListOf<Entry>()
         val urls = mutableListOf<String>()
         val strings = mutableListOf<Map<String, String>>()
-        val typed = mutableListOf<Boolean>()
         for (i in 0 until data.itemCount) {
             val item = data.getItemAt(i)
             item.text?.let { strings.add(mapOf("mimeType" to "text/plain", "value" to it.toString())) }
             item.htmlText?.let { strings.add(mapOf("mimeType" to "text/html", "value" to it)) }
             item.uri?.let { uri ->
                 if (uri.scheme == "content" || uri.scheme == "file") {
-                    fileUris.add(uri)
-                    var name = uri.lastPathSegment ?: "drop"
-                    if (uri.scheme == "content") {
-                        try {
-                            host.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
-                                if (cursor.moveToFirst()) name = cursor.getString(0) ?: name
-                            }
-                        } catch (_: Exception) { }
-                    }
-                    var mime = runCatching { host.contentResolver.getType(uri) }.getOrNull()
-                    val virtual = Build.VERSION.SDK_INT >= Build.VERSION_CODES.N &&
-                        DocumentsContract.isDocumentUri(host, uri) && runCatching {
-                            host.contentResolver.query(uri, arrayOf(DocumentsContract.Document.COLUMN_FLAGS), null, null, null)?.use { cursor ->
-                                cursor.moveToFirst() && (cursor.getInt(0) and DocumentsContract.Document.FLAG_VIRTUAL_DOCUMENT) != 0
-                            } ?: false
-                        }.getOrDefault(false)
-                    if (virtual) mime = runCatching { host.contentResolver.getStreamTypes(uri, "*/*")?.firstOrNull() }.getOrNull()
-                    typed.add(virtual)
-                    files.add(mapOf("name" to name, "mimeType" to mime, "source" to (fileUris.size - 1)))
+                    val item = entry(host, uri)
+                    files.add(item.metadata + mapOf("source" to entries.size))
+                    entries.add(item)
                 } else urls.add(uri.toString())
             }
         }
         if (urls.isNotEmpty()) strings.add(mapOf("mimeType" to "text/uri-list", "value" to urls.joinToString("\r\n")))
         val offer = mapOf("files" to files, "strings" to strings,
             "isComplete" to true, "allowedOperations" to listOf("copy"))
-        val args = args(event, offer, true)
-        val epoch = generation
-        query(args) { target, operation ->
-            if (epoch != generation || args["session"] != session || transport == null || activity !== host) { permission?.release(); return@query }
-            transport?.invoke("feedback", (args - "offer") + mapOf("target" to target, "operation" to operation))
-            if (target <= 0) { permission?.release(); return@query }
-            val source = Source(fileUris.toList(), files.toList(), typed.toList(), permission)
-            val serial = args["session"] as Long
-            sources[serial] = source
-            // Keep URI permissions until this application's callback completes.
-            transport?.invoke("drop", args + mapOf("target" to target, "operation" to operation), object : FfiTransport.Result {
-                private fun finish() {
-                    if (sources[serial] === source) sources.remove(serial)
-                    releaseSource(source)
-                }
-                override fun success(result: Any?) = finish()
-                override fun error(code: String, message: String?, details: Any?) = finish()
-                override fun notImplemented() = finish()
-            })
-        }
+        val current = transport
+        if (current == null) { permission?.release(); return false }
+        val args = choose(event, offer, 2)
+        val target = args["target"] as Long
+        if (target <= 0) { permission?.release(); return false }
+        val source = Source(entries, permission)
+        val serial = args["session"] as Long
+        sources[serial] = source
+        // Keep URI permissions until this application's callback completes.
+        current.invoke("drop", args + mapOf("offer" to offer), object : FfiTransport.Result {
+            private fun finish() {
+                if (sources[serial] === source) sources.remove(serial)
+                releaseSource(source)
+            }
+            override fun success(result: Any?) = finish()
+            override fun error(code: String, message: String?, details: Any?) = finish()
+            override fun notImplemented() = finish()
+        })
+        return true
     }
 
     private fun releaseSource(source: Source) {
         if (source.released) return
         source.released = true
+        if (accessSource === source) {
+            val callback = pendingAccess
+            pendingAccess = null; accessSource = null
+            callback?.invoke(Activity.RESULT_CANCELED, null)
+        }
         source.permission?.release()
         if (!io.isShutdown) io.execute {
             source.readers.values.forEach { runCatching { it.close() } }
@@ -221,21 +307,35 @@ class DesktopDropPlugin : FlutterPlugin, ActivityAware {
         }
         val stream = call.argument<Number>("stream")?.toLong()
         val index = call.argument<Number>("source")?.toInt() ?: -1
-        val uri = source.uris.getOrNull(index)
-        val metadata = source.files.getOrNull(index)
-        val virtual = source.typed.getOrNull(index) == true
-        if (op == "stat") {
-            if (metadata == null) result.error("source_expired", "Dropped item is no longer available", null)
-            else result.success(mapOf("name" to metadata["name"]))
+        if (op == "requestAccess") {
+            // UI is requested only through the explicit public operation.
+            io.execute {
+                val parent = source.entries.getOrNull(index)
+                main.post {
+                    if (epoch != generation || sources[serial] !== source || source.released) {
+                        result.error("source_expired", "Dropped source has expired", null)
+                    } else if (parent == null || parent.metadata["isDirectory"] != true ||
+                        !DocumentsContract.isDocumentUri(host, parent.uri)) {
+                        result.error("unsupported_directory", "Directory does not support document-tree access", null)
+                    } else requestDirectoryAccess(result, source, parent)
+                }
+            }
             return
         }
         io.execute {
             var opened: Long? = null
             try {
+                check(!source.released) { "Dropped source has expired" }
+                val item = source.entries.getOrNull(index)
+                val uri = item?.uri
+                val metadata = item?.metadata
                 val value: Any? = when (op) {
+                    "stat" -> metadata ?: error("Dropped item is no longer available")
+                    "list" -> listDirectory(host, source, item ?: error("Dropped directory is no longer available"))
                     "open" -> {
-                        check(uri != null) { "Dropped item is no longer available" }
-                        val input = if (virtual) {
+                        check(item != null && uri != null) { "Dropped item is no longer available" }
+                        check(metadata?.get("isDirectory") != true) { "Cannot open a directory as a file" }
+                        val input = if (item.typed) {
                             val mime = metadata?.get("mimeType") as? String ?: error("No byte representation for dropped document")
                             val descriptor = host.contentResolver.openTypedAssetFileDescriptor(uri, mime, null)
                                 ?: error("Cannot open dropped document")
@@ -274,6 +374,12 @@ class DesktopDropPlugin : FlutterPlugin, ActivityAware {
                         result.error("source_expired", "Dropped source has expired", null)
                     }
                 }
+            } catch (error: SecurityException) {
+                main.post {
+                    result.error(if (op == "list") "directory_access_required" else "read_access_denied",
+                        if (op == "list") "Access to this directory's children was not granted. Request directory access explicitly before retrying."
+                        else error.message, null)
+                }
             } catch (error: Exception) {
                 main.post { result.error("read_failed", error.message, null) }
             }
@@ -291,13 +397,11 @@ class DesktopDropPlugin : FlutterPlugin, ActivityAware {
             result.error("unsupported_view", "Flutter view is not attached", null); return
         }
         releaseSources()
-        generation++; revision++; inside = false
         hoverOffer = null; offerSent = false
-        result.success(mapOf("view" to 0L, "generation" to generation))
+        result.success(mapOf("view" to 0L, "context" to transport!!.decisionContext))
     }
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         releaseSources()
-        generation++
         transport?.close(); transport = null
         detach()
         io.shutdown()
@@ -309,6 +413,8 @@ class DesktopDropPlugin : FlutterPlugin, ActivityAware {
     }
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
         val host = binding.activity
+        activityBinding = binding
+        binding.addActivityResultListener(accessListener)
         activity = host
         // FlutterActivity attaches plugins before creating its FlutterView.
         // Also rebind after Activity recreation when Dart stays connected.
@@ -324,7 +430,8 @@ class DesktopDropPlugin : FlutterPlugin, ActivityAware {
     }
     private fun detach() {
         releaseSources()
-        revision++; inside = false
+        activityBinding?.removeActivityResultListener(accessListener)
+        activityBinding = null
         hoverOffer = null; offerSent = false
         dragView?.setOnDragListener(null); dragView = null; activity = null
     }

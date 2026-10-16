@@ -23,6 +23,8 @@ dependencies:
   universal_platform:
 
 dev_dependencies:
+  integration_test:
+    sdk: flutter
   cross_file_io: ^1.0.0
   flutter_test:
     sdk: flutter

@@ -1,5 +1,9 @@
 import 'package:cross_file_io/cross_file_io.dart';
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:desktop_drop/src/native_transport.dart';
+import 'package:desktop_drop_example/pages/drop_stage.dart';
+import 'package:desktop_drop_example/pages/drop_content.dart';
+import 'package:desktop_drop_example/common/received_item.dart';
 import 'package:desktop_drop_example/main.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -107,7 +111,7 @@ void main() {
         'query',
         args(a.topRight + const Offset(10, 70), 'notes.txt'),
       ) as int;
-      final frontB = await native('query', args(overlap, 'image.png')) as int;
+      final frontB = await native('query', args(overlap, 'photo.jpg')) as int;
       expect(parent, greaterThan(0));
       expect(frontB, isNot(parent));
       expect(await native('query', args(overlap, 'notes.txt')), parent);
@@ -127,7 +131,7 @@ void main() {
       );
       expect(
         await native('query', args(overlap, '', isComplete: false)),
-        parent,
+        frontB,
       );
       await tester.tap(find.byKey(const ValueKey('swap-layers')));
       await tester.pumpAndSettle();
@@ -161,6 +165,96 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Nothing dropped yet'), findsOneWidget);
       expect(sourceOperations, ['open', 'read', 'read', 'close']);
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets('Text and Images consume only their matching representations', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1200, 760);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    DropDetails? received;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: DropStage(onDrop: (_, details) => received = details),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final a = tester.getRect(find.byKey(const ValueKey('target-Child A')));
+    final b = tester.getRect(find.byKey(const ValueKey('target-Child B')));
+    final overlap = a.intersect(b).center;
+    final mixed = args(overlap, 'photo.jpg');
+    (mixed['offer'] as Map)['strings'] = [
+      {'mimeType': 'text/plain', 'value': 'selected text'},
+      {'mimeType': 'text/uri-list', 'value': 'https://example.com'},
+    ];
+    final images = await native('query', mixed);
+    await native('drop', {...mixed, 'target': images});
+    await tester.pumpAndSettle();
+    expect(received!.items, hasLength(1));
+    expect(received!.items.single, isA<DropFileItem>());
+    expect(received!.items.single.mimeType, 'image/jpeg');
+    await tester.tap(find.byKey(const ValueKey('swap-layers')));
+    await tester.pumpAndSettle();
+    final text = await native('query', mixed);
+    await native('drop', {...mixed, 'target': text});
+    await tester.pumpAndSettle();
+    expect(received!.items, hasLength(1));
+    expect((received!.items.single as DropStringItem).value, 'selected text');
+    final parent = await native(
+      'query',
+      args(a.topRight + const Offset(10, 70), 'unknown'),
+    );
+    expect(await native('query', args(overlap, 'unknown')), parent);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets(
+    'received directories navigate to cached text without rendering errors',
+    (tester) async {
+      final file = DropFileItem.fromPath('/unused/deep.txt');
+      final nested = DropDirectoryItem(
+        directory: XDirectory.fileSystem(path: '/unused/nested'),
+        name: 'nested',
+      );
+      final folder = DropDirectoryItem(
+        directory: XDirectory.fileSystem(path: '/unused'),
+        name: 'folder',
+      );
+      final details = DropDetails(
+        items: [folder],
+        localPosition: Offset.zero,
+        globalPosition: Offset.zero,
+        operation: DropOperation.copy,
+      );
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: DropContent(
+              event: details,
+              receiver: 'Parent',
+              onClear: () {},
+              content: {
+                folder: ReceivedItem(children: [nested]),
+                nested: ReceivedItem(children: [file]),
+                file: ReceivedItem(
+                  bytes: Uint8List.fromList('nested content'.codeUnits),
+                ),
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.text('nested'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('deep.txt'));
+      await tester.pumpAndSettle();
+      expect(find.text('nested content'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );

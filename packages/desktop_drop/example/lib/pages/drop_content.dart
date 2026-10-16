@@ -121,12 +121,12 @@ class _DropContentState extends State<DropContent> {
         ),
         const SizedBox(height: 12),
         Expanded(
-          child: Container(
+          child: Material(
             clipBehavior: Clip.antiAlias,
-            decoration: BoxDecoration(
-              color: Colors.white,
+            color: Colors.white,
+            shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppTheme.border),
+              side: const BorderSide(color: AppTheme.border),
             ),
             child: event == null || item == null
                 ? const _Message(

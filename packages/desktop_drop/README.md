@@ -53,6 +53,13 @@ See the [example app](example) for files, directories, text, and nested targets.
 - A drag can contain several representations of the same content, such as an
   image file, HTML, and a URL. Choose which to use. URLs are delivered as strings;
   the plugin does not download them.
+- Android directory reads never open permission UI. If the source does not grant
+  access to children, `directory.list()` throws `PlatformException` with code
+  `directory_access_required`. Explain the request in your UI, then explicitly
+  call `DesktopDrop.instance.requestDirectoryAccess(directory: item)` after a
+  user action and retry listing. Await the entire flow inside `onDrop`; access
+  expires when it finishes. Cancelling authorization throws
+  `directory_access_denied`. No broad storage access is used.
 - Sandboxed macOS files and directories may supply an `appleBookmark`. Keep
   security-scoped access active while reading, and stop access afterward.
 

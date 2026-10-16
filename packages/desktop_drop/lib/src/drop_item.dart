@@ -80,7 +80,10 @@ final class DropDirectoryItem extends DropItem {
 
   /// Lists immediate children as XFile or XDirectory without reading file
   /// contents. Native sandbox directories can require access through
-  /// [appleBookmark] while listing and reading their children.
+  /// [appleBookmark] while listing and reading their children. On Android,
+  /// insufficient permission fails with PlatformException code
+  /// `directory_access_required`; listing never opens UI. Applications may
+  /// explicitly call DesktopDrop.requestDirectoryAccess and retry inside onDrop.
   final XDirectory directory;
   final String name;
   final String? localPath;

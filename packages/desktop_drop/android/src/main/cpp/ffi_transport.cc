@@ -79,9 +79,30 @@ Java_one_mixin_desktop_drop_FfiTransport_nativeSend(JNIEnv* env, jobject, jlong 
     current.env->DeleteLocalRef(data);
   } : nullptr, pending);
 }
+extern "C" JNIEXPORT jlong JNICALL
+Java_one_mixin_desktop_drop_FfiTransport_nativeCreateDecision(JNIEnv*, jobject) {
+  return dd_bridge_create();
+}
 extern "C" JNIEXPORT void JNICALL
-Java_one_mixin_desktop_drop_FfiTransport_nativeCancel(JNIEnv*, jobject, jlong context, jlong request) {
-  dd_rpc_cancel(context, request);
+Java_one_mixin_desktop_drop_FfiTransport_nativeDestroyDecision(JNIEnv*, jobject, jlong context) {
+  dd_bridge_destroy(context);
+}
+extern "C" JNIEXPORT jlong JNICALL
+Java_one_mixin_desktop_drop_FfiTransport_nativeDecisionGeneration(JNIEnv*, jobject, jlong context) {
+  return dd_bridge_generation(context);
+}
+extern "C" JNIEXPORT jlongArray JNICALL
+Java_one_mixin_desktop_drop_FfiTransport_nativeDecide(JNIEnv* env, jobject, jlong context,
+                                                   jlong session, jint phase, jdouble x,
+                                                   jdouble y, jbyteArray data) {
+  const auto bytes = Copy(env, data);
+  const auto decision = dd_bridge_decide(context, session, phase, x, y,
+                                         bytes.data(), bytes.size());
+  const jlong values[] = {decision.generation, decision.request,
+                         decision.target, decision.operation};
+  auto result = env->NewLongArray(4);
+  if (result) env->SetLongArrayRegion(result, 0, 4, values);
+  return result;
 }
 extern "C" JNIEXPORT void JNICALL
 Java_one_mixin_desktop_drop_FfiTransport_nativeReply(JNIEnv* env, jobject, jlong context, jlong epoch, jlong request, jbyteArray data) {

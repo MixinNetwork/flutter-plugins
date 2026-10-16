@@ -275,8 +275,8 @@ class _NativeBridge implements DropBridge {
     if (descriptor == null || descriptor['view'] != view) {
       throw StateError('desktop_drop could not bind Flutter view $view');
     }
-    // GTK and Android can request a synchronous Dart predicate through an
-    // asynchronous FFI reply. They do not block their main loop.
+    // GTK requests the Dart predicate through an asynchronous FFI reply
+    // without blocking its main loop. Other native adapters expose a context.
     if (!descriptor.containsKey('context')) {
       generation = descriptor['generation'] as int? ?? 0;
       return;

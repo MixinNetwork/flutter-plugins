@@ -1,5 +1,6 @@
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 /// Content owned by the example after reading during onDrop.
 class ReceivedItem {
@@ -9,8 +10,12 @@ class ReceivedItem {
   final Object? error;
 }
 
-Future<Map<DropItem, ReceivedItem>> readDrop(DropDetails event) async {
+Future<Map<DropItem, ReceivedItem>> readDrop(
+  DropDetails event, {
+  Future<bool> Function(DropDirectoryItem directory)? onDirectoryAccessRequired,
+}) async {
   final content = <DropItem, ReceivedItem>{};
+  final accessRequested = <DropDirectoryItem>{};
 
   Future<void> read(DropItem item) async {
     try {
@@ -38,6 +43,23 @@ Future<Map<DropItem, ReceivedItem>> readDrop(DropDetails event) async {
         content[item] = const ReceivedItem();
       }
     } catch (error) {
+      if (error is PlatformException &&
+          error.code == 'directory_access_required' &&
+          item is DropDirectoryItem &&
+          onDirectoryAccessRequired != null &&
+          accessRequested.add(item)) {
+        try {
+          if (await onDirectoryAccessRequired(item)) {
+            // The application chose to authorize; retry the same source while
+            // onDrop still owns its lifetime.
+            await read(item);
+            return;
+          }
+        } catch (accessError) {
+          content[item] = ReceivedItem(error: accessError);
+          return;
+        }
+      }
       content[item] = ReceivedItem(
         children: content[item]?.children,
         error: error,

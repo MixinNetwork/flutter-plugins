@@ -8,33 +8,45 @@ import '../common/app_theme.dart';
 
 enum _Rule {
   any('Any content'),
+  images('Images'),
+  text('Text'),
   files('Files'),
   folders('Folders'),
-  text('Text'),
-  urls('URLs'),
-  plainText('Plain text files'),
-  png('PNG files');
+  urls('URLs');
 
   const _Rule(this.label);
   final String label;
 
-  bool accepts(DragDetails details) {
-    final entries = details.items
-        .where((item) => item.kind != DropItemKind.string)
-        .toList();
-    return switch (this) {
-      urls => details.items.any((item) => item.mimeType == 'text/uri-list'),
-      plainText || png =>
-        entries.isNotEmpty &&
-            entries.every(
-              (item) =>
-                  item.kind == DropItemKind.file &&
-                  item.mimeType ==
-                      (this == plainText ? 'text/plain' : 'image/png'),
-            ),
-      _ => true,
-    };
-  }
+  bool matches(DropItemKind kind, String? mime, {bool preview = false}) =>
+      switch (this) {
+        any => true,
+        files => kind == DropItemKind.file,
+        folders => kind == DropItemKind.directory,
+        urls => kind == DropItemKind.string && mime == 'text/uri-list',
+        images =>
+          kind == DropItemKind.file &&
+              (mime?.startsWith('image/') == true || (preview && mime == null)),
+        text =>
+          (kind == DropItemKind.file || kind == DropItemKind.string) &&
+              (mime?.startsWith('text/') == true && mime != 'text/uri-list' ||
+                  mime == 'application/json' ||
+                  mime == 'application/xml' ||
+                  (preview && mime == null)),
+      };
+
+  bool accepts(DragDetails details) => details.items.any(
+    (item) => matches(
+      item.kind,
+      item.mimeType,
+      preview: item.name == null || item.name!.isEmpty,
+    ),
+  );
+
+  bool acceptsItem(DropItem item) => matches(switch (item) {
+    DropFileItem() => DropItemKind.file,
+    DropDirectoryItem() => DropItemKind.directory,
+    DropStringItem() => DropItemKind.string,
+  }, item.mimeType);
 }
 
 class DropStage extends StatefulWidget {
@@ -47,7 +59,7 @@ class DropStage extends StatefulWidget {
 
 class _DropStageState extends State<DropStage> {
   final _enabled = [true, true, true];
-  final _rules = [_Rule.any, _Rule.plainText, _Rule.png];
+  final _rules = [_Rule.any, _Rule.text, _Rule.images];
   static const _names = ['Parent', 'Child A', 'Child B'];
   DropOperation _operation = DropOperation.copy;
   int _front = 2;
@@ -71,8 +83,9 @@ class _DropStageState extends State<DropStage> {
     enabled: _enabled[index],
     operation: _operation,
     acceptedKinds: switch (_rules[index]) {
-      _Rule.files || _Rule.plainText || _Rule.png => const {DropItemKind.file},
-      _Rule.text || _Rule.urls => const {DropItemKind.string},
+      _Rule.files || _Rule.images => const {DropItemKind.file},
+      _Rule.text => const {DropItemKind.file, DropItemKind.string},
+      _Rule.urls => const {DropItemKind.string},
       _Rule.folders => const {DropItemKind.directory},
       _ => const {
         DropItemKind.file,
@@ -81,7 +94,7 @@ class _DropStageState extends State<DropStage> {
       },
     },
     onWillAccept: switch (_rules[index]) {
-      _Rule.plainText || _Rule.png || _Rule.urls => _rules[index].accepts,
+      _Rule.text || _Rule.images || _Rule.urls => _rules[index].accepts,
       _ => null,
     },
     onEnter: (details) => _hover(index, details),
@@ -94,7 +107,15 @@ class _DropStageState extends State<DropStage> {
         });
       }
     },
-    onDrop: (details) => widget.onDrop(_names[index], details),
+    onDrop: (details) => widget.onDrop(
+      _names[index],
+      DropDetails(
+        items: details.items.where(_rules[index].acceptsItem).toList(),
+        localPosition: details.localPosition,
+        globalPosition: details.globalPosition,
+        operation: details.operation,
+      ),
+    ),
     child: child,
   );
 
@@ -325,7 +346,7 @@ class _DropStageState extends State<DropStage> {
         child: Text(
           _preview == null
               ? 'Files, folders, text or links. Contents are read on request.'
-              : '${_names[_hovering!]} · ${_operation.name}\nPreview: ${_preview!.items.map((item) => item.kind.name).toSet().join(', ')}',
+              : '${_names[_hovering!]} · ${_operation.name}\nPreview: ${_preview!.items.map((item) => '${item.kind.name}${item.mimeType == null ? '' : ' (${item.mimeType})'}').toSet().join(', ')}',
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(fontSize: 11, color: AppTheme.muted),

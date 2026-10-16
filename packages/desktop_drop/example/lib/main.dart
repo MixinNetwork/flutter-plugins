@@ -42,7 +42,36 @@ class _DropPlaygroundState extends State<DropPlayground> {
       _receiver = target;
       _content = {};
     });
-    final content = await readDrop(event);
+    final content = await readDrop(
+      event,
+      onDirectoryAccessRequired: (directory) async {
+        if (!mounted || !identical(_drop, event)) return false;
+        final authorize = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Directory access required'),
+            content: Text(
+              'Android has not granted access to the children of "${directory.name}". Authorize this folder to read its contents.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Authorize folder'),
+              ),
+            ],
+          ),
+        );
+        if (authorize != true || !mounted || !identical(_drop, event)) {
+          return false;
+        }
+        await DesktopDrop.instance.requestDirectoryAccess(directory: directory);
+        return mounted && identical(_drop, event);
+      },
+    );
     if (mounted && identical(_drop, event)) {
       setState(() => _content = content);
     }

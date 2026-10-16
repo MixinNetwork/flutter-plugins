@@ -5,7 +5,8 @@ import 'package:cross_file/cross_file.dart';
 import 'package:cross_file_platform_interface/cross_file_platform_interface.dart';
 import 'package:flutter/services.dart';
 
-import 'native_transport.dart';
+import 'native_transport_stub.dart'
+    if (dart.library.io) 'native_transport.dart';
 
 // These are access references, not snapshots. The native provider can expire
 // independently of the Dart objects; reads propagate its errors to the caller.
@@ -16,6 +17,17 @@ XFile sourceFile(Map<Object?, Object?> source, String name) =>
 XDirectory sourceDirectory(Map<Object?, Object?> source) =>
     // ignore: invalid_use_of_internal_member
     ScopedStorageXDirectory.fromPlatform(_SourceDirectory(source));
+
+/// Explicit access request; ordinary reads never show platform UI.
+Future<void> requestSourceDirectoryAccess(XDirectory directory) async {
+  // ignore: invalid_use_of_internal_member
+  final platform = directory.platform;
+  if (platform is! _SourceDirectory) {
+    throw UnsupportedError('Directory is not backed by an Android drop source');
+  }
+  if (platform._disposed) throw StateError('Dropped source has been released');
+  await _invoke<void>(platform.source, 'requestAccess');
+}
 
 Future<T?> _invoke<T>(
   Map<Object?, Object?> source,
@@ -149,19 +161,17 @@ final class _SourceDirectory extends PlatformScopedStorageXDirectory {
         PlatformScopedStorageXDirectoryCreationParams(uri: _uri(source)),
       );
   final Map<Object?, Object?> source;
-  late final Future<XDirectory> _directory = _resolvePath(source).then((path) {
-    if (path == null) {
-      throw StateError('Dropped directory does not support path resolution');
-    }
-    return XDirectory.fileSystem(path: path);
-  });
+  late final Future<XDirectory?> _directory = _resolvePath(source)
+      .then((path) => path == null ? null : XDirectory.fileSystem(path: path));
   bool _disposed = false;
   @override
   Future<bool> exists() async {
     if (_disposed) return false;
     try {
       final directory = await _directory;
-      return await directory.exists();
+      if (directory != null) return await directory.exists();
+      await _invoke<Object>(source, 'stat');
+      return true;
     } on PlatformException {
       return false;
     }
@@ -179,7 +189,28 @@ final class _SourceDirectory extends PlatformScopedStorageXDirectory {
     if (_disposed) throw StateError('Dropped source has been released');
     final directory = await _directory;
     if (_disposed) throw StateError('Dropped source has been released');
-    // ignore: invalid_use_of_internal_member
-    yield* directory.platform.list(params);
+    if (directory != null) {
+      // ignore: invalid_use_of_internal_member
+      yield* directory.platform.list(params);
+      return;
+    }
+    final children = await _invoke<List>(source, 'list');
+    if (children == null) {
+      throw StateError('Source did not return directory entries');
+    }
+    for (final child in children.cast<Map>()) {
+      if (_disposed) throw StateError('Dropped source has been released');
+      final name = child['name'] as String? ?? '';
+      final reference = <Object?, Object?>{
+        ...source,
+        'source': child['source'],
+        'name': name,
+      };
+      final entity = child['isDirectory'] == true
+          ? sourceDirectory(reference)
+          : sourceFile(reference, name);
+      // ignore: invalid_use_of_internal_member
+      yield entity.platform;
+    }
   }
 }

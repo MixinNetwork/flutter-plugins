@@ -38,6 +38,9 @@ Sources:
 - A UIKit file-provider temporary URL expires after its completion handler.
   Retaining content requires copying it before returning. See
   [loadFileRepresentation](https://developer.apple.com/documentation/foundation/nsitemprovider/loadfilerepresentation(fortypeidentifier:completionhandler:)).
+- The Android adapter now returns the synchronous shared-bridge acceptance
+  from `ACTION_DROP`. Starting a drag still returns a subscription result;
+  asynchronous application processing does not determine the native drop result.
 - Native acceptance, data loading, and application processing have distinct
   completion semantics. A Dart Future cannot universally delay the native result.
 

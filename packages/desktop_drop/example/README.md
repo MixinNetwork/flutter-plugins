@@ -35,9 +35,11 @@ DropTarget(
 
 Parent contains two partially overlapping sibling targets, Child A and Child B.
 Each target has its own acceptance preset and enabled switch. Parent accepts any
-content by default; Child A accepts `text/plain` files, and Child B accepts
-`image/png` files. Both presets use only the MIME type exposed by the plugin,
-including during hover. Unknown types are rejected by these child targets.
+content by default; Child A accepts text strings and text files, and Child B
+accepts images (including PNG and JPEG). Other presets are Files, Folders and
+URLs. MIME types are shown in the hover preview. A missing MIME type is accepted
+tentatively; final metadata decides which target receives the drop. Each preset
+reads only matching representations from the delivered items.
 Child B starts in front. **Swap layers** exchanges their stacking order without
 changing their settings. The shared Action selector configures copy/move/link
 on every target.
@@ -53,7 +55,7 @@ An operation unsupported by the source is rejected rather than substituted.
 | Drop onto Parent's background | Parent decides using its own preset. |
 | Disable the front child | Its card still obscures the sibling; Parent can receive the drop. |
 | Disable Parent and both children | Rejected. |
-| Mixed text/PNG selection onto a plain-text-only target | Rejected by that target. |
+| Mixed text/image selection onto Text | Text receives and reads the text representations. |
 | Source does not support the selected Action | Rejected. Android and iOS advertise copy only. |
 
 Hover highlights the selected target and shows its configured operation and
@@ -93,6 +95,21 @@ temporary directory. Once received, files and directories use the existing
 the temporary files after pending reception finishes; the example keeps its own
 received bytes. A receiver is requested only once, even for concurrent reads.
 
+## Android
+
+Select **copy**. Hover previews use the MIME types advertised by the source;
+filenames and actual representations become available at drop. Content-backed
+directories use the document provider to list children on demand, including
+nested directories. Access lasts through the awaited `onDrop` callback.
+If listing fails with `directory_access_required`, the example explains the
+missing permission and offers **Cancel** and **Authorize folder**. Only clicking
+**Authorize folder** calls `DesktopDrop.instance.requestDirectoryAccess`, opening
+Android's folder picker. Choose **Use this folder**, then **Allow**; the example
+retries the directory read. Ordinary plugin reads never open UI. The entire flow
+is awaited inside `onDrop` so the source stays available. Cancelling reports an
+access error in the viewer. The plugin does not request broad storage access or
+persist the tree grant.
+
 ## iOS
 
 The example includes an iOS host. Run it with `flutter run -d <ios-device-id>`.
@@ -120,11 +137,21 @@ file and folder reads also keep security-scoped access active while reading.
   read error without a crash. Also test a drop into an inactive window and source
   expiry.
 - On Web, check folders with more than 100 entries and verify that image URL/HTML
-  drops make no network request. MIME presets reject mismatched or unknown types
-  during hover and drop, even when the browser protects filenames.
+  drops make no network request. MIME presets reject known mismatched types. Unknown hover types are checked
+  again using the metadata available at drop.
 - Test the overlap in both layer orders, independent switches, parent fallback,
   unsupported actions, and viewing received content after the source is released.
 
-Widget coverage follows the same target decision/delivery path and checks the
-fixed desktop layout and overlap behavior. Real OS drag acceptance is a separate
-manual check. This example does not synthesize native drags.
+Widget coverage checks the desktop layout and overlap behavior. Android's
+integration suite dispatches native drag events through the debug host to verify
+synchronous JNI/Dart acceptance, rejection, MIME previews, provider-backed
+directory traversal, source expiry, and asynchronous delivery:
+
+```sh
+flutter drive --driver=test_driver/integration_test.dart \
+  --target=integration_test/app_test.dart -d <android-device-id>
+```
+
+The native event fixture supports Android API 31-37. Its channel is debug-only
+and is not part of the plugin. URI permission grants and drag feedback from
+external source apps still require manual checks.
