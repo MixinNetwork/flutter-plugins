@@ -18,24 +18,12 @@ enum _Rule {
   const _Rule(this.label);
   final String label;
 
-  bool accepts(DropOffer offer) {
-    final entries = offer.items
+  bool accepts(DragDetails details) {
+    final entries = details.items
         .where((item) => item.kind != DropItemKind.string)
         .toList();
     return switch (this) {
-      any => offer.items.isNotEmpty,
-      files =>
-        entries.isNotEmpty &&
-            entries.every((item) => item.kind == DropItemKind.file),
-      folders =>
-        entries.isNotEmpty &&
-            entries.every(
-              (item) =>
-                  item.kind == DropItemKind.directory ||
-                  (!offer.isComplete && item.kind == DropItemKind.file),
-            ),
-      text => offer.items.any((item) => item.kind == DropItemKind.string),
-      urls => offer.items.any((item) => item.mimeType == 'text/uri-list'),
+      urls => details.items.any((item) => item.mimeType == 'text/uri-list'),
       plainText || png =>
         entries.isNotEmpty &&
             entries.every(
@@ -44,13 +32,14 @@ enum _Rule {
                   item.mimeType ==
                       (this == plainText ? 'text/plain' : 'image/png'),
             ),
+      _ => true,
     };
   }
 }
 
 class DropStage extends StatefulWidget {
   const DropStage({super.key, required this.onDrop});
-  final FutureOr<void> Function(String target, DropEvent event) onDrop;
+  final FutureOr<void> Function(String target, DropDetails event) onDrop;
 
   @override
   State<DropStage> createState() => _DropStageState();
@@ -63,13 +52,11 @@ class _DropStageState extends State<DropStage> {
   DropOperation _operation = DropOperation.copy;
   int _front = 2;
   int? _hovering;
-  DropEventDetails? _preview;
+  DragDetails? _preview;
 
   // Only rebuild when the feedback shown by this example changes.
-  void _hover(int index, DropEventDetails details) {
-    if (_hovering == index &&
-        _preview?.operation == details.operation &&
-        setEquals(_preview?.allowedOperations, details.allowedOperations)) {
+  void _hover(int index, DragDetails details) {
+    if (_hovering == index && listEquals(_preview?.items, details.items)) {
       return;
     }
     setState(() {
@@ -81,13 +68,25 @@ class _DropStageState extends State<DropStage> {
   Widget _target(int index, Widget child) => DropTarget(
     key: ValueKey('target-${_names[index]}'),
     behavior: HitTestBehavior.opaque,
-    enable: _enabled[index],
-    onDropDecision: (details) => _rules[index].accepts(details.offer)
-        ? _operation
-        : DropOperation.reject,
-    onDragEntered: (details) => _hover(index, details),
-    onDragUpdated: (details) => _hover(index, details),
-    onDragExited: (_) {
+    enabled: _enabled[index],
+    operation: _operation,
+    acceptedKinds: switch (_rules[index]) {
+      _Rule.files || _Rule.plainText || _Rule.png => const {DropItemKind.file},
+      _Rule.text || _Rule.urls => const {DropItemKind.string},
+      _Rule.folders => const {DropItemKind.directory},
+      _ => const {
+        DropItemKind.file,
+        DropItemKind.directory,
+        DropItemKind.string,
+      },
+    },
+    onWillAccept: switch (_rules[index]) {
+      _Rule.plainText || _Rule.png || _Rule.urls => _rules[index].accepts,
+      _ => null,
+    },
+    onEnter: (details) => _hover(index, details),
+    onMove: (details) => _hover(index, details),
+    onLeave: () {
       if (_hovering == index) {
         setState(() {
           _hovering = null;
@@ -95,13 +94,7 @@ class _DropStageState extends State<DropStage> {
         });
       }
     },
-    onDrop: (event) {
-      setState(() {
-        _hovering = null;
-        _preview = null;
-      });
-      return widget.onDrop(_names[index], event);
-    },
+    onDrop: (details) => widget.onDrop(_names[index], details),
     child: child,
   );
 
@@ -332,7 +325,7 @@ class _DropStageState extends State<DropStage> {
         child: Text(
           _preview == null
               ? 'Files, folders, text or links. Contents are read on request.'
-              : '${_names[_hovering!]} · ${_preview!.operation.name}\nSource allows ${_preview!.allowedOperations.map((op) => op.name).join(', ')}',
+              : '${_names[_hovering!]} · ${_operation.name}\nPreview: ${_preview!.items.map((item) => item.kind.name).toSet().join(', ')}',
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(fontSize: 11, color: AppTheme.muted),

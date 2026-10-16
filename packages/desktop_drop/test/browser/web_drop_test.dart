@@ -65,29 +65,35 @@ void send(String type, web.DataTransfer data, Offset position) {
   );
 }
 
-String stringValue(DropEvent event, String mimeType) => event.items
+String stringValue(DropDetails event, String mimeType) => event.items
     .whereType<DropStringItem>()
     .singleWhere((item) => item.mimeType == mimeType)
     .value;
 
 Future<Offset> mount(
   WidgetTester tester, {
-  required bool Function(DropEventDetails) accepts,
+  required bool Function(DragDetails) accepts,
   DropOperation operation = DropOperation.copy,
-  required FutureOr<void> Function(DropEvent) done,
-  void Function(DropEventDetails)? entered,
-  void Function(DropEventDetails)? exited,
+  Set<DropItemKind> acceptedKinds = const {
+    DropItemKind.file,
+    DropItemKind.string,
+    DropItemKind.directory,
+  },
+  required FutureOr<void> Function(DropDetails) done,
+  void Function(DragDetails)? entered,
+  VoidCallback? exited,
 }) async {
   await tester.pumpWidget(
     Directionality(
       textDirection: TextDirection.ltr,
       child: Center(
         child: DropTarget(
-          onDropDecision: (details) =>
-              accepts(details) ? operation : DropOperation.reject,
+          operation: operation,
+          acceptedKinds: acceptedKinds,
+          onWillAccept: accepts,
           onDrop: done,
-          onDragEntered: entered,
-          onDragExited: exited,
+          onEnter: entered,
+          onLeave: exited,
           child: const SizedBox(width: 200, height: 200),
         ),
       ),
@@ -119,7 +125,7 @@ void main() {
     testWidgets(
       'browser negotiates ${operation.name} within source operations',
       (tester) async {
-        DropEvent? done;
+        DropDetails? done;
         final point = await mount(
           tester,
           accepts: (_) => true,
@@ -133,7 +139,6 @@ void main() {
         send('drop', data, point);
         await tester.pump();
         expect(done!.operation, operation);
-        expect(done!.allowedOperations, {operation});
         expect(stringValue(done!, 'text/plain'), 'hello');
       },
     );
@@ -161,7 +166,7 @@ void main() {
   testWidgets('browser files stream complete contents during async onDrop', (
     tester,
   ) async {
-    final done = Completer<DropEvent>();
+    final done = Completer<DropDetails>();
     final finish = Completer<void>();
     final point = await mount(
       tester,
@@ -199,15 +204,13 @@ void main() {
   testWidgets(
     'URL, HTML, and custom string formats pass through without creating files',
     (tester) async {
-      final done = Completer<DropEvent>();
-      final offers = <DropOffer>[];
+      final done = Completer<DropDetails>();
+      final offers = <DragDetails>[];
       final point = await mount(
         tester,
         accepts: (event) {
-          offers.add(event.offer);
-          return event.offer.items.any(
-            (item) => item.kind == DropItemKind.string,
-          );
+          offers.add(event);
+          return event.items.any((item) => item.kind == DropItemKind.string);
         },
         done: done.complete,
       );
@@ -242,7 +245,7 @@ void main() {
 
     web.window.setProperty('fetch'.toJS, blockedFetch.toJS);
     addTearDown(() => web.window.setProperty('fetch'.toJS, original));
-    final done = Completer<DropEvent>();
+    final done = Completer<DropDetails>();
     final point = await mount(
       tester,
       accepts: (_) => true,
@@ -265,7 +268,7 @@ void main() {
   testWidgets(
     'capture listeners prevent file navigation even when a descendant stops bubbling',
     (tester) async {
-      final done = Completer<DropEvent>();
+      final done = Completer<DropDetails>();
       final point = await mount(
         tester,
         accepts: (_) => true,
@@ -301,11 +304,11 @@ void main() {
     testWidgets(
       'file $name retains MIME, getAsFile fallback and string representations',
       (tester) async {
-        final done = Completer<DropEvent>();
+        final done = Completer<DropDetails>();
         final finish = Completer<void>();
         final point = await mount(
           tester,
-          accepts: (d) => d.offer.items.any(
+          accepts: (d) => d.items.any(
             (item) =>
                 item.kind == DropItemKind.file && item.mimeType == expectedMime,
           ),
@@ -343,14 +346,14 @@ void main() {
   testWidgets(
     'text and URL values are available for the final synchronous decision',
     (tester) async {
-      final done = Completer<DropEvent>();
-      final offers = <DropOffer>[];
+      final done = Completer<DropDetails>();
+      final offers = <DragDetails>[];
       final point = await mount(
         tester,
         accepts: (d) {
-          offers.add(d.offer);
-          return !d.offer.isComplete ||
-              d.offer.items.any(
+          offers.add(d);
+          return d.items.every((item) => item.value == null) ||
+              d.items.any(
                 (item) =>
                     item.mimeType == 'text/plain' && item.value == 'hello',
               );
@@ -361,7 +364,6 @@ void main() {
         ..setData('text/plain', 'hello')
         ..setData('text/uri-list', '# comment\r\nhttps://example.com\r\n');
       send('dragenter', data, point);
-      expect(offers.last.isComplete, false);
       expect(offers.last.items.every((item) => item.value == null), true);
       expect(
         offers.last.items.map((item) => item.mimeType),
@@ -377,7 +379,7 @@ void main() {
           stringValue(event, 'text/uri-list'),
           '# comment\r\nhttps://example.com\r\n',
         );
-        expect(offers.last.isComplete, true);
+        expect(offers.last.items.any((item) => item.value == 'hello'), true);
       });
     },
   );
@@ -391,7 +393,7 @@ void main() {
       accepts: (_) => allowed,
       done: (_) => drops++,
       entered: (_) => hovering = true,
-      exited: (_) => hovering = false,
+      exited: () => hovering = false,
     );
     final data = transfer()..setData('text/plain', 'hello');
     send('dragenter', data, point);
@@ -407,13 +409,13 @@ void main() {
     tester,
   ) async {
     var hovering = false;
-    final done = Completer<DropEvent>();
+    final done = Completer<DropDetails>();
     final point = await mount(
       tester,
       accepts: (_) => true,
       done: done.complete,
       entered: (_) => hovering = true,
-      exited: (_) => hovering = false,
+      exited: () => hovering = false,
     );
     final data = transfer()..setData('text/plain', 'hello');
     send('dragenter', data, point);
@@ -432,10 +434,11 @@ void main() {
   testWidgets('directory reads consume every batch beyond 100 entries', (
     tester,
   ) async {
-    final done = Completer<DropEvent>();
+    final done = Completer<DropDetails>();
     final finish = Completer<void>();
     final point = await mount(
       tester,
+      acceptedKinds: const {DropItemKind.directory},
       accepts: (_) => true,
       done: (event) async {
         done.complete(event);
@@ -479,6 +482,8 @@ void main() {
     final data = transfer();
     data.items.add(web.File(<JSAny>[].toJS, 'folder'));
     useEntry(root);
+    send('dragenter', data, point);
+    expect(data.dropEffect, 'copy');
     send('drop', data, point);
     await tester.pump();
     expect(done.isCompleted, true);
@@ -501,7 +506,7 @@ void main() {
   testWidgets('asynchronous file reads retain the committed drop position', (
     tester,
   ) async {
-    final done = Completer<DropEvent>();
+    final done = Completer<DropDetails>();
     final point = await mount(
       tester,
       accepts: (_) => true,

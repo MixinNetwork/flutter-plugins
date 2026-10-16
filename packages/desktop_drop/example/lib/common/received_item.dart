@@ -9,7 +9,7 @@ class ReceivedItem {
   final Object? error;
 }
 
-Future<Map<DropItem, ReceivedItem>> readDrop(DropEvent event) async {
+Future<Map<DropItem, ReceivedItem>> readDrop(DropDetails event) async {
   final content = <DropItem, ReceivedItem>{};
 
   Future<void> read(DropItem item) async {

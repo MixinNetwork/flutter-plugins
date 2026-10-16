@@ -13,11 +13,13 @@ abstract interface class DropTargetClient {
   int get view;
   bool get enabled;
   RenderBox? get box;
-  DropOperation decide(DropEventDetails details);
-  void entered(DropEventDetails details);
-  void updated(DropEventDetails details);
-  void exited(DropEventDetails details);
-  FutureOr<void> dropped(DropEvent details);
+  DropOperation get operation;
+  Set<DropItemKind> get acceptedKinds;
+  bool accepts(DragDetails details);
+  void entered(DragDetails details);
+  void updated(DragDetails details);
+  void exited();
+  FutureOr<void> dropped(DropDetails details);
 }
 
 class _View {
@@ -26,7 +28,6 @@ class _View {
   final targets = <int>{};
   int? hovering;
   int? session;
-  DropEventDetails? details;
 }
 
 /// Owns selection and delivery for all native adapters and the browser.
@@ -97,13 +98,11 @@ class DropCoordinator with WidgetsBindingObserver {
     if (view == null) return;
     if (view.hovering == target.id) {
       view.hovering = null;
-      view.details = null;
     }
     view.targets.remove(target.id);
     if (view.targets.isEmpty) {
       // Page changes must not invalidate sources already delivered to onDrop.
       // The bridge is released when the Flutter view is removed instead.
-      view.details = null;
       view.session = null;
     }
   }
@@ -112,17 +111,16 @@ class DropCoordinator with WidgetsBindingObserver {
     final view = _views[target.view];
     if (view?.hovering != target.id) return;
     view!.hovering = null;
-    final details = view.details;
     // didUpdateWidget runs during a build. User hover callbacks can setState.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (identical(_targets[target.id], target) && details != null) {
-        target.exited(details);
+      if (identical(_targets[target.id], target)) {
+        target.exited();
       }
     });
   }
 
   DropSelection decide(int view, DropOffer offer, Offset position) {
-    const rejected = (target: 0, operation: DropOperation.reject);
+    const rejected = (target: 0, operation: null);
     final state = _views[view];
     if (state == null || state.targets.isEmpty) return rejected;
     final result = HitTestResult();
@@ -140,13 +138,20 @@ class DropCoordinator with WidgetsBindingObserver {
           !visited.add(target.id)) {
         continue;
       }
+      if (!offer.allowedOperations.contains(target.operation)) continue;
+      final matchesKind = offer.items.any(
+        (item) =>
+            target.acceptedKinds.contains(item.kind) ||
+            (!offer.isComplete &&
+                item.kind == DropItemKind.file &&
+                target.acceptedKinds.contains(DropItemKind.directory)),
+      );
+      if (!matchesKind) continue;
       final details = _details(target, offer, position);
       if (details == null) continue;
       try {
-        final operation = target.decide(details);
-        if (operation != DropOperation.reject &&
-            offer.allowedOperations.contains(operation)) {
-          return (target: target.id, operation: operation);
+        if (target.accepts(details)) {
+          return (target: target.id, operation: target.operation);
         }
       } catch (error, stack) {
         scheduleMicrotask(
@@ -155,7 +160,7 @@ class DropCoordinator with WidgetsBindingObserver {
               exception: error,
               stack: stack,
               library: 'desktop_drop',
-              context: ErrorDescription('in DropTarget.onDropDecision'),
+              context: ErrorDescription('in DropTarget.onWillAccept'),
             ),
           ),
         );
@@ -164,23 +169,21 @@ class DropCoordinator with WidgetsBindingObserver {
     return rejected;
   }
 
-  DropEventDetails? _details(
+  DragDetails? _details(
     DropTargetClient target,
     DropOffer offer,
-    Offset position, [
-    DropOperation operation = DropOperation.reject,
-  ]) {
+    Offset position,
+  ) {
     final box = target.box;
     if (box == null || !box.attached || !box.hasSize) return null;
-    return DropEventDetails(
-      offer: offer,
+    return DragDetails(
+      items: offer.items,
       globalPosition: position,
       localPosition: box.globalToLocal(position),
-      operation: operation,
     );
   }
 
-  DropEventDetails? details(
+  DragDetails? details(
     int viewId,
     DropSelection selection,
     DropOffer offer,
@@ -193,7 +196,7 @@ class DropCoordinator with WidgetsBindingObserver {
         !offer.allowedOperations.contains(selection.operation)) {
       return null;
     }
-    return _details(target, offer, position, selection.operation);
+    return _details(target, offer, position);
   }
 
   void exit(int viewId, [int? session]) {
@@ -202,12 +205,15 @@ class DropCoordinator with WidgetsBindingObserver {
     if (session == null || view.session == session) _exit(view);
   }
 
-  Future<bool> drop(int viewId, int targetId, DropEvent event) async {
+  Future<bool> drop(
+    int viewId,
+    int targetId,
+    DropDetails event, {
+    required int session,
+  }) async {
+    exit(viewId, session);
     final target = _targets[targetId];
-    if (target == null ||
-        target.view != viewId ||
-        !target.enabled ||
-        !event.allowedOperations.contains(event.operation)) {
+    if (target == null || target.view != viewId || !target.enabled) {
       return false;
     }
     final box = target.box;
@@ -253,13 +259,11 @@ class DropCoordinator with WidgetsBindingObserver {
         final details = this.details(viewId, selection, offer, position);
         if (details == null) return false;
         view.hovering = selected.id;
-        view.details = details;
         selected.entered(details);
       }
     } else if (selected != null) {
       final details = this.details(viewId, selection, offer, position);
       if (details == null) return false;
-      view.details = details;
       selected.updated(details);
     }
     return true;
@@ -267,9 +271,7 @@ class DropCoordinator with WidgetsBindingObserver {
 
   void _exit(_View view) {
     final previous = _targets[view.hovering];
-    final details = view.details;
     view.hovering = null;
-    view.details = null;
-    if (previous != null && details != null) previous.exited(details);
+    previous?.exited();
   }
 }

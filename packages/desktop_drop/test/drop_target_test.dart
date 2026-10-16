@@ -40,7 +40,7 @@ Map<String, Object?> event(
   'request': _requestBase + request,
   'phase': phase,
   'target': target,
-  'operation': operation.index,
+  'operation': operation.index + 1,
   'x': point.dx,
   'y': point.dy,
   'offer': {
@@ -74,21 +74,230 @@ void main() {
     transport.invokeHandler = null;
   });
 
+  testWidgets('defaults accept all advertised kinds using copy', (
+    tester,
+  ) async {
+    DragDetails? preview;
+    DropDetails? received;
+    await mount(
+      tester,
+      DropTarget(
+        onEnter: (details) => preview = details,
+        onDrop: (details) => received = details,
+        child: const SizedBox(width: 200, height: 200),
+      ),
+    );
+    const point = Offset(400, 300);
+    final data = {
+      'files': [
+        {'name': 'report.txt', 'path': '/tmp/report.txt'},
+        {'name': 'folder', 'path': '/tmp/folder', 'isDirectory': true},
+      ],
+      'strings': [
+        {'mimeType': 'text/plain', 'value': 'hello'},
+      ],
+    };
+    final selection = await platform('query', event(point, data: data)) as Map;
+    expect(selection['operation'], 1);
+    final target = selection['target'] as int;
+    expect(target, greaterThan(0));
+    await platform('feedback', event(point, data: data, target: target));
+    expect(preview!.items.map((item) => item.kind), [
+      DropItemKind.file,
+      DropItemKind.directory,
+      DropItemKind.string,
+    ]);
+    expect(() => preview!.items.clear(), throwsUnsupportedError);
+    await platform('drop', event(point, data: data, target: target));
+    expect(received!.operation, DropOperation.copy);
+    expect(received!.items, [
+      isA<DropFileItem>(),
+      isA<DropDirectoryItem>(),
+      isA<DropStringItem>(),
+    ]);
+    expect(() => received!.items.clear(), throwsUnsupportedError);
+    expect(
+      await platform(
+        'query',
+        event(
+          point,
+          data: {
+            ...data,
+            'allowedOperations': ['move'],
+          },
+        ),
+      ),
+      {'target': 0, 'operation': 0},
+    );
+    expect(await query(event(point, data: {'files': [], 'strings': []})), 0);
+  });
+
+  testWidgets('kind filtering gates the predicate without filtering delivery', (
+    tester,
+  ) async {
+    var checks = 0;
+    var accepted = true;
+    DropDetails? received;
+    await mount(
+      tester,
+      DropTarget(
+        acceptedKinds: const {DropItemKind.file},
+        onWillAccept: (_) {
+          checks++;
+          return accepted;
+        },
+        onDrop: (details) => received = details,
+        child: const SizedBox(width: 200, height: 200),
+      ),
+    );
+    const point = Offset(400, 300);
+    expect(await query(event(point)), 0);
+    expect(checks, 0);
+    final data = {
+      ...offer,
+      'files': [
+        {'name': 'report.txt', 'path': '/tmp/report.txt'},
+      ],
+    };
+    expect(
+      await query(
+        event(
+          point,
+          data: {
+            ...data,
+            'allowedOperations': ['move'],
+          },
+        ),
+      ),
+      0,
+    );
+    expect(checks, 0);
+    final target = await query(event(point, data: data));
+    expect(target, greaterThan(0));
+    accepted = false;
+    expect(await query(event(point, data: data, phase: 2)), 0);
+    accepted = true;
+    await platform('drop', event(point, data: data, target: target));
+    expect(received!.items.whereType<DropFileItem>(), hasLength(1));
+    expect(received!.items.whereType<DropStringItem>().single.value, 'hello');
+    await mount(
+      tester,
+      DropTarget(
+        acceptedKinds: const {},
+        onDrop: (_) {},
+        child: const SizedBox(width: 200, height: 200),
+      ),
+    );
+    expect(await query(event(point, data: data)), 0);
+  });
+
+  testWidgets(
+    'directory targets accept incomplete previews then check final kind',
+    (tester) async {
+      await mount(
+        tester,
+        DropTarget(
+          acceptedKinds: const {DropItemKind.directory},
+          onDrop: (_) {},
+          child: const SizedBox(width: 200, height: 200),
+        ),
+      );
+      const point = Offset(400, 300);
+      final data = {
+        'files': [
+          {'name': 'folder'},
+        ],
+        'isComplete': false,
+      };
+      expect(await query(event(point, data: data)), greaterThan(0));
+      expect(
+        await query(
+          event(point, phase: 2, data: {...data, 'isComplete': true}),
+        ),
+        0,
+      );
+      expect(
+        await query(
+          event(
+            point,
+            phase: 2,
+            data: {
+              'files': [
+                {'name': 'folder', 'isDirectory': true},
+              ],
+              'isComplete': true,
+            },
+          ),
+        ),
+        greaterThan(0),
+      );
+    },
+  );
+
+  testWidgets('drop clears hover once before invoking application processing', (
+    tester,
+  ) async {
+    final callbacks = <String>[];
+    await mount(
+      tester,
+      DropTarget(
+        onEnter: (_) => callbacks.add('enter'),
+        onLeave: () => callbacks.add('leave'),
+        onDrop: (_) => callbacks.add('drop'),
+        child: const SizedBox(width: 200, height: 200),
+      ),
+    );
+    const point = Offset(400, 300);
+    final target = await query(event(point));
+    await platform('feedback', event(point, target: target));
+    await platform('drop', event(point, target: target));
+    await platform('exit', event(point));
+    expect(callbacks, ['enter', 'leave', 'drop']);
+  });
+
+  testWidgets('delayed delivery does not clear a newer drag hover', (
+    tester,
+  ) async {
+    var enters = 0, leaves = 0, drops = 0;
+    await mount(
+      tester,
+      DropTarget(
+        onEnter: (_) => enters++,
+        onLeave: () => leaves++,
+        onDrop: (_) => drops++,
+        child: const SizedBox(width: 200, height: 200),
+      ),
+    );
+    const point = Offset(400, 300);
+    final target = await query(event(point));
+    await platform('feedback', event(point, target: target));
+    await platform('feedback', {
+      ...event(point, target: target, request: 2),
+      'session': _session + 1,
+    });
+    expect([enters, leaves], [2, 1]);
+    await platform('drop', event(point, target: target));
+    expect([drops, leaves], [1, 1]);
+    await platform('exit', {...event(point), 'session': _session + 1});
+    expect(leaves, 2);
+  });
+
   testWidgets('cached offers are shared while decisions remain live', (
     tester,
   ) async {
     var accepts = true;
-    final inspected = <DropOffer>[];
-    DropEventDetails? hover;
+    final inspected = <DragDetails>[];
+    DragDetails? hover;
     await mount(
       tester,
       DropTarget(
-        onDropDecision: (details) {
-          inspected.add(details.offer);
-          return accepts ? DropOperation.copy : DropOperation.reject;
+        onDrop: (_) {},
+        onWillAccept: (details) {
+          inspected.add(details);
+          return accepts;
         },
-        onDragEntered: (details) => hover = details,
-        onDragUpdated: (details) => hover = details,
+        onEnter: (details) => hover = details,
+        onMove: (details) => hover = details,
         child: const SizedBox(width: 200, height: 200),
       ),
     );
@@ -98,17 +307,14 @@ void main() {
     final compact = event(point)..remove('offer');
     compact['operationMask'] = 1;
     expect(await query(compact), target);
-    expect(identical(inspected.last, cached), true);
+    expect(inspected.last.items, cached.items);
     await platform('feedback', {...compact, 'target': target});
-    expect(identical(hover!.offer, cached), true);
+    expect(hover!.items, cached.items);
     accepts = false;
     expect(await query(compact), 0);
     accepts = true;
     expect(await query({...compact, 'operationMask': 3}), target);
-    expect(inspected.last.allowedOperations, {
-      DropOperation.copy,
-      DropOperation.move,
-    });
+    expect(inspected.last.items.single.value, 'hello');
     await query(
       event(
         point,
@@ -125,7 +331,7 @@ void main() {
       'target': target,
       'request': _requestBase + 2,
     });
-    expect(hover!.offer.items.single.value, 'completed');
+    expect(hover!.items.single.value, 'completed');
     expect(await query({...compact, 'session': _session + 1}), -1);
   });
 
@@ -140,7 +346,6 @@ void main() {
     final started = Completer<void>();
     final finish = Completer<void>();
     Widget target() => DropTarget(
-      onDropDecision: (_) => DropOperation.copy,
       onDrop: (_) async {
         started.complete();
         await finish.future;
@@ -183,13 +388,9 @@ void main() {
               Expanded(
                 child: DropTarget(
                   key: const Key('text'),
-                  onDropDecision: (d) =>
+                  onWillAccept: (d) =>
                       allowed &&
-                          d.offer.items.any(
-                            (item) => item.mimeType == 'text/plain',
-                          )
-                      ? DropOperation.copy
-                      : DropOperation.reject,
+                      d.items.any((item) => item.mimeType == 'text/plain'),
                   onDrop: (_) => delivered.add('text'),
                   child: const ColoredBox(color: Color(0xFF000001)),
                 ),
@@ -197,12 +398,8 @@ void main() {
               Expanded(
                 child: DropTarget(
                   key: const Key('url'),
-                  onDropDecision: (d) =>
-                      d.offer.items.any(
-                        (item) => item.mimeType == 'text/uri-list',
-                      )
-                      ? DropOperation.copy
-                      : DropOperation.reject,
+                  onWillAccept: (d) =>
+                      d.items.any((item) => item.mimeType == 'text/uri-list'),
                   onDrop: (_) => delivered.add('url'),
                   child: const ColoredBox(color: Color(0xFF000002)),
                 ),
@@ -247,15 +444,13 @@ void main() {
     await mount(
       tester,
       DropTarget(
-        onDropDecision: (_) => DropOperation.copy,
         onDrop: (_) => selected = 'parent',
         child: SizedBox(
           width: 200,
           height: 200,
           child: DropTarget(
             key: const Key('child'),
-            onDropDecision: (_) =>
-                childAccepts ? DropOperation.copy : DropOperation.reject,
+            onWillAccept: (_) => childAccepts,
             onDrop: (_) => selected = 'child',
             child: const ColoredBox(color: Color(0xFF000001)),
           ),
@@ -282,10 +477,7 @@ void main() {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            DropTarget(
-              onDropDecision: (_) => DropOperation.copy,
-              child: const SizedBox.expand(),
-            ),
+            DropTarget(onDrop: (_) {}, child: const SizedBox.expand()),
             const Listener(
               behavior: HitTestBehavior.opaque,
               child: SizedBox.expand(),
@@ -306,10 +498,11 @@ void main() {
       Transform.translate(
         offset: const Offset(80, 30),
         child: DropTarget(
+          onDrop: (_) {},
           key: const Key('target'),
-          onDropDecision: (d) {
+          onWillAccept: (d) {
             local = d.localPosition;
-            return DropOperation.copy;
+            return true;
           },
           child: const SizedBox(width: 100, height: 100),
         ),
@@ -333,10 +526,10 @@ void main() {
         builder: (_, setState) {
           update = setState;
           return DropTarget(
-            enable: enabled,
-            onDropDecision: (_) => DropOperation.copy,
-            onDragEntered: (_) => enters++,
-            onDragExited: (_) => exits++,
+            onDrop: (_) {},
+            enabled: enabled,
+            onEnter: (_) => enters++,
+            onLeave: () => exits++,
             child: const SizedBox(width: 200, height: 200),
           );
         },
@@ -370,7 +563,6 @@ void main() {
         tester,
         DropTarget(
           key: const Key('old'),
-          onDropDecision: (_) => DropOperation.copy,
           onDrop: (_) => delivered++,
           child: const SizedBox(width: 200, height: 200),
         ),
@@ -381,7 +573,6 @@ void main() {
         tester,
         DropTarget(
           key: const Key('new'),
-          onDropDecision: (_) => DropOperation.copy,
           onDrop: (_) => delivered++,
           child: const SizedBox(width: 200, height: 200),
         ),
@@ -399,12 +590,13 @@ void main() {
       await mount(
         tester,
         DropTarget(
-          onDropDecision: (_) => DropOperation.copy,
+          onDrop: (_) {},
           child: SizedBox(
             width: 200,
             height: 200,
             child: DropTarget(
-              onDropDecision: (_) => throw StateError('bad predicate'),
+              onDrop: (_) {},
+              onWillAccept: (_) => throw StateError('bad predicate'),
               child: const SizedBox.expand(),
             ),
           ),
@@ -419,11 +611,10 @@ void main() {
   testWidgets('Linux resolved paths and original URI-list are separate items', (
     tester,
   ) async {
-    DropEvent? done;
+    DropDetails? done;
     await mount(
       tester,
       DropTarget(
-        onDropDecision: (_) => DropOperation.copy,
         onDrop: (d) => done = d,
         child: const SizedBox(width: 200, height: 200),
       ),
@@ -464,46 +655,32 @@ void main() {
     expect(done!.globalPosition, point);
   });
 
-  testWidgets('selected operations reach hover and committed drop details', (
+  testWidgets('configured operations reach the native reply and drop details', (
     tester,
   ) async {
-    var chosen = DropOperation.copy;
-    DropEventDetails? hover;
-    DropEvent? done;
-    await mount(
-      tester,
-      DropTarget(
-        onDropDecision: (details) {
-          expect(details.operation, DropOperation.reject);
-          expect(details.allowedOperations, {
-            DropOperation.copy,
-            DropOperation.move,
-            DropOperation.link,
-          });
-          return chosen;
-        },
-        onDragEntered: (details) => hover = details,
-        onDragUpdated: (details) => hover = details,
-        onDrop: (details) => done = details,
-        child: const SizedBox(width: 200, height: 200),
-      ),
-    );
+    DragDetails? hover;
+    DropDetails? done;
     const point = Offset(400, 300);
     final data = {
       ...offer,
       'allowedOperations': ['copy', 'move', 'link'],
     };
-    for (final operation in [
-      DropOperation.copy,
-      DropOperation.move,
-      DropOperation.link,
-    ]) {
-      chosen = operation;
+    for (final operation in DropOperation.values) {
+      await mount(
+        tester,
+        DropTarget(
+          operation: operation,
+          onEnter: (details) => hover = details,
+          onMove: (details) => hover = details,
+          onDrop: (details) => done = details,
+          child: const SizedBox(width: 200, height: 200),
+        ),
+      );
       final selection =
           await platform('query', event(point, data: data)) as Map;
       final target = selection['target'] as int;
       expect(target, greaterThan(0));
-      expect(selection['operation'], operation.index);
+      expect(selection['operation'], operation.index + 1);
       await platform(
         'feedback',
         event(
@@ -511,38 +688,32 @@ void main() {
           data: data,
           target: target,
           operation: operation,
-          request: operation.index,
+          request: operation.index + 10,
         ),
       );
-      expect(hover!.operation, operation);
+      expect(hover!.items.single.value, 'hello');
       await platform(
         'drop',
         event(point, data: data, target: target, operation: operation),
       );
       expect(done!.operation, operation);
     }
-    chosen = DropOperation.reject;
-    expect(await platform('query', event(point, data: data)), {
-      'target': 0,
-      'operation': 0,
-    });
   });
 
   testWidgets(
     'unsupported child operations fall back without being substituted',
     (tester) async {
-      var childOperation = DropOperation.move;
+      const childOperation = DropOperation.move;
       String? received;
       await mount(
         tester,
         DropTarget(
-          onDropDecision: (_) => DropOperation.copy,
           onDrop: (_) => received = 'parent',
           child: SizedBox(
             width: 200,
             height: 200,
             child: DropTarget(
-              onDropDecision: (_) => childOperation,
+              operation: childOperation,
               onDrop: (_) => received = 'child',
               child: const SizedBox.expand(),
             ),
@@ -551,7 +722,7 @@ void main() {
       );
       const point = Offset(400, 300);
       final parent = await platform('query', event(point)) as Map;
-      expect(parent['operation'], DropOperation.copy.index);
+      expect(parent['operation'], 1);
       await platform('drop', event(point, target: parent['target'] as int));
       expect(received, 'parent');
       final moveOffer = {
@@ -560,7 +731,7 @@ void main() {
       };
       final child =
           await platform('query', event(point, data: moveOffer)) as Map;
-      expect(child['operation'], DropOperation.move.index);
+      expect(child['operation'], 2);
       expect(child['target'], isNot(parent['target']));
       await platform(
         'drop',
@@ -572,11 +743,19 @@ void main() {
         ),
       );
       expect(received, 'child');
-      childOperation = DropOperation.link;
-      expect(await platform('query', event(point, data: moveOffer)), {
-        'target': 0,
-        'operation': 0,
-      });
+      expect(
+        await platform(
+          'query',
+          event(
+            point,
+            data: {
+              ...offer,
+              'allowedOperations': ['link'],
+            },
+          ),
+        ),
+        {'target': 0, 'operation': 0},
+      );
     },
   );
   testWidgets('native sources are read on demand and propagate expiry', (
@@ -620,11 +799,10 @@ void main() {
       throw StateError('Unexpected source operation: $operation');
     };
     final finish = Completer<void>();
-    DropEvent? drop;
+    DropDetails? drop;
     await mount(
       tester,
       DropTarget(
-        onDropDecision: (_) => DropOperation.copy,
         onDrop: (event) async {
           drop = event;
           await finish.future;
@@ -715,11 +893,10 @@ void main() {
         throw StateError('Unexpected source operation: ${args['op']}');
       };
       final finish = Completer<void>();
-      DropEvent? drop;
+      DropDetails? drop;
       await mount(
         tester,
         DropTarget(
-          onDropDecision: (_) => DropOperation.copy,
           onDrop: (event) async {
             drop = event;
             await finish.future;
@@ -765,12 +942,6 @@ void main() {
       );
       await tester.pump();
       final file = drop!.items.whereType<DropFileItem>().single;
-      expect(
-        drop!.offer.items
-            .where((item) => item.kind != DropItemKind.string)
-            .map((item) => (item.kind, item.name)),
-        [(DropItemKind.file, 'image.png'), (DropItemKind.directory, 'folder')],
-      );
       expect(file.localPath, isNull);
       expect(file.mimeType, 'image/png');
       expect(await file.file.readAsBytes(), [1, 2, 3]);

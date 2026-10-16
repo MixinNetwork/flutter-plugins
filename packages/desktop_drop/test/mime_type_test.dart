@@ -1,5 +1,6 @@
 import 'package:cross_file_io/cross_file_io.dart';
 import 'package:desktop_drop/desktop_drop.dart';
+import 'package:desktop_drop/src/drop_offer.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

@@ -233,9 +233,9 @@ class DesktopDropWeb {
     final selection = coordinator.decide(view, offer, position);
     final target = selection.target;
     event.preventDefault();
-    data.dropEffect = selection.operation == DropOperation.reject
+    data.dropEffect = selection.operation == null
         ? 'none'
-        : selection.operation.name;
+        : selection.operation!.name;
     if (!finalDrop) {
       coordinator.feedback(view, _session, selection, offer, position);
       return;
@@ -245,6 +245,7 @@ class DesktopDropWeb {
     _hoverView = null;
     _hoverOffer = null;
     if (details == null) return;
+    final session = _session;
     final resources = <XEntity>[];
     var active = true;
     void retain(XEntity entity) {
@@ -283,13 +284,13 @@ class DesktopDropWeb {
             await coordinator.drop(
               view,
               target,
-              DropEvent(
-                offer: offer,
+              DropDetails(
                 localPosition: details.localPosition,
                 globalPosition: details.globalPosition,
-                operation: selection.operation,
+                operation: selection.operation!,
                 items: items.whereType<DropItem>().toList(),
               ),
+              session: session,
             );
           })
           .whenComplete(() async {

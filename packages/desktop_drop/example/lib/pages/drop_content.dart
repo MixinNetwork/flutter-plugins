@@ -45,7 +45,7 @@ class DropContent extends StatefulWidget {
     required this.onClear,
     this.content = const {},
   });
-  final DropEvent? event;
+  final DropDetails? event;
   final Map<DropItem, ReceivedItem> content;
   final String? receiver;
   final VoidCallback onClear;
@@ -289,7 +289,7 @@ class _ItemContent extends StatefulWidget {
     required this.onOpen,
   });
   final DropItem item;
-  final DropEvent event;
+  final DropDetails event;
   final ReceivedItem? received;
   final ValueChanged<DropItem> onOpen;
 
@@ -632,10 +632,6 @@ class _ItemContentState extends State<_ItemContent> {
           ),
           _metadata('File promise', '$isPromised'),
         ],
-        _metadata(
-          'Source allows',
-          widget.event.allowedOperations.map((op) => op.name).join(', '),
-        ),
         _metadata(
           'Global position',
           '${widget.event.globalPosition.dx.toStringAsFixed(1)}, ${widget.event.globalPosition.dy.toStringAsFixed(1)}',

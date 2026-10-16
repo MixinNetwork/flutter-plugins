@@ -31,12 +31,12 @@ class DropPlayground extends StatefulWidget {
 }
 
 class _DropPlaygroundState extends State<DropPlayground> {
-  DropEvent? _drop;
+  DropDetails? _drop;
   String? _receiver;
   Map<DropItem, ReceivedItem> _content = {};
   double _stageFraction = .38;
 
-  Future<void> _received(String target, DropEvent event) async {
+  Future<void> _received(String target, DropDetails event) async {
     setState(() {
       _drop = event;
       _receiver = target;

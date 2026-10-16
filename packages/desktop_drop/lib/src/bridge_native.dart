@@ -37,7 +37,7 @@ DropBridge createDropBridge(int view, DropCoordinator coordinator) {
         final selection = connection._decideMap(map);
         return {
           'target': selection.target,
-          'operation': selection.operation.index,
+          'operation': (selection.operation?.index ?? -1) + 1,
         };
       }
       if (call.method == 'feedback' ||
@@ -110,7 +110,7 @@ class _NativeBridge implements DropBridge {
   ) {
     final offer = _resolveOffer(session, event);
     // Native adapters resend a full offer on a cache miss.
-    if (offer == null) return (target: -1, operation: DropOperation.reject);
+    if (offer == null) return (target: -1, operation: null);
     return coordinator.decide(view, offer, position);
   }
 
@@ -130,7 +130,7 @@ class _NativeBridge implements DropBridge {
       );
     } catch (error, stack) {
       _report(error, stack);
-      return (target: 0, operation: DropOperation.reject);
+      return (target: 0, operation: null);
     }
   }
 
@@ -143,7 +143,7 @@ class _NativeBridge implements DropBridge {
       );
     } catch (error, stack) {
       _report(error, stack);
-      return (target: 0, operation: DropOperation.reject);
+      return (target: 0, operation: null);
     }
   }
 
@@ -174,7 +174,7 @@ class _NativeBridge implements DropBridge {
         1 => DropOperation.copy,
         2 => DropOperation.move,
         3 => DropOperation.link,
-        _ => DropOperation.reject,
+        _ => null,
       },
     );
     if (method == 'feedback') {
@@ -187,13 +187,13 @@ class _NativeBridge implements DropBridge {
     return coordinator.drop(
       view,
       selection.target,
-      DropEvent(
-        offer: offer,
+      DropDetails(
         localPosition: details.localPosition,
         globalPosition: details.globalPosition,
-        operation: selection.operation,
+        operation: selection.operation!,
         items: _items((event['offer'] as Map).cast<Object?, Object?>(), source),
       ),
+      session: session,
     );
   }
 
@@ -297,7 +297,7 @@ class _NativeBridge implements DropBridge {
       );
       result.ref
         ..target = selection.target
-        ..operation = selection.operation.index;
+        ..operation = (selection.operation?.index ?? -1) + 1;
     });
     _port = ReceivePort()
       ..listen((dynamic message) {
@@ -314,7 +314,7 @@ class _NativeBridge implements DropBridge {
           generation,
           data[2] as int,
           selection.target,
-          selection.operation.index,
+          (selection.operation?.index ?? -1) + 1,
         );
       });
     generation = _bindings!.dd_bridge_register(

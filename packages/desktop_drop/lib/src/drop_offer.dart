@@ -6,10 +6,9 @@ import 'file_tree.dart';
 /// Broad kinds available to a synchronous drag decision.
 enum DropItemKind { file, string, directory }
 
-/// The operation a target chooses. Reject is always available; the remaining
-/// operations must be present in the event's allowedOperations.
-// Keep the indices in sync with DDDecision.operation in desktop_drop_ffi.h.
-enum DropOperation { reject, copy, move, link }
+/// The operation requested by a target. Unsupported operations reject the drag.
+/// Native ABI values are index + 1; zero is reserved for rejection.
+enum DropOperation { copy, move, link }
 
 /// Metadata visible during a drag. A string's [value] can remain unavailable
 /// until drop. A virtual file can advertise a name without a local path.
@@ -51,11 +50,7 @@ class DropOffer {
     this.isComplete = true,
     Set<DropOperation> allowedOperations = const {DropOperation.copy},
   }) : items = List.unmodifiable(items),
-       allowedOperations = Set.unmodifiable(
-         allowedOperations.where(
-           (operation) => operation != DropOperation.reject,
-         ),
-       );
+       allowedOperations = Set.unmodifiable(allowedOperations);
 
   final List<DropItemPreview> items;
   final bool isComplete;

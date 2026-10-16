@@ -12,6 +12,25 @@ the panes. Lists and content scroll independently; the page never moves the
 results below the targets. The macOS window opens at 1180 × 740 with a minimum
 content size of 900 × 620. Hosts narrower than 800 pixels can pan horizontally.
 
+## API
+
+Targets use `acceptedKinds` for basic filtering, optional `onWillAccept` for the
+MIME and URL presets, and `operation` for the Action selector. `onEnter` and `onMove`
+receive `DragDetails`; `onDrop` receives readable `DropDetails.items`.
+
+```dart
+DropTarget(
+  acceptedKinds: const {DropItemKind.file},
+  onDrop: (details) async {
+    for (final item in details.items.whereType<DropFileItem>()) {
+      final bytes = await item.file.readAsBytes();
+      print('${item.name}: ${bytes.length} bytes');
+    }
+  },
+  child: const SizedBox(width: 200, height: 200),
+)
+```
+
 ## Targets
 
 Parent contains two partially overlapping sibling targets, Child A and Child B.
@@ -20,7 +39,8 @@ content by default; Child A accepts `text/plain` files, and Child B accepts
 `image/png` files. Both presets use only the MIME type exposed by the plugin,
 including during hover. Unknown types are rejected by these child targets.
 Child B starts in front. **Swap layers** exchanges their stacking order without
-changing their settings. The shared Action selector chooses reject/copy/move/link.
+changing their settings. The shared Action selector configures copy/move/link
+on every target.
 An operation unsupported by the source is rejected rather than substituted.
 
 | Scenario | Expected behavior |
@@ -36,8 +56,9 @@ An operation unsupported by the source is rejected rather than substituted.
 | Mixed text/PNG selection onto a plain-text-only target | Rejected by that target. |
 | Source does not support the selected Action | Rejected. Android and iOS advertise copy only. |
 
-Hover highlights the selected target and shows its operation. Received content
-remains unchanged until another drop. On macOS, changing the action only at the
+Hover highlights the selected target and shows its configured operation and
+preview kinds. `onLeave` clears the highlight on exit, rejection, drop, or disabling.
+Received content remains unchanged until another drop. On macOS, changing the action only at the
 final decision rather than during hover rejects the drop.
 
 ## Content
@@ -60,8 +81,8 @@ representations or invent a file from an image URL.
 - String items display their original values immediately. HTML is source text.
   URI lists show one line per entry, preserve comments, and support copying.
   No external images, previews or URLs are downloaded.
-- **Details** shows MIME type, local path or source reference, promise status,
-  allowed operations and original positions. It does not read file content.
+- **Details** shows MIME type, local path or source reference, promise status
+  and original positions. It does not read file content.
 - Clear and replacement discard the example's stored content. Selecting an item
   does not request the native source again. Read errors are shown in the viewer;
   retry by dropping the source again.
