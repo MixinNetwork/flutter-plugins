@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.3
+
+* Add `MarkdownController.parseDocument` and a `document` argument to `MarkdownController`, so an app can parse a document in an isolate before the widget builds.
+* Add `MarkdownController.highlightCodeBlocks` and `MarkdownController.cacheCodeHighlights`, so an app can highlight the code blocks of a parsed document in an isolate.
+* Show cached code highlights in the first frame, instead of plain code followed by a rebuild of the document.
+* Measure pretext text less: share width, line height, and tight text metrics measurements, measure each segment once per run, and merge plain fragments of a line.
+
 ## 0.3.2
 
 * Hide HTML comments and GitHub review metadata in rendered and copied Markdown while preserving literal comments in code and escaped text.
