@@ -120,14 +120,14 @@ public final class DesktopDropPlugin: NSObject, FlutterPlugin, UIDropInteraction
     offer.removeAll()
     operation = .cancel
   }
-  private func preview(_ session: UIDropSession) {
+  private func preview(_ session: UIDropSession, refresh: Bool = false) {
     if active !== session {
       active = session
       serial += 1
       itemIDs.removeAll()
     }
     let ids = session.items.map { ObjectIdentifier($0) }
-    guard ids != itemIDs else { return }
+    guard refresh || ids != itemIDs else { return }
     itemIDs = ids
     items = session.items.map { drag in
       let provider = drag.itemProvider
@@ -166,7 +166,9 @@ public final class DesktopDropPlugin: NSObject, FlutterPlugin, UIDropInteraction
     offerChanged = true
   }
   private func choose(_ session: UIDropSession, phase: Int32) -> (DDDecision, [String: Any]) {
-    preview(session)
+    // UIKit replaces hover providers with readable providers at drop time,
+    // even when the UIDragItem identities remain unchanged.
+    preview(session, refresh: phase == 2)
     guard let host = host else {
       return (DDDecision(generation: dd_bridge_generation(context), request: 0, target: 0, operation: 0), [:])
     }
