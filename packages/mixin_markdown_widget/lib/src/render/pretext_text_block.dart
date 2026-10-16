@@ -2568,6 +2568,10 @@ class _TextPainterSegmentMeasurer {
 
   /// Measures [segment], which starts at [start] in the text of [runWidths].
   /// A cache miss lays out the whole run once instead of the segment alone.
+  ///
+  /// The entry is separate from [measure]: a width from inside a run can
+  /// differ from a width of the segment alone when a font shapes across the
+  /// segment edge, and the result must not depend on which one ran first.
   double measureInRun(
     String segment,
     TextStyle style,
@@ -2576,7 +2580,7 @@ class _TextPainterSegmentMeasurer {
     int start,
   ) {
     return _cachedMeasure(
-      (segment, style, textScaleFactor, null),
+      (#inRun, segment, style, textScaleFactor),
       () => runWidths.width(start, start + segment.length),
     );
   }
