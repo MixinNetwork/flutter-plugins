@@ -1,6 +1,8 @@
 import 'dart:async';
 
-import 'package:desktop_webview_window/src/title_bar_state.dart';
+import 'package:desktop_webview_window/desktop_webview_window.dart';
+import 'package:desktop_webview_window/src/title_bar_runtime.dart';
+import 'package:desktop_webview_window/src/webview_impl.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -21,7 +23,9 @@ void main() {
     pages = await DemoPageServer.start();
     state = DemoState(pages);
     calls = [];
-    titleBarInitialized = true;
+    titleBarInitialization = Future<void>.value();
+    defaultTitleBarConfiguration.value =
+        const WebviewTitleBarConfiguration(height: 44);
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
       calls.add(call);
@@ -32,7 +36,8 @@ void main() {
   });
 
   tearDown(() async {
-    titleBarInitialized = false;
+    titleBarInitialization = null;
+    defaultTitleBarConfiguration.value = const WebviewTitleBarConfiguration();
     await pages.close();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, null);
@@ -58,18 +63,7 @@ void main() {
     expect(first.result, contains('first window result'));
     expect(second.result, isNot(contains('first window result')));
     expect(state.selected, same(second));
-    await TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .handlePlatformMessage(
-      'webview_window',
-      const StandardMethodCodec().encodeMethodCall(MethodCall(
-        'onWindowClose',
-        {
-          'id': (calls.firstWhere((call) => call.method == 'launch').arguments
-              as Map)['viewId']
-        },
-      )),
-      (_) {},
-    );
+    (first.webview as WebviewImpl).onClosed();
     await first.webview.onClose;
     await Future<void>.delayed(Duration.zero);
     expect(state.windows, [second]);
@@ -104,11 +98,11 @@ void main() {
     state.dispose();
   });
 
-  testWidgets('Flutter titlebar switch controls reserved height and padding',
+  testWidgets('system and Flutter titlebar switches are independent',
       (tester) async {
     await tester.pumpWidget(DemoApp(state: state));
     await tester.pumpAndSettle();
-    Future<void> openAndCheck(bool titleBar) async {
+    Future<void> openAndCheck(bool system, bool flutter) async {
       await tester.runAsync(() async {
         await tester.tap(find.text('Open window'));
         while (state.creating) {
@@ -118,22 +112,35 @@ void main() {
       await tester.pumpAndSettle();
       final arguments =
           calls.lastWhere((call) => call.method == 'create').arguments as Map;
-      expect(arguments['titleBarHeight'], titleBar ? 44 : 0);
-      if (!titleBar) expect(arguments['titleBarTopPadding'], 0);
+      expect(arguments['showSystemTitleBar'], system);
+      expect(arguments['titleBarHeight'], flutter ? 44 : 0);
+      if (!system) expect(arguments['titleBarTopPadding'], 0);
     }
 
-    await openAndCheck(true);
+    await openAndCheck(true, true);
+    await tester.tap(find.descendant(
+      of: find.widgetWithText(Row, 'System titlebar'),
+      matching: find.byType(Checkbox),
+    ));
+    await tester.pumpAndSettle();
+    await openAndCheck(false, true);
     await tester.tap(find.descendant(
       of: find.widgetWithText(Row, 'Flutter titlebar'),
       matching: find.byType(Checkbox),
     ));
     await tester.pumpAndSettle();
-    await openAndCheck(false);
+    await openAndCheck(false, false);
+    await tester.tap(find.descendant(
+      of: find.widgetWithText(Row, 'System titlebar'),
+      matching: find.byType(Checkbox),
+    ));
+    await tester.pumpAndSettle();
+    await openAndCheck(true, false);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('window selection and app theme work at a narrow size',
+  testWidgets('window selection and shared theme work at a narrow size',
       (tester) async {
     tester.view.physicalSize = const Size(620, 760);
     tester.view.devicePixelRatio = 1;
@@ -146,7 +153,7 @@ void main() {
     await tester.tap(find.widgetWithText(ListTile, 'Browser 1'));
     await tester.pumpAndSettle();
     expect(state.selectedId, 1);
-    await tester.tap(find.byTooltip('Toggle app theme'));
+    await tester.tap(find.byTooltip('Toggle shared theme'));
     await tester.pumpAndSettle();
     expect(state.darkMode.value, isTrue);
     expect(tester.takeException(), isNull);

@@ -1,10 +1,11 @@
 import Cocoa
 import FlutterMacOS
 import WebKit
+import desktop_webview_window
 
 class MainFlutterWindow: NSWindow {
   override func awakeFromNib() {
-    let flutterViewController = FlutterViewController.init()
+    let flutterViewController = try! DesktopWebviewWindowPlugin.createMainViewController()
     let windowFrame = self.frame
     self.contentViewController = flutterViewController
     self.setFrame(windowFrame, display: true)
@@ -16,17 +17,6 @@ class MainFlutterWindow: NSWindow {
     let testChannel = FlutterMethodChannel(
       name: "webview_example/native_test", binaryMessenger: flutterViewController.engine.binaryMessenger)
     testChannel.setMethodCallHandler { call, result in
-      if call.method == "titlebar",
-         let args = call.arguments as? [String: Any],
-         let title = args["title"] as? String,
-         let operation = args["operation"] as? String,
-         let window = NSApp.windows.first(where: { $0.title == title }),
-         let controller = window.contentViewController?.children.compactMap({ $0 as? FlutterViewController }).first {
-        let channel = FlutterMethodChannel(
-          name: "webview_example/titlebar_test", binaryMessenger: controller.engine.binaryMessenger)
-        channel.invokeMethod(operation, arguments: nil, result: result)
-        return
-      }
       if call.method == "inspect",
          let args = call.arguments as? [String: Any],
          let title = args["title"] as? String,
@@ -42,6 +32,14 @@ class MainFlutterWindow: NSWindow {
           return
         }
         result([
+          "nativeDark": window.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua,
+          "titled": window.styleMask.contains(.titled),
+          "fullSizeContentView": window.styleMask.contains(.fullSizeContentView),
+          "transparentTitlebar": window.titlebarAppearsTransparent,
+          "webTopInWindow": webView.convert(webView.bounds, to: nil).maxY,
+          "contentLayoutTop": window.contentLayoutRect.maxY,
+          "closeButtonVisible": window.standardWindowButton(.closeButton).map { !$0.isHidden } ?? false,
+          "canBecomeKey": window.canBecomeKey,
           "contentHeight": content.bounds.height,
           "webHeight": webView.bounds.height,
           "webWidth": webView.bounds.width,

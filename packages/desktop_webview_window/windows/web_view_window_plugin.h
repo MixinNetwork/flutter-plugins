@@ -21,7 +21,7 @@ class WebviewWindowPlugin: public flutter::Plugin {
 
   static void RegisterWithRegistrar(flutter::PluginRegistrarWindows *registrar);
 
-  explicit WebviewWindowPlugin(MethodChannelPtr method_channel);
+  WebviewWindowPlugin(MethodChannelPtr method_channel, flutter::BinaryMessenger* messenger);
 
   ~WebviewWindowPlugin() override;
 
@@ -33,7 +33,13 @@ class WebviewWindowPlugin: public flutter::Plugin {
 
   MethodChannelPtr method_channel_;
 
-  std::map<int64_t, std::unique_ptr<WebviewWindow>> windows_;
+  // Declared before windows_ so views die before their routing registry.
+  webview_window::TitleBarViews title_bar_views_;
+
+  std::map<int64_t, std::shared_ptr<WebviewWindow>> windows_;
+
+  // Guards native close callbacks during plugin teardown.
+  std::shared_ptr<bool> lifetime_ = std::make_shared<bool>(true);
 
 };
 

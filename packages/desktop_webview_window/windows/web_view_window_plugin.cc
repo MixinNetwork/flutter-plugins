@@ -12,9 +12,9 @@ namespace {
 int64_t next_window_id_ = 0;
 
 bool IsWebViewRuntimeAvailable() {
-  LPWSTR version_info;
-  GetAvailableCoreWebView2BrowserVersionString(nullptr, &version_info);
-  return version_info != nullptr;
+  wil::unique_cotaskmem_string version_info;
+  const HRESULT hr = GetAvailableCoreWebView2BrowserVersionString(nullptr, &version_info);
+  return SUCCEEDED(hr) && version_info != nullptr;
 }
 
 }  // namespace
@@ -26,7 +26,7 @@ void WebviewWindowPlugin::RegisterWithRegistrar(
       std::make_shared<flutter::MethodChannel<flutter::EncodableValue>>(
           registrar->messenger(), "webview_window",
           &flutter::StandardMethodCodec::GetInstance());
-  auto plugin = std::make_unique<WebviewWindowPlugin>(channel);
+  auto plugin = std::make_unique<WebviewWindowPlugin>(channel, registrar->messenger());
 
   channel->SetMethodCallHandler(
       [plugin_pointer = plugin.get()](const auto &call, auto result) {
@@ -36,10 +36,20 @@ void WebviewWindowPlugin::RegisterWithRegistrar(
   registrar->AddPlugin(std::move(plugin));
 }
 
-WebviewWindowPlugin::WebviewWindowPlugin(MethodChannelPtr method_channel)
-    : method_channel_(std::move(method_channel)), windows_() {}
+WebviewWindowPlugin::WebviewWindowPlugin(
+    MethodChannelPtr method_channel, flutter::BinaryMessenger* messenger)
+    : method_channel_(std::move(method_channel)), title_bar_views_(messenger), windows_() {}
 
-WebviewWindowPlugin::~WebviewWindowPlugin() = default;
+WebviewWindowPlugin::~WebviewWindowPlugin() {
+  method_channel_->SetMethodCallHandler(nullptr);
+  lifetime_.reset();
+  // Close windows while their shared engine and channels are still alive.
+  auto windows = std::move(windows_);
+  for (const auto& entry : windows) {
+    entry.second->Close();
+  }
+  windows.clear();
+}
 
 void WebviewWindowPlugin::HandleMethodCall(
     const flutter::MethodCall<flutter::EncodableValue> &method_call,
@@ -77,30 +87,51 @@ void WebviewWindowPlugin::HandleMethodCall(
       auto *value = std::get_if<bool>(&it->second);
       return value != nullptr && *value;
     };
+    const auto system_title_bar = arguments->find(flutter::EncodableValue("showSystemTitleBar"));
+    const bool show_system_title_bar = system_title_bar == arguments->end() ||
+        std::get<bool>(system_title_bar->second);
     auto openHidden = optional_bool("openHidden");
     auto denyCameraAndMicrophone = optional_bool("denyCameraAndMicrophone");
 
-    auto window_id = next_window_id_;
-    auto window = std::make_unique<WebviewWindow>(
-        method_channel_, window_id, int(titleBarHeight),
-        [this, window_id]() { windows_.erase(window_id); });
-    std::shared_ptr<flutter::MethodResult<flutter::EncodableValue>> result2(
+    const auto use_title_bar = arguments->find(flutter::EncodableValue("useTitleBar"));
+    const bool show_title_bar = use_title_bar == arguments->end() ||
+        std::get<bool>(use_title_bar->second);
+    const auto padding = arguments->find(flutter::EncodableValue("titleBarTopPadding"));
+    const int top_padding = padding == arguments->end() ? 0 :
+        static_cast<int>(padding->second.LongValue());
+    const int toolbar_height = show_title_bar && titleBarHeight > 0 ?
+        static_cast<int>(titleBarHeight) : 0;
+
+    const auto window_id = next_window_id_++;
+    std::weak_ptr<bool> lifetime = lifetime_;
+    auto window = std::make_shared<WebviewWindow>(
+        method_channel_, window_id, toolbar_height, top_padding, &title_bar_views_,
+        [this, lifetime, window_id]() {
+          if (!lifetime.expired()) {
+            windows_.erase(window_id);
+          }
+        });
+    // Store ownership first: window creation can fail synchronously or pump
+    // native messages, including an early close.
+    windows_.emplace(window_id, window);
+    std::shared_ptr<flutter::MethodResult<flutter::EncodableValue>> pending_result(
         std::move(result));
+    const auto brightness = arguments->find(flutter::EncodableValue("titleBarBrightness"));
+    if (brightness != arguments->end()) {
+      window->SetBrightness(static_cast<int>(brightness->second.LongValue()));
+    }
     window->CreateAndShow(
         utf8_to_wide(title), int(height), int(width),
         utf8_to_wide(userDataFolder), int(windowPosX), int(windowPosY),
-        useWindowPositionAndSize, openMaximized, openHidden,
-        denyCameraAndMicrophone,
-        [this, window_id, result(result2)](bool succeed) mutable {
-          if (!succeed) {
-            result->Error("0", "failed to show window");
-            windows_.erase(window_id);
-            return;
+        useWindowPositionAndSize, openMaximized, openHidden, denyCameraAndMicrophone,
+        show_system_title_bar,
+        [window_id, pending_result](bool success, const std::string& error) {
+          if (success) {
+            pending_result->Success(flutter::EncodableValue(window_id));
+          } else {
+            pending_result->Error("0", error);
           }
-          result->Success(flutter::EncodableValue(window_id));
         });
-    next_window_id_++;
-    windows_[window_id] = std::move(window);
   } else if (method_call.method_name() == "launch") {
     auto *arguments =
         std::get_if<flutter::EncodableMap>(method_call.arguments());
@@ -146,8 +177,11 @@ void WebviewWindowPlugin::HandleMethodCall(
         utf8_to_wide(javaScript));
     result->Success();
   } else if (method_call.method_name() == "clearAll") {
-    std::map<int64_t, std::unique_ptr<WebviewWindow>> local;
+    std::map<int64_t, std::shared_ptr<WebviewWindow>> local;
     std::swap(local, windows_);
+    for (const auto& entry : local) {
+      entry.second->Close();
+    }
     local.clear();
     result->Success();
   } else if (method_call.method_name() == "setApplicationNameForUserAgent") {
@@ -314,6 +348,17 @@ void WebviewWindowPlugin::HandleMethodCall(
       return;
     }
     windows_[window_id]->GetWebView()->GetAllCookies(std::move(result));
+  } else if (method_call.method_name() == "setBrightness") {
+    const auto* arguments = std::get_if<flutter::EncodableMap>(method_call.arguments());
+    const auto window_id = arguments->at(flutter::EncodableValue("viewId")).LongValue();
+    const auto found = windows_.find(window_id);
+    if (found == windows_.end()) {
+      result->Error("0", "can not find webview window for id");
+      return;
+    }
+    const auto brightness = arguments->at(flutter::EncodableValue("brightness")).LongValue();
+    found->second->SetBrightness(static_cast<int>(brightness));
+    result->Success();
   } else if (method_call.method_name() == "close") {
     auto *arguments =
         std::get_if<flutter::EncodableMap>(method_call.arguments());
@@ -323,7 +368,8 @@ void WebviewWindowPlugin::HandleMethodCall(
       result->Error("0", "can not find webview window for id");
       return;
     }
-    windows_.erase(window_id);
+    auto window = windows_.at(window_id);
+    window->Close();
     result->Success();
   } else if (method_call.method_name() == "evaluateJavaScript") {
     auto *arguments =

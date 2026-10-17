@@ -2,27 +2,41 @@ import Cocoa
 import FlutterMacOS
 import WebKit
 
-private var viewId: Int64 = 0
+// Browser IDs are distinct from engine-assigned Flutter view IDs.
+private var nextWebViewId: Int64 = 0
 
 public class DesktopWebviewWindowPlugin: NSObject, FlutterPlugin {
   private let methodChannel: FlutterMethodChannel
 
   private var webviews: [Int64: WebviewWindowController] = [:]
 
-  public init(methodChannel: FlutterMethodChannel) {
+  private let titleBarViews: TitleBarViews
+
+  public init(methodChannel: FlutterMethodChannel, messenger: FlutterBinaryMessenger) {
     self.methodChannel = methodChannel
+    self.titleBarViews = TitleBarViews(messenger: messenger)
     super.init()
+  }
+
+  /// Creates the application's main controller with multi-view enabled.
+  /// Call before RegisterGeneratedPlugins in the macOS runner.
+  public static func createMainViewController() throws -> FlutterViewController {
+    try TitleBarViews.createMainViewController()
   }
 
   public static func register(with registrar: FlutterPluginRegistrar) {
     let channel = FlutterMethodChannel(name: "webview_window", binaryMessenger: registrar.messenger)
-    let instance = DesktopWebviewWindowPlugin(methodChannel: channel)
+    let instance = DesktopWebviewWindowPlugin(methodChannel: channel, messenger: registrar.messenger)
     registrar.addMethodCallDelegate(instance, channel: channel)
-    ClientMessageChannelPlugin.register(with: registrar)
   }
 
   public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     switch call.method {
+    #if DEBUG
+    case "debugTitleBarState":
+      result(titleBarViews.debugState())
+      return
+    #endif
     case "create":
       guard let argument = call.arguments as? [String: Any?] else {
         result(FlutterError(code: "0", message: "arg is not map", details: nil))
@@ -32,18 +46,32 @@ public class DesktopWebviewWindowPlugin: NSObject, FlutterPlugin {
       let height = argument["windowHeight"] as? Int ?? 720
       let title = argument["title"] as? String ?? ""
       let titleBarHeight = argument["titleBarHeight"] as? Int ?? 50
-      let titleBarTopPadding = argument["titleBarTopPadding"] as? Int ?? 0
+      let showSystemTitleBar = argument["showSystemTitleBar"] as? Bool ?? true
+      let titleBarTopPadding = showSystemTitleBar
+        ? max(0, argument["titleBarTopPadding"] as? Int ?? 0) : 0
+      let useTitleBar = argument["useTitleBar"] as? Bool ?? true
+      let viewId = nextWebViewId
+      nextWebViewId += 1
+
+      var titleBarController: FlutterViewController?
+      if useTitleBar && titleBarHeight > 0 {
+        titleBarController = titleBarViews.createView(
+          webViewId: viewId, titleBarTopPadding: titleBarTopPadding)
+      }
 
       let controller = WebviewWindowController(
         viewId: viewId, methodChannel: methodChannel,
-        width: width, height: height, title: title,
-        titleBarHeight: titleBarHeight, titleBarTopPadding: titleBarTopPadding
+        width: width, height: height, title: title, showSystemTitleBar: showSystemTitleBar,
+        titleBarHeight: titleBarController == nil ? 0 : titleBarHeight + titleBarTopPadding,
+        titleBarController: titleBarController, titleBarViews: titleBarViews
       )
       controller.webviewPlugin = self
       webviews[viewId] = controller
+      if let brightness = argument["titleBarBrightness"] as? Int {
+        controller.setAppearance(brightness: brightness)
+      }
       controller.showWindow(nil)
       result(viewId)
-      viewId += 1
       break
     case "launch":
       guard let argument = call.arguments as? [String: Any?] else {
@@ -192,6 +220,7 @@ public class DesktopWebviewWindowPlugin: NSObject, FlutterPlugin {
         return
       }
       wc.webViewController.goBack()
+      result(nil)
       break
     case "forward":
       guard let argument = call.arguments as? [String: Any?] else {
@@ -207,6 +236,7 @@ public class DesktopWebviewWindowPlugin: NSObject, FlutterPlugin {
         return
       }
       wc.webViewController.goForward()
+      result(nil)
       break
     case "reload":
       guard let argument = call.arguments as? [String: Any?] else {
@@ -222,6 +252,7 @@ public class DesktopWebviewWindowPlugin: NSObject, FlutterPlugin {
         return
       }
       wc.webViewController.reload()
+      result(nil)
       break
     case "stop":
       guard let argument = call.arguments as? [String: Any?] else {
@@ -237,6 +268,7 @@ public class DesktopWebviewWindowPlugin: NSObject, FlutterPlugin {
         return
       }
       wc.webViewController.stopLoading()
+      result(nil)
       break
     case "close":
       guard let argument = call.arguments as? [String: Any?] else {
@@ -248,10 +280,13 @@ public class DesktopWebviewWindowPlugin: NSObject, FlutterPlugin {
         return
       }
       guard let wc = webviews[viewId] else {
-        result(FlutterError(code: "0", message: "can not find webview for id: \(viewId)", details: nil))
+        // Closing an already closed window is harmless, including a duplicate
+        // request while a native close event is being delivered.
+        result(nil)
         return
       }
       wc.close()
+      result(nil)
       break
     case "evaluateJavaScript":
       guard let argument = call.arguments as? [String: Any?] else {
@@ -293,6 +328,16 @@ public class DesktopWebviewWindowPlugin: NSObject, FlutterPlugin {
   }
 
   func onWebviewWindowClose(viewId: Int64, wc: WebviewWindowController) {
+    guard webviews[viewId] === wc else { return }
     webviews.removeValue(forKey: viewId)
+  }
+
+  deinit {
+    // Detach only browser views; the runner retains the application engine.
+    for controller in webviews.values {
+      controller.destroy()
+    }
+    webviews.removeAll()
+    titleBarViews.shutdown()
   }
 }

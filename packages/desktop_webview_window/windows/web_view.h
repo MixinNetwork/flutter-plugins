@@ -8,6 +8,8 @@
 #include <windows.h>
 
 #include <string>
+#include <functional>
+#include <memory>
 
 #include <flutter/method_channel.h>
 #include <flutter/encodable_value.h>
@@ -20,18 +22,19 @@
 
 namespace webview_window {
 
-class WebView {
+class WebView : public std::enable_shared_from_this<WebView> {
 
  public:
 
   WebView(std::shared_ptr<flutter::MethodChannel<flutter::EncodableValue>> method_channel,
           int64_t web_view_id,
-          std::wstring userDataFolder,
-          bool deny_camera_and_microphone,
-          std::function<void(HRESULT)> on_web_view_created_callback
-  );
+          std::wstring userDataFolder, bool deny_camera_and_microphone);
 
   virtual ~WebView();
+
+  void Create(std::function<void(HRESULT)> callback);
+
+  void Close();
 
   [[nodiscard]] const wil::unique_hwnd &NativeWindow() const { return view_window_; }
 
@@ -102,6 +105,9 @@ class WebView {
   bool visible_{true};
 
   void CancelPendingNavigation();
+  bool closed_ = false;
+
+  void CompleteCreation(HRESULT result);
 
   HRESULT OnWebviewControllerCreated();
 

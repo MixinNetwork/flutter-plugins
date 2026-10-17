@@ -7,8 +7,8 @@
 #include <cstring>
 #include <map>
 #include <memory>
+#include <vector>
 
-#include "message_channel_plugin.h"
 #include "webview_window.h"
 
 namespace {
@@ -27,6 +27,8 @@ struct _WebviewWindowPlugin {
   std::map<int64_t, std::unique_ptr<WebviewWindow>> *windows;
   // The app's view, used to find the window webview windows belong to.
   FlView *view;
+  TitleBarViews *title_bar_views;
+  FlBinaryMessenger *messenger;
 };
 
 G_DEFINE_TYPE(WebviewWindowPlugin, webview_window_plugin, g_object_get_type())
@@ -57,20 +59,32 @@ static void webview_window_plugin_handle_method_call(
         parent = GTK_WINDOW(toplevel);
       }
     }
+    auto *system_title_bar = fl_value_lookup_string(args, "showSystemTitleBar");
+    const bool show_system_title_bar = system_title_bar == nullptr ||
+        fl_value_get_bool(system_title_bar);
+    auto *use_title_bar = fl_value_lookup_string(args, "useTitleBar");
+    if ((use_title_bar != nullptr &&
+         fl_value_get_type(use_title_bar) == FL_VALUE_TYPE_BOOL &&
+         !fl_value_get_bool(use_title_bar)) || title_bar_height <= 0) {
+      title_bar_height = 0;
+    }
+    auto *padding = fl_value_lookup_string(args, "titleBarTopPadding");
+    const int title_bar_top_padding =
+        padding == nullptr ? 0 : fl_value_get_int(padding);
+
 
     auto window_id = next_window_id_;
-    g_object_ref(self);
     auto webview = std::make_unique<WebviewWindow>(
         self->method_channel, window_id,
         [self, window_id]() {
           self->windows->erase(window_id);
-          g_object_unref(self);
         },
-        title, width, height, title_bar_height, parent);
+        title, width, height, title_bar_height, title_bar_top_padding,
+        self->title_bar_views, parent, show_system_title_bar);
     self->windows->insert({window_id, std::move(webview)});
     next_window_id_++;
-    fl_method_call_respond_success(method_call, fl_value_new_int(window_id),
-                                   nullptr);
+    g_autoptr(FlValue) result = fl_value_new_int(window_id);
+    fl_method_call_respond_success(method_call, result, nullptr);
   } else if (strcmp(method, "launch") == 0) {
     auto *args = fl_method_call_get_args(method_call);
     if (fl_value_get_type(args) != FL_VALUE_TYPE_MAP) {
@@ -110,13 +124,19 @@ static void webview_window_plugin_handle_method_call(
     self->windows->at(window_id)->RunJavaScriptWhenContentReady(java_script);
     fl_method_call_respond_success(method_call, nullptr, nullptr);
   } else if (strcmp(method, "clearAll") == 0) {
-    for (const auto &item : *self->windows) {
-      item.second->Close();
+    // Closing destroys each window synchronously and erases its map entry.
+    // Iterate a snapshot, not an iterator invalidated by that callback.
+    std::vector<int64_t> ids;
+    for (const auto &item : *self->windows) ids.push_back(item.first);
+    for (int64_t id : ids) {
+      auto found = self->windows->find(id);
+      if (found != self->windows->end()) found->second->Close();
     }
     // If application didn't create a webview, but we called
     // webkit_website_data_manager_clear, there will be a segment fault. To
     // avoid crash, we create a fake webview first and then clear all data.
-    auto *web_view = webkit_web_view_new();
+    g_autoptr(WebKitWebView) web_view = WEBKIT_WEB_VIEW(webkit_web_view_new());
+    g_object_ref_sink(web_view);
     auto *context = webkit_web_view_get_context(WEBKIT_WEB_VIEW(web_view));
     auto *website_data_manager =
         webkit_web_context_get_website_data_manager(context);
@@ -246,9 +266,8 @@ static void webview_window_plugin_handle_method_call(
     }
     auto window_id = fl_value_get_int(fl_value_lookup_string(args, "viewId"));
     if (!self->windows->count(window_id)) {
-      fl_method_call_respond_error(method_call, "0",
-                                   "can not found webview for viewId", nullptr,
-                                   nullptr);
+      // A duplicated or delayed close is already satisfied.
+      fl_method_call_respond_success(method_call, nullptr, nullptr);
       return;
     }
     self->windows->at(window_id)->Close();
@@ -309,8 +328,23 @@ static void webview_window_plugin_handle_method_call(
 }
 
 static void webview_window_plugin_dispose(GObject *object) {
-  delete WEBVIEW_WINDOW_PLUGIN(object)->windows;
-  g_object_unref(WEBVIEW_WINDOW_PLUGIN(object)->method_channel);
+  auto *self = WEBVIEW_WINDOW_PLUGIN(object);
+  // Destructors disconnect native callbacks before destroying GTK widgets.
+  // Windows must release their views before the shared host is destroyed.
+  delete self->windows;
+  self->windows = nullptr;
+  if (self->messenger != nullptr) {
+    g_object_set_data(G_OBJECT(self->messenger), "desktop_webview_window/titlebars", nullptr);
+  }
+  delete self->title_bar_views;
+  self->title_bar_views = nullptr;
+  g_clear_object(&self->method_channel);
+  g_clear_object(&self->messenger);
+  if (self->view != nullptr) {
+    g_object_remove_weak_pointer(G_OBJECT(self->view),
+                                reinterpret_cast<gpointer*>(&self->view));
+    self->view = nullptr;
+  }
   G_OBJECT_CLASS(webview_window_plugin_parent_class)->dispose(object);
 }
 
@@ -330,7 +364,6 @@ static void method_call_cb(FlMethodChannel *channel, FlMethodCall *method_call,
 
 void desktop_webview_window_plugin_register_with_registrar(
     FlPluginRegistrar *registrar) {
-  client_message_channel_plugin_register_with_registrar(registrar);
 
   WebviewWindowPlugin *plugin = WEBVIEW_WINDOW_PLUGIN(
       g_object_new(webview_window_plugin_get_type(), nullptr));
@@ -341,9 +374,26 @@ void desktop_webview_window_plugin_register_with_registrar(
                             "webview_window", FL_METHOD_CODEC(codec));
   g_object_ref(channel);
   plugin->method_channel = channel;
+  plugin->messenger = FL_BINARY_MESSENGER(g_object_ref(
+      fl_plugin_registrar_get_messenger(registrar)));
   plugin->view = fl_plugin_registrar_get_view(registrar);
+  if (plugin->view != nullptr) {
+    g_object_add_weak_pointer(G_OBJECT(plugin->view),
+                             reinterpret_cast<gpointer*>(&plugin->view));
+  }
+  plugin->title_bar_views = new TitleBarViews(
+      fl_plugin_registrar_get_messenger(registrar), plugin->view);
   fl_method_channel_set_method_call_handler(
       channel, method_call_cb, g_object_ref(plugin), g_object_unref);
 
   g_object_unref(plugin);
+}
+
+void desktop_webview_window_plugin_attach_engine(FlEngine* engine) {
+  g_return_if_fail(FL_IS_ENGINE(engine));
+  auto* messenger = fl_engine_get_binary_messenger(engine);
+  auto* titlebars = static_cast<TitleBarViews*>(g_object_get_data(
+      G_OBJECT(messenger), "desktop_webview_window/titlebars"));
+  g_return_if_fail(titlebars != nullptr);
+  titlebars->AttachEngine(engine);
 }

@@ -23,7 +23,7 @@
 #include "flutter_view.h"
 #include "web_view.h"
 
-class WebviewWindow {
+class WebviewWindow : public std::enable_shared_from_this<WebviewWindow> {
 
  public:
 
@@ -32,17 +32,20 @@ class WebviewWindow {
   WebviewWindow(MethodChannelPtr method_channel,
                 int64_t window_id,
                 int title_bar_height,
+                int title_bar_top_padding,
+                webview_window::TitleBarViews* title_bar_views,
                 std::function<void()> on_close_callback);
 
   virtual ~WebviewWindow();
 
-  using CreateCallback = std::function<void(bool success)>;
+  using CreateCallback = std::function<void(bool success, const std::string& error)>;
 
   void CreateAndShow(const std::wstring &title, int height, int width,
                      const std::wstring &userDataFolder,
                      int windowPosX, int windowPosY, bool useWindowPositionAndSize,
                      bool openMaximized, bool openHidden,
-                     bool denyCameraAndMicrophone, CreateCallback callback);
+                     bool denyCameraAndMicrophone, bool showSystemTitleBar,
+                     CreateCallback callback);
 
 
   // OS callback called by message pump. Handles the WM_NCCREATE message which
@@ -55,6 +58,8 @@ class WebviewWindow {
                                   WPARAM wparam,
                                   LPARAM lparam) noexcept;
 
+  void Close();
+
   void SetBrightness(int brightness);
 
   void setVisibility(bool visible);
@@ -65,7 +70,7 @@ class WebviewWindow {
 
   void getPositionalParameters(std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> completer);
 
-  [[nodiscard]] const std::unique_ptr<webview_window::WebView> &GetWebView() const {
+  [[nodiscard]] const std::shared_ptr<webview_window::WebView> &GetWebView() const {
     return web_view_;
   }
 
@@ -84,13 +89,24 @@ class WebviewWindow {
 
   std::unique_ptr<webview_window::FlutterView> flutter_action_bar_;
 
-  std::unique_ptr<webview_window::WebView> web_view_;
+  std::shared_ptr<webview_window::WebView> web_view_;
 
-  int last_title_bar_width_ = 0;
+  webview_window::TitleBarViews* title_bar_views_;
+
+  CreateCallback create_callback_;
+
+  int title_bar_top_padding_;
 
   bool destroyed_ = false;
 
   int title_bar_height_;
+  int brightness_ = -2;
+
+  void CompleteCreation(bool success, const std::string& error = "");
+
+  void OnClosed();
+
+  void ResizeChildren(HWND window);
 
   // Processes and route salient window messages for mouse handling,
   // size change and DPI. Delegates handling of these to member overloads that

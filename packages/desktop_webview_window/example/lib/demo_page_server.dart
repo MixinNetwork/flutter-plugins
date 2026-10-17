@@ -18,7 +18,7 @@ button, input, a { font: inherit; margin: 6px 8px 6px 0; padding: 8px; }
 output { display: block; margin-top: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
 </style></head><body>
 <p>DESKTOP WEBVIEW WINDOW</p><h1>Browser $id${next ? ' · next page' : ''}</h1>
-<p>This native browser has its own page. Use the Flutter app to control this window and inspect its events.</p>
+<p>This native browser has its own page. Its Flutter titlebar shares the main application's engine.</p>
 <section><h2>Navigation & input</h2><label>Native input <input placeholder="Type here"></label>
 <button onclick="this.textContent='Clicked browser $id'">Native button</button>
 <a href="${next ? '/' : '/next'}?id=$id">${next ? 'First page' : 'Next page'}</a></section>

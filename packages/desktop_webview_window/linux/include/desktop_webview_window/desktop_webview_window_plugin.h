@@ -21,6 +21,11 @@ FLUTTER_PLUGIN_EXPORT GType webview_window_plugin_get_type();
 FLUTTER_PLUGIN_EXPORT void desktop_webview_window_plugin_register_with_registrar(
     FlPluginRegistrar* registrar);
 
+// Headless/multi-window runners call this after registering generated plugins.
+// The application retains ownership of the engine and its windows.
+FLUTTER_PLUGIN_EXPORT void desktop_webview_window_plugin_attach_engine(
+    FlEngine* engine);
+
 G_END_DECLS
 
 #endif  // FLUTTER_PLUGIN_WEBVIEW_WINDOW_PLUGIN_H_

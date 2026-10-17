@@ -13,9 +13,10 @@ flutter run -d macos # or windows / linux
 ```
 
 ```text
-Desktop WebView                                     [App theme]
+Desktop WebView                                  [Shared theme]
 Built-in demo / Custom URL              [Open window] [Open 3]
-[x] Flutter titlebar       Windows: [ ] Hidden [ ] Deny media
+[x] System titlebar [x] Flutter titlebar
+Windows: [ ] Hidden [ ] Deny media
 +----------------------+-------------------------------------+
 | Browser windows      | Navigation / JavaScript / messages   |
 | Select a window      | Cookies / result / window options   |
@@ -24,10 +25,12 @@ Built-in demo / Custom URL              [Open window] [Open 3]
 +------------------------------------------------------------+
 ```
 
-The app theme affects the control panel. Each browser's Flutter titlebar still
-runs in its own engine, using `runWebViewTitleBarWidget` and the existing
-`TitleBarWebViewController` / `TitleBarWebViewState` APIs. Disable the Flutter
-titlebar to give its space to the web content.
+The shared theme affects both the control panel and browser titlebars. The
+example uses `WebviewWindowApp` with `WebviewTitleBarConfiguration` to render
+all Flutter titlebars on the application's engine. Each titlebar receives its
+own `Webview` handle and `WebviewNavigationState`. System and Flutter titlebars
+can be enabled independently; disabling the Flutter titlebar gives its space to
+the web content. macOS and Windows also expose per-window theme overrides.
 
 ## Tests
 
@@ -53,8 +56,9 @@ flutter test integration_test/app_test.dart -d windows --timeout 5m
 
 macOS coverage includes real WKWebView navigation, independent browser/titlebar
 state, titlebar back/forward/reload/stop/close, DOM input, resizing and repeated
-close/recreate. Native inspection and titlebar command fixtures live only in the
-example's Debug runner. Windows coverage includes WebView2 POST bodies,
+close/recreate. Native geometry inspection lives only in the example's Debug
+runner; titlebar commands are exercised directly through the shared test host.
+Windows coverage includes WebView2 POST bodies,
 navigation replacement/cancellation (including redirects and cached history),
 hidden/maximized visibility and non-persistent media denial.
 

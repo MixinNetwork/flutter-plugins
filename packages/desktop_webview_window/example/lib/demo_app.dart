@@ -19,6 +19,7 @@ class _DemoAppState extends State<DemoApp> {
   final _message = TextEditingController(text: 'Hello from Flutter');
   bool _builtIn = true;
   bool _titleBar = true;
+  bool _systemTitleBar = true;
   bool _hidden = false;
   bool _denyMedia = false;
   int? _eventWindow;
@@ -53,7 +54,7 @@ class _DemoAppState extends State<DemoApp> {
                 title: const Text('Desktop WebView'),
                 actions: [
                   IconButton(
-                    tooltip: 'Toggle app theme',
+                    tooltip: 'Toggle shared theme',
                     onPressed: () => state.darkMode.value = !dark,
                     icon: Icon(dark ? Icons.light_mode : Icons.dark_mode),
                   ),
@@ -116,6 +117,8 @@ class _DemoAppState extends State<DemoApp> {
               spacing: 12,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
+                _check('System titlebar', _systemTitleBar,
+                    (value) => _systemTitleBar = value),
                 _check('Flutter titlebar', _titleBar,
                     (value) => _titleBar = value),
                 if (Platform.isWindows) ...[
@@ -160,6 +163,7 @@ class _DemoAppState extends State<DemoApp> {
       url: _builtIn ? null : _url.text.trim(),
       count: count,
       showTitleBar: _titleBar,
+      showSystemTitleBar: _systemTitleBar,
       openHidden: _hidden,
       denyMedia: _denyMedia,
     );
@@ -198,7 +202,7 @@ class _DemoAppState extends State<DemoApp> {
         child: Padding(
           padding: EdgeInsets.all(24),
           child: Text(
-              'Explore native browser windows\n\nOpen the built-in demo, send a message from the page,\nand inspect messages, cookies and navigation.',
+              'Explore native browser windows\n\nOpen the built-in demo, send a message from the page,\nand try changing the shared titlebar theme.',
               textAlign: TextAlign.center),
         ),
       );
@@ -273,12 +277,17 @@ class _DemoAppState extends State<DemoApp> {
                 style: const TextStyle(fontFamily: 'monospace')),
           ),
         ),
-        if (Platform.isWindows) ...[
+        if (Platform.isMacOS || Platform.isWindows) ...[
           const Divider(height: 32),
           Text('Window options · ${Platform.operatingSystem}',
               style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 12),
           Wrap(spacing: 8, runSpacing: 8, children: [
+            action('Light titlebar',
+                () => view.setTitleBarTheme(ThemeData.light())),
+            action(
+                'Dark titlebar', () => view.setTitleBarTheme(ThemeData.dark())),
+            action('Follow shared theme', () => view.setTitleBarTheme(null)),
             if (Platform.isWindows) ...[
               action('Show', () => view.setWebviewWindowVisibility(true)),
               action('Hide', () => view.setWebviewWindowVisibility(false)),

@@ -94,6 +94,7 @@ class DemoState extends ChangeNotifier {
     String? url,
     int count = 1,
     bool showTitleBar = true,
+    bool showSystemTitleBar = true,
     bool openHidden = false,
     bool denyMedia = false,
   }) async {
@@ -117,12 +118,13 @@ class DemoState extends ChangeNotifier {
             title: 'Browser $id',
             windowWidth: 960,
             windowHeight: 720,
-            titleBarHeight: showTitleBar ? 44 : 0,
-            titleBarTopPadding: showTitleBar && Platform.isMacOS ? 24 : 0,
+            showSystemTitleBar: showSystemTitleBar,
             userDataFolderWindows: userDataFolder,
             openHidden: openHidden,
             denyCameraAndMicrophone: denyMedia,
           ),
+          titleBar:
+              showTitleBar ? null : const WebviewTitleBarConfiguration.none(),
         );
         if (_disposed) {
           view.close();

@@ -10,17 +10,26 @@ import 'demo_page_server.dart';
 import 'demo_state.dart';
 import 'demo_title_bar.dart';
 
-Future<void> main(List<String> args) async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // Each titlebar starts this entrypoint in its own engine. Only the main app
-  // should start the local server and own browser windows.
-  if (runWebViewTitleBarWidget(args, builder: (_) => const DemoTitleBar())) {
-    return;
-  }
   final profile = Platform.isWindows
       ? p.join((await getApplicationSupportDirectory()).path, 'webview_profile')
       : 'webview_window_WebView2';
-  runApp(DemoApp(
-    state: DemoState(await DemoPageServer.start(), userDataFolder: profile),
+  final state =
+      DemoState(await DemoPageServer.start(), userDataFolder: profile);
+  runWidget(ValueListenableBuilder<bool>(
+    valueListenable: state.darkMode,
+    child: DemoApp(state: state),
+    builder: (context, dark, child) => WebviewWindowApp(
+      titleBar: WebviewTitleBarConfiguration(
+        height: 44,
+        theme: state.theme,
+        builder: (context, webview, navigation) => DemoTitleBar(
+          webview: webview,
+          state: navigation,
+        ),
+      ),
+      child: child!,
+    ),
   ));
 }

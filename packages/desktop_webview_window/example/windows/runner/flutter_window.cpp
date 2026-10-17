@@ -1,6 +1,9 @@
 #include "flutter_window.h"
 
 #include <optional>
+#include <dwmapi.h>
+#include <flutter/method_channel.h>
+#include <flutter/standard_method_codec.h>
 
 #include "flutter/generated_plugin_registrant.h"
 
@@ -26,6 +29,31 @@ bool FlutterWindow::OnCreate() {
   }
   RegisterPlugins(flutter_controller_->engine());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
+#ifndef NDEBUG
+  // Example-only fixture: inspect the real DWM attribute rather than a cached
+  // plugin value. Integration test window titles are ASCII.
+  flutter::MethodChannel<flutter::EncodableValue> test_channel(
+      flutter_controller_->engine()->messenger(), "webview_example/native_test",
+      &flutter::StandardMethodCodec::GetInstance());
+  test_channel.SetMethodCallHandler([](const auto& call, auto result) {
+    if (call.method_name() != "inspect") {
+      result->NotImplemented();
+      return;
+    }
+    const auto& args = std::get<flutter::EncodableMap>(*call.arguments());
+    const auto& title = std::get<std::string>(args.at(flutter::EncodableValue("title")));
+    const auto window = FindWindowA("WebviewWindow", title.c_str());
+    BOOL dark = FALSE;
+    if (!window || FAILED(DwmGetWindowAttribute(window,
+            static_cast<DWMWINDOWATTRIBUTE>(20), &dark, sizeof(dark)))) {
+      result->Error("test_window_missing", "Cannot inspect native titlebar appearance");
+      return;
+    }
+    result->Success(flutter::EncodableValue(flutter::EncodableMap{
+        {flutter::EncodableValue("nativeDark"), flutter::EncodableValue(dark != FALSE)},
+    }));
+  });
+#endif
   return true;
 }
 
