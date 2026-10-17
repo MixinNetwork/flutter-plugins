@@ -1,7 +1,7 @@
 name: desktop_drop
 resolution: workspace
 description: Receive files, text, and URLs with per-target drag acceptance in Flutter applications.
-version: 0.9.0
+version: 0.9.1
 homepage: https://github.com/MixinNetwork/flutter-plugins/tree/main/packages/desktop_drop
 
 environment:

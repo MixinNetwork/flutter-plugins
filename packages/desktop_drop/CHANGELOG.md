@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.1
+
+- Windows: Fix a startup crash caused by queued platform tasks being freed before execution on affected Flutter engines. ([#526](https://github.com/MixinNetwork/flutter-plugins/pull/526))
+
 ## 0.9.0
 
 ### Breaking changes
