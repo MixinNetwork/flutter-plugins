@@ -68,10 +68,14 @@ class FfiTransport {
  private:
   static void Post(FlutterDesktopEngineRef engine, std::function<void()> task) {
     auto* pending = new std::function<void()>(std::move(task));
+    // No on_cancel: before flutter/flutter#193412 the engine builds its task
+    // context from a temporary whose destructor runs on_cancel immediately,
+    // freeing the task before it executes. A task discarded at engine
+    // shutdown leaks.
     FlutterDesktopEnginePostPlatformThreadTask(engine, [](void* user) {
       std::unique_ptr<std::function<void()>> task(static_cast<std::function<void()>*>(user));
       (*task)();
-    }, [](void* user) { delete static_cast<std::function<void()>*>(user); }, pending);
+    }, nullptr, pending);
   }
   void Dispatch(std::function<void()> task) { Post(engine_, std::move(task)); }
   FlutterDesktopMessengerRef messenger_;
