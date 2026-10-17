@@ -28,33 +28,34 @@ int Scale(int source, double scale_factor) {
   return static_cast<int>(source * scale_factor);
 }
 
-}
 
 using namespace Microsoft::WRL;
 
-WebviewWindow::WebviewWindow(
-    MethodChannelPtr method_channel,
-    int64_t window_id,
-    int title_bar_height,
-    int title_bar_top_padding,
-    webview_window::TitleBarViews* title_bar_views,
-    std::function<void()> on_close_callback
-) : method_channel_(std::move(method_channel)),
-    hwnd_(),
-    window_id_(window_id),
-    on_close_callback_(std::move(on_close_callback)),
-    title_bar_views_(title_bar_views),
-    title_bar_top_padding_(title_bar_top_padding),
-    title_bar_height_(title_bar_height) {
+constexpr UINT kDeferredClose = WM_APP + 1;
 
-}
+}  // namespace
+
+WebviewWindow::WebviewWindow(EventSink emit,
+                             NavigationRequest request_navigation,
+                             int64_t window_id,
+                             std::function<void()> on_close_callback)
+    : emit_(std::move(emit)),
+      request_navigation_(std::move(request_navigation)),
+      hwnd_(),
+      window_id_(window_id),
+      on_close_callback_(std::move(on_close_callback)) {}
 
 WebviewWindow::~WebviewWindow() {
   // No callbacks may reenter a partially destructed window.
   if (hwnd_) {
     SetWindowLongPtr(hwnd_.get(), GWLP_USERDATA, 0);
   }
-  flutter_action_bar_.reset();
+  if (!destroyed_) {
+    closing_ = true;
+    composer_.BeginClose();
+    composer_.Closing(window_id_);
+    dww::UnregisterBrowser(window_id_);
+  }
   if (web_view_) {
     web_view_->Close();
     web_view_.reset();
@@ -62,103 +63,120 @@ WebviewWindow::~WebviewWindow() {
   hwnd_.reset();
 }
 
-void WebviewWindow::CreateAndShow(const std::wstring &title, int height, int width,
-                                  const std::wstring &userDataFolder,
-                                  int windowPosX, int windowPosY, bool useWindowPositionAndSize,
-                                  bool openMaximized, bool openHidden,
-                                  bool denyCameraAndMicrophone, bool showSystemTitleBar,
+void WebviewWindow::CreateAndShow(const Options& options,
                                   CreateCallback callback) {
-
   // Keep this alive through synchronous failure callbacks and window messages.
   auto keep_alive = shared_from_this();
   create_callback_ = std::move(callback);
   RegisterWindowClass(kWebViewWindowClassName, WebviewWindow::WndProc);
 
-  const POINT target_point = {static_cast<LONG>(10), static_cast<LONG>(10)};
+  // Size the window for the monitor it will open on: the requested position,
+  // or the monitor showing the cursor for a centred window.
+  POINT target_point = {static_cast<LONG>(options.x), static_cast<LONG>(options.y)};
+  if (!options.use_position) GetCursorPos(&target_point);
   HMONITOR monitor = MonitorFromPoint(target_point, MONITOR_DEFAULTTONEAREST);
-  const double scale_factor = FlutterDesktopGetDpiForMonitor(monitor) / 96.0;
-  DWORD style = showSystemTitleBar ? WS_OVERLAPPEDWINDOW :
+  double scale_factor = FlutterDesktopGetDpiForMonitor(monitor) / 96.0;
+  DWORD style = options.show_system_title_bar ? WS_OVERLAPPEDWINDOW :
       WS_POPUP | WS_THICKFRAME | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX;
-  if (openMaximized) {
+  style |= WS_CLIPCHILDREN;
+  if (options.open_maximized) {
     style |= WS_MAXIMIZE;
   }
   hwnd_ = wil::unique_hwnd(::CreateWindow(
-      kWebViewWindowClassName, title.c_str(), style,
-      useWindowPositionAndSize ? windowPosX : CW_USEDEFAULT,
-      useWindowPositionAndSize ? windowPosY : CW_USEDEFAULT,
-      useWindowPositionAndSize ? width : Scale(width, scale_factor),
-      useWindowPositionAndSize ? height : Scale(height, scale_factor),
+      kWebViewWindowClassName, options.title.c_str(), style,
+      options.use_position ? options.x : CW_USEDEFAULT,
+      options.use_position ? options.y : CW_USEDEFAULT,
+      Scale(options.width, scale_factor), Scale(options.height, scale_factor),
       nullptr, nullptr, GetModuleHandle(nullptr), this));
   if (!hwnd_) {
-    CompleteCreation(false, "Failed to create the browser window.");
+    CompleteCreation(CreateOutcome::kFailed, "Failed to create the browser window.");
     OnClosed();
     return;
   }
   if (brightness_ != -2) SetBrightness(brightness_);
-  if (!useWindowPositionAndSize && !openMaximized) {
+  if (!options.use_position && !options.open_maximized) {
     ClipOrCenterWindowToMonitor(hwnd_.get(), MONITOR_CENTER);
   }
 
-  RECT bounds;
-  GetClientRect(hwnd_.get(), &bounds);
-  const int title_bar_height = Scale(title_bar_height_, scale_factor);
-  if (title_bar_height_ > 0) {
-    std::string error;
-    flutter_action_bar_ = title_bar_views_->CreateView(
-        window_id_, title_bar_top_padding_, bounds.right - bounds.left,
-        title_bar_height, &error);
-    if (!flutter_action_bar_) {
-      CompleteCreation(false, error);
-      Close();
-      return;
-    }
-    if (destroyed_) {
-      flutter_action_bar_.reset();
-      return;
-    }
-    SetParent(flutter_action_bar_->GetWindow(), hwnd_.get());
-    ShowWindow(flutter_action_bar_->GetWindow(), SW_SHOW);
-  }
-
+  std::weak_ptr<WebviewWindow> weak = weak_from_this();
   web_view_ = std::make_shared<webview_window::WebView>(
-      method_channel_, window_id_, userDataFolder, denyCameraAndMicrophone);
-  web_view_->SetVisible(!openHidden);
-  SetParent(web_view_->NativeWindow().get(), hwnd_.get());
-  ResizeChildren(hwnd_.get());
-  ShowWindow(web_view_->NativeWindow().get(), SW_SHOW);
-  if (!openHidden) {
-    ShowWindow(hwnd_.get(), openMaximized ? SW_SHOWMAXIMIZED : SW_SHOW);
+      emit_, request_navigation_,
+      [weak] {
+        if (auto window = weak.lock()) window->PublishNavigationState();
+      },
+      window_id_, options.user_data_folder, options.deny_camera_and_microphone,
+      options.javascript_bridge);
+  web_view_->SetVisible(!options.open_hidden);
+  HWND view = web_view_->NativeWindow().get();
+  SetParent(view, hwnd_.get());
+
+  dww::RegisterBrowser(window_id_, this);
+  const DWWComposeRequest request{
+      window_id_, hwnd_.get(), view,
+      options.composer_arguments ? options.composer_arguments->c_str() : nullptr,
+      options.show_toolbar};
+  composer_.Compose(request);
+  if (closing_) {
+    DestroyNow();
+    return;
+  }
+  Layout();
+  ShowWindow(view, SW_SHOW);
+  PublishNavigationState();
+  if (closing_) {
+    DestroyNow();
+    return;
+  }
+  if (!options.open_hidden) {
+    ShowWindow(hwnd_.get(), options.open_maximized ? SW_SHOWMAXIMIZED : SW_SHOW);
     UpdateWindow(hwnd_.get());
   }
 
-  // Start asynchronous WebView2 initialization only after ownership, parenting,
-  // and toolbar routing have been installed. Closing now cancels this reply.
-  if (destroyed_ || !web_view_) {
-    return;
-  }
-  web_view_->Create([weak = weak_from_this()](HRESULT result) {
+  // Start asynchronous WebView2 initialization only after ownership, parenting
+  // and composition. Closing now resolves the pending create as closed.
+  web_view_->Create([weak](HRESULT result) {
     auto window = weak.lock();
     if (!window || window->destroyed_) {
       return;
     }
     if (SUCCEEDED(result)) {
-      window->CompleteCreation(true);
+      window->CompleteCreation(CreateOutcome::kReady);
+      window->PublishNavigationState();
     } else {
-      window->CompleteCreation(false, "Failed to initialize the browser view.");
+      window->CompleteCreation(CreateOutcome::kFailed,
+                               "Failed to initialize the browser view.");
       window->Close();
     }
   });
 }
 
-void WebviewWindow::CompleteCreation(bool success, const std::string& error) {
+void WebviewWindow::CompleteCreation(CreateOutcome outcome,
+                                     const std::string& error) {
   auto callback = std::exchange(create_callback_, nullptr);
   if (callback) {
-    callback(success, error);
+    callback(outcome, error);
   }
 }
 
-void WebviewWindow::Close() {
+bool WebviewWindow::Close() {
+  if (closing_ || destroyed_) return false;
+  closing_ = true;
+  composer_.BeginClose();
+  if (composer_.dispatching() && hwnd_) {
+    // Composer code is on the stack; tear down once it has returned.
+    PostMessage(hwnd_.get(), kDeferredClose, 0, 0);
+    return true;
+  }
+  DestroyNow();
+  return true;
+}
+
+void WebviewWindow::DestroyNow() {
   auto keep_alive = shared_from_this();
+  if (destroyed_) return;
+  closing_ = true;
+  composer_.BeginClose();
+  composer_.Closing(window_id_);
   if (hwnd_) {
     DestroyWindow(hwnd_.get());
   } else {
@@ -170,43 +188,88 @@ void WebviewWindow::OnClosed() {
   if (destroyed_) {
     return;
   }
+  closing_ = true;
+  composer_.BeginClose();
+  // Normally delivered by DestroyNow(); this covers an external destroy.
+  composer_.Closing(window_id_);
   destroyed_ = true;
-  flutter_action_bar_.reset();
+  dww::UnregisterBrowser(window_id_);
   if (web_view_) {
     web_view_->Close();
     web_view_.reset();
   }
-  CompleteCreation(false, "Browser window closed before initialization completed.");
-  method_channel_->InvokeMethod(
-      "onWindowClose", std::make_unique<flutter::EncodableValue>(flutter::EncodableMap{
-          {flutter::EncodableValue("id"), flutter::EncodableValue(window_id_)}}));
+  CompleteCreation(CreateOutcome::kClosed);
+  if (emit_) {
+    emit_("onWindowClose", flutter::EncodableMap{
+        {flutter::EncodableValue("id"), flutter::EncodableValue(window_id_)}});
+  }
   auto callback = std::exchange(on_close_callback_, nullptr);
   if (callback) {
     callback();
   }
 }
 
-void WebviewWindow::ResizeChildren(HWND window) {
+bool WebviewWindow::GoBack() {
+  if (closing_ || destroyed_) return false;
+  if (web_view_) web_view_->GoBack();
+  return true;
+}
+
+bool WebviewWindow::GoForward() {
+  if (closing_ || destroyed_) return false;
+  if (web_view_) web_view_->GoForward();
+  return true;
+}
+
+bool WebviewWindow::Reload() {
+  if (closing_ || destroyed_) return false;
+  if (web_view_) web_view_->Reload();
+  return true;
+}
+
+bool WebviewWindow::Stop() {
+  if (closing_ || destroyed_) return false;
+  if (web_view_) web_view_->Stop();
+  return true;
+}
+
+void WebviewWindow::Layout() {
+  if (!hwnd_ || !web_view_) return;
   RECT bounds;
-  GetClientRect(window, &bounds);
-  const auto monitor = MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST);
-  const double scale = FlutterDesktopGetDpiForMonitor(monitor) / 96.0;
+  GetClientRect(hwnd_.get(), &bounds);
   const int width = bounds.right - bounds.left;
   const int height = bounds.bottom - bounds.top;
-  const int toolbar_height = flutter_action_bar_ ? Scale(title_bar_height_, scale) : 0;
-  if (web_view_ && web_view_->NativeWindow()) {
-    MoveWindow(web_view_->NativeWindow().get(), 0, toolbar_height, width,
-               (std::max)(0, height - toolbar_height), true);
-    if (web_view_) {
-      web_view_->UpdateBounds();
-    }
+  if (!composer_.Layout(window_id_, width, height)) {
+    MoveWindow(web_view_->NativeWindow().get(), 0, 0, width, height, TRUE);
   }
-  if (flutter_action_bar_) {
-    MoveWindow(flutter_action_bar_->GetWindow(), 0, 0, width, toolbar_height, true);
-    if (flutter_action_bar_) {
-      flutter_action_bar_->ForceRedraw();
-    }
+}
+
+void WebviewWindow::PublishNavigationState() {
+  if (closing_ || destroyed_ || !web_view_) return;
+  auto state = web_view_->State();
+  if (published_ && *published_ == state) return;
+  published_ = state;
+  const std::string url = wide_to_utf8(state.url);
+  const std::string title = wide_to_utf8(state.title);
+  auto text = [](const std::string& value) {
+    return value.empty() ? flutter::EncodableValue()
+                         : flutter::EncodableValue(value);
+  };
+  if (emit_) {
+    emit_("onNavigationStateChanged", flutter::EncodableMap{
+        {flutter::EncodableValue("id"), flutter::EncodableValue(window_id_)},
+        {flutter::EncodableValue("canGoBack"), flutter::EncodableValue(state.can_go_back)},
+        {flutter::EncodableValue("canGoForward"), flutter::EncodableValue(state.can_go_forward)},
+        {flutter::EncodableValue("isLoading"), flutter::EncodableValue(state.is_loading)},
+        {flutter::EncodableValue("url"), text(url)},
+        {flutter::EncodableValue("title"), text(title)},
+    });
   }
+  const DWWNavigationState native{
+      window_id_, state.can_go_back, state.can_go_forward, state.is_loading,
+      url.empty() ? nullptr : url.c_str(),
+      title.empty() ? nullptr : title.c_str()};
+  composer_.NavigationChanged(native);
 }
 
 void WebviewWindow::SetBrightness(int brightness) {
@@ -225,47 +288,11 @@ void WebviewWindow::SetBrightness(int brightness) {
   // titlebar unchanged in that case. 20 is DWMWA_USE_IMMERSIVE_DARK_MODE.
   DwmSetWindowAttribute(hwnd_.get(), static_cast<DWMWINDOWATTRIBUTE>(20),
                         &dark, sizeof(dark));
-}
-
-void WebviewWindow::setVisibility(bool visible)
-{
-  if(visible)
-    ::ShowWindow(hwnd_.get(), SW_SHOW);
-  else
-    ::ShowWindow(hwnd_.get(), SW_HIDE);
-  if (web_view_) {
-    web_view_->SetVisible(visible);
-  }
-}
-
-void WebviewWindow::moveWebviewWindow(int left, int top, int width, int height) {
-  ::SetWindowPos(hwnd_.get(), nullptr, left, top, width, height, SWP_NOZORDER | SWP_NOACTIVATE);
-}
-
-void WebviewWindow::bringToForeground(bool maximized) {
-  SetForegroundWindow(hwnd_.get());
-  if (maximized) {
-    if (web_view_) {
-      web_view_->SetVisible(true);
-    }
-    ::ShowWindow(hwnd_.get(), SW_MAXIMIZE);
-  }
-}
-
-void WebviewWindow::getPositionalParameters(std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> completer) {
-  RECT rc;
-  GetWindowRect(hwnd_.get(), &rc);
-
-  std::unique_ptr<WINDOWPLACEMENT> wp(new WINDOWPLACEMENT{});
-  wp->length = sizeof(WINDOWPLACEMENT);
-  GetWindowPlacement(hwnd_.get(), wp.get());
-  std::map<flutter::EncodableValue, flutter::EncodableValue> m{
-    {"left", rc.left},
-    {"top", rc.top},
-    {"width", rc.right-rc.left},
-    {"height", rc.bottom-rc.top},
-    {"maximized", wp->showCmd==SW_MAXIMIZE}};
-  completer->Success(flutter::EncodableValue(m));
+  // Read by the default toolbar.
+  SetPropW(hwnd_.get(), L"DesktopWebviewDark",
+           reinterpret_cast<HANDLE>(static_cast<INT_PTR>(dark ? 1 : 2)));
+  RedrawWindow(hwnd_.get(), nullptr, nullptr,
+               RDW_INVALIDATE | RDW_ALLCHILDREN);
 }
 
 // static
@@ -298,19 +325,22 @@ WebviewWindow::MessageHandler(
     WPARAM wparam,
     LPARAM lparam
 ) noexcept {
-  // Give Flutter, including plugins, an opportunity to handle window messages.
-  if (flutter_action_bar_ && message != WM_DESTROY) {
-    std::optional<LRESULT> result = flutter_action_bar_->HandleTopLevelWindowProc(hwnd, message, wparam, lparam);
-    if (result) {
-      return *result;
-    }
-  }
-
+  // Messages are not forwarded to the engine's top-level window delegates:
+  // those belong to the application's windows (for example window_manager)
+  // and must not act on browser windows.
   switch (message) {
+    case WM_CLOSE:
+      // The close button takes the same path as every other close request.
+      Close();
+      return 0;
+    case kDeferredClose:
+      DestroyNow();
+      return 0;
     case WM_DESTROY: {
       // The OS is already destroying this HWND; do not destroy it a second time
       // when the final shared owner is released at the end of WndProc.
       SetWindowLongPtr(hwnd, GWLP_USERDATA, 0);
+      RemovePropW(hwnd, L"DesktopWebviewDark");
       hwnd_.release();
       OnClosed();
       return 0;
@@ -325,21 +355,32 @@ WebviewWindow::MessageHandler(
       return 0;
     }
     case WM_SIZE: {
-      ResizeChildren(hwnd);
+      Layout();
       return 0;
+    }
+    case WM_WINDOWPOSCHANGED: {
+      // WebView2 does not follow its host window's visibility. Track it here,
+      // including when another library shows or hides the window by handle.
+      // Unlike WM_SHOWWINDOW, this is sent for every ShowWindow command.
+      const auto* pos = reinterpret_cast<const WINDOWPOS*>(lparam);
+      if (web_view_ && pos) {
+        if (pos->flags & SWP_SHOWWINDOW) web_view_->SetVisible(true);
+        if (pos->flags & SWP_HIDEWINDOW) web_view_->SetVisible(false);
+      }
+      // DefWindowProc still derives WM_SIZE and WM_MOVE from this message.
+      break;
     }
     case WM_DWMCOLORIZATIONCOLORCHANGED:
     case WM_SETTINGCHANGE: {
       if (brightness_ == -1) SetBrightness(-1);
       break;
     }
-    case WM_FONTCHANGE: {
-      if (flutter_action_bar_) {
-        flutter_action_bar_->ReloadSystemFonts();
-      }
-      break;
-    }
     case WM_ACTIVATE: {
+      // DefWindowProc would focus this frame window, which has no input of its
+      // own. Hand activation focus to the page instead.
+      if (LOWORD(wparam) != WA_INACTIVE && web_view_) {
+        web_view_->Focus();
+      }
       return 0;
     }
   }

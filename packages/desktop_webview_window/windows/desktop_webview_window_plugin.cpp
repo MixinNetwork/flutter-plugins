@@ -4,7 +4,5 @@
 
 void DesktopWebviewWindowPluginRegisterWithRegistrar(
     FlutterDesktopPluginRegistrarRef registrar) {
-  WebviewWindowPlugin::RegisterWithRegistrar(
-      flutter::PluginRegistrarManager::GetInstance()
-          ->GetRegistrar<flutter::PluginRegistrarWindows>(registrar));
+  WebviewWindowPlugin::RegisterWithRegistrar(registrar);
 }

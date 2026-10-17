@@ -12,81 +12,126 @@
 
 #include <functional>
 #include <string>
-#include <unordered_map>
 
-#include "title_bar_views.h"
+#include "composer_runtime.h"
 
-typedef struct {
-    GMainLoop *loop;
-    GList *cookies;
-} CookieData;
-
-void get_cookies_callback(WebKitCookieManager *manager, GAsyncResult *res,
-                          gpointer user_data);
-
-GList *get_cookies_sync(WebKitWebView *web_view);
-
-class WebviewWindow {
+class WebviewWindow : public dww::Browser {
  public:
-  WebviewWindow(FlMethodChannel *method_channel, int64_t window_id,
-                std::function<void()> on_close_callback,
-                const std::string &title, int width, int height,
-                int title_bar_height, int title_bar_top_padding,
-                TitleBarViews *title_bar_views, GtkWindow *parent,
-                bool show_system_title_bar);
+  // Posts a browser event to Dart; |args| is a map that gains the "id".
+  using EventSink = std::function<void(const char *method, FlValue *args)>;
+  // Asks Dart to decide a top-level navigation. |decision| is referenced and
+  // must be used or ignored once Dart replies.
+  using NavigationRequest =
+      std::function<void(const char *url, WebKitPolicyDecision *decision)>;
 
-  virtual ~WebviewWindow();
+  struct Options {
+    std::string title;
+    int width = 1280;
+    int height = 720;
+    int x = 0;
+    int y = 0;
+    bool use_position = false;
+    bool open_maximized = false;
+    bool open_hidden = false;
+    bool show_system_title_bar = true;
+    bool show_toolbar = true;
+    bool has_composer_arguments = false;
+    std::string composer_arguments;
+    std::string javascript_bridge;
+  };
 
-  void Navigate(const char *url);
+  WebviewWindow(EventSink emit, NavigationRequest request_navigation,
+                int64_t window_id, std::function<void()> on_close_callback,
+                const Options &options, GtkWindow *parent);
+
+  ~WebviewWindow() override;
+
+  // Composes, publishes the initial navigation state and shows the window.
+  // A close requested meanwhile skips the rest; finish it with DestroyNow().
+  void Start(const Options &options);
+
+  // Destroys the window now. Only valid outside composer callbacks.
+  void DestroyNow();
+
+  [[nodiscard]] bool IsClosing() const { return closing_; }
+
+  // With |decide| false, this navigation bypasses the Dart decision.
+  void Navigate(const char *url, bool decide);
+
+  [[nodiscard]] GtkWidget *NativeWindow() const { return window_; }
+
+  void SetUrlRequestEnabled(bool enabled) { url_request_enabled_ = enabled; }
 
   void RunJavaScriptWhenContentReady(const char *java_script);
 
-  void Close();
-
   void SetApplicationNameForUserAgent(const std::string &app_name);
 
-  void OnLoadChanged(WebKitLoadEvent load_event);
+  bool GoBack() override;
 
-  void GoBack();
+  bool GoForward() override;
 
-  void GoForward();
+  bool Reload() override;
 
-  void Reload();
+  bool Stop() override;
 
-  void StopLoading();
+  // Requests closing. Inside a composer callback it takes effect afterwards.
+  bool Close() override;
 
-  FlValue* GetAllCookies();
+  void GetAllCookies(FlMethodCall *call);
 
   gboolean DecidePolicy(WebKitPolicyDecision *decision,
                         WebKitPolicyDecisionType type);
 
+  // Replies with the result serialized as JSON, or null.
   void EvaluateJavaScript(const char *java_script, FlMethodCall *call);
 
-  void RegisterJavaScriptChannel(const std::string &name);
-
-  void UnregisterJavaScriptChannel(const std::string &name);
+  void OpenInspector();
 
  private:
   void OnDestroyed();
   void DisconnectCallbacks();
+  void Emit(const char *method, FlValue *args = nullptr);
+  void OnBridgeMessage(WebKitJavascriptResult *result);
+  void PublishNavigationState();
+  void DeliverClosing();
 
-  FlMethodChannel *method_channel_;
+  EventSink emit_;
+  NavigationRequest request_navigation_;
   int64_t window_id_;
   std::function<void()> on_close_callback_;
 
   std::string default_user_agent_;
 
   GtkWidget *window_ = nullptr;
+  // Holds the WebView; handed to the composer as webview_view.
+  GtkWidget *container_ = nullptr;
   GtkWidget *webview_ = nullptr;
-  GtkBox *box_ = nullptr;
   WebKitUserContentManager *content_manager_ = nullptr;
   GCancellable *javascript_cancellable_ = nullptr;
-  TitleBarViews *title_bar_views_ = nullptr;  // Owned by the plugin.
-  int64_t title_bar_view_id_ = -1;
+  dww::ComposerBinding composer_;
   bool closing_ = false;
   bool closed_ = false;
+  guint close_source_ = 0;
+  bool url_request_enabled_ = false;
+  // Set by Navigate(decide: false): the next decision skips Dart.
+  bool skip_next_decision_ = false;
+  gulong bridge_handler_id_ = 0;
 
-  std::unordered_map<std::string, gulong> js_channel_handler_ids_;
+  struct NavigationState {
+    bool can_go_back = false;
+    bool can_go_forward = false;
+    bool is_loading = false;
+    std::string url;
+    std::string title;
+    bool operator==(const NavigationState &other) const {
+      return can_go_back == other.can_go_back &&
+             can_go_forward == other.can_go_forward &&
+             is_loading == other.is_loading && url == other.url &&
+             title == other.title;
+    }
+  };
+  NavigationState navigation_;
+  bool published_ = false;
 };
 
 #endif  // WEBVIEW_WINDOW_LINUX_WEBVIEW_WINDOW_H_

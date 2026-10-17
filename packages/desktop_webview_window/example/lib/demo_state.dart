@@ -11,12 +11,10 @@ class DemoWindow {
   final int id;
   final Webview webview;
   String url;
-  bool canGoBack = false;
-  bool canGoForward = false;
   bool busy = false;
   String result = 'Execute JavaScript or read cookies to see the result here.';
   late final VoidCallback navigationListener;
-  late final OnWebMessageReceivedCallback messageListener;
+  bool _wasLoading = false;
 }
 
 class DemoEvent {
@@ -93,7 +91,7 @@ class DemoState extends ChangeNotifier {
   Future<void> open({
     String? url,
     int count = 1,
-    bool showTitleBar = true,
+    bool showToolbar = true,
     bool showSystemTitleBar = true,
     bool openHidden = false,
     bool denyMedia = false,
@@ -119,12 +117,13 @@ class DemoState extends ChangeNotifier {
             windowWidth: 960,
             windowHeight: 720,
             showSystemTitleBar: showSystemTitleBar,
-            userDataFolderWindows: userDataFolder,
+            showToolbar: showToolbar,
             openHidden: openHidden,
-            denyCameraAndMicrophone: denyMedia,
+            windows: WindowsWebviewOptions(
+              userDataFolder: userDataFolder,
+              denyCameraAndMicrophone: denyMedia,
+            ),
           ),
-          titleBar:
-              showTitleBar ? null : const WebviewTitleBarConfiguration.none(),
         );
         if (_disposed) {
           view.close();
@@ -133,26 +132,22 @@ class DemoState extends ChangeNotifier {
         final window = DemoWindow(id, view, url ?? pages.url(id));
         windows.add(window);
         selectedId = id;
-        window.navigationListener = () =>
-            log(view.isNavigating.value ? 'Loading' : 'Loading finished', id);
-        window.messageListener = (message) => log('Page message: $message', id);
-        view.isNavigating.addListener(window.navigationListener);
-        view.setOnHistoryChangedCallback((back, forward) {
-          window.canGoBack = back;
-          window.canGoForward = forward;
+        window.navigationListener = () {
+          final loading = view.navigationState.value.isLoading;
+          if (loading != window._wasLoading) {
+            window._wasLoading = loading;
+            log(loading ? 'Loading' : 'Loading finished', id);
+          }
           _changed();
-        });
+        };
+        view.navigationState.addListener(window.navigationListener);
         view.setOnUrlRequestCallback((value) {
           window.url = value;
           log('Navigate: $value', id);
           return true;
         });
-        if (Platform.isWindows) {
-          view.addOnWebMessageReceivedCallback(window.messageListener);
-        } else {
-          view.registerJavaScriptMessageHandler(
-              'demo', (name, body) => log('Page message: $body', id));
-        }
+        view.addJavaScriptHandler(
+            'demo', (data) => log('Page message: $data', id));
         if (Platform.isMacOS) {
           view.setPromptHandler((prompt, text) {
             log('Prompt: $prompt ($text)', id);
@@ -172,7 +167,9 @@ class DemoState extends ChangeNotifier {
           await view.setApplicationNameForUserAgent(' WebviewExample/1.0');
           return null;
         });
-        if (!_disposed && windows.contains(window)) view.launch(window.url);
+        if (!_disposed && windows.contains(window)) {
+          await view.launch(window.url);
+        }
       }
     } catch (error) {
       log('Create failed: $error');
@@ -205,10 +202,7 @@ class DemoState extends ChangeNotifier {
   }
 
   void _detach(DemoWindow window) {
-    window.webview.isNavigating.removeListener(window.navigationListener);
-    window.webview.setOnHistoryChangedCallback(null);
-    window.webview.setOnUrlRequestCallback(null);
-    window.webview.removeOnWebMessageReceivedCallback(window.messageListener);
+    window.webview.navigationState.removeListener(window.navigationListener);
   }
 
   @override
@@ -216,7 +210,7 @@ class DemoState extends ChangeNotifier {
     _disposed = true;
     for (final window in windows) {
       _detach(window);
-      window.webview.close();
+      unawaited(window.webview.close());
     }
     darkMode.dispose();
     unawaited(pages.close());

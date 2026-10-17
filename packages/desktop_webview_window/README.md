@@ -12,227 +12,195 @@ Show a webview window on your flutter desktop application.
 
 ## Getting Started
 
-1. Run the main application and optional browser titlebars on one engine:
+```dart
+import 'package:desktop_webview_window/desktop_webview_window.dart';
 
-   ```dart
-   import 'package:desktop_webview_window/desktop_webview_window.dart';
+final webview = await WebviewWindow.create();
+await webview.launch('https://example.com');
+```
 
-   void main() {
-     runWebviewWindowApp(const MyApp());
-   }
-   ```
+The window shows a native toolbar (back, forward, reload/stop and the page
+title) above the page. Pass `CreateConfiguration(showToolbar: false)` to show
+only the page, or install a [native composer](#window-layout) to lay the window
+out yourself. No runner changes or startup hooks are needed.
 
-   For a custom titlebar, pass `titleBar: WebviewTitleBarConfiguration(...)`.
-   Its `builder(context, webview, state)` receives the browser handle and current
-   navigation state. Startup-argument dispatch is not needed.
+## Talking to the page
 
-2. launch WebViewWindow
+Every page gets the same `window.desktopWebview` object on macOS, Windows and
+Linux. Messages carry any JSON-encodable value.
 
-   ```dart
-     final webview = await WebviewWindow.create();
-     webview.launch("https://example.com");
-   ```
-
-## One application engine (Flutter 3.47.6 or newer)
-
-The main application and every browser titlebar use the same Flutter engine and
-Dart isolate. `runWebviewWindowApp` replaces `runApp` with a multi-view root.
-Each browser has a separate Flutter view above its native WebView2, WKWebView or
-WebKit content. Closing a browser removes only its titlebar view.
-
-Application initialization runs once. There is no dedicated titlebar engine,
-startup-argument dispatch, cross-engine message bridge, or renderer fallback.
-Titlebar state and commands are delivered within the same Dart isolate. Each
-widget retains its own state; static/global variables are shared with the main
-application. A titlebar's Flutter view ID and browser ID are distinct.
-
-Applications that already manage Flutter views use the composable host instead
-of the convenience root:
+```js
+// In the page
+window.desktopWebview.postMessage('login', {token: 'abc'});
+window.desktopWebview.addEventListener('theme', data => applyTheme(data));
+```
 
 ```dart
-runWidget(
-  WebviewTitleBarHost(
-    titleBar: WebviewTitleBarConfiguration(
-      height: 44,
-      builder: (context, webview, state) => IconButton(
-        onPressed: state.canGoBack ? webview.back : null,
-        icon: const Icon(Icons.arrow_back),
-      ),
-    ),
-    child: const MyMultiWindowApp(), // Creates its own views/windows.
-  ),
-);
+webview.addJavaScriptHandler('login', (data) => print(data)); // {token: abc}
+await webview.postMessage('theme', {'dark': true});
 ```
 
-The host renders only browser toolbar views. Application windows remain owned
-by `MyMultiWindowApp`. Install one host per engine above windows that may close
-independently. Shared inherited dependencies belong above the host. Dependencies
-inside a particular window remain scoped to that window.
+`evaluateJavaScript` returns the decoded result (`Map`, `List`, `String`, `num`,
+`bool` or `null`).
 
-`WebviewWindow.create()` follows the host defaults. A `titleBar` argument replaces
-them for that browser. A null theme continues to follow the host theme;
-`setTitleBarTheme(null)` restores the window configuration or host theme.
-Builder and theme changes update existing toolbars. Height, padding and enabled
-state are applied when creating a browser.
+## Navigation decisions
 
-To use ordinary `runApp` without Flutter toolbar views, explicitly disable them:
+`setOnUrlRequestCallback` runs before every top-level navigation, including
+redirects, while a callback is installed. The navigation waits for it, so the
+callback answers synchronously. Return false to cancel; a callback that throws
+allows the navigation. `launch(url, triggerOnUrlRequestEvent: false)` skips the
+decision for that navigation.
+
+`webview.navigationState` reports `canGoBack`, `canGoForward`, `isLoading`, and
+the current page's `url` and `title`. Native composers receive the same state.
+
+## Controlling the window
+
+The plugin owns each browser window but does not move, show or focus it after
+creation. `webview.nativeWindowHandle` returns the native window — `HWND` on
+Windows, `NSWindow*` on macOS and `GtkWindow*` on Linux — for a window library
+or your own FFI code:
 
 ```dart
-final webview = await WebviewWindow.create(
-  titleBar: const WebviewTitleBarConfiguration.none(),
-);
+import 'dart:ffi';
+import 'package:nativeapi/nativeapi.dart';
+
+final window = Window.createWithNativeWindow(
+    Pointer.fromAddress(webview.nativeWindowHandle))!;
+window.show();
+window.focus();
+unawaited(webview.onClose.then((_) => window.dispose()));
 ```
 
-Requesting a Flutter toolbar without a mounted host throws a `StateError` instead
-of silently hiding it. `showSystemTitleBar` remains independent of the Flutter
-toolbar. Configure Flutter toolbars through `WebviewTitleBarConfiguration`.
-See [Migration](#migration) for removed APIs and their replacements.
+The handle is valid until `onClose` completes and is 0 afterwards. Borrow it:
+do not destroy or close the window through it, replace its delegate or window
+procedure, or keep it beyond `onClose`. Use `webview.close()` to close the
+window. A source review of `nativeapi-core` (commit `ead6a88`) found that
+wrapping a window does not destroy it on any desktop platform; its ownership
+semantics are not documented upstream, so verify again when upgrading. Its
+macOS `setNonActivating(true)` changes the window class and disables keyboard
+input in borderless browser windows.
 
-### macOS runner setup
+Creation-time placement stays in `CreateConfiguration`: `openHidden`,
+`openMaximized`, and `useWindowPositionAndSize` with `windowPosX`/`windowPosY`.
 
-macOS must enable multi-view before its first controller is created. In
-`macos/Runner/MainFlutterWindow.swift`, import the plugin and replace the default
-controller construction:
+## Platform support
 
-```swift
-import desktop_webview_window
+| Feature | macOS | Windows | Linux |
+| --- | --- | --- | --- |
+| Page messaging, navigation decisions, script results | ✅ | ✅ | ✅ |
+| `nativeWindowHandle`, `openHidden`, `openMaximized`, position | ✅ | ✅ | ✅ |
+| `openDevToolsWindow` | ❌ Safari Web Inspector (debug builds) | ✅ | ✅ |
+| `setBrightness` | ✅ | ✅ | ❌ |
+| `setPromptHandler` | ✅ | ❌ | ❌ |
+| `WindowsWebviewOptions` | — | ✅ | — |
 
-let flutterViewController = try! DesktopWebviewWindowPlugin.createMainViewController()
+Calling an unsupported operation throws `UnsupportedError`. Operations return
+futures that complete once native code has applied them and fail with a
+`PlatformException` when it reports an error.
+
+## Window layout
+
+The plugin owns each browser window and its WebView. A *composer* decides what
+else the window contains and where the WebView sits. Without one, the default
+composer places a native toolbar above the page:
+
+```
+┌──────────────────────────────────────────┐
+│  ←  →  ⟳   Page title                    │
+├──────────────────────────────────────────┤
+│                  page                    │
+└──────────────────────────────────────────┘
 ```
 
-Keep the existing window assignment and `RegisterGeneratedPlugins` call after
-this line. The helper creates the application's only engine and main controller.
-Applications already using Flutter multi-window startup keep their existing
-engine and use `WebviewTitleBarHost`; the plugin borrows that engine without
-requiring a main view or calling this helper.
+To use a different layout (a sidebar, an overlay, your own toolbar), install a
+native composer from the runner before the first browser is created. It
+receives the window and a view containing the WebView, and may arrange them
+however it likes:
 
-Windows and ordinary Linux runners need no change. A headless Linux runner calls
-`desktop_webview_window_plugin_attach_engine(engine)` after generated plugin
-registration. Include
-`desktop_webview_window/desktop_webview_window_plugin.h` for that function.
-This explicitly supplies the existing engine because the public Linux registrar
-has no engine getter when its view is null.
+```c
+#include <desktop_webview_window/webview_window_composer.h>
 
-Windows uses runtime-resolved borrowing APIs; macOS uses guarded internal
-multi-view selectors. Future Flutter upgrades require native validation.
-Legacy macOS plugins that assume an implicit controller need separate checking.
-See [design and validation](doc/shared_titlebar_engine.md).
+static DWWComposeResult compose(void* user, const DWWComposeRequest* request) {
+  if (request->arguments == NULL) return DWW_COMPOSE_DEFAULT;  // Default toolbar.
+  GtkWidget* row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+  gtk_box_pack_start(GTK_BOX(row), my_sidebar(request->browser), FALSE, FALSE, 0);
+  gtk_box_pack_start(GTK_BOX(row), GTK_WIDGET(request->webview_view), TRUE, TRUE, 0);
+  gtk_container_add(GTK_CONTAINER(request->window), row);
+  gtk_widget_show_all(row);
+  return DWW_COMPOSE_HANDLED;
+}
 
-### Linux rendering
+static const DWWComposer composer = {NULL, compose, navigation_changed, NULL, closing};
+dww_set_composer(&composer);  // In the runner, before the first create.
+```
 
-Linux uses the public `fl_view_new_for_engine` API on the main application engine.
-X11/GLX rendering has related upstream failures, including
-[Flutter #186577](https://github.com/flutter/flutter/issues/186577).
-See [the Linux investigation](doc/linux_shared_titlebar_engine.md) for evidence.
+Controls call `dww_browser_go_back`, `dww_browser_reload`, `dww_browser_close`
+and friends with the browser ID; `navigation_changed` delivers the navigation
+state. `CreateConfiguration(composerArguments: ...)` is passed to `compose`
+unchanged, so one composer can lay out different windows differently. A
+composer that returns `DWW_COMPOSE_DEFAULT` hands that window to the default
+composer for its whole lifetime.
+
+The header documents the window and view types per platform and the rules for
+borrowed pointers, closing from inside callbacks, and Windows resizing. The
+example runner's `linux/test_composer.cc` is a complete composer. See
+[the design](doc/native_window_composer.md) for the full contract.
+
+The composer is native code, so a Flutter UI inside a browser window means
+creating your own Flutter view there. On Linux X11 that is subject to
+[Flutter #186577](https://github.com/flutter/flutter/issues/186577), which is
+why the plugin itself no longer renders Flutter toolbars.
 
 ## Migration
 
-The old titlebar APIs have been removed. Existing callers must migrate to
-`WebviewTitleBarConfiguration`; they are no longer available as deprecated
-aliases.
+0.4.0 is a breaking release. The APIs below were removed rather than
+deprecated.
 
-### Titlebar builders and themes
-
-Move the root titlebar parameters into `titleBar`. This applies to both
-`runWebviewWindowApp` and `WebviewWindowApp`.
+### Browser API changes
 
 | Removed API | Replacement |
 | --- | --- |
-| `titleBarBuilder` | `titleBar.builder`, with `(context, webview, state)` arguments |
-| `titleBarBackgroundColor` | `titleBar.backgroundColor` |
-| `titleBarTheme` | `titleBar.theme` |
-| `TitleBarWebViewController.of(context)` | The `webview` passed to the builder |
-| `TitleBarWebViewState.of(context)` | The `state` passed to the builder |
+| `registerJavaScriptMessageHandler(name, (name, body) {...})` | `addJavaScriptHandler(name, (data) {...})`; the page calls `window.desktopWebview.postMessage(name, data)` |
+| `unregisterJavaScriptMessageHandler` | `removeJavaScriptHandler` |
+| `postWebMessageAsString` / `postWebMessageAsJson` | `postMessage(name, data)`; the page listens with `window.desktopWebview.addEventListener(name, ...)` |
+| `addOnWebMessageReceivedCallback` and related | `addJavaScriptHandler` |
+| `isNavigating` | `navigationState.value.isLoading` |
+| `setOnHistoryChangedCallback` | Listen to `navigationState` |
+| `moveWebviewWindow`, `setWebviewWindowVisibility`, `bringToForeground`, `getPositionalParameters` | `nativeWindowHandle` with a window library; see [Controlling the window](#controlling-the-window) |
+| `CreateConfiguration(userDataFolderWindows:, denyCameraAndMicrophone:)` | `CreateConfiguration(windows: WindowsWebviewOptions(userDataFolder:, denyCameraAndMicrophone:))` |
+| `clearAll(userDataFolderWindows:)` | `clearAll(windows: WindowsWebviewOptions(...))` |
 
-Before:
+Behavior changes:
 
-```dart
-runWebviewWindowApp(
-  const MyApp(),
-  titleBarTheme: ThemeData.dark(),
-  titleBarBackgroundColor: Colors.black,
-  titleBarBuilder: (context) {
-    final controller = TitleBarWebViewController.of(context);
-    final state = TitleBarWebViewState.of(context);
-    return IconButton(
-      onPressed: state.canGoBack ? controller.back : null,
-      icon: const Icon(Icons.arrow_back),
-    );
-  },
-);
-```
+- `launch`, `close`, `setBrightness`, `setOnUrlRequestCallback`,
+  `addScriptToExecuteOnDocumentCreated` and `openDevToolsWindow` return futures
+  and report native errors.
+- `evaluateJavaScript` returns `Future<Object?>` with the decoded value instead
+  of a JSON string.
+- `setOnUrlRequestCallback` can cancel navigations on every platform.
+- Pages from the old bridges must switch to `window.desktopWebview`;
+  `window.webkit.messageHandlers.<name>` and `chrome.webview` messages are no
+  longer forwarded.
+- macOS cookies now report `expires`, `secure`, `httpOnly` and `sessionOnly`.
+- Browser IDs (`Webview.id`) are unique per process.
 
-After:
+### Titlebars
 
-```dart
-runWebviewWindowApp(
-  const MyApp(),
-  titleBar: WebviewTitleBarConfiguration(
-    theme: ThemeData.dark(),
-    backgroundColor: Colors.black,
-    builder: (context, webview, state) => IconButton(
-      onPressed: state.canGoBack ? webview.back : null,
-      icon: const Icon(Icons.arrow_back),
-    ),
-  ),
-);
-```
+Browser windows no longer run Flutter. Remove the `runWebViewTitleBarWidget(args)`
+startup hook and its early return, and delete the titlebar widget:
 
-Use `state.isLoading`, `state.canGoBack`, `state.canGoForward`, and `state.url`
-for navigation state. Call `webview.back()`, `forward()`, `reload()`, `stop()`,
-or `close()` for browser commands. Outside a titlebar builder, listen to
-`webview.navigationState` for updates.
+| Removed API | Replacement |
+| --- | --- |
+| `runWebViewTitleBarWidget(args, builder: ...)` | The default native toolbar, or a [native composer](#window-layout) |
+| `TitleBarWebViewController.of(context)` | `dww_browser_*` in a composer, or the `Webview` in Dart |
+| `TitleBarWebViewState.of(context)` | `navigation_changed` in a composer, or `webview.navigationState` in Dart |
+| `CreateConfiguration(titleBarHeight: 0)` | `CreateConfiguration(showToolbar: false)` |
+| `CreateConfiguration(titleBarTopPadding: ...)` | Composer layout |
 
-### Titlebar dimensions and omission
-
-The `titleBarHeight` and `titleBarTopPadding` constructor parameters and getters
-have been removed from `CreateConfiguration`. Keep native window options there;
-pass Flutter toolbar options through `WebviewWindow.create(titleBar: ...)`.
-
-Before:
-
-```dart
-final webview = await WebviewWindow.create(
-  configuration: const CreateConfiguration(
-    windowWidth: 1024,
-    titleBarHeight: 48,
-    titleBarTopPadding: 12,
-  ),
-);
-```
-
-After:
-
-```dart
-final webview = await WebviewWindow.create(
-  configuration: const CreateConfiguration(windowWidth: 1024),
-  titleBar: const WebviewTitleBarConfiguration(height: 48, topPadding: 12),
-);
-```
-
-To set dimensions for all browsers, put them in the host's `titleBar`
-configuration instead. A per-window configuration replaces the host defaults;
-include any custom builder or background color that window should retain.
-A null theme continues to follow the host theme.
-
-Replace `CreateConfiguration(titleBarHeight: 0)` with:
-
-```dart
-final webview = await WebviewWindow.create(
-  titleBar: const WebviewTitleBarConfiguration.none(),
-);
-```
-
-Ordinary `runApp` no longer silently omits Flutter toolbars. Explicitly pass
-`.none()` when no toolbar host is mounted. To keep Flutter toolbars, start with
-`runWebviewWindowApp`, or mount `WebviewTitleBarHost` in an application that
-already manages its own views. `showSystemTitleBar` still controls the native
-system titlebar independently.
-
-For applications migrating from the older separate-engine implementation,
-remove the `runWebViewTitleBarWidget(args)` startup hook and its early return.
-Initialize the application once with `runWebviewWindowApp`. On macOS, also
-follow the [runner setup](#macos-runner-setup) above.
+Navigation controls drawn by the main application window can keep using
+`webview.back()`, `forward()`, `reload()`, `stop()`, `close()` and
+`webview.navigationState`.
 
 ## linux requirement
 
@@ -270,18 +238,19 @@ you can use `WebviewWindow.create()` to create a webview with a custom user data
 ```dart
 final webview = await WebviewWindow.create(
   configuration: CreateConfiguration(
-    userDataFolderWindows: 'your_custom_user_data_folder',
+    windows: WindowsWebviewOptions(userDataFolder: 'your_custom_user_data_folder'),
   ),
 );
 ```
 
 ### Window and media options
 
-`CreateConfiguration(openHidden: true)` creates a Windows WebView without
-showing its window. Show it later with `setWebviewWindowVisibility(true)` or
-`bringToForeground(maximized: true)`.
+`CreateConfiguration(openHidden: true)` creates the window without showing it,
+so nothing is painted while WebView2 starts. Show it later through
+`nativeWindowHandle`; WebView2 resumes rendering when its window becomes
+visible.
 
-`CreateConfiguration(denyCameraAndMicrophone: true)` denies camera and microphone
+`WindowsWebviewOptions(denyCameraAndMicrophone: true)` denies camera and microphone
 requests for that window without saving the denial in the shared profile.
 This option requires WebView2 Runtime 111.0.1661.34 or later. Window creation
 fails on older runtimes when this option is enabled. Both options default to
@@ -306,23 +275,21 @@ Microsoft.Web.WebView2 SDK 1.0.4258.31.
 
 see [LICENSE](./LICENSE)
 
-## Repeatable macOS integration test
+## Integration tests
 
 All platform scenarios register through the package's single application test
 entry point, `example/integration_test/app_test.dart`. Files under
 `integration_test/src/` contain scenarios only, with no additional `main()`.
 
-From `example`, run the native shared-titlebar regression with:
+From `example`:
 
 ```sh
-flutter drive -d macos --driver=test_driver/integration_test.dart --target=integration_test/app_test.dart
+flutter test integration_test/app_test.dart -d linux
 ```
 
-This launches real WKWebViews and the dedicated multi-view toolbar engine. It
-checks independent navigation and toolbar state, toolbar commands, native page
-DOM behavior, resize, duplicate/rapid close, zero-height mode, and reuse after all
-windows close. `flutter drive` preserves the secondary engine's entry arguments;
-`flutter test` wraps `main()` and does not support this multi-engine test target.
-The existing integration CI matrix includes this target. Native keyboard/pointer
-focus and visual rendering still need a short manual check when the SDK changes.
-See [Shared titlebar engine](doc/shared_titlebar_engine.md) for design, validation results, and platform limits.
+The suite launches real WebViews and checks page messaging, navigation
+decisions, script results and the native window handle. On Linux it also
+drives the example runner's test composer: default and application-owned
+layouts side by side, resize, toolbar buttons, closing from each composer
+callback, and repeated close/recreate. Native keyboard/pointer focus and visual
+rendering still need a short manual check.

@@ -1,33 +1,29 @@
 import 'dart:async';
 
 import 'package:desktop_webview_window/desktop_webview_window.dart';
-import 'package:desktop_webview_window/src/title_bar_runtime.dart';
+import 'package:desktop_webview_window/src/browser_runtime.dart';
 import 'package:desktop_webview_window/src/webview_impl.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'title_bar_initialization_test.dart' show sendBrowserEvent;
+import 'fake_transport.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  const channel = MethodChannel('webview_window');
-  final messenger =
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+  setUp(installFakeTransport);
 
   tearDown(() async {
-    for (final id in List.of(titleBarWebviews.value.keys)) {
+    for (final id in List.of(browsers.keys)) {
       await sendBrowserEvent('onWindowClose', {'id': id});
     }
-    messenger.setMockMethodCallHandler(channel, null);
   });
 
   test('close is idempotent before and after native acknowledgement', () async {
     var closes = 0;
-    messenger.setMockMethodCallHandler(channel, (call) async {
+    fakeTransport.native = (call) async {
       if (call.method == 'close') closes++;
       return null;
-    });
-    final webview = WebviewImpl(123, channel);
+    };
+    final webview = WebviewImpl(123, windowHandle: 1, transport: fakeTransport);
     webview.close();
     webview.close();
     await Future<void>.delayed(Duration.zero);
@@ -40,44 +36,64 @@ void main() {
   });
 
   test(
-      'native close before the create response completes onClose without publishing a toolbar handle',
+      'native close before the create response completes onClose without registering the browser',
       () async {
-    final response = Completer<int>();
-    messenger.setMockMethodCallHandler(
-        channel, (call) async => response.future);
-    final creating = WebviewWindow.create(
-        titleBar: const WebviewTitleBarConfiguration.none());
+    final response = Completer<Map<String, Object?>>();
+    fakeTransport.native = (call) async => response.future;
+    final creating = WebviewWindow.create();
     await Future<void>.delayed(Duration.zero);
     await sendBrowserEvent('onWindowClose', {'id': 303});
-    response.complete(303);
+    response.complete(created(303));
     final webview = await creating;
     await webview.onClose;
-    expect(titleBarWebviews.value, isEmpty);
+    expect(browsers, isEmpty);
   });
 
-  test(
-      'application and late toolbar readers share the current navigation state',
+  test('navigation state mirrors the native state, including the title',
       () async {
-    messenger.setMockMethodCallHandler(channel, (call) async => 404);
-    final webview = await WebviewWindow.create(
-        titleBar: const WebviewTitleBarConfiguration.none());
-    var updates = 0;
-    webview.navigationState.addListener(() => updates++);
-    await sendBrowserEvent('onNavigationStarted', {'id': 404});
-    await sendBrowserEvent('onNavigationCompleted', {'id': 404});
-    await sendBrowserEvent('onHistoryChanged',
-        {'id': 404, 'canGoBack': true, 'canGoForward': false});
-    await sendBrowserEvent(
-        'onUrlRequested', {'id': 404, 'url': 'https://example.com'});
-    expect(
-        webview.navigationState.value,
-        const WebviewNavigationState(
-          canGoBack: true,
-          url: 'https://example.com',
-        ));
-    expect(webview.isNavigating.value, isFalse);
-    expect(updates, 4);
-    await sendBrowserEvent('onNavigationCompleted', {'id': 404});
-    expect(updates, 4);
+    fakeTransport.native = (call) async => created(404);
+    final webview = await WebviewWindow.create();
+    final states = <WebviewNavigationState>[];
+    webview.navigationState
+        .addListener(() => states.add(webview.navigationState.value));
+    await sendBrowserEvent('onNavigationStateChanged', {
+      'id': 404,
+      'canGoBack': false,
+      'canGoForward': false,
+      'isLoading': true,
+      'url': 'https://example.com/',
+      'title': null,
+    });
+    await sendBrowserEvent('onNavigationStateChanged', {
+      'id': 404,
+      'canGoBack': true,
+      'canGoForward': false,
+      'isLoading': false,
+      'url': 'https://example.com/',
+      'title': 'Example',
+    });
+    expect(states, const [
+      WebviewNavigationState(isLoading: true, url: 'https://example.com/'),
+      WebviewNavigationState(
+        canGoBack: true,
+        url: 'https://example.com/',
+        title: 'Example',
+      ),
+    ]);
+  });
+
+  test('closing clears the loading flag', () async {
+    fakeTransport.native = (call) async => created(405);
+    final webview = await WebviewWindow.create();
+    await sendBrowserEvent('onNavigationStateChanged', {
+      'id': 405,
+      'canGoBack': false,
+      'canGoForward': false,
+      'isLoading': true,
+      'url': null,
+      'title': null,
+    });
+    await sendBrowserEvent('onWindowClose', {'id': 405});
+    expect(webview.navigationState.value.isLoading, isFalse);
   });
 }

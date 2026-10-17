@@ -3,6 +3,7 @@ project(runner LANGUAGES CXX)
 
 add_executable(${BINARY_NAME} WIN32
   "flutter_window.cpp"
+  "test_composer.cpp"
   "main.cpp"
   "utils.cpp"
   "win32_window.cpp"

@@ -1,7 +1,5 @@
 import 'dart:async';
 
-import 'package:desktop_webview_window/desktop_webview_window.dart';
-import 'package:desktop_webview_window/src/title_bar_runtime.dart';
 import 'package:desktop_webview_window/src/webview_impl.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -13,7 +11,7 @@ import 'package:webview_window_example/demo_state.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  const channel = MethodChannel('webview_window');
+  const channel = MethodChannel('desktop_webview_window');
   late DemoPageServer pages;
   late DemoState state;
   late List<MethodCall> calls;
@@ -23,21 +21,16 @@ void main() {
     pages = await DemoPageServer.start();
     state = DemoState(pages);
     calls = [];
-    titleBarInitialization = Future<void>.value();
-    defaultTitleBarConfiguration.value =
-        const WebviewTitleBarConfiguration(height: 44);
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
       calls.add(call);
-      if (call.method == 'create') return ++nextId;
+      if (call.method == 'create') return {'id': ++nextId, 'windowHandle': 1};
       if (call.method == 'isWebviewAvailable') return true;
       return null;
     });
   });
 
   tearDown(() async {
-    titleBarInitialization = null;
-    defaultTitleBarConfiguration.value = const WebviewTitleBarConfiguration();
     await pages.close();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, null);
@@ -71,7 +64,7 @@ void main() {
   });
 
   test('a pending create is closed when the app has been disposed', () async {
-    final response = Completer<int>();
+    final response = Completer<Map<String, Object?>>();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
       calls.add(call);
@@ -81,7 +74,7 @@ void main() {
     final opening = state.open();
     await Future<void>.delayed(Duration.zero);
     state.dispose();
-    response.complete(++nextId);
+    response.complete({'id': ++nextId, 'windowHandle': 1});
     await opening;
     expect(state.windows, isEmpty);
     expect(calls.where((call) => call.method == 'close'), hasLength(1));
@@ -98,11 +91,11 @@ void main() {
     state.dispose();
   });
 
-  testWidgets('system and Flutter titlebar switches are independent',
+  testWidgets('system titlebar and native toolbar switches are independent',
       (tester) async {
     await tester.pumpWidget(DemoApp(state: state));
     await tester.pumpAndSettle();
-    Future<void> openAndCheck(bool system, bool flutter) async {
+    Future<void> openAndCheck(bool system, bool toolbar) async {
       await tester.runAsync(() async {
         await tester.tap(find.text('Open window'));
         while (state.creating) {
@@ -113,8 +106,7 @@ void main() {
       final arguments =
           calls.lastWhere((call) => call.method == 'create').arguments as Map;
       expect(arguments['showSystemTitleBar'], system);
-      expect(arguments['titleBarHeight'], flutter ? 44 : 0);
-      if (!system) expect(arguments['titleBarTopPadding'], 0);
+      expect(arguments['showToolbar'], toolbar);
     }
 
     await openAndCheck(true, true);
@@ -125,7 +117,7 @@ void main() {
     await tester.pumpAndSettle();
     await openAndCheck(false, true);
     await tester.tap(find.descendant(
-      of: find.widgetWithText(Row, 'Flutter titlebar'),
+      of: find.widgetWithText(Row, 'Native toolbar'),
       matching: find.byType(Checkbox),
     ));
     await tester.pumpAndSettle();

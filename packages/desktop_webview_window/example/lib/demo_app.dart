@@ -18,7 +18,7 @@ class _DemoAppState extends State<DemoApp> {
   final _script = TextEditingController(text: 'document.title');
   final _message = TextEditingController(text: 'Hello from Flutter');
   bool _builtIn = true;
-  bool _titleBar = true;
+  bool _toolbar = true;
   bool _systemTitleBar = true;
   bool _hidden = false;
   bool _denyMedia = false;
@@ -119,8 +119,7 @@ class _DemoAppState extends State<DemoApp> {
               children: [
                 _check('System titlebar', _systemTitleBar,
                     (value) => _systemTitleBar = value),
-                _check('Flutter titlebar', _titleBar,
-                    (value) => _titleBar = value),
+                _check('Native toolbar', _toolbar, (value) => _toolbar = value),
                 if (Platform.isWindows) ...[
                   _check('Open hidden', _hidden, (value) => _hidden = value),
                   _check('Deny camera / mic', _denyMedia,
@@ -162,7 +161,7 @@ class _DemoAppState extends State<DemoApp> {
     state.open(
       url: _builtIn ? null : _url.text.trim(),
       count: count,
-      showTitleBar: _titleBar,
+      showToolbar: _toolbar,
       showSystemTitleBar: _systemTitleBar,
       openHidden: _hidden,
       denyMedia: _denyMedia,
@@ -183,9 +182,10 @@ class _DemoAppState extends State<DemoApp> {
                     ListTile(
                       dense: true,
                       selected: state.selectedId == window.id,
-                      leading: Icon(window.webview.isNavigating.value
-                          ? Icons.hourglass_top
-                          : Icons.web),
+                      leading: Icon(
+                          window.webview.navigationState.value.isLoading
+                              ? Icons.hourglass_top
+                              : Icons.web),
                       title: Text('Browser ${window.id}'),
                       subtitle: Text(window.url,
                           maxLines: 1, overflow: TextOverflow.ellipsis),
@@ -202,12 +202,13 @@ class _DemoAppState extends State<DemoApp> {
         child: Padding(
           padding: EdgeInsets.all(24),
           child: Text(
-              'Explore native browser windows\n\nOpen the built-in demo, send a message from the page,\nand try changing the shared titlebar theme.',
+              'Explore native browser windows\n\nOpen the built-in demo, send a message from the page,\nand try the native toolbar.',
               textAlign: TextAlign.center),
         ),
       );
     }
     final view = window.webview;
+    final navigation = view.navigationState.value;
     Widget action(String label, Future<Object?> Function() callback,
             {bool enabled = true}) =>
         OutlinedButton(
@@ -224,13 +225,13 @@ class _DemoAppState extends State<DemoApp> {
         const SizedBox(height: 8),
         SelectableText(window.url),
         const SizedBox(height: 8),
-        Text(view.isNavigating.value ? 'Loading…' : 'Idle'),
+        Text(navigation.isLoading ? 'Loading…' : 'Idle'),
         const SizedBox(height: 12),
         Wrap(spacing: 8, runSpacing: 8, children: [
-          action('Back', view.back, enabled: window.canGoBack),
-          action('Forward', view.forward, enabled: window.canGoForward),
+          action('Back', view.back, enabled: navigation.canGoBack),
+          action('Forward', view.forward, enabled: navigation.canGoForward),
           action('Reload', view.reload),
-          action('Stop', view.stop, enabled: view.isNavigating.value),
+          action('Stop', view.stop, enabled: navigation.isLoading),
           TextButton.icon(
               onPressed: view.close,
               icon: const Icon(Icons.close),
@@ -261,12 +262,13 @@ class _DemoAppState extends State<DemoApp> {
         const SizedBox(height: 8),
         Wrap(spacing: 8, children: [
           action(
-              'Send to page',
+              'Call page function',
               () => view.evaluateJavaScript(
                   'window.receiveFromApp(${jsonEncode(_message.text)})')),
-          if (Platform.isWindows)
-            action('Post web message',
-                () => view.postWebMessageAsString(_message.text)),
+          action('Post message', () async {
+            await view.postMessage('demo', {'text': _message.text});
+            return null;
+          }),
         ]),
         const SizedBox(height: 12),
         if (window.busy) const LinearProgressIndicator(),
@@ -277,26 +279,33 @@ class _DemoAppState extends State<DemoApp> {
                 style: const TextStyle(fontFamily: 'monospace')),
           ),
         ),
-        if (Platform.isMacOS || Platform.isWindows) ...[
+        ...[
           const Divider(height: 32),
           Text('Window options · ${Platform.operatingSystem}',
               style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 12),
           Wrap(spacing: 8, runSpacing: 8, children: [
-            action('Light titlebar',
-                () => view.setTitleBarTheme(ThemeData.light())),
-            action(
-                'Dark titlebar', () => view.setTitleBarTheme(ThemeData.dark())),
-            action('Follow shared theme', () => view.setTitleBarTheme(null)),
-            if (Platform.isWindows) ...[
-              action('Show', () => view.setWebviewWindowVisibility(true)),
-              action('Hide', () => view.setWebviewWindowVisibility(false)),
-              action('Activate', () => view.bringToForeground()),
-              action('Move / resize',
-                  () => view.moveWebviewWindow(100, 100, 960, 720)),
-              action('Position', view.getPositionalParameters),
-              action('DevTools', view.openDevToolsWindow),
+            if (Platform.isMacOS || Platform.isWindows) ...[
+              action('Light window', () async {
+                await view.setBrightness(Brightness.light);
+                return null;
+              }),
+              action('Dark window', () async {
+                await view.setBrightness(Brightness.dark);
+                return null;
+              }),
+              action('System appearance', () async {
+                await view.setBrightness(null);
+                return null;
+              }),
             ],
+            action('Native handle',
+                () async => '0x${view.nativeWindowHandle.toRadixString(16)}'),
+            if (!Platform.isMacOS)
+              action('DevTools', () async {
+                await view.openDevToolsWindow();
+                return null;
+              }),
           ]),
         ],
       ]),

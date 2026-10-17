@@ -1,343 +1,181 @@
 import Cocoa
 import FlutterMacOS
 import WebKit
-
-// Browser IDs are distinct from engine-assigned Flutter view IDs.
-private var nextWebViewId: Int64 = 0
+#if SWIFT_PACKAGE
+// Runners install composers through `import desktop_webview_window`.
+@_exported import desktop_webview_window_composer
+#endif
 
 public class DesktopWebviewWindowPlugin: NSObject, FlutterPlugin {
-  private let methodChannel: FlutterMethodChannel
+  private let channel: FlutterMethodChannel
 
   private var webviews: [Int64: WebviewWindowController] = [:]
 
-  private let titleBarViews: TitleBarViews
+  private var isDetached = false
 
-  public init(methodChannel: FlutterMethodChannel, messenger: FlutterBinaryMessenger) {
-    self.methodChannel = methodChannel
-    self.titleBarViews = TitleBarViews(messenger: messenger)
+  init(channel: FlutterMethodChannel) {
+    self.channel = channel
     super.init()
   }
 
-  /// Creates the application's main controller with multi-view enabled.
-  /// Call before RegisterGeneratedPlugins in the macOS runner.
-  public static func createMainViewController() throws -> FlutterViewController {
-    try TitleBarViews.createMainViewController()
-  }
-
   public static func register(with registrar: FlutterPluginRegistrar) {
-    let channel = FlutterMethodChannel(name: "webview_window", binaryMessenger: registrar.messenger)
-    let instance = DesktopWebviewWindowPlugin(methodChannel: channel, messenger: registrar.messenger)
+    DefaultComposer.install()
+    let channel = FlutterMethodChannel(
+      name: "desktop_webview_window", binaryMessenger: registrar.messenger)
+    let instance = DesktopWebviewWindowPlugin(channel: channel)
     registrar.addMethodCallDelegate(instance, channel: channel)
   }
 
+  public func detachFromEngine(for registrar: FlutterPluginRegistrar) {
+    teardown()
+  }
+
   public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
-    switch call.method {
-    #if DEBUG
-    case "debugTitleBarState":
-      result(titleBarViews.debugState())
+    guard !isDetached else {
+      result(FlutterError(code: "engine_detached", message: "The plugin was detached", details: nil))
       return
-    #endif
+    }
+    let argument = call.arguments as? [String: Any?] ?? [:]
+    switch call.method {
+    case "isWebviewAvailable":
+      result(true)
+      return
     case "create":
-      guard let argument = call.arguments as? [String: Any?] else {
-        result(FlutterError(code: "0", message: "arg is not map", details: nil))
-        return
-      }
-      let width = argument["windowWidth"] as? Int ?? 1280
-      let height = argument["windowHeight"] as? Int ?? 720
-      let title = argument["title"] as? String ?? ""
-      let titleBarHeight = argument["titleBarHeight"] as? Int ?? 50
-      let showSystemTitleBar = argument["showSystemTitleBar"] as? Bool ?? true
-      let titleBarTopPadding = showSystemTitleBar
-        ? max(0, argument["titleBarTopPadding"] as? Int ?? 0) : 0
-      let useTitleBar = argument["useTitleBar"] as? Bool ?? true
-      let viewId = nextWebViewId
-      nextWebViewId += 1
-
-      var titleBarController: FlutterViewController?
-      if useTitleBar && titleBarHeight > 0 {
-        titleBarController = titleBarViews.createView(
-          webViewId: viewId, titleBarTopPadding: titleBarTopPadding)
-      }
-
-      let controller = WebviewWindowController(
-        viewId: viewId, methodChannel: methodChannel,
-        width: width, height: height, title: title, showSystemTitleBar: showSystemTitleBar,
-        titleBarHeight: titleBarController == nil ? 0 : titleBarHeight + titleBarTopPadding,
-        titleBarController: titleBarController, titleBarViews: titleBarViews
-      )
-      controller.webviewPlugin = self
-      webviews[viewId] = controller
-      if let brightness = argument["titleBarBrightness"] as? Int {
-        controller.setAppearance(brightness: brightness)
-      }
-      controller.showWindow(nil)
-      result(viewId)
-      break
-    case "launch":
-      guard let argument = call.arguments as? [String: Any?] else {
-        result(FlutterError(code: "0", message: "arg is not map", details: nil))
-        return
-      }
-
-      guard let viewId = argument["viewId"] as? Int64 else {
-        result(FlutterError(code: "0", message: "param viewId not found", details: nil))
-        return
-      }
-
-      guard let url = argument["url"] as? String else {
-        result(FlutterError(code: "0", message: "param url not found", details: nil))
-        return
-      }
-
-      guard let parsedUrl = URL(string: url) else {
-        result(FlutterError(code: "0", message: "failed to parse \(url)", details: nil))
-        return
-      }
-
-      guard let wc = webviews[viewId] else {
-        result(FlutterError(code: "0", message: "can not find webview for id: \(viewId)", details: nil))
-        return
-      }
-      wc.webViewController.load(url: parsedUrl)
-      result(nil)
-      break
-    case "registerJavaScriptInterface":
-      guard let argument = call.arguments as? [String: Any?] else {
-        result(FlutterError(code: "0", message: "arg is not map", details: nil))
-        return
-      }
-      guard let viewId = argument["viewId"] as? Int64 else {
-        result(FlutterError(code: "0", message: "param viewId not found", details: nil))
-        return
-      }
-      guard let name = argument["name"] as? String else {
-        result(FlutterError(code: "0", message: "param name not found", details: nil))
-        return
-      }
-      guard let wc = webviews[viewId] else {
-        result(FlutterError(code: "0", message: "can not find webview for id: \(viewId)", details: nil))
-        return
-      }
-      wc.webViewController.addJavascriptInterface(name: name)
-      result(nil)
-      break
-    case "unregisterJavaScriptInterface":
-      guard let argument = call.arguments as? [String: Any?] else {
-        result(FlutterError(code: "0", message: "arg is not map", details: nil))
-        return
-      }
-      guard let viewId = argument["viewId"] as? Int64 else {
-        result(FlutterError(code: "0", message: "param viewId not found", details: nil))
-        return
-      }
-      guard let name = argument["name"] as? String else {
-        result(FlutterError(code: "0", message: "param name not found", details: nil))
-        return
-      }
-      guard let wc = webviews[viewId] else {
-        result(FlutterError(code: "0", message: "can not find webview for id: \(viewId)", details: nil))
-        return
-      }
-      wc.webViewController.removeJavascriptInterface(name: name)
-      result(nil)
-      break
+      create(argument, result: result)
+      return
     case "clearAll":
       WKWebsiteDataStore.default().removeData(
-        ofTypes: [WKWebsiteDataTypeCookies, WKWebsiteDataTypeLocalStorage],
+        ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(),
         modifiedSince: .distantPast,
-        completionHandler: {
-          result(nil)
+        completionHandler: { result(nil) })
+      return
+    default:
+      break
+    }
+
+    guard let viewId = argument["viewId"] as? Int64 else {
+      result(FlutterError(code: "invalid_argument", message: "viewId is required", details: nil))
+      return
+    }
+    if call.method == "close" {
+      // A duplicated or delayed close is already satisfied.
+      webviews[viewId]?.requestClose()
+      result(nil)
+      return
+    }
+    guard let wc = webviews[viewId] else {
+      result(FlutterError(code: "browser_closed", message: "No open browser with id \(viewId)", details: nil))
+      return
+    }
+    let webView = wc.webViewController
+    switch call.method {
+    case "launch":
+      guard let url = argument["url"] as? String, let parsed = URL(string: url) else {
+        result(FlutterError(code: "invalid_argument", message: "Invalid url", details: nil))
+        return
+      }
+      let decide = argument["triggerOnUrlRequestEvent"] as? Bool ?? true
+      webView.load(url: parsed, decide: decide)
+      result(nil)
+    case "setUrlRequestEnabled":
+      webView.urlRequestEnabled = argument["enabled"] as? Bool ?? false
+      result(nil)
+    case "postJavaScriptMessage":
+      guard let script = argument["script"] as? String else {
+        result(FlutterError(code: "invalid_argument", message: "script is required", details: nil))
+        return
+      }
+      webView.evaluate(script) { _, error in
+        result(error.map {
+          FlutterError(code: "javascript_error", message: $0.localizedDescription, details: nil)
         })
-      break
+      }
     case "setBrightness":
-      guard let argument = call.arguments as? [String: Any?] else {
-        result(FlutterError(code: "0", message: "arg is not map", details: nil))
-        return
-      }
-      guard let viewId = argument["viewId"] as? Int64 else {
-        result(FlutterError(code: "0", message: "param viewId not found", details: nil))
-        return
-      }
-      guard let wc = webviews[viewId] else {
-        result(FlutterError(code: "0", message: "can not find webview for id: \(viewId)", details: nil))
-        return
-      }
-      let brightness = argument["brightness"] as? Int ?? -1
-      wc.setAppearance(brightness: brightness)
+      wc.setAppearance(brightness: argument["brightness"] as? Int ?? -1)
       result(nil)
-      break
     case "addScriptToExecuteOnDocumentCreated":
-      guard let argument = call.arguments as? [String: Any?] else {
-        result(FlutterError(code: "0", message: "arg is not map", details: nil))
-        return
-      }
-      guard let viewId = argument["viewId"] as? Int64 else {
-        result(FlutterError(code: "0", message: "param viewId not found", details: nil))
-        return
-      }
-      guard let wc = webviews[viewId] else {
-        result(FlutterError(code: "0", message: "can not find webview for id: \(viewId)", details: nil))
-        return
-      }
       guard let javaScript = argument["javaScript"] as? String else {
-        result(FlutterError(code: "0", message: "param javaScript not found", details: nil))
+        result(FlutterError(code: "invalid_argument", message: "javaScript is required", details: nil))
         return
       }
-      wc.webViewController.addScriptToExecuteOnDocumentCreated(javaScript: javaScript)
+      webView.addScriptToExecuteOnDocumentCreated(javaScript: javaScript)
       result(nil)
-      break
     case "setApplicationNameForUserAgent":
-      guard let argument = call.arguments as? [String: Any?] else {
-        result(FlutterError(code: "0", message: "arg is not map", details: nil))
-        return
-      }
-      guard let viewId = argument["viewId"] as? Int64 else {
-        result(FlutterError(code: "0", message: "param viewId not found", details: nil))
-        return
-      }
-      guard let wc = webviews[viewId] else {
-        result(FlutterError(code: "0", message: "can not find webview for id: \(viewId)", details: nil))
-        return
-      }
       guard let applicationName = argument["applicationName"] as? String else {
-        result(FlutterError(code: "0", message: "param applicationName not found", details: nil))
+        result(FlutterError(code: "invalid_argument", message: "applicationName is required", details: nil))
         return
       }
-      wc.webViewController.setApplicationNameForUserAgent(applicationName: applicationName)
+      webView.setApplicationNameForUserAgent(applicationName: applicationName)
       result(nil)
-      break
     case "back":
-      guard let argument = call.arguments as? [String: Any?] else {
-        result(FlutterError(code: "0", message: "arg is not map", details: nil))
-        return
-      }
-      guard let viewId = argument["viewId"] as? Int64 else {
-        result(FlutterError(code: "0", message: "param viewId not found", details: nil))
-        return
-      }
-      guard let wc = webviews[viewId] else {
-        result(FlutterError(code: "0", message: "can not find webview for id: \(viewId)", details: nil))
-        return
-      }
-      wc.webViewController.goBack()
+      webView.goBack()
       result(nil)
-      break
     case "forward":
-      guard let argument = call.arguments as? [String: Any?] else {
-        result(FlutterError(code: "0", message: "arg is not map", details: nil))
-        return
-      }
-      guard let viewId = argument["viewId"] as? Int64 else {
-        result(FlutterError(code: "0", message: "param viewId not found", details: nil))
-        return
-      }
-      guard let wc = webviews[viewId] else {
-        result(FlutterError(code: "0", message: "can not find webview for id: \(viewId)", details: nil))
-        return
-      }
-      wc.webViewController.goForward()
+      webView.goForward()
       result(nil)
-      break
     case "reload":
-      guard let argument = call.arguments as? [String: Any?] else {
-        result(FlutterError(code: "0", message: "arg is not map", details: nil))
-        return
-      }
-      guard let viewId = argument["viewId"] as? Int64 else {
-        result(FlutterError(code: "0", message: "param viewId not found", details: nil))
-        return
-      }
-      guard let wc = webviews[viewId] else {
-        result(FlutterError(code: "0", message: "can not find webview for id: \(viewId)", details: nil))
-        return
-      }
-      wc.webViewController.reload()
+      webView.reload()
       result(nil)
-      break
     case "stop":
-      guard let argument = call.arguments as? [String: Any?] else {
-        result(FlutterError(code: "0", message: "arg is not map", details: nil))
-        return
-      }
-      guard let viewId = argument["viewId"] as? Int64 else {
-        result(FlutterError(code: "0", message: "param viewId not found", details: nil))
-        return
-      }
-      guard let wc = webviews[viewId] else {
-        result(FlutterError(code: "0", message: "can not find webview for id: \(viewId)", details: nil))
-        return
-      }
-      wc.webViewController.stopLoading()
+      webView.stopLoading()
       result(nil)
-      break
-    case "close":
-      guard let argument = call.arguments as? [String: Any?] else {
-        result(FlutterError(code: "0", message: "arg is not map", details: nil))
-        return
-      }
-      guard let viewId = argument["viewId"] as? Int64 else {
-        result(FlutterError(code: "0", message: "param viewId not found", details: nil))
-        return
-      }
-      guard let wc = webviews[viewId] else {
-        // Closing an already closed window is harmless, including a duplicate
-        // request while a native close event is being delivered.
-        result(nil)
-        return
-      }
-      wc.close()
-      result(nil)
-      break
     case "evaluateJavaScript":
-      guard let argument = call.arguments as? [String: Any?] else {
-        result(FlutterError(code: "0", message: "arg is not map", details: nil))
-        return
-      }
-      guard let viewId = argument["viewId"] as? Int64 else {
-        result(FlutterError(code: "0", message: "param viewId not found", details: nil))
-        return
-      }
-      guard let wc = webviews[viewId] else {
-        result(FlutterError(code: "0", message: "can not find webview for id: \(viewId)", details: nil))
-        return
-      }
       guard let js = argument["javaScriptString"] as? String else {
-        result(FlutterError(code: "0", message: "param javaScriptString not found", details: nil))
+        result(FlutterError(code: "invalid_argument", message: "javaScriptString is required", details: nil))
         return
       }
-      wc.webViewController.evaluateJavaScript(javaScriptString: js, completer: result)
-      break
+      webView.evaluateJavaScript(javaScriptString: js, completer: result)
     case "getAllCookies":
-      guard let argument = call.arguments as? [String: Any?] else {
-        result(FlutterError(code: "0", message: "arg is not map", details: nil))
-        return
-      }
-      guard let viewId = argument["viewId"] as? Int64 else {
-        result(FlutterError(code: "0", message: "param viewId not found", details: nil))
-        return
-      }
-      guard let wc = webviews[viewId] else {
-        result(FlutterError(code: "0", message: "can not find webview for id: \(viewId)", details: nil))
-        return
-      }
-      wc.webViewController.getAllCookies(completer: result)
-      break
+      webView.getAllCookies(completer: result)
     default:
       result(FlutterMethodNotImplemented)
     }
   }
 
-  func onWebviewWindowClose(viewId: Int64, wc: WebviewWindowController) {
-    guard webviews[viewId] === wc else { return }
-    webviews.removeValue(forKey: viewId)
+  private func create(_ argument: [String: Any?], result: @escaping FlutterResult) {
+    let viewId = dww_darwin_next_browser_id()
+    let options = WebviewWindowController.Options(
+      width: argument["windowWidth"] as? Int ?? 1280,
+      height: argument["windowHeight"] as? Int ?? 720,
+      x: argument["windowPosX"] as? Int ?? 0,
+      y: argument["windowPosY"] as? Int ?? 0,
+      usePosition: argument["useWindowPositionAndSize"] as? Bool ?? false,
+      title: argument["title"] as? String ?? "",
+      showSystemTitleBar: argument["showSystemTitleBar"] as? Bool ?? true,
+      showToolbar: argument["showToolbar"] as? Bool ?? true,
+      composerArguments: argument["composerArguments"] as? String,
+      javaScriptBridge: argument["javaScriptBridge"] as? String)
+    let controller = WebviewWindowController(viewId: viewId, channel: channel, options: options)
+    controller.onClosed = { [weak self] wc in
+      guard let self = self, self.webviews[wc.viewId] === wc else { return }
+      self.webviews.removeValue(forKey: wc.viewId)
+    }
+    webviews[viewId] = controller
+    controller.start(
+      options: options,
+      openMaximized: argument["openMaximized"] as? Bool ?? false,
+      openHidden: argument["openHidden"] as? Bool ?? false)
+    if controller.isClosing {
+      // Closed from a composer callback: tear down before replying, so Dart
+      // receives a browser that has already closed.
+      controller.destroyNow()
+      result(["id": viewId, "windowHandle": 0, "closed": true])
+      return
+    }
+    let handle = controller.window.map { Int64(Int(bitPattern: Unmanaged.passUnretained($0).toOpaque())) } ?? 0
+    result(["id": viewId, "windowHandle": handle])
+  }
+
+  private func teardown() {
+    guard !isDetached else { return }
+    isDetached = true
+    for controller in webviews.values {
+      controller.detach()
+    }
+    webviews.removeAll()
   }
 
   deinit {
-    // Detach only browser views; the runner retains the application engine.
-    for controller in webviews.values {
-      controller.destroy()
-    }
-    webviews.removeAll()
-    titleBarViews.shutdown()
+    teardown()
   }
 }

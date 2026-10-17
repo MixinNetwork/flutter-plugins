@@ -18,7 +18,7 @@ button, input, a { font: inherit; margin: 6px 8px 6px 0; padding: 8px; }
 output { display: block; margin-top: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
 </style></head><body>
 <p>DESKTOP WEBVIEW WINDOW</p><h1>Browser $id${next ? ' · next page' : ''}</h1>
-<p>This native browser has its own page. Its Flutter titlebar shares the main application's engine.</p>
+<p>This native browser has its own page and a native toolbar.</p>
 <section><h2>Navigation & input</h2><label>Native input <input placeholder="Type here"></label>
 <button onclick="this.textContent='Clicked browser $id'">Native button</button>
 <a href="${next ? '/' : '/next'}?id=$id">${next ? 'First page' : 'Next page'}</a></section>
@@ -35,11 +35,10 @@ function showResult(value) { document.getElementById('result').textContent = Str
 window.receiveFromApp = function(message) { showResult(message); return 'Received: ' + message; };
 function sendToApp() {
   const payload = {window: $id, message: document.getElementById('message').value};
-  if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage(JSON.stringify(payload));
-  else if (window.webkit && window.webkit.messageHandlers.demo) window.webkit.messageHandlers.demo.postMessage(JSON.stringify(payload));
+  window.desktopWebview.postMessage('demo', payload);
   showResult('Sent to Flutter: ' + JSON.stringify(payload));
 }
-if (window.chrome && window.chrome.webview) window.chrome.webview.addEventListener('message', e => showResult(JSON.stringify(e.data)));
+window.desktopWebview.addEventListener('demo', data => showResult('From Flutter: ' + JSON.stringify(data)));
 </script></body></html>''');
       await request.response.close();
     });

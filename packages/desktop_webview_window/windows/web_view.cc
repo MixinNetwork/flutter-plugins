@@ -15,15 +15,20 @@
 #include <utility>
 #include <vector>
 
-#include "flutter/method_result_functions.h"
 #include "strconv.h"
 #include "utils.h"
 
 namespace webview_window {
 
+// The host window is the composer's webview_view. WebView2 follows its size.
 static LRESULT CALLBACK WndProc(HWND const window, UINT const message,
                                 WPARAM const wparam,
                                 LPARAM const lparam) noexcept {
+  if (message == WM_SIZE) {
+    auto* web_view =
+        reinterpret_cast<WebView*>(GetWindowLongPtr(window, GWLP_USERDATA));
+    if (web_view) web_view->UpdateBounds();
+  }
   return DefWindowProc(window, message, wparam, lparam);
 }
 
@@ -31,17 +36,50 @@ const auto kWebViewClassName = _T("web_view_window_web_view");
 
 using namespace Microsoft::WRL;
 
-WebView::WebView(
-    std::shared_ptr<flutter::MethodChannel<flutter::EncodableValue>> method_channel,
-    int64_t web_view_id, std::wstring userDataFolder, bool deny_camera_and_microphone)
-    : method_channel_(std::move(method_channel)),
+WebView::WebView(EventSink emit, NavigationRequest request_navigation,
+                 std::function<void()> state_changed, int64_t web_view_id,
+                 std::wstring userDataFolder, bool deny_camera_and_microphone,
+                 std::wstring javascript_bridge)
+    : emit_(std::move(emit)),
+      request_navigation_(std::move(request_navigation)),
+      state_changed_(std::move(state_changed)),
+      javascript_bridge_(std::move(javascript_bridge)),
       web_view_id_(web_view_id),
       user_data_folder_(std::move(userDataFolder)),
       deny_camera_and_microphone_(deny_camera_and_microphone) {
   RegisterWindowClass(kWebViewClassName, WndProc);
+  // Hidden until the browser window has been composed.
   view_window_ = wil::unique_hwnd(::CreateWindowEx(
-      0, kWebViewClassName, L"", WS_CHILD | WS_VISIBLE, 0, 0, 0, 0,
+      0, kWebViewClassName, L"", WS_CHILD | WS_CLIPCHILDREN, 0, 0, 0, 0,
       HWND_MESSAGE, nullptr, ::GetModuleHandle(nullptr), nullptr));
+  if (view_window_) {
+    SetWindowLongPtr(view_window_.get(), GWLP_USERDATA,
+                     reinterpret_cast<LONG_PTR>(this));
+  }
+}
+
+void WebView::NotifyStateChanged() {
+  if (!closed_ && state_changed_) state_changed_();
+}
+
+WebView::NavigationState WebView::State() const {
+  NavigationState state;
+  state.can_go_back = CanGoBack();
+  state.can_go_forward = CanGoForward();
+  state.is_loading = loading_;
+  if (webview_) {
+    wil::unique_cotaskmem_string source;
+    if (SUCCEEDED(webview_->get_Source(&source)) && source) {
+      state.url = source.get();
+      // A new WebView reports about:blank before its first navigation.
+      if (state.url == L"about:blank") state.url.clear();
+    }
+    wil::unique_cotaskmem_string title;
+    if (SUCCEEDED(webview_->get_DocumentTitle(&title)) && title) {
+      state.title = title.get();
+    }
+  }
+  return state;
 }
 
 void WebView::Create(std::function<void(HRESULT)> callback) {
@@ -114,6 +152,12 @@ void WebView::Create(std::function<void(HRESULT)> callback) {
   }
 }
 
+void WebView::Emit(const std::string &method, flutter::EncodableMap args) {
+  if (closed_ || !emit_) return;
+  args[flutter::EncodableValue("id")] = flutter::EncodableValue(web_view_id_);
+  emit_(method, std::move(args));
+}
+
 void WebView::CompleteCreation(HRESULT result) {
   auto callback = std::exchange(on_web_view_created_callback_, nullptr);
   if (callback) {
@@ -157,6 +201,13 @@ HRESULT WebView::OnWebviewControllerCreated() {
 
   webview_controller_->put_IsVisible(visible_);
   UpdateBounds();
+
+  if (!javascript_bridge_.empty()) {
+    // Registered before the first navigation, so every page gets the bridge.
+    hr = webview_->AddScriptToExecuteOnDocumentCreated(
+        javascript_bridge_.c_str(), nullptr);
+    if (FAILED(hr)) return hr;
+  }
 
   // Always use single window to load web page.
   webview_->add_NewWindowRequested(
@@ -209,104 +260,60 @@ HRESULT WebView::OnWebviewControllerCreated() {
       Callback<ICoreWebView2HistoryChangedEventHandler>(
           [weak = weak_from_this()](ICoreWebView2 *sender, IUnknown *args) {
             auto self = weak.lock();
-            if (!self || self->closed_) return S_OK;
-            auto method_args = flutter::EncodableMap{
-                {flutter::EncodableValue("id"),
-                 flutter::EncodableValue(self->web_view_id_)},
-                {flutter::EncodableValue("canGoBack"),
-                 flutter::EncodableValue(self->CanGoBack())},
-                {flutter::EncodableValue("canGoForward"),
-                 flutter::EncodableValue(self->CanGoForward())},
-            };
-            self->method_channel_->InvokeMethod(
-                "onHistoryChanged",
-                std::make_unique<flutter::EncodableValue>(method_args));
+            if (self) self->NotifyStateChanged();
+            return S_OK;
+          })
+          .Get(),
+      nullptr);
+  webview_->add_SourceChanged(
+      Callback<ICoreWebView2SourceChangedEventHandler>(
+          [weak = weak_from_this()](ICoreWebView2 *,
+                                    ICoreWebView2SourceChangedEventArgs *) {
+            auto self = weak.lock();
+            if (self) self->NotifyStateChanged();
+            return S_OK;
+          })
+          .Get(),
+      nullptr);
+  webview_->add_DocumentTitleChanged(
+      Callback<ICoreWebView2DocumentTitleChangedEventHandler>(
+          [weak = weak_from_this()](ICoreWebView2 *, IUnknown *) {
+            auto self = weak.lock();
+            if (self) self->NotifyStateChanged();
             return S_OK;
           })
           .Get(),
       nullptr);
 
+  // NavigationStarting only reports top-level navigations, including redirects.
+  // It has no deferral, so Dart decides synchronously before the handler
+  // returns; an allowed navigation keeps its method, body and headers.
   webview_->add_NavigationStarting(
       Callback<ICoreWebView2NavigationStartingEventHandler>(
           [weak = weak_from_this()](ICoreWebView2 *sender,
                  ICoreWebView2NavigationStartingEventArgs *args) {
             auto self = weak.lock();
             if (!self || self->closed_) return S_OK;
-            self->method_channel_->InvokeMethod(
-                "onNavigationStarted",
-                std::make_unique<flutter::EncodableValue>(flutter::EncodableMap{
-                    {flutter::EncodableValue("id"),
-                     flutter::EncodableValue(self->web_view_id_)},
-                }));
-
-            // Every new navigation supersedes pending approval, including
-            // navigations that intentionally bypass the Dart callback.
-            self->CancelPendingNavigation();
-            if (self->triggerOnUrlRequestedEvent) {
-              wil::unique_cotaskmem_string uri;
-              UINT64 navigation_id;
-              HRESULT hr = args->get_Uri(&uri);
-              if (FAILED(hr) || !uri ||
-                  FAILED(args->get_NavigationId(&navigation_id))) {
-                args->put_Cancel(true);
-                return S_OK;
-              }
-
-              // Capture URI string before async callback
-              std::wstring uri_string(uri.get());
-              auto navigation = std::make_shared<NavigationRequest>(
-                  uri_string, navigation_id);
-              self->pending_navigation_ = navigation;
-
-              if (!navigation->IsHttp()) {
-                // Keep non-HTTP navigation canceled until Dart allows it.
-                args->put_Cancel(true);
-                wil::com_ptr<ICoreWebView2> webview = sender;
-                // Closing or superseding the request completes it with false,
-                // so a late reply cannot restart navigation.
-                navigation->OnDecision(
-                    [weak, uri_string, webview](bool allow) {
-                      auto self = weak.lock();
-                      if (!self || self->closed_) return;
-                      if (allow) {
-                        self->setTriggerOnUrlRequestedEvent(false);
-                        webview->Navigate(uri_string.c_str());
-                      }
-                    });
-              }
-
-              // HTTP(S) must continue with its original method, body and headers.
-              // WebResourceRequested below defers it until this reply arrives.
-              auto result_handler =
-                  std::make_unique<flutter::MethodResultFunctions<>>(
-                      [navigation](const flutter::EncodableValue *success_value) {
-                        bool letPass = false;
-                        if (success_value &&
-                            std::holds_alternative<bool>(*success_value)) {
-                          letPass = std::get<bool>(*success_value);
-                        }
-                        navigation->Complete(letPass);
-                      },
-                      [navigation](const std::string &, const std::string &,
-                                   const flutter::EncodableValue *) {
-                        navigation->Complete(false);
-                      },
-                      [navigation]() { navigation->Complete(false); });
-
-              self->method_channel_->InvokeMethod(
-                  "onUrlRequested",
-                  std::make_unique<flutter::EncodableValue>(
-                      flutter::EncodableMap{
-                          {flutter::EncodableValue("id"),
-                           flutter::EncodableValue(self->web_view_id_)},
-                          {flutter::EncodableValue("url"),
-                           flutter::EncodableValue(
-                               wide_to_utf8(uri_string))},
-                      }),
-                  std::move(result_handler));
-            } else {
-              args->put_Cancel(false);
+            self->declined_url_.clear();
+            self->loading_ = true;
+            self->NotifyStateChanged();
+            if (!self->triggerOnUrlRequestedEvent) {
+              // Only the explicitly launched navigation bypasses Dart.
               self->triggerOnUrlRequestedEvent = true;
+              return S_OK;
+            }
+            if (!self->url_request_enabled_ || !self->request_navigation_) {
+              return S_OK;
+            }
+            wil::unique_cotaskmem_string uri;
+            if (FAILED(args->get_Uri(&uri)) || !uri) {
+              args->put_Cancel(true);
+              return S_OK;
+            }
+            std::wstring url(uri.get());
+            if (!self->request_navigation_(url)) {
+              self->declined_url_ = url.substr(0, url.find(L'#'));
+              args->put_Cancel(true);
             }
             return S_OK;
           })
@@ -319,45 +326,27 @@ HRESULT WebView::OnWebviewControllerCreated() {
           [weak = weak_from_this()](ICoreWebView2 *sender,
                   ICoreWebView2WebResourceRequestedEventArgs *args) -> HRESULT {
             auto self = weak.lock();
-            if (!self || self->closed_) return S_OK;
-            const auto navigation = self->pending_navigation_;
-            if (!navigation || !navigation->IsHttp()) {
+            if (!self || self->closed_ || self->declined_url_.empty()) {
               return S_OK;
             }
             wil::com_ptr<ICoreWebView2WebResourceRequest> request;
             wil::unique_cotaskmem_string uri;
             if (FAILED(args->get_Request(&request)) || !request ||
-                FAILED(request->get_Uri(&uri)) || !uri ||
-                !navigation->MatchesResource(uri.get())) {
+                FAILED(request->get_Uri(&uri)) || !uri) {
               return S_OK;
             }
-
-            wil::com_ptr<ICoreWebView2Deferral> deferral;
-            HRESULT hr = args->GetDeferral(&deferral);
-            if (FAILED(hr)) {
-              sender->Stop();
-              return hr;
+            std::wstring url(uri.get());
+            if (url.substr(0, url.find(L'#')) != self->declined_url_) {
+              return S_OK;
             }
-            wil::com_ptr<ICoreWebView2WebResourceRequestedEventArgs> event = args;
-            wil::com_ptr<ICoreWebView2> webview = sender;
-            auto environment = self->environment_;
-            navigation->OnDecision(
-                [event, deferral, environment, webview](bool allow) {
-                  if (!allow) {
-                    // A synthetic 204 prevents the network request and keeps
-                    // the current document, just like canceled navigation.
-                    wil::com_ptr<ICoreWebView2WebResourceResponse> response;
-                    HRESULT hr = environment->CreateWebResourceResponse(
-                        nullptr, 204, L"No Content", L"", &response);
-                    if (FAILED(hr) ||
-                        FAILED(event->put_Response(response.get()))) {
-                      webview->Stop();
-                    }
-                  }
-                  // Without a replacement response, WebView2 sends the
-                  // original request, including POST data, exactly once.
-                  deferral->Complete();
-                });
+            self->declined_url_.clear();
+            // A synthetic 204 keeps the request off the network and leaves the
+            // current document in place, like the cancelled navigation.
+            wil::com_ptr<ICoreWebView2WebResourceResponse> response;
+            if (SUCCEEDED(self->environment_->CreateWebResourceResponse(
+                    nullptr, 204, L"No Content", L"", &response))) {
+              args->put_Response(response.get());
+            }
             return S_OK;
           })
           .Get(),
@@ -368,19 +357,8 @@ HRESULT WebView::OnWebviewControllerCreated() {
                  ICoreWebView2NavigationCompletedEventArgs *args) {
             auto self = weak.lock();
             if (!self || self->closed_) return S_OK;
-            UINT64 navigation_id;
-            if (self->pending_navigation_ && self->pending_navigation_->IsHttp() &&
-                SUCCEEDED(args->get_NavigationId(&navigation_id)) &&
-                self->pending_navigation_->id == navigation_id) {
-              self->CancelPendingNavigation();
-            }
-            auto method_args = flutter::EncodableMap{
-                {flutter::EncodableValue("id"),
-                 flutter::EncodableValue(self->web_view_id_)},
-            };
-            self->method_channel_->InvokeMethod(
-                "onNavigationCompleted",
-                std::make_unique<flutter::EncodableValue>(method_args));
+            self->loading_ = false;
+            self->NotifyStateChanged();
             return S_OK;
           })
           .Get(),
@@ -391,29 +369,16 @@ HRESULT WebView::OnWebviewControllerCreated() {
                  ICoreWebView2WebMessageReceivedEventArgs *args) {
             auto self = weak.lock();
             if (!self || self->closed_) return S_OK;
-            wil::unique_cotaskmem_string messageRaw;
-            HRESULT hrString = args->TryGetWebMessageAsString(&messageRaw);
-            if (FAILED(hrString)) {
-              if (hrString == E_INVALIDARG) {
-                // web message was not a string --> should only happen if it was
-                // a JSON object
-                HRESULT hrJson = args->get_WebMessageAsJson(&messageRaw);
-                if (FAILED(hrJson)) {
-                  return hrJson;
-                }
-              } else {
-                return hrString;
-              }
+            // The injected bridge always posts a JSON string; anything else
+            // did not come from window.desktopWebview.
+            wil::unique_cotaskmem_string message;
+            if (FAILED(args->TryGetWebMessageAsString(&message)) || !message) {
+              return S_OK;
             }
-            self->method_channel_->InvokeMethod(
-                "onWebMessageReceived",
-                std::make_unique<flutter::EncodableValue>(flutter::EncodableMap{
-                    {flutter::EncodableValue("id"),
-                     flutter::EncodableValue(self->web_view_id_)},
-                    {flutter::EncodableValue("message"),
-                     flutter::EncodableValue(
-                         wide_to_utf8(std::wstring(messageRaw.get())))},
-                }));
+            self->Emit("onJavaScriptMessage", flutter::EncodableMap{
+                {flutter::EncodableValue("message"),
+                 flutter::EncodableValue(wide_to_utf8(std::wstring(message.get())))},
+            });
             return S_OK;
           })
           .Get(),
@@ -430,7 +395,6 @@ void WebView::UpdateBounds() {
 }
 
 void WebView::Navigate(const std::wstring &url) {
-  CancelPendingNavigation();
   if (webview_) {
     webview_->Navigate(url.c_str());
   } else {
@@ -445,10 +409,9 @@ void WebView::SetVisible(bool visible) {
   }
 }
 
-void WebView::CancelPendingNavigation() {
-  if (pending_navigation_) {
-    pending_navigation_->Complete(false);
-    pending_navigation_.reset();
+void WebView::Focus() {
+  if (webview_controller_) {
+    webview_controller_->MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC);
   }
 }
 
@@ -475,28 +438,24 @@ void WebView::SetApplicationNameForUserAgent(const std::wstring &name) {
 }
 
 void WebView::GoBack() {
-  CancelPendingNavigation();
   if (webview_) {
     webview_->GoBack();
   }
 }
 
 void WebView::GoForward() {
-  CancelPendingNavigation();
   if (webview_) {
     webview_->GoForward();
   }
 }
 
 void WebView::Reload() {
-  CancelPendingNavigation();
   if (webview_) {
     webview_->Reload();
   }
 }
 
 void WebView::Stop() {
-  CancelPendingNavigation();
   if (webview_) {
     webview_->Stop();
   }
@@ -651,11 +610,12 @@ void WebView::ExecuteJavaScript(
               if (error != S_OK) {
                 completer->Error("0", "Error executing JavaScript");
               } else {
+                // ExecuteScript already returns JSON ("null" for undefined).
                 if (result) {
                   completer->Success(flutter::EncodableValue(
                       wide_to_utf8(std::wstring(result))));
                 } else {
-                  completer->Success(flutter::EncodableValue(""));
+                  completer->Success();
                 }
               }
               return S_OK;
@@ -666,32 +626,18 @@ void WebView::ExecuteJavaScript(
   }
 }
 
-void WebView::PostWebMessageAsString(
-    const std::wstring &webmessage,
+void WebView::PostJavaScriptMessage(
+    const std::wstring &message,
     std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> completer) {
-  if (webview_) {
-    if (webview_->PostWebMessageAsString(webmessage.c_str()) == NOERROR) {
-      completer->Success();
-    } else {
-      completer->Error("0", "Error posting webmessage as String");
-    }
-  } else {
-    completer->Error("0", "webview not created");
+  if (!webview_) {
+    completer->Error("browser_not_ready", "The browser view is not ready.");
+    return;
   }
-}
-
-void WebView::PostWebMessageAsJson(
-    const std::wstring &webmessage,
-    std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> completer) {
-  if (webview_) {
-    if (webview_->PostWebMessageAsJson(webmessage.c_str()) == NOERROR) {
-      completer->Success();
-    } else {
-      completer->Error("0", "Error posting webmessage as JSON");
-    }
-  } else {
-    completer->Error("0", "webview not created");
+  if (FAILED(webview_->PostWebMessageAsString(message.c_str()))) {
+    completer->Error("post_message_failed", "Failed to post the message.");
+    return;
   }
+  completer->Success();
 }
 
 void WebView::setTriggerOnUrlRequestedEvent(const bool value) {
@@ -705,7 +651,10 @@ void WebView::Close() {
   closed_ = true;
   // The window resolves its pending create result; abandon the backend callback.
   on_web_view_created_callback_ = nullptr;
-  CancelPendingNavigation();
+  state_changed_ = nullptr;
+  if (view_window_) {
+    SetWindowLongPtr(view_window_.get(), GWLP_USERDATA, 0);
+  }
   if (webview_) {
     webview_->Stop();
   }

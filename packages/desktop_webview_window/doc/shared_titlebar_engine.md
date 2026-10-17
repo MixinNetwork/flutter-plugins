@@ -22,7 +22,34 @@ or command broadcast. Builders receive the real `Webview` and its current
 Native WebViews remain the browser content, below the non-overlapping titlebar.
 Native keyboard/pointer behavior is unchanged by the ownership migration.
 
-`desktop_webview_window/titlebars` belongs to the application engine:
+## Native transport
+
+All Dart/native communication uses FFI, following desktop_drop. `src/` holds
+the C contract (`desktop_webview_window_ffi.h`), compiled into each platform's
+plugin (Darwin through forwarders in its SwiftPM/CocoaPods target):
+
+- RPC: Dart opens the bridge with `PlatformDispatcher.engineId`; each plugin
+  instance matches its own engine (macOS by messenger identity through the
+  guarded engine lookup, Windows by messenger, Linux by FlEngine pointer).
+  Calls and events are StandardMethodCodec payloads posted to a Dart port.
+  A new isolate (hot restart) closes the previous port and drops late replies.
+- Navigation decisions: Dart installs a `NativeCallable.isolateLocal`. Native
+  code calls it synchronously from macOS `decidePolicyFor`, WebView2
+  `NavigationStarting` and WebKitGTK `decide-policy`, only after checking that
+  the current thread owns the root isolate. Otherwise navigation is allowed.
+- Native windows: browser IDs and window pointers live in a process-wide
+  registry, so `nativeWindowHandle` is a synchronous lookup. Windows are
+  unregistered before they are destroyed.
+- Page messaging: one injected script (`lib/src/js_bridge.dart`) defines
+  `window.desktopWebview` over `webkit.messageHandlers.desktopWebview` or
+  `chrome.webview`. Messages are JSON strings `{name, data}`.
+
+Run `dart run tool/ffigen.dart` after changing the header; it regenerates the
+Dart bindings and the Darwin header copy.
+
+## Titlebar host calls
+
+The titlebar host's calls share the bridge with browser calls:
 
 - `initialize`: attach the application's engine without requiring a main view.
   Windows and macOS receive the actual `dart:ui` engine ID. macOS guards its stock
@@ -30,7 +57,7 @@ Native keyboard/pointer behavior is unchanged by the ownership migration.
 - `getMainView`: used only by the ordinary-app convenience root. macOS keeps a
   weak registration for main controllers created by its runner helper.
 - `getViews`: snapshot of `{viewId, webViewId, titleBarTopPadding}`.
-- `viewsChanged`: invalidate the snapshot.
+- `viewsChanged` (event): invalidate the snapshot.
 
 Browser creation waits for host initialization when a Flutter toolbar is
 requested. Without a host it fails explicitly; `WebviewTitleBarConfiguration.none()`
@@ -56,6 +83,8 @@ Plugin teardown detaches browser views without destroying the runner's engine.
   `FlutterDesktopEngineCreateViewController` borrow the application's engine.
   The runner retains its existing implicit view 0. The plugin never uses the
   constructor that transfers engine ownership.
+  Browser windows do not forward their messages to the engine's top-level
+  window delegates; those belong to the application's own windows.
 - macOS: the runner calls
   `DesktopWebviewWindowPlugin.createMainViewController()` before registering
   plugins for ordinary applications. It enables multi-view before creating the
@@ -76,11 +105,15 @@ ordering and cancellation on unmount, composition with application-owned views
 without an implicit view, anchored composition, browser/view routing, retained
 application state, shared navigation state, per-window builder/theme overrides,
 convenience-root builders, duplicate close and close before native create completes.
+They also cover the bridge contract through a fake transport: page messages,
+`postMessage`, decoded script results, error propagation, synchronous
+navigation decisions, prompt replies, brightness overrides, and host
+replacement versus duplicate hosts.
 
 The portable Windows harness verifies that a pre-existing application engine
-and view 0 survive browser create/close/reopen and registry disposal. It also
-asserts that no engine is created/destroyed and no native message relay is
-registered by the titlebar code. This is ownership validation, not GUI rendering.
+and view 0 survive browser create/close/reopen, that no engine is created or
+destroyed, and that the plugin's borrowed properties struct matches Flutter's
+internal header. This is ownership validation, not GUI rendering.
 
 From the package:
 

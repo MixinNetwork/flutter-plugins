@@ -9,16 +9,30 @@ import Cocoa
 import FlutterMacOS
 import WebKit
 
+/// Navigation state shared with Dart and the window's composer.
+struct NavigationState: Equatable {
+  var canGoBack = false
+  var canGoForward = false
+  var isLoading = false
+  var url: String?
+  var title: String?
+}
+
+/// Owns the WKWebView. Its view is the container handed to composers as
+/// webview_view; the WebView itself and its delegates stay private.
 class WebViewLayoutController: NSViewController {
-  private var titleBarController: FlutterViewController?
-
-  private weak var titleBarViews: TitleBarViews?
-
   private lazy var webView: WKWebView = {
     WKWebView()
   }()
 
-  private var javaScriptHandlerNames: [String] = []
+  private static let bridgeHandlerName = "desktopWebview"
+
+  private let javaScriptBridge: String?
+
+  private var observesBridge = false
+
+  // Set by launch(decide: false): the next main-frame navigation skips Dart.
+  private var skipNextDecision = false
 
   private var observesNavigation = false
 
@@ -26,26 +40,23 @@ class WebViewLayoutController: NSViewController {
 
   private var defaultUserAgent: String?
 
-  private let methodChannel: FlutterMethodChannel
+  private let channel: FlutterMethodChannel
 
   private let viewId: Int64
 
-  private let titleBarHeight: Int
+  /// Top-level navigations wait for Dart only while this is set.
+  var urlRequestEnabled = false
 
-  init(methodChannel: FlutterMethodChannel, viewId: Int64, titleBarHeight: Int,
-       titleBarController: FlutterViewController?, titleBarViews: TitleBarViews?) {
+  /// Called whenever the navigation state changes.
+  var onNavigationStateChanged: ((NavigationState) -> Void)?
+
+  private static let observedKeys = ["canGoBack", "canGoForward", "loading", "title", "URL"]
+
+  init(channel: FlutterMethodChannel, viewId: Int64, javaScriptBridge: String?) {
     self.viewId = viewId
-    self.methodChannel = methodChannel
-    self.titleBarHeight = titleBarHeight
-    self.titleBarController = titleBarController
-    self.titleBarViews = titleBarViews
-    #if SWIFT_PACKAGE
-    // SwiftPM places resources in a per-module bundle exposed as `Bundle.module`.
-    super.init(nibName: "WebViewLayoutController", bundle: Bundle.module)
-    #else
-    // CocoaPods build: the nib is in the framework bundle of this class.
-    super.init(nibName: "WebViewLayoutController", bundle: Bundle(for: WebViewLayoutController.self))
-    #endif
+    self.channel = channel
+    self.javaScriptBridge = javaScriptBridge
+    super.init(nibName: nil, bundle: nil)
   }
 
   required init?(coder: NSCoder) {
@@ -53,33 +64,16 @@ class WebViewLayoutController: NSViewController {
   }
 
   override func loadView() {
-    super.loadView()
+    let container = NSView()
+    view = container
     guard !isDestroyed else { return }
-
-    var webViewTopAnchor = view.topAnchor
-    if let titleBarController = titleBarController {
-      addChild(titleBarController)
-      let flutterView = titleBarController.view
-      flutterView.translatesAutoresizingMaskIntoConstraints = false
-      view.addSubview(flutterView)
-      NSLayoutConstraint.activate([
-        flutterView.topAnchor.constraint(equalTo: view.topAnchor),
-        flutterView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-        flutterView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-        flutterView.heightAnchor.constraint(equalToConstant: CGFloat(titleBarHeight)),
-      ])
-      webViewTopAnchor = flutterView.bottomAnchor
-    }
-
-    // WKWebView occupies its own native rectangle. Flutter only owns the optional
-    // titlebar above it; a toolbar-less window reserves no Flutter layout space.
-    view.addSubview(webView)
+    container.addSubview(webView)
     webView.translatesAutoresizingMaskIntoConstraints = false
     NSLayoutConstraint.activate([
-      webView.topAnchor.constraint(equalTo: webViewTopAnchor),
-      webView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-      webView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-      webView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+      webView.topAnchor.constraint(equalTo: container.topAnchor),
+      webView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+      webView.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+      webView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
     ])
   }
 
@@ -97,50 +91,49 @@ class WebViewLayoutController: NSViewController {
     webView.configuration.allowsAirPlayForMediaPlayback = true
     webView.configuration.mediaTypesRequiringUserActionForPlayback = .video
 
-    webView.addObserver(self, forKeyPath: "canGoBack", options: .new, context: nil)
-    webView.addObserver(self, forKeyPath: "canGoForward", options: .new, context: nil)
-    webView.addObserver(self, forKeyPath: "loading", options: .new, context: nil)
+    for key in Self.observedKeys {
+      webView.addObserver(self, forKeyPath: key, options: .new, context: nil)
+    }
     observesNavigation = true
 
     defaultUserAgent = webView.value(forKey: "userAgent") as? String
+
+    if let bridge = javaScriptBridge {
+      let controller = webView.configuration.userContentController
+      controller.add(WeakScriptMessageHandler(self), name: Self.bridgeHandlerName)
+      controller.addUserScript(
+        WKUserScript(source: bridge, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+      observesBridge = true
+    }
+    #if DEBUG
+    if #available(macOS 13.3, *) {
+      webView.isInspectable = true
+    }
+    #endif
+  }
+
+  var navigationState: NavigationState {
+    guard isViewLoaded, !isDestroyed else { return NavigationState() }
+    return NavigationState(
+      canGoBack: webView.canGoBack,
+      canGoForward: webView.canGoForward,
+      isLoading: webView.isLoading,
+      url: webView.url?.absoluteString,
+      title: webView.title.flatMap { $0.isEmpty ? nil : $0 })
   }
 
   override func observeValue(forKeyPath keyPath: String?, of object: Any?, change: [NSKeyValueChangeKey: Any]?, context: UnsafeMutableRawPointer?) {
     guard !isDestroyed else { return }
-    if keyPath == "canGoBack" || keyPath == "canGoForward" {
-      methodChannel.invokeMethod("onHistoryChanged", arguments: [
-        "id": viewId,
-        "canGoBack": webView.canGoBack,
-        "canGoForward": webView.canGoForward,
-      ] as [String: Any])
-    } else if keyPath == "loading" {
-      if webView.isLoading {
-        methodChannel.invokeMethod("onNavigationStarted", arguments: [
-          "id": viewId,
-        ])
-      } else {
-        methodChannel.invokeMethod("onNavigationCompleted", arguments: [
-          "id": viewId,
-        ])
-      }
-    }
+    onNavigationStateChanged?(navigationState)
   }
 
-  func load(url: URL) {
-    debugPrint("load url: \(url)")
+  func load(url: URL, decide: Bool) {
+    skipNextDecision = !decide
     webView.load(URLRequest(url: url))
   }
 
-  func addJavascriptInterface(name: String) {
-    javaScriptHandlerNames.append(name)
-    webView.configuration.userContentController.add(self, name: name)
-  }
-
-  func removeJavascriptInterface(name: String) {
-    if let index = javaScriptHandlerNames.firstIndex(of: name) {
-      javaScriptHandlerNames.remove(at: index)
-    }
-    webView.configuration.userContentController.removeScriptMessageHandler(forName: name)
+  func evaluate(_ script: String, completion: @escaping (Any?, Error?) -> Void) {
+    webView.evaluateJavaScript(script, completionHandler: completion)
   }
 
   func addScriptToExecuteOnDocumentCreated(javaScript: String) {
@@ -158,29 +151,22 @@ class WebViewLayoutController: NSViewController {
     // Do not force either lazy native view to load while closing an early window.
     if isViewLoaded {
       if observesNavigation {
-        webView.removeObserver(self, forKeyPath: "canGoBack")
-        webView.removeObserver(self, forKeyPath: "canGoForward")
-        webView.removeObserver(self, forKeyPath: "loading")
+        for key in Self.observedKeys {
+          webView.removeObserver(self, forKeyPath: key)
+        }
         observesNavigation = false
       }
       webView.navigationDelegate = nil
       webView.uiDelegate = nil
-      for name in javaScriptHandlerNames {
-        webView.configuration.userContentController.removeScriptMessageHandler(forName: name)
+      if observesBridge {
+        webView.configuration.userContentController.removeScriptMessageHandler(
+          forName: Self.bridgeHandlerName)
+        observesBridge = false
       }
-      javaScriptHandlerNames.removeAll()
       webView.stopLoading()
       webView.removeFromSuperview()
     }
-    if let titleBarController = titleBarController {
-      if titleBarController.isViewLoaded {
-        titleBarController.view.removeFromSuperview()
-      }
-      titleBarController.removeFromParent()
-      titleBarViews?.removeView(titleBarController)
-    }
-    titleBarController = nil
-    titleBarViews = nil
+    onNavigationStateChanged = nil
   }
 
   func reload() {
@@ -209,7 +195,32 @@ class WebViewLayoutController: NSViewController {
         completer(FlutterError(code: "1", message: error.localizedDescription, details: nil))
         return
       }
-      completer(result)
+      // Results cross the bridge as JSON so every platform returns the same
+      // shape. Undefined and null both become nil.
+      guard let result = result, !(result is NSNull) else {
+        completer(nil)
+        return
+      }
+      let value = Self.jsonCompatible(result)
+      guard let data = try? JSONSerialization.data(withJSONObject: value, options: [.fragmentsAllowed]),
+            let json = String(data: data, encoding: .utf8) else {
+        completer(FlutterError(code: "javascript_result", message: "The result is not JSON-compatible", details: nil))
+        return
+      }
+      completer(json)
+    }
+  }
+
+  private static func jsonCompatible(_ value: Any) -> Any {
+    switch value {
+    case let date as Date:
+      return date.timeIntervalSince1970 * 1000
+    case let array as [Any]:
+      return array.map(jsonCompatible)
+    case let dictionary as [String: Any]:
+      return dictionary.mapValues(jsonCompatible)
+    default:
+      return value
     }
   }
 
@@ -224,10 +235,10 @@ class WebViewLayoutController: NSViewController {
           "value": cookie.value,
           "domain": cookie.domain,
           "path": cookie.path,
-          "expiresDate": cookie.expiresDate?.timeIntervalSince1970 ?? NSNull(),
-          "isSecure": cookie.isSecure,
-          "isHTTPOnly": cookie.isHTTPOnly,
-          "isSessionOnly": cookie.isSessionOnly,
+          "expires": cookie.expiresDate?.timeIntervalSince1970 ?? NSNull(),
+          "secure": cookie.isSecure,
+          "httpOnly": cookie.isHTTPOnly,
+          "sessionOnly": cookie.isSessionOnly,
         ])
       }
 
@@ -254,12 +265,26 @@ extension WebViewLayoutController: WKNavigationDelegate {
       return
     }
 
-    methodChannel.invokeMethod("onUrlRequested", arguments: [
-      "id": viewId,
-      "url": url.absoluteString,
-    ] as [String: Any])
-
-    decisionHandler(.allow)
+    // Only top-level navigations are decided, as on the other platforms.
+    guard navigationAction.targetFrame?.isMainFrame ?? true else {
+      decisionHandler(.allow)
+      return
+    }
+    if skipNextDecision {
+      skipNextDecision = false
+      decisionHandler(.allow)
+      return
+    }
+    guard urlRequestEnabled else {
+      decisionHandler(.allow)
+      return
+    }
+    // The navigation waits for Dart. Anything but an explicit false allows it.
+    channel.invokeMethod("onUrlRequest", arguments: [
+      "id": viewId, "url": url.absoluteString,
+    ] as [String: Any]) { result in
+      decisionHandler((result as? Bool) == false ? .cancel : .allow)
+    }
   }
 
   func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse, decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
@@ -269,7 +294,7 @@ extension WebViewLayoutController: WKNavigationDelegate {
 
 extension WebViewLayoutController: WKUIDelegate {
   func webView(_ webView: WKWebView, runJavaScriptTextInputPanelWithPrompt prompt: String, defaultText: String?, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (String?) -> Void) {
-    methodChannel.invokeMethod(
+    channel.invokeMethod(
       "runJavaScriptTextInputPanelWithPrompt",
       arguments: [
         "id": viewId,
@@ -290,12 +315,25 @@ extension WebViewLayoutController: WKUIDelegate {
 
 extension WebViewLayoutController: WKScriptMessageHandler {
   func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-    methodChannel.invokeMethod(
-      "onJavaScriptMessage",
-      arguments: [
-        "id": viewId,
-        "name": message.name,
-        "body": message.body,
-      ])
+    guard !isDestroyed, message.name == Self.bridgeHandlerName,
+          message.frameInfo.isMainFrame,
+          let body = message.body as? String else {
+      return
+    }
+    channel.invokeMethod("onJavaScriptMessage", arguments: ["id": viewId, "message": body])
+  }
+}
+
+/// WKUserContentController retains its handlers; this breaks the cycle with
+/// the controller that owns the web view.
+private final class WeakScriptMessageHandler: NSObject, WKScriptMessageHandler {
+  private weak var target: WKScriptMessageHandler?
+
+  init(_ target: WKScriptMessageHandler) {
+    self.target = target
+  }
+
+  func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+    target?.userContentController(userContentController, didReceive: message)
   }
 }

@@ -4,19 +4,22 @@ import 'dart:io';
 
 import 'package:desktop_webview_window/src/cookie.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart' show ThemeData;
-import 'package:flutter/services.dart';
 
-import 'title_bar_configuration.dart';
-import 'title_bar_runtime.dart';
+import 'js_bridge.dart';
+import 'native_transport.dart';
 import 'webview.dart';
 
-class WebviewImpl extends Webview with ChangeNotifier {
-  final int viewId;
+class WebviewImpl extends Webview {
+  WebviewImpl(this.id, {required int windowHandle, NativeTransport? transport})
+      : _windowHandle = windowHandle,
+        _transport = transport ?? NativeTransport.instance;
 
-  final MethodChannel channel;
+  @override
+  final int id;
 
-  final Map<String, JavaScriptMessageHandler> _javaScriptMessageHandlers = {};
+  final NativeTransport _transport;
+
+  final Map<String, JavaScriptMessageHandler> _javaScriptHandlers = {};
 
   bool _closed = false;
   bool _closing = false;
@@ -25,371 +28,206 @@ class WebviewImpl extends Webview with ChangeNotifier {
 
   final _closeCompleter = Completer<void>();
 
-  OnHistoryChangedCallback? _onHistoryChanged;
-
-  final ValueNotifier<bool> _isNavigating = ValueNotifier<bool>(false);
-
   OnUrlRequestCallback? _onUrlRequestCallback;
 
-  final Set<OnWebMessageReceivedCallback> _onWebMessageReceivedCallbacks = {};
-
-  ThemeData? _titleBarTheme;
-
-  ThemeData? get titleBarTheme => _titleBarTheme;
-  Brightness? _appliedTitleBarBrightness;
-
-  final WebviewTitleBarConfiguration? titleBarConfiguration;
   final _navigation = ValueNotifier(const WebviewNavigationState());
+
+  final int _windowHandle;
 
   @override
   ValueListenable<WebviewNavigationState> get navigationState => _navigation;
 
-  WebviewTitleBarConfiguration get effectiveTitleBarConfiguration =>
-      titleBarConfiguration ?? defaultTitleBarConfiguration.value;
-
-  ThemeData? get effectiveTitleBarTheme =>
-      _titleBarTheme ??
-      effectiveTitleBarConfiguration.theme ??
-      defaultTitleBarConfiguration.value.theme;
-
-  WebviewImpl(this.viewId, this.channel, {this.titleBarConfiguration}) {
-    defaultTitleBarConfiguration.addListener(_onDefaultTitleBarThemeChanged);
-  }
-
-  void _onDefaultTitleBarThemeChanged() {
-    notifyListeners();
-    unawaited(
-        syncTitleBarBrightness().catchError((Object error, StackTrace stack) {
-      FlutterError.reportError(
-          FlutterErrorDetails(exception: error, stack: stack));
-    }));
-  }
-
-  Future<void> syncTitleBarBrightness() async {
-    if (_closed || _closing) return;
-    final brightness = effectiveTitleBarTheme?.brightness;
-    if (brightness == _appliedTitleBarBrightness) return;
-    await _setNativeBrightness(brightness);
-    _appliedTitleBarBrightness = brightness;
-  }
+  bool get isClosed => _closed;
 
   @override
-  Future<void> setTitleBarTheme(ThemeData? theme) async {
+  Future<void> setBrightness(Brightness? brightness) async {
+    if (!(Platform.isMacOS || Platform.isWindows)) {
+      throw UnsupportedError('setBrightness is supported on macOS and Windows');
+    }
     if (_closed || _closing) return;
-    _titleBarTheme = theme;
-    notifyListeners();
-    await syncTitleBarBrightness();
+    await _invoke('setBrightness', {'brightness': brightness?.index ?? -1});
   }
 
   @override
   Future<void> get onClose => _closeCompleter.future;
 
+  @override
+  int get nativeWindowHandle => _closed ? 0 : _windowHandle;
+
   void onClosed() {
     if (_closed) return;
-    defaultTitleBarConfiguration.removeListener(_onDefaultTitleBarThemeChanged);
     _closed = true;
     _closing = true;
-    _javaScriptMessageHandlers.clear();
-    _onWebMessageReceivedCallbacks.clear();
-    _onHistoryChanged = null;
+    _javaScriptHandlers.clear();
     _onUrlRequestCallback = null;
     _promptHandler = null;
-    _updateNavigation(isLoading: false);
+    if (_navigation.value.isLoading) {
+      _navigation.value = WebviewNavigationState(
+        canGoBack: _navigation.value.canGoBack,
+        canGoForward: _navigation.value.canGoForward,
+        url: _navigation.value.url,
+        title: _navigation.value.title,
+      );
+    }
     _closeCompleter.complete();
   }
 
-  void onJavaScriptMessage(String name, dynamic body) {
-    assert(!_closed);
-    final handler = _javaScriptMessageHandlers[name];
-    assert(handler != null, "handler $name is not registed.");
-    handler?.call(name, body);
+  void onJavaScriptMessage(String raw) {
+    if (_closed) return;
+    final message = decodeJavaScriptMessage(raw);
+    if (message == null) return;
+    _javaScriptHandlers[message.name]?.call(message.data);
   }
 
-  String onRunJavaScriptTextInputPanelWithPrompt(
-    String prompt,
-    String defaultText,
-  ) {
-    assert(!_closed);
-    return _promptHandler?.call(prompt, defaultText) ?? defaultText;
+  String onPrompt(String prompt, String defaultText) =>
+      _promptHandler?.call(prompt, defaultText) ?? defaultText;
+
+  void onNavigationStateChanged({
+    required bool canGoBack,
+    required bool canGoForward,
+    required bool isLoading,
+    String? url,
+    String? title,
+  }) {
+    if (_closed) return;
+    _navigation.value = WebviewNavigationState(
+      canGoBack: canGoBack,
+      canGoForward: canGoForward,
+      isLoading: isLoading,
+      url: url,
+      title: title,
+    );
   }
 
-  void onHistoryChanged(bool canGoBack, bool canGoForward) {
-    assert(!_closed);
-    _updateNavigation(canGoBack: canGoBack, canGoForward: canGoForward);
-    _onHistoryChanged?.call(canGoBack, canGoForward);
-  }
-
-  void onNavigationStarted() {
-    _updateNavigation(isLoading: true);
-  }
-
-  bool notifyUrlChanged(String url) {
-    _updateNavigation(url: url);
-    if (_onUrlRequestCallback != null) {
-      return _onUrlRequestCallback!(url);
-    } else {
+  /// Native code waits for the result before navigating.
+  bool decideNavigation(String url) {
+    final callback = _onUrlRequestCallback;
+    if (_closed || callback == null) return true;
+    try {
+      return callback(url);
+    } catch (error, stack) {
+      FlutterError.reportError(FlutterErrorDetails(
+        exception: error,
+        stack: stack,
+        library: 'desktop_webview_window',
+        context: ErrorDescription('deciding a navigation'),
+      ));
       return true;
     }
   }
 
-  void notifyWebMessageReceived(String message) {
-    for (final callback in _onWebMessageReceivedCallbacks) {
-      callback(message);
-    }
-  }
-
-  void onNavigationCompleted() {
-    _updateNavigation(isLoading: false);
-  }
-
-  void _updateNavigation({
-    bool? canGoBack,
-    bool? canGoForward,
-    bool? isLoading,
-    String? url,
-  }) {
-    final next = WebviewNavigationState(
-      canGoBack: canGoBack ?? _navigation.value.canGoBack,
-      canGoForward: canGoForward ?? _navigation.value.canGoForward,
-      isLoading: isLoading ?? _navigation.value.isLoading,
-      url: url ?? _navigation.value.url,
-    );
-    if (next == _navigation.value) return;
-    _navigation.value = next;
-    _isNavigating.value = next.isLoading;
-  }
-
-  @override
-  ValueListenable<bool> get isNavigating => _isNavigating;
-
-  @override
-  void registerJavaScriptMessageHandler(
-    String name,
-    JavaScriptMessageHandler handler,
-  ) {
-    if (!Platform.isMacOS && !Platform.isLinux) {
-      return;
-    }
-    assert(!_closed);
+  Future<T?> _invoke<T>(String method, [Map<String, Object?>? arguments]) {
     if (_closed) {
-      return;
+      return Future.error(StateError('Browser $id has been closed'));
     }
-    assert(name.isNotEmpty);
-    assert(!_javaScriptMessageHandlers.containsKey(name));
-    _javaScriptMessageHandlers[name] = handler;
-    channel.invokeMethod("registerJavaScriptInterface", {
-      "viewId": viewId,
-      "name": name,
-    });
+    return _transport.invoke<T>(method, {'viewId': id, ...?arguments});
   }
 
   @override
-  void unregisterJavaScriptMessageHandler(String name) {
-    if (!Platform.isMacOS && !Platform.isLinux) {
-      return;
-    }
-    if (_closed) {
-      return;
-    }
-    channel.invokeMethod("unregisterJavaScriptInterface", {
-      "viewId": viewId,
-      "name": name,
+  void addJavaScriptHandler(String name, JavaScriptMessageHandler handler) {
+    if (_closed) throw StateError('Browser $id has been closed');
+    _javaScriptHandlers[name] = handler;
+  }
+
+  @override
+  void removeJavaScriptHandler(String name) {
+    _javaScriptHandlers.remove(name);
+  }
+
+  @override
+  Future<void> postMessage(String name, Object? data) {
+    final message = encodeJavaScriptMessage(name, data);
+    return _invoke('postJavaScriptMessage', {
+      'message': message,
+      'script': javaScriptDispatchScript(message),
     });
   }
 
   @override
   void setPromptHandler(PromptHandler? handler) {
     if (!Platform.isMacOS) {
-      return;
+      throw UnsupportedError('setPromptHandler is supported on macOS only');
     }
     _promptHandler = handler;
   }
 
   @override
-  void launch(String url, {bool triggerOnUrlRequestEvent = true}) async {
-    await channel.invokeMethod("launch", {
-      "url": url,
-      "viewId": viewId,
-      "triggerOnUrlRequestEvent": triggerOnUrlRequestEvent,
-    });
-  }
+  Future<void> launch(String url, {bool triggerOnUrlRequestEvent = true}) =>
+      _invoke('launch', {
+        'url': url,
+        'triggerOnUrlRequestEvent': triggerOnUrlRequestEvent,
+      });
 
   @override
-  void setBrightness(Brightness? brightness) {
-    _appliedTitleBarBrightness = brightness;
-    unawaited(_setNativeBrightness(brightness));
-  }
-
-  Future<void> _setNativeBrightness(Brightness? brightness) async {
-    if (_closed || _closing || !(Platform.isMacOS || Platform.isWindows)) {
-      return;
+  Future<void> addScriptToExecuteOnDocumentCreated(String javaScript) {
+    if (javaScript.trim().isEmpty) {
+      throw ArgumentError.value(javaScript, 'javaScript', 'Must not be empty');
     }
-    await channel.invokeMethod("setBrightness", {
-      "viewId": viewId,
-      "brightness": brightness?.index ?? -1,
-    });
+    return _invoke(
+        'addScriptToExecuteOnDocumentCreated', {'javaScript': javaScript});
   }
 
   @override
-  void addScriptToExecuteOnDocumentCreated(String javaScript) {
-    if (!(Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
-      return;
-    }
-    assert(javaScript.trim().isNotEmpty);
-    channel.invokeMethod("addScriptToExecuteOnDocumentCreated", {
-      "viewId": viewId,
-      "javaScript": javaScript,
-    });
-  }
+  Future<void> setApplicationNameForUserAgent(String applicationName) =>
+      _invoke('setApplicationNameForUserAgent',
+          {'applicationName': applicationName});
 
   @override
-  Future<void> setApplicationNameForUserAgent(String applicationName) async {
-    if (!(Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
-      return;
-    }
-    await channel.invokeMethod("setApplicationNameForUserAgent", {
-      "viewId": viewId,
-      "applicationName": applicationName,
-    });
-  }
+  Future<void> back() => _invoke('back');
 
   @override
-  Future<void> forward() {
-    return channel.invokeMethod("forward", {"viewId": viewId});
-  }
+  Future<void> forward() => _invoke('forward');
 
   @override
-  Future<void> setWebviewWindowVisibility(bool visible) {
-    return channel.invokeMethod("setWebviewWindowVisibility", {
-      "viewId": viewId,
-      "visible": visible,
-    });
-  }
+  Future<void> reload() => _invoke('reload');
 
   @override
-  Future<void> moveWebviewWindow(int left, int top, int width, int height) {
-    return channel.invokeMethod("moveWebviewWindow", {
-      "viewId": viewId,
-      "left": left,
-      "top": top,
-      "width": width,
-      "height": height,
-    });
-  }
-
-  @override
-  Future<void> bringToForeground({bool maximized = false}) {
-    return channel.invokeMethod("bringToForeground", {
-      "viewId": viewId,
-      "maximized": maximized,
-    });
-  }
-
-  @override
-  Future<Map<dynamic, dynamic>?> getPositionalParameters() async {
-    return await channel.invokeMethod("getPositionalParameters", {
-      "viewId": viewId,
-    });
-  }
-
-  @override
-  Future<void> back() {
-    return channel.invokeMethod("back", {"viewId": viewId});
-  }
-
-  @override
-  Future<void> reload() {
-    return channel.invokeMethod("reload", {"viewId": viewId});
-  }
-
-  @override
-  Future<void> stop() {
-    return channel.invokeMethod("stop", {"viewId": viewId});
-  }
+  Future<void> stop() => _invoke('stop');
 
   @override
   Future<void> openDevToolsWindow() {
-    return channel.invokeMethod('openDevToolsWindow', {"viewId": viewId});
+    if (Platform.isMacOS) {
+      throw UnsupportedError(
+          'macOS has no public API to open Web Inspector. Debug builds enable '
+          'it from Safari\'s Develop menu.');
+    }
+    return _invoke('openDevToolsWindow');
   }
 
   @override
-  void setOnHistoryChangedCallback(OnHistoryChangedCallback? callback) {
-    _onHistoryChanged = callback;
-  }
-
-  @override
-  void setOnUrlRequestCallback(OnUrlRequestCallback? callback) {
+  Future<void> setOnUrlRequestCallback(OnUrlRequestCallback? callback) async {
+    if (_closed) return;
+    final enabled = _onUrlRequestCallback != null;
     _onUrlRequestCallback = callback;
+    if (enabled == (callback != null)) return;
+    await _invoke('setUrlRequestEnabled', {'enabled': callback != null});
   }
 
   @override
-  void addOnWebMessageReceivedCallback(OnWebMessageReceivedCallback callback) {
-    _onWebMessageReceivedCallbacks.add(callback);
-  }
-
-  @override
-  void removeOnWebMessageReceivedCallback(
-    OnWebMessageReceivedCallback callback,
-  ) {
-    _onWebMessageReceivedCallbacks.remove(callback);
-  }
-
-  @override
-  void removeAllWebMessageReceivedCallback() {
-    _onWebMessageReceivedCallbacks.clear();
-  }
-
-  @override
-  void close() {
-    if (_closed || _closing) {
-      return;
-    }
+  Future<void> close() async {
+    if (_closed || _closing) return;
     _closing = true;
-    channel.invokeMethod("close", {"viewId": viewId}).catchError((
-      Object error,
-    ) {
+    try {
+      await _transport.invoke('close', {'viewId': id});
+    } catch (_) {
       _closing = false;
-      FlutterError.reportError(FlutterErrorDetails(exception: error));
-    });
-  }
-
-  @override
-  Future<String?> evaluateJavaScript(String javaScript) async {
-    final dynamic result = await channel.invokeMethod("evaluateJavaScript", {
-      "viewId": viewId,
-      "javaScriptString": javaScript,
-    });
-    if (result == null || result is String) {
-      return result;
+      rethrow;
     }
-    return json.encode(result);
   }
 
   @override
-  Future<void> postWebMessageAsString(String webMessage) async {
-    return channel.invokeMethod("postWebMessageAsString", {
-      "viewId": viewId,
-      "webMessage": webMessage,
-    });
-  }
-
-  @override
-  Future<void> postWebMessageAsJson(String webMessage) async {
-    return channel.invokeMethod("postWebMessageAsJson", {
-      "viewId": viewId,
-      "webMessage": webMessage,
-    });
+  Future<Object?> evaluateJavaScript(String javaScript) async {
+    final result = await _invoke<String>(
+        'evaluateJavaScript', {'javaScriptString': javaScript});
+    return result == null ? null : jsonDecode(result);
   }
 
   @override
   Future<List<WebviewCookie>> getAllCookies() async {
-    final result = await channel.invokeListMethod<Map>("getAllCookies", {
-      "viewId": viewId,
-    });
-
-    return result
-            ?.map((e) => WebviewCookie.fromJson(e.cast<String, dynamic>()))
-            .toList() ??
-        [];
+    final result = await _invoke<List<Object?>>('getAllCookies');
+    return [
+      for (final cookie in result ?? const [])
+        WebviewCookie.fromJson((cookie as Map).cast<String, dynamic>()),
+    ];
   }
 }

@@ -17,12 +17,14 @@ let package = Package(
     targets: [
         .target(
             name: "desktop_webview_window",
-            dependencies: [
+            dependencies: ["desktop_webview_window_composer",
                 .product(name: "FlutterFramework", package: "FlutterFramework")
-            ],
-            resources: [
-                .process("WebViewLayoutController.xib"),
             ]
+        ),
+        .target(
+            name: "desktop_webview_window_composer",
+            publicHeadersPath: "include"
         )
-    ]
+    ],
+    cxxLanguageStandard: .cxx17
 )

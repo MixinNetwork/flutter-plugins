@@ -1,24 +1,20 @@
+import 'dart:async';
+
 import 'package:desktop_webview_window/src/cookie.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart' show ThemeData;
 
-/// Handle custom message from JavaScript in your app.
-typedef JavaScriptMessageHandler = void Function(String name, dynamic body);
+/// Receives `window.desktopWebview.postMessage(name, data)` from the page.
+/// [data] is the JSON-decoded value.
+typedef JavaScriptMessageHandler = void Function(Object? data);
 
 typedef PromptHandler = String Function(String prompt, String defaultText);
 
-typedef OnHistoryChangedCallback = void Function(
-    bool canGoBack, bool canGoForward);
-
-/// Callback when WebView start to load a URL.
-/// [url] is the URL string.
+/// Decides whether the browser may navigate to [url]. Return false to cancel.
+/// The navigation waits for the callback, so it must answer synchronously; a
+/// callback that throws allows the navigation.
 typedef OnUrlRequestCallback = bool Function(String url);
 
-/// Callback when WebView receives a web message
-/// [message] constains the webmessage
-typedef OnWebMessageReceivedCallback = void Function(String message);
-
-/// Current browser navigation state, shared by the application and toolbar.
+/// Current browser navigation state, the same state native composers receive.
 @immutable
 class WebviewNavigationState {
   const WebviewNavigationState({
@@ -26,14 +22,18 @@ class WebviewNavigationState {
     this.canGoForward = false,
     this.isLoading = false,
     this.url,
+    this.title,
   });
 
   final bool canGoBack;
   final bool canGoForward;
   final bool isLoading;
 
-  /// The most recently requested URL. This is not a committed-navigation URL.
+  /// The URL of the current page.
   final String? url;
+
+  /// The document title of the current page.
+  final String? title;
 
   @override
   bool operator ==(Object other) =>
@@ -41,103 +41,83 @@ class WebviewNavigationState {
       canGoBack == other.canGoBack &&
       canGoForward == other.canGoForward &&
       isLoading == other.isLoading &&
-      url == other.url;
+      url == other.url &&
+      title == other.title;
 
   @override
-  int get hashCode => Object.hash(canGoBack, canGoForward, isLoading, url);
+  int get hashCode =>
+      Object.hash(canGoBack, canGoForward, isLoading, url, title);
 }
 
+/// A browser window. Operations complete when native code has applied them and
+/// fail with a [PlatformException] when it reports an error. Operations a
+/// platform does not support throw [UnsupportedError].
 abstract class Webview {
+  /// Process-wide browser ID. Distinct from any Flutter view ID.
+  int get id;
+
+  /// Completes once the native window has closed.
   Future<void> get onClose;
 
   ValueListenable<WebviewNavigationState> get navigationState;
 
-  ///  true if the webview is currently loading a page.
-  ValueListenable<bool> get isNavigating;
-
-  /// Install a message handler that you can call from your Javascript code.
+  /// Native window pointer: `HWND` on Windows, `NSWindow*` on macOS and
+  /// `GtkWindow*` on Linux. Returns 0 once the browser has closed.
   ///
-  /// available: macOS (10.10+)
-  void registerJavaScriptMessageHandler(
-    String name,
-    JavaScriptMessageHandler handler,
-  );
+  /// The window is owned by this plugin. Other libraries may borrow it to move,
+  /// show, hide or focus the window, but must not destroy or retain it beyond
+  /// [onClose], and must not replace its delegate or window procedure.
+  int get nativeWindowHandle;
 
-  /// available: macOS
-  void unregisterJavaScriptMessageHandler(String name);
+  /// Handles `window.desktopWebview.postMessage(name, data)` from the page.
+  /// Replaces an existing handler with the same [name].
+  void addJavaScriptHandler(String name, JavaScriptMessageHandler handler);
 
-  /// available: macOS
+  void removeJavaScriptHandler(String name);
+
+  /// Delivers [data] to listeners added with
+  /// `window.desktopWebview.addEventListener(name, listener)`.
+  /// [data] must be JSON-encodable.
+  Future<void> postMessage(String name, Object? data);
+
+  /// Answers JavaScript `prompt()`. macOS only.
   void setPromptHandler(PromptHandler? handler);
 
-  /// Navigates to the given URL.
-  void launch(String url, {bool triggerOnUrlRequestEvent = true});
+  /// Navigates to the given URL. With [triggerOnUrlRequestEvent] false, this
+  /// navigation bypasses the [setOnUrlRequestCallback] decision.
+  Future<void> launch(String url, {bool triggerOnUrlRequestEvent = true});
 
-  /// Overrides this window's toolbar theme and native titlebar brightness.
-  /// Pass null to resume following the window configuration or host theme.
-  /// Native titlebar synchronization is supported on macOS and Windows.
-  Future<void> setTitleBarTheme(ThemeData? theme);
+  /// Changes native window appearance, including the default toolbar, on
+  /// macOS and Windows. Pass null to restore the platform default. macOS also
+  /// applies it to web content.
+  Future<void> setBrightness(Brightness? brightness);
 
-  /// Changes native window appearance on macOS and Windows.
-  /// Pass null to restore the platform default. Does not theme Flutter widgets.
-  /// macOS may also apply this appearance to web content.
-  void setBrightness(Brightness? brightness);
-
-  void addScriptToExecuteOnDocumentCreated(String javaScript);
+  Future<void> addScriptToExecuteOnDocumentCreated(String javaScript);
 
   /// Append a string to the webview's user-agent.
   Future<void> setApplicationNameForUserAgent(String applicationName);
 
-  /// Navigate to the previous page in the history.
   Future<void> back();
 
-  /// Navigate to the next page in the history.
   Future<void> forward();
 
-  /// Show or hide webview window
-  Future<void> setWebviewWindowVisibility(bool visible);
-
-  /// Move and Resize the webview window
-  Future<void> moveWebviewWindow(int left, int top, int width, int height);
-
-  /// Activates the webview window (giving it the focus)
-  Future<void> bringToForeground({bool maximized = false});
-
-  /// get position, extents and maximization info of the webview window
-  Future<Map<dynamic, dynamic>?> getPositionalParameters();
-
-  /// Reload the current page.
   Future<void> reload();
 
   /// Stop all navigations and pending resource fetches.
   Future<void> stop();
 
-  /// Opens the Browser DevTools in a separate window
+  /// Opens the browser developer tools. Windows and Linux.
   Future<void> openDevToolsWindow();
 
-  /// Register a callback that will be invoked when the webview history changes.
-  void setOnHistoryChangedCallback(OnHistoryChangedCallback? callback);
+  /// Installs the navigation decision for this browser. Top-level navigations
+  /// wait for Dart only while a callback is installed.
+  Future<void> setOnUrlRequestCallback(OnUrlRequestCallback? callback);
 
-  void setOnUrlRequestCallback(OnUrlRequestCallback? callback);
+  /// Requests the window to close. [onClose] completes when it has closed.
+  Future<void> close();
 
-  void addOnWebMessageReceivedCallback(OnWebMessageReceivedCallback callback);
-
-  void removeOnWebMessageReceivedCallback(
-    OnWebMessageReceivedCallback callback,
-  );
-
-  void removeAllWebMessageReceivedCallback();
-
-  /// Close the web view window.
-  void close();
-
-  /// evaluate JavaScript in the web view.
-  Future<String?> evaluateJavaScript(String javaScript);
-
-  /// post a web message as String to the top level document in this WebView
-  Future<void> postWebMessageAsString(String webMessage);
-
-  /// post a web message as JSON to the top level document in this WebView
-  Future<void> postWebMessageAsJson(String webMessage);
+  /// Evaluates [javaScript] and returns its JSON-compatible result.
+  Future<Object?> evaluateJavaScript(String javaScript);
 
   Future<List<WebviewCookie>> getAllCookies();
 }
