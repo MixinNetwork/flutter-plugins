@@ -1,5 +1,5 @@
 //
-// Created by yangbin on 2021/11/11.
+// Created by chuishui233 on 2025/09/26.
 //
 
 #ifndef DESKTOP_WEBVIEW_WINDOW_WINDOWS_UTILS_H_
@@ -7,7 +7,6 @@
 
 #include <windows.h>
 #include "wil/wrl.h"
-
 #include <string>
 
 namespace webview_window {
@@ -35,11 +34,9 @@ void ClipOrCenterWindowToMonitor(HWND hwnd, UINT flags);
 
 bool SetWindowBackgroundTransparent(HWND hwnd);
 
-const wchar_t *RegisterWindowClass(LPCWSTR class_name, WNDPROC wnd_proc);
+const wchar_t *RegisterWindowClass(LPCWSTR class_name, WNDPROC wnd_proc, const std::wstring &iconPath = L"");
 
 void UnregisterWindowClass(LPCWSTR class_name);
-
-std::string ConvertLPCWSTRToString(LPCWSTR lpcwszStr);
 
 }  // namespace webview_window
 
