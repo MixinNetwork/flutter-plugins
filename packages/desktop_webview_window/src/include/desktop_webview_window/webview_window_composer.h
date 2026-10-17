@@ -3,7 +3,8 @@
 // The plugin owns each browser's top-level window and WebView. A composer
 // decides what else the window contains and where the WebView sits. Install
 // one from the runner before the first browser is created; without one, the
-// plugin's default composer adds a native toolbar above the WebView.
+// plugin's default composer puts navigation controls, the page title and host
+// into the window's native title bar.
 //
 // Concrete types of DWWComposeRequest::window / webview_view:
 //   macOS:   NSWindow*  / NSView*    (not yet in the window's hierarchy)
@@ -13,7 +14,9 @@
 // All callbacks and functions run on the platform main thread. Pointers are
 // borrowed and must not be used after closing(). Do not destroy the window or
 // webview_view, replace the window's delegate or window procedure, or move
-// webview_view into another window.
+// webview_view into another window. A composer may change the window's style,
+// for example to remove its title bar; on Windows, handle window messages by
+// subclassing it with SetWindowSubclass.
 
 #ifndef DESKTOP_WEBVIEW_WINDOW_WEBVIEW_WINDOW_COMPOSER_H_
 #define DESKTOP_WEBVIEW_WINDOW_WEBVIEW_WINDOW_COMPOSER_H_
@@ -34,12 +37,20 @@
 extern "C" {
 #endif
 
+// Items of the default title bar, from CreateConfiguration.titleBar.
+typedef enum {
+  DWW_TITLE_BAR_NAVIGATION = 1 << 0,  // Back and forward.
+  DWW_TITLE_BAR_RELOAD = 1 << 1,      // Reload, or stop while loading.
+  DWW_TITLE_BAR_TITLE = 1 << 2,       // Page title.
+  DWW_TITLE_BAR_HOST = 1 << 3,        // Host of the current URL.
+} DWWTitleBarItem;
+
 typedef struct {
   int64_t browser;        // Same value as Webview.id in Dart.
   void* window;           // Borrowed top-level window.
   void* webview_view;     // Borrowed WebView container view.
   const char* arguments;  // CreateConfiguration.composerArguments, or NULL.
-  int32_t show_toolbar;   // CreateConfiguration.showToolbar.
+  uint32_t title_bar;     // DWWTitleBarItem flags.
 } DWWComposeRequest;
 
 typedef struct {

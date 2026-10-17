@@ -66,12 +66,11 @@ void main() {
     state.dispose();
   });
 
-  test('layouts map to toolbar and composer arguments', () async {
+  test('layouts map to composer arguments', () async {
     for (final layout in DemoLayout.values) {
       await state.open(DemoWindowOptions(layout: layout));
       final arguments =
           calls.lastWhere((call) => call.method == 'create').arguments as Map;
-      expect(arguments['showToolbar'], layout == DemoLayout.toolbar);
       expect(arguments['composerArguments'],
           layout == DemoLayout.sidebar ? 'sidebar' : null);
     }
@@ -114,7 +113,7 @@ void main() {
     state.dispose();
   });
 
-  testWidgets('new window dialog maps layout and titlebar choices',
+  testWidgets('new window dialog maps layout and title bar choices',
       (tester) async {
     await tester.pumpWidget(DemoApp(state: state));
     await tester.runAsync(() async {
@@ -141,23 +140,21 @@ void main() {
     }
 
     var arguments = await openWith(() async {});
-    expect(arguments['showSystemTitleBar'], true);
-    expect(arguments['showToolbar'], true);
+    expect(arguments['titleBar'], 15);
     expect(arguments['composerArguments'], isNull);
 
     arguments = await openWith(() async {
-      await tester.tap(find.text('Sidebar composer'));
-      await tester.tap(find.byType(Switch));
+      await tester.tap(find.widgetWithText(FilterChip, 'Reload'));
+      await tester.pump();
+      await tester.tap(find.widgetWithText(FilterChip, 'Host'));
     });
-    expect(arguments['showSystemTitleBar'], false);
-    expect(arguments['showToolbar'], false);
-    expect(arguments['composerArguments'], 'sidebar');
+    expect(arguments['titleBar'], 1 | 4);
+    expect(arguments['composerArguments'], isNull);
 
     // The dialog keeps the previous choices.
-    arguments = await openWith(() => tester.tap(find.text('None')));
-    expect(arguments['showSystemTitleBar'], false);
-    expect(arguments['showToolbar'], false);
-    expect(arguments['composerArguments'], isNull);
+    arguments = await openWith(() => tester.tap(find.text('Sidebar composer')));
+    expect(arguments['titleBar'], 1 | 4);
+    expect(arguments['composerArguments'], 'sidebar');
     expect(state.windows, hasLength(3));
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());

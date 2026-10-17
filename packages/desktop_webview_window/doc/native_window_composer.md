@@ -21,7 +21,8 @@ This design moves window composition out of Flutter and out of the plugin's
 fixed layout. The plugin owns the native window, the WebView and their control.
 The application decides what else the window contains and where the WebView
 sits, through a native composer callback. The plugin ships a default composer
-with a native toolbar, so applications that do not care need no native code.
+that merges navigation into the native title bar, so applications that do not
+care need no native code.
 
 ## Responsibilities
 
@@ -31,7 +32,7 @@ with a native toolbar, so applications that do not care need no native code.
 | Owns the WebView, its delegates and handlers | Adds, removes and lays out its own views |
 | Navigation decisions, JS bridge, cookies | Draws any toolbar, sidebar or overlay it wants |
 | Navigation state, control functions | Reacts to navigation state changes |
-| Default composer (native toolbar) | Optionally delegates some windows to the default |
+| Default composer (native title bar) | Optionally delegates some windows to the default |
 
 The application never receives the WebView object itself (`WKWebView`,
 `WebKitWebView`, `ICoreWebView2*`). It receives a container view that holds the
@@ -52,12 +53,19 @@ method channel, `desktop_webview_window`; the earlier FFI bridge existed to
 route calls between engines and is removed together with the shared engine.
 
 ```c
+typedef enum {
+  DWW_TITLE_BAR_NAVIGATION = 1 << 0,  // Back and forward.
+  DWW_TITLE_BAR_RELOAD = 1 << 1,      // Reload, or stop while loading.
+  DWW_TITLE_BAR_TITLE = 1 << 2,       // Page title.
+  DWW_TITLE_BAR_HOST = 1 << 3,        // Host of the current URL.
+} DWWTitleBarItem;
+
 typedef struct {
   int64_t browser;          // Same value as Webview.id in Dart.
   void* window;             // Borrowed top-level window.
   void* webview_view;       // Borrowed WebView container view.
   const char* arguments;    // CreateConfiguration.composerArguments, UTF-8, may be NULL.
-  int32_t show_toolbar;     // CreateConfiguration.showToolbar.
+  uint32_t title_bar;       // DWWTitleBarItem flags, CreateConfiguration.titleBar.
 } DWWComposeRequest;
 
 typedef struct {
@@ -197,35 +205,42 @@ closing the window, or `clearAll` on Windows/Linux.
 
 ## Default composer
 
-A vertical layout: a native toolbar on top, `webview_view` below. With
-`show_toolbar == 0`, `webview_view` fills the window.
+The default composer merges navigation into the window's native title bar,
+like a Chrome app window, and lets `webview_view` fill the rest of the window.
+Every platform uses its own title bar mechanism instead of a strip drawn above
+the page:
 
 ```
-┌──────────────────────────────────────────┐
-│  ←  →  ⟳/✕   Document title              │  native, ~40 px
-├──────────────────────────────────────────┤
-│                webview_view              │
-└──────────────────────────────────────────┘
+macOS    ● ● ●  ‹ › ⟳  Page title
+                       example.com
+Windows  ← → ⟳  Page title  example.com      ─ □ ✕
+Linux    [‹|›] ⟳      Page title       ✕
+                      example.com
 ```
 
-| Platform | Toolbar |
+| Platform | Title bar |
 |---|---|
-| macOS | `NSStackView` of `NSButton`s with SF Symbols |
-| Linux | `GtkBox` of `GtkButton`s with symbolic icons, above the WebView |
-| Windows | Child window with GDI owner-drawn buttons, following system dark mode |
+| macOS | `NSToolbar` with `.unified` style. Back, forward and reload are bordered, navigational items (leading, before the title); `window.title` is the page title and `window.subtitle` the host (macOS 11+). Without navigation or reload items there is no toolbar and AppKit shows the title alone. |
+| Linux | `GtkHeaderBar` set as the window's titlebar (client-side decorations, as in GNOME Web). Back and forward are one `linked` group; title and host are the header bar's title and subtitle. |
+| Windows | A custom-drawn title bar in the client area, like Chrome's. The composer subclasses the window: `WM_NCCALCSIZE` moves the caption into the client area while DWM keeps the side and bottom borders and the shadow, and the bar is painted opaque with buffered paint in the system light or dark colors. The composer draws the minimize, maximize and close buttons itself at the full bar height; `WM_NCHITTEST` reports them as `HTMINBUTTON`, `HTMAXBUTTON` and `HTCLOSE` (so Windows 11 shows Snap Layouts) and the rest of the bar as a caption. |
+
+`CreateConfiguration.titleBar` (`TitleBarOptions`) chooses the items:
+navigation, reload, title and host, all shown by default. The native window
+title always follows the page title, falling back to `CreateConfiguration.title`,
+so the Dock, taskbar and window switchers name the page even when the title bar
+hides it.
 
 Buttons are icon-only, without text labels or tooltips, so the plugin carries
 no localized strings. The document title is page content and is shown as is.
 
-On macOS the toolbar sits at the top of the content area. When the system
-titlebar is hidden it may end up beneath the traffic lights; that is accepted as
-long as both stay operable, and the exact placement can be tuned later.
-
 Buttons call the same `dww_browser_*` functions and update from
 `DWWNavigationState`, so the default composer exercises the public contract.
 Appearance follows the window's appearance, which `Webview.setBrightness`
-already controls on macOS and Windows. Styling is intentionally not
-configurable; applications that want another look write a composer.
+already controls on macOS and Windows. Styling beyond the items is
+intentionally not configurable; applications that want another look, or no
+title bar, write a composer. A composer may restyle the window; on Windows it
+handles window messages by subclassing with `SetWindowSubclass`, as the
+default composer does.
 
 ## Dart API changes
 
@@ -265,7 +280,12 @@ Added to `CreateConfiguration`:
 
 - `String? composerArguments`: passed to `compose` unchanged. The plugin never
   interprets it; applications typically use it to choose a layout per window.
-- `bool showToolbar = true`: read by the default composer.
+- `TitleBarOptions titleBar`: the default title bar's items, also passed to
+  composers as `DWWComposeRequest::title_bar`.
+
+Removed from `CreateConfiguration` during 0.4.0 development:
+`showSystemTitleBar` and `showToolbar`. The window always has a system frame;
+a composer that wants none removes it.
 
 Unchanged: `Webview` control methods, JS bridge, `setBrightness`, cookies,
 `clearAll`. Browser creation no longer
@@ -291,13 +311,13 @@ From 0.3.2:
 - Delete the `runWebViewTitleBarWidget(args)` dispatch in `main`. Browser
   windows no longer start a Flutter engine.
 - Replace `TitleBarWebViewController`/`TitleBarWebViewState` toolbars with
-  either the default native toolbar or a native composer.
+  either the default native title bar or a native composer.
 - `clearAll(userDataFolderWindows:)` becomes
   `clearAll(windows: WindowsWebviewOptions(userDataFolder: ...))`.
 
 For flutter-app (`lib/utils/web_view/web_view_desktop.dart`,
 `lib/widgets/web_view_navigation_bar.dart`): remove `runWebViewNavigationBar`
-and the navigation bar widget. The bot window gets the default toolbar with no
+and the navigation bar widget. The bot window gets the default title bar with no
 runner change. A Mixin-styled toolbar is a composer in each runner.
 
 The built-in Flutter toolbar is removed, not moved. A `WebviewTitleBarBuilder`
@@ -308,7 +328,7 @@ isolates. On Linux X11 that remains subject to flutter/flutter#186577.
 
 ## Validation
 
-- Package tests: `create` forwards `composerArguments` and `showToolbar`;
+- Package tests: `create` forwards `composerArguments` and the `titleBar` flags;
   removed APIs are gone; creation needs no host.
 - Example: the runners install a composer that handles
   `composerArguments == "sidebar"` with a horizontal layout (vertical button
@@ -320,7 +340,7 @@ isolates. On Linux X11 that remains subject to flutter/flutter#186577.
   - Layout: default geometry, sidebar geometry, resize keeps the WebView in its
     slot.
   - Mixed ownership: default and sidebar windows open together; resize both and
-    check the default toolbar stays visible; navigate both and check the
+    check the default title bar keeps its buttons; navigate both and check the
     application composer receives callbacks only for the sidebar window; close
     both and check each owner receives exactly one `closing`.
   - Close from each callback (`compose`, `navigation_changed`, `layout` on
@@ -328,7 +348,8 @@ isolates. On Linux X11 that remains subject to flutter/flutter#186577.
     `closing`, `onClose` completes. For `compose`: no initial
     `navigation_changed`, window never shown, `create()` returns a closed
     `Webview`.
-  - Default toolbar buttons drive navigation; `navigation_changed` order;
+  - Default title bar buttons drive navigation and the window title follows
+    the page; `navigation_changed` order;
     `closing` before `onClose`; twenty close/recreate rounds.
 - Windows and Linux runs go through `flutter-remote-test`; Linux on X11
   specifically, since that is the motivating crash. Native lifecycle checks do

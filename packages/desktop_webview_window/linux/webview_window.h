@@ -33,8 +33,7 @@ class WebviewWindow : public dww::Browser {
     bool use_position = false;
     bool open_maximized = false;
     bool open_hidden = false;
-    bool show_system_title_bar = true;
-    bool show_toolbar = true;
+    uint32_t title_bar = 0xF;
     bool has_composer_arguments = false;
     std::string composer_arguments;
     std::string javascript_bridge;
@@ -42,7 +41,7 @@ class WebviewWindow : public dww::Browser {
 
   WebviewWindow(EventSink emit, NavigationRequest request_navigation,
                 int64_t window_id, std::function<void()> on_close_callback,
-                const Options &options, GtkWindow *parent);
+                const Options &options);
 
   ~WebviewWindow() override;
 

@@ -58,20 +58,20 @@ void main() {
     expect(arguments['openHidden'], isTrue);
     expect(arguments['userDataFolderWindows'], 'profile');
     expect(arguments['denyCameraAndMicrophone'], isTrue);
-    expect(arguments['showToolbar'], isTrue);
+    expect(arguments['titleBar'], 15);
     expect(arguments['composerArguments'], isNull);
   });
 
-  test('composer arguments and toolbar visibility reach native unchanged',
+  test('composer arguments and title bar items reach native unchanged',
       () async {
     await WebviewWindow.create(
       configuration: const CreateConfiguration(
-        showToolbar: false,
+        titleBar: TitleBarOptions(showNavigation: false, showHost: false),
         composerArguments: '{"layout":"sidebar"}',
       ),
     );
     final arguments = calls.single.arguments as Map;
-    expect(arguments['showToolbar'], isFalse);
+    expect(arguments['titleBar'], 2 | 4);
     expect(arguments['composerArguments'], '{"layout":"sidebar"}');
   });
 

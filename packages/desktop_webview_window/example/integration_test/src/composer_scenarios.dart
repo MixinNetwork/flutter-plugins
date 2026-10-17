@@ -105,15 +105,18 @@ void registerComposerTests() {
         await _until(() async {
           final top = await _geometry(standard);
           final side = await _geometry(sidebar);
+          // The default title bar is outside the content view on macOS and
+          // Linux and the top of the client area on Windows.
           return top['webX'] == 0 &&
-              top['webY']! > 0 &&
+              top['webY']! >= 0 &&
               top['webWidth'] == top['contentWidth'] &&
+              top['buttons']! >= 3 &&
               top['webY']! + top['webHeight']! == top['contentHeight'] &&
               side['webY'] == 0 &&
               side['webX']! > 0 &&
               side['webHeight'] == side['contentHeight'] &&
               side['webX']! + side['webWidth']! == side['contentWidth'];
-        }, 'toolbar above the default page, sidebar left of the other');
+        }, 'title bar controls in the default window, sidebar left of the other');
       }
 
       await checkLayout();
@@ -131,11 +134,18 @@ void registerComposerTests() {
       }, 'resized');
       await checkLayout();
 
+      // The default title bar names the window after the page.
+      expect(
+          await _native.invokeMethod<String>(
+              'windowTitle', {'handle': standard.nativeWindowHandle}),
+          '/standard');
+
       // The application composer saw the default window only at compose.
       expect(await _events(standard), ['compose']);
       expect(await _events(sidebar), contains('navigation'));
 
-      // Default toolbar: back, forward, reload. Back returns to the first page.
+      // Default title bar: back, forward, reload. Back returns to the first
+      // page.
       await standard.launch(url('/second'));
       await _loaded(standard, '/second');
       await _native.invokeMethod(

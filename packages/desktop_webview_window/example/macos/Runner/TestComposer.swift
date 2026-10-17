@@ -112,6 +112,13 @@ enum TestComposer {
     return found
   }
 
+  /// Title bar items, then buttons in the content view.
+  private static func buttons(of window: NSWindow, content: NSView) -> [() -> Void] {
+    let items = (window.toolbar?.items ?? []).filter { $0.action != nil }
+    return items.map { item in { NSApp.sendAction(item.action!, to: item.target, from: item) } }
+      + descendants(of: content, NSButton.self).map { button in { button.performClick(nil) } }
+  }
+
   static func registerChannel(messenger: FlutterBinaryMessenger) {
     let channel = FlutterMethodChannel(name: "webview_example/native_test", binaryMessenger: messenger)
     channel.setMethodCallHandler { call, result in
@@ -153,21 +160,23 @@ enum TestComposer {
           "webY": Int(top.rounded()),
           "webWidth": Int(frame.width.rounded()),
           "webHeight": Int(frame.height.rounded()),
-          "buttons": descendants(of: content, NSButton.self).count,
+          "buttons": buttons(of: window, content: content).count,
         ])
       case "resize":
         let width = args["width"] as? Int ?? 0
         let height = args["height"] as? Int ?? 0
         window.setContentSize(NSSize(width: width, height: height))
         result(nil)
+      case "windowTitle":
+        result(window.title)
       case "clickButton":
-        let buttons = descendants(of: content, NSButton.self)
+        let buttons = buttons(of: window, content: content)
         let index = args["index"] as? Int ?? -1
         guard buttons.indices.contains(index) else {
           result(FlutterError(code: "no_button", message: "No such button", details: nil))
           return
         }
-        buttons[index].performClick(nil)
+        buttons[index]()
         result(nil)
       default:
         result(FlutterMethodNotImplemented)

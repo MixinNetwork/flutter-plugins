@@ -3,6 +3,8 @@
 #ifndef DESKTOP_WEBVIEW_WINDOW_COMPOSER_RUNTIME_H_
 #define DESKTOP_WEBVIEW_WINDOW_COMPOSER_RUNTIME_H_
 
+#include <string>
+
 #include "include/desktop_webview_window/webview_window_composer.h"
 
 namespace dww {
@@ -27,6 +29,9 @@ void UnregisterBrowser(int64_t id);
 
 // The platform's built-in composer.
 const DWWComposer& DefaultComposer();
+
+// The host of an absolute URL, such as "example.com"; empty when it has none.
+std::string HostOf(const char* url);
 
 // One browser's composer: the window's owner, callback gating after close, and
 // whether a callback is on the stack.

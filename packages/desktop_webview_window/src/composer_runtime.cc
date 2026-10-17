@@ -1,5 +1,6 @@
 #include "composer_runtime.h"
 
+#include <string_view>
 #include <unordered_map>
 
 namespace {
@@ -20,6 +21,22 @@ dww::Browser* Find(int64_t id) {
 namespace dww {
 
 int64_t NextBrowserId() { return next_browser++; }
+
+std::string HostOf(const char* url) {
+  if (url == nullptr) return {};
+  std::string_view rest(url);
+  const auto scheme = rest.find("://");
+  if (scheme == std::string_view::npos) return {};
+  rest.remove_prefix(scheme + 3);
+  rest = rest.substr(0, rest.find_first_of("/?#"));
+  if (const auto at = rest.rfind('@'); at != std::string_view::npos) {
+    rest.remove_prefix(at + 1);
+  }
+  if (!rest.empty() && rest.front() == '[') {
+    return std::string(rest.substr(0, rest.find(']') + 1));
+  }
+  return std::string(rest.substr(0, rest.find(':')));
+}
 
 void RegisterBrowser(int64_t id, Browser* browser) { browsers[id] = browser; }
 

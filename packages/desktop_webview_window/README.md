@@ -19,10 +19,11 @@ final webview = await WebviewWindow.create();
 await webview.launch('https://example.com');
 ```
 
-The window shows a native toolbar (back, forward, reload/stop and the page
-title) above the page. Pass `CreateConfiguration(showToolbar: false)` to show
-only the page, or install a [native composer](#window-layout) to lay the window
-out yourself. No runner changes or startup hooks are needed.
+The window's native title bar carries back, forward, reload/stop, the page
+title and its host, next to the system window buttons. Choose the items with
+`CreateConfiguration(titleBar: TitleBarOptions(...))`, or install a
+[native composer](#window-layout) to lay the window out yourself. No runner
+changes or startup hooks are needed.
 
 ## Talking to the page
 
@@ -103,17 +104,35 @@ futures that complete once native code has applied them and fail with a
 
 The plugin owns each browser window and its WebView. A *composer* decides what
 else the window contains and where the WebView sits. Without one, the default
-composer places a native toolbar above the page:
+composer merges navigation into the window's title bar, like a Chrome app
+window:
 
 ```
-┌──────────────────────────────────────────┐
-│  ←  →  ⟳   Page title                    │
-├──────────────────────────────────────────┤
-│                  page                    │
-└──────────────────────────────────────────┘
+macOS    ● ● ●  ‹ › ⟳  Page title          (NSToolbar, unified)
+                       example.com
+Windows  ← → ⟳  Page title  example.com      ─ □ ✕   (custom drawn)
+Linux    [‹|›] ⟳      Page title       ✕      (GtkHeaderBar)
+                      example.com
 ```
 
-To use a different layout (a sidebar, an overlay, your own toolbar), install a
+Each item can be hidden:
+
+```dart
+CreateConfiguration(
+  titleBar: TitleBarOptions(
+    showNavigation: true, // back and forward
+    showReload: true,     // reload, or stop while loading
+    showTitle: true,      // page title, or CreateConfiguration.title
+    showHost: false,      // host of the current URL
+  ),
+)
+```
+
+The window title follows the page title, so the Dock, taskbar and window
+switchers name the page even when the title bar hides it.
+
+To use a different layout (a sidebar, an overlay, your own toolbar, no title
+bar at all), install a
 native composer from the runner before the first browser is created. It
 receives the window and a view containing the WebView, and may arrange them
 however it likes:
@@ -122,7 +141,7 @@ however it likes:
 #include <desktop_webview_window/webview_window_composer.h>
 
 static DWWComposeResult compose(void* user, const DWWComposeRequest* request) {
-  if (request->arguments == NULL) return DWW_COMPOSE_DEFAULT;  // Default toolbar.
+  if (request->arguments == NULL) return DWW_COMPOSE_DEFAULT;  // Default title bar.
   GtkWidget* row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
   gtk_box_pack_start(GTK_BOX(row), my_sidebar(request->browser), FALSE, FALSE, 0);
   gtk_box_pack_start(GTK_BOX(row), GTK_WIDGET(request->webview_view), TRUE, TRUE, 0);
@@ -140,7 +159,11 @@ and friends with the browser ID; `navigation_changed` delivers the navigation
 state. `CreateConfiguration(composerArguments: ...)` is passed to `compose`
 unchanged, so one composer can lay out different windows differently. A
 composer that returns `DWW_COMPOSE_DEFAULT` hands that window to the default
-composer for its whole lifetime.
+composer for its whole lifetime. `request->title_bar` carries the
+`TitleBarOptions` flags (`DWW_TITLE_BAR_*`) for composers that want to honor
+them. A composer may restyle the window, for example to remove its title bar;
+on Windows it handles window messages by subclassing the window with
+`SetWindowSubclass`.
 
 The header documents the window and view types per platform and the rules for
 borrowed pointers, closing from inside callbacks, and Windows resizing. The
@@ -179,6 +202,9 @@ Behavior changes:
 - `evaluateJavaScript` returns `Future<Object?>` with the decoded value instead
   of a JSON string.
 - `setOnUrlRequestCallback` can cancel navigations on every platform.
+- On Linux, browser windows are independent top-level windows, as on macOS and
+  Windows, instead of transient children of the application window: they no
+  longer stay above it, and open centred on the screen.
 - Pages from the old bridges must switch to `window.desktopWebview`;
   `window.webkit.messageHandlers.<name>` and `chrome.webview` messages are no
   longer forwarded.
@@ -192,10 +218,10 @@ startup hook and its early return, and delete the titlebar widget:
 
 | Removed API | Replacement |
 | --- | --- |
-| `runWebViewTitleBarWidget(args, builder: ...)` | The default native toolbar, or a [native composer](#window-layout) |
+| `runWebViewTitleBarWidget(args, builder: ...)` | The default native title bar, or a [native composer](#window-layout) |
 | `TitleBarWebViewController.of(context)` | `dww_browser_*` in a composer, or the `Webview` in Dart |
 | `TitleBarWebViewState.of(context)` | `navigation_changed` in a composer, or `webview.navigationState` in Dart |
-| `CreateConfiguration(titleBarHeight: 0)` | `CreateConfiguration(showToolbar: false)` |
+| `CreateConfiguration(titleBarHeight: 0)` | `CreateConfiguration(titleBar: TitleBarOptions(showNavigation: false, showReload: false))` |
 | `CreateConfiguration(titleBarTopPadding: ...)` | Composer layout |
 
 Navigation controls drawn by the main application window can keep using
@@ -290,6 +316,6 @@ flutter test integration_test/app_test.dart -d linux
 The suite launches real WebViews and checks page messaging, navigation
 decisions, script results and the native window handle. On Linux it also
 drives the example runner's test composer: default and application-owned
-layouts side by side, resize, toolbar buttons, closing from each composer
+layouts side by side, resize, title bar buttons, closing from each composer
 callback, and repeated close/recreate. Native keyboard/pointer focus and visual
 rendering still need a short manual check.

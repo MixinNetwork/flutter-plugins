@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:desktop_webview_window/desktop_webview_window.dart';
 import 'package:flutter/material.dart';
 
 import 'demo_state.dart';
@@ -151,9 +152,8 @@ class _HomeState extends State<_Home> {
       ? const SizedBox.square(
           dimension: 18, child: CircularProgressIndicator(strokeWidth: 2))
       : Icon(switch (window.options.layout) {
-          DemoLayout.toolbar => Icons.web,
+          DemoLayout.titleBar => Icons.web,
           DemoLayout.sidebar => Icons.view_sidebar_outlined,
-          DemoLayout.none => Icons.crop_square,
         });
 
   Widget _windowList() =>
@@ -248,7 +248,6 @@ class _HomeState extends State<_Home> {
                   window.name,
                   navigation.isLoading ? 'Loading…' : 'Idle',
                   window.options.layout.label,
-                  if (!window.options.systemTitleBar) 'No system titlebar',
                   if (window.options.openHidden) 'Hidden',
                 ].join(' · '),
                 style: theme.textTheme.bodySmall,
@@ -679,10 +678,28 @@ class _NewWindowDialog extends StatefulWidget {
 }
 
 class _NewWindowDialogState extends State<_NewWindowDialog> {
+  List<(String, bool, TitleBarOptions Function(bool))> get _titleBarItems {
+    final t = _titleBar;
+    TitleBarOptions copy(
+            {bool? navigation, bool? reload, bool? title, bool? host}) =>
+        TitleBarOptions(
+          showNavigation: navigation ?? t.showNavigation,
+          showReload: reload ?? t.showReload,
+          showTitle: title ?? t.showTitle,
+          showHost: host ?? t.showHost,
+        );
+    return [
+      ('Navigation', t.showNavigation, (v) => copy(navigation: v)),
+      ('Reload', t.showReload, (v) => copy(reload: v)),
+      ('Title', t.showTitle, (v) => copy(title: v)),
+      ('Host', t.showHost, (v) => copy(host: v)),
+    ];
+  }
+
   late var _custom = widget.initial.url != null;
   late final _url = TextEditingController(text: widget.initialUrl);
   late var _layout = widget.initial.layout;
-  late var _systemTitleBar = widget.initial.systemTitleBar;
+  late var _titleBar = widget.initial.titleBar;
   late var _hidden = widget.initial.openHidden;
   late var _denyMedia = widget.initial.denyMedia;
   String? _error;
@@ -701,7 +718,7 @@ class _NewWindowDialogState extends State<_NewWindowDialog> {
     Navigator.of(context).pop(DemoWindowOptions(
       url: _custom ? _url.text.trim() : null,
       layout: _layout,
-      systemTitleBar: _systemTitleBar,
+      titleBar: _titleBar,
       openHidden: _hidden,
       denyMedia: _denyMedia,
     ));
@@ -762,22 +779,25 @@ class _NewWindowDialogState extends State<_NewWindowDialog> {
               const SizedBox(height: 6),
               Text(
                 switch (_layout) {
-                  DemoLayout.toolbar =>
-                    'The default composer puts a native toolbar above the page.',
+                  DemoLayout.titleBar =>
+                    'The default composer puts navigation, the page title and host into the native title bar.',
                   DemoLayout.sidebar =>
                     'The example runner\'s own native composer puts controls left of the page.',
-                  DemoLayout.none => 'The page fills the whole window.',
                 },
                 style: theme.textTheme.bodySmall,
               ),
-              const SizedBox(height: 8),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('System titlebar'),
-                subtitle: const Text('Hide it to provide your own drag region'),
-                value: _systemTitleBar,
-                onChanged: (value) => setState(() => _systemTitleBar = value),
-              ),
+              if (_layout == DemoLayout.titleBar) ...[
+                const SizedBox(height: 12),
+                Wrap(spacing: 8, runSpacing: 8, children: [
+                  for (final (name, shown, toggle) in _titleBarItems)
+                    FilterChip(
+                      label: Text(name),
+                      selected: shown,
+                      onSelected: (value) =>
+                          setState(() => _titleBar = toggle(value)),
+                    ),
+                ]),
+              ],
               if (Platform.isWindows)
                 ExpansionTile(
                   tilePadding: EdgeInsets.zero,

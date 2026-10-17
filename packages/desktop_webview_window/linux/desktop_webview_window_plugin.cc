@@ -21,8 +21,6 @@ struct _WebviewWindowPlugin {
   // Weak: the channel owns this plugin through its handler.
   FlMethodChannel *channel;
   std::map<int64_t, std::unique_ptr<WebviewWindow>> *windows;
-  // The app's view, used to find the window webview windows belong to.
-  FlView *view;
 };
 
 G_DEFINE_TYPE(WebviewWindowPlugin, webview_window_plugin, g_object_get_type())
@@ -98,20 +96,13 @@ void create_window(WebviewWindowPlugin *self, FlMethodCall *call) {
   options.use_position = Bool(args, "useWindowPositionAndSize", false);
   options.open_maximized = Bool(args, "openMaximized", false);
   options.open_hidden = Bool(args, "openHidden", false);
-  options.show_system_title_bar = Bool(args, "showSystemTitleBar", true);
-  options.show_toolbar = Bool(args, "showToolbar", true);
+  options.title_bar = static_cast<uint32_t>(Int(args, "titleBar", 0xF));
   if (const char *arguments = String(args, "composerArguments")) {
     options.has_composer_arguments = true;
     options.composer_arguments = arguments;
   }
   const char *bridge = String(args, "javaScriptBridge");
   options.javascript_bridge = bridge ? bridge : "";
-
-  GtkWindow *parent = nullptr;
-  if (self->view != nullptr) {
-    auto *toplevel = gtk_widget_get_toplevel(GTK_WIDGET(self->view));
-    if (GTK_IS_WINDOW(toplevel)) parent = GTK_WINDOW(toplevel);
-  }
 
   const auto window_id = dww::NextBrowserId();
   auto *windows = self->windows;
@@ -135,7 +126,7 @@ void create_window(WebviewWindowPlugin *self, FlMethodCall *call) {
                                         g_object_ref(decision));
       },
       window_id, [windows, window_id]() { windows->erase(window_id); },
-      options, parent);
+      options);
   auto *window = owned.get();
   windows->insert({window_id, std::move(owned)});
   window->Start(options);
@@ -289,11 +280,6 @@ static void webview_window_plugin_dispose(GObject *object) {
                                  reinterpret_cast<gpointer *>(&self->channel));
     self->channel = nullptr;
   }
-  if (self->view != nullptr) {
-    g_object_remove_weak_pointer(G_OBJECT(self->view),
-                                 reinterpret_cast<gpointer *>(&self->view));
-    self->view = nullptr;
-  }
   G_OBJECT_CLASS(webview_window_plugin_parent_class)->dispose(object);
 }
 
@@ -309,11 +295,6 @@ void desktop_webview_window_plugin_register_with_registrar(
     FlPluginRegistrar *registrar) {
   WebviewWindowPlugin *plugin = WEBVIEW_WINDOW_PLUGIN(
       g_object_new(webview_window_plugin_get_type(), nullptr));
-  plugin->view = fl_plugin_registrar_get_view(registrar);
-  if (plugin->view != nullptr) {
-    g_object_add_weak_pointer(G_OBJECT(plugin->view),
-                              reinterpret_cast<gpointer *>(&plugin->view));
-  }
   g_autoptr(FlStandardMethodCodec) codec = fl_standard_method_codec_new();
   // The messenger keeps the channel alive for the engine's lifetime, and the
   // channel owns the plugin through the handler's destroy notify.

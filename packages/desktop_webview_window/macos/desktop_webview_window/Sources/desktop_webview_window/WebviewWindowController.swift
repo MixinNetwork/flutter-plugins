@@ -26,8 +26,7 @@ final class WebviewWindowController: NSWindowController {
     let y: Int
     let usePosition: Bool
     let title: String
-    let showSystemTitleBar: Bool
-    let showToolbar: Bool
+    let titleBar: UInt32
     let composerArguments: String?
     let javaScriptBridge: String?
   }
@@ -56,9 +55,7 @@ final class WebviewWindowController: NSWindowController {
       channel: channel, viewId: viewId, javaScriptBridge: options.javaScriptBridge)
     super.init(window: nil)
 
-    let styleMask: NSWindow.StyleMask = options.showSystemTitleBar
-      ? [.titled, .closable, .miniaturizable, .resizable]
-      : [.borderless, .resizable]
+    let styleMask: NSWindow.StyleMask = [.titled, .closable, .miniaturizable, .resizable]
     let newWindow = BrowserWindow(contentRect: NSRect(x: 0, y: 0, width: options.width, height: options.height),
                                   styleMask: styleMask, backing: .buffered, defer: false)
     newWindow.delegate = self
@@ -115,7 +112,7 @@ final class WebviewWindowController: NSWindowController {
     func make(_ arguments: UnsafePointer<CChar>?) {
       var request = DWWComposeRequest(
         browser: viewId, window: windowPointer, webview_view: viewPointer,
-        arguments: arguments, show_toolbar: options.showToolbar ? 1 : 0)
+        arguments: arguments, title_bar: options.titleBar)
       body(&request)
     }
     if let arguments = options.composerArguments {

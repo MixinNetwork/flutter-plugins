@@ -59,21 +59,16 @@ WebviewWindow::WebviewWindow(EventSink emit,
                              NavigationRequest request_navigation,
                              int64_t window_id,
                              std::function<void()> on_close_callback,
-                             const Options &options, GtkWindow *parent)
+                             const Options &options)
     : emit_(std::move(emit)),
       request_navigation_(std::move(request_navigation)),
       window_id_(window_id),
       on_close_callback_(std::move(on_close_callback)),
       default_user_agent_() {
   javascript_cancellable_ = g_cancellable_new();
+  // An independent top-level window, as on macOS and Windows: not transient
+  // for the app window, so it does not stay above it.
   window_ = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-  gtk_window_set_decorated(GTK_WINDOW(window_), options.show_system_title_bar);
-  if (parent != nullptr) {
-    // Declared as a child of the app window, so window managers treat it like
-    // a dialog: centred over the app and kept above it on stacking ones,
-    // floated instead of tiled on tiling ones.
-    gtk_window_set_transient_for(GTK_WINDOW(window_), parent);
-  }
   g_object_ref_sink(window_);
   g_signal_connect(G_OBJECT(window_), "destroy",
                    G_CALLBACK(+[](GtkWidget *, gpointer arg) {
@@ -94,9 +89,7 @@ WebviewWindow::WebviewWindow(EventSink emit,
   if (options.use_position) {
     gtk_window_move(GTK_WINDOW(window_), options.x, options.y);
   } else {
-    gtk_window_set_position(GTK_WINDOW(window_),
-                            parent != nullptr ? GTK_WIN_POS_CENTER_ON_PARENT
-                                              : GTK_WIN_POS_CENTER);
+    gtk_window_set_position(GTK_WINDOW(window_), GTK_WIN_POS_CENTER);
   }
   if (options.open_maximized) {
     gtk_window_maximize(GTK_WINDOW(window_));
@@ -159,7 +152,7 @@ void WebviewWindow::Start(const Options &options) {
       window_id_, window_, container_,
       options.has_composer_arguments ? options.composer_arguments.c_str()
                                      : nullptr,
-      options.show_toolbar};
+      options.title_bar};
   composer_.Compose(request);
   if (closing_) return;
   if (gtk_widget_get_parent(container_) == nullptr) {

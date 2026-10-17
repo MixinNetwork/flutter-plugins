@@ -40,8 +40,7 @@ class WebviewWindow : public std::enable_shared_from_this<WebviewWindow>,
     bool use_position = false;
     bool open_maximized = false;
     bool open_hidden = false;
-    bool show_system_title_bar = true;
-    bool show_toolbar = true;
+    uint32_t title_bar = 0xF;
     bool deny_camera_and_microphone = false;
     std::wstring user_data_folder;
     std::wstring javascript_bridge;
@@ -106,7 +105,9 @@ class WebviewWindow : public std::enable_shared_from_this<WebviewWindow>,
 
   bool destroyed_ = false;
 
-  int brightness_ = -2;
+  // Follow the system theme until Webview.setBrightness pins one, so the frame
+  // and the default title bar agree.
+  int brightness_ = -1;
 
   std::optional<webview_window::WebView::NavigationState> published_;
 

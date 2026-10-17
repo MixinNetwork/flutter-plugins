@@ -19,6 +19,8 @@ add_library(${PLUGIN_NAME} SHARED
         "webview_window.h"
         "webview_window.cc"
         "strconv.h"
+        "title_bar_accessibility.h"
+        "title_bar_accessibility.cc"
         "utils.h"
         "utils.cc"
         "web_view.h"
@@ -47,7 +49,7 @@ add_library(Webview2 SHARED IMPORTED GLOBAL)
 SET_PROPERTY(TARGET Webview2 PROPERTY IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/libs/x64/Webview2Loader.dll)
 SET_PROPERTY(TARGET Webview2 PROPERTY IMPORTED_IMPLIB ${CMAKE_CURRENT_SOURCE_DIR}/libs/x64/Webview2Loader.dll.lib)
 
-target_link_libraries(${PLUGIN_NAME} PRIVATE Webview2 uxtheme dwmapi advapi32)
+target_link_libraries(${PLUGIN_NAME} PRIVATE Webview2 uxtheme dwmapi advapi32 comctl32 uiautomationcore)
 
 # List of absolute paths to libraries that should be bundled with the plugin
 set(desktop_webview_window_bundled_libraries

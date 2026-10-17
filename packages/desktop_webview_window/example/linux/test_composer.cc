@@ -100,7 +100,10 @@ void Closing(void*, int64_t browser) {
 
 void Collect(GtkWidget* widget, const char* type, std::vector<GtkWidget*>* out) {
   if (strcmp(G_OBJECT_TYPE_NAME(widget), type) == 0 ||
-      (strcmp(type, "GtkButton") == 0 && GTK_IS_BUTTON(widget))) {
+      (strcmp(type, "GtkButton") == 0 && GTK_IS_BUTTON(widget) &&
+       // Window controls of a header bar.
+       !gtk_style_context_has_class(gtk_widget_get_style_context(widget),
+                                    "titlebutton"))) {
     out->push_back(widget);
   }
   if (GTK_IS_CONTAINER(widget)) {
@@ -183,6 +186,11 @@ FlMethodResponse* Handle(FlMethodCall* call) {
         static_cast<gint>(fl_value_get_int(fl_value_lookup_string(args, "width"))),
         static_cast<gint>(fl_value_get_int(fl_value_lookup_string(args, "height"))));
     return FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
+  }
+  if (strcmp(method, "windowTitle") == 0) {
+    const char* title = gtk_window_get_title(GTK_WINDOW(window));
+    return FL_METHOD_RESPONSE(
+        fl_method_success_response_new(fl_value_new_string(title ? title : "")));
   }
   if (strcmp(method, "clickButton") == 0) {
     const auto buttons = Find(window, "GtkButton");

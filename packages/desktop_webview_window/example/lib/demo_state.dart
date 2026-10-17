@@ -8,14 +8,11 @@ import 'demo_page_server.dart';
 
 /// How the native window around the page is composed.
 enum DemoLayout {
-  /// The plugin's default composer with its native toolbar.
-  toolbar('Toolbar'),
+  /// The plugin's default composer, with controls in the native title bar.
+  titleBar('Title bar'),
 
   /// The example runner's native composer, with controls left of the page.
-  sidebar('Sidebar composer'),
-
-  /// The page fills the window.
-  none('None');
+  sidebar('Sidebar composer');
 
   const DemoLayout(this.label);
   final String label;
@@ -25,8 +22,8 @@ enum DemoLayout {
 class DemoWindowOptions {
   const DemoWindowOptions({
     this.url,
-    this.layout = DemoLayout.toolbar,
-    this.systemTitleBar = true,
+    this.layout = DemoLayout.titleBar,
+    this.titleBar = const TitleBarOptions(),
     this.openHidden = false,
     this.denyMedia = false,
   });
@@ -34,7 +31,7 @@ class DemoWindowOptions {
   /// Null opens the built-in demo page.
   final String? url;
   final DemoLayout layout;
-  final bool systemTitleBar;
+  final TitleBarOptions titleBar;
   final bool openHidden;
   final bool denyMedia;
 }
@@ -149,8 +146,7 @@ class DemoState extends ChangeNotifier {
           title: 'Browser $id',
           windowWidth: 960,
           windowHeight: 720,
-          showSystemTitleBar: options.systemTitleBar,
-          showToolbar: options.layout == DemoLayout.toolbar,
+          titleBar: options.titleBar,
           composerArguments:
               options.layout == DemoLayout.sidebar ? 'sidebar' : null,
           openHidden: options.openHidden,

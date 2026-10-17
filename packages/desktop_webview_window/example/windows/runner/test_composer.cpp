@@ -182,6 +182,53 @@ std::vector<HWND> Buttons(HWND root) {
   return buttons;
 }
 
+// A clickable control: a child button, or a button the window draws in its
+// own title bar, found by hit testing above the WebView.
+struct Control {
+  HWND button;
+  POINT point;
+};
+
+// Title bar buttons, then child buttons.
+std::vector<Control> Controls(HWND window, HWND web) {
+  std::vector<Control> controls;
+  RECT client, rect;
+  GetClientRect(window, &client);
+  GetWindowRect(web, &rect);
+  MapWindowPoints(HWND_DESKTOP, window, reinterpret_cast<POINT*>(&rect), 2);
+  // Below the top resize border.
+  const LONG y = rect.top * 2 / 3;
+  LONG start = -1;
+  for (LONG x = 0; rect.top > 0 && x <= client.right; x++) {
+    POINT screen{x, y};
+    ClientToScreen(window, &screen);
+    const bool hit =
+        x < client.right &&
+        SendMessage(window, WM_NCHITTEST, 0,
+                    MAKELPARAM(static_cast<SHORT>(screen.x),
+                               static_cast<SHORT>(screen.y))) == HTCLIENT;
+    if (hit && start < 0) start = x;
+    if (!hit && start >= 0) {
+      controls.push_back({nullptr, {(start + x) / 2, y}});
+      start = -1;
+    }
+  }
+  for (HWND button : Buttons(window)) controls.push_back({button, {}});
+  return controls;
+}
+
+std::string WindowTitle(HWND window) {
+  std::wstring wide(GetWindowTextLengthW(window) + 1, L'\0');
+  wide.resize(GetWindowTextW(window, wide.data(), static_cast<int>(wide.size())));
+  const int size = WideCharToMultiByte(CP_UTF8, 0, wide.c_str(),
+                                       static_cast<int>(wide.size()), nullptr,
+                                       0, nullptr, nullptr);
+  std::string utf8(size, '\0');
+  WideCharToMultiByte(CP_UTF8, 0, wide.c_str(), static_cast<int>(wide.size()),
+                      utf8.data(), size, nullptr, nullptr);
+  return utf8;
+}
+
 int64_t IntArgument(const EncodableMap& args, const char* key) {
   const auto found = args.find(EncodableValue(key));
   if (found == args.end()) return 0;
@@ -225,8 +272,12 @@ void TestComposerRegisterChannel(flutter::BinaryMessenger* messenger) {
       result->Error("no_window", "Unknown window");
       return;
     }
+    if (method == "windowTitle") {
+      result->Success(EncodableValue(WindowTitle(window)));
+      return;
+    }
+    HWND web = FindChild(window, L"web_view_window_web_view");
     if (method == "geometry") {
-      HWND web = FindChild(window, L"web_view_window_web_view");
       if (!web) {
         result->Error("no_webview", "No WebView");
         return;
@@ -242,7 +293,8 @@ void TestComposerRegisterChannel(flutter::BinaryMessenger* messenger) {
           {EncodableValue("webY"), EncodableValue(int32_t(rect.top))},
           {EncodableValue("webWidth"), EncodableValue(int32_t(rect.right - rect.left))},
           {EncodableValue("webHeight"), EncodableValue(int32_t(rect.bottom - rect.top))},
-          {EncodableValue("buttons"), EncodableValue(int32_t(Buttons(window).size()))},
+          {EncodableValue("buttons"),
+           EncodableValue(int32_t(Controls(window, web).size()))},
       }));
       return;
     }
@@ -259,13 +311,21 @@ void TestComposerRegisterChannel(flutter::BinaryMessenger* messenger) {
       return;
     }
     if (method == "clickButton") {
-      const auto buttons = Buttons(window);
+      const auto controls =
+          web ? Controls(window, web) : std::vector<Control>();
       const auto index = IntArgument(args, "index");
-      if (index < 0 || index >= static_cast<int64_t>(buttons.size())) {
+      if (index < 0 || index >= static_cast<int64_t>(controls.size())) {
         result->Error("no_button", "No such button");
         return;
       }
-      SendMessage(buttons[index], BM_CLICK, 0, 0);
+      const Control& control = controls[index];
+      if (control.button) {
+        SendMessage(control.button, BM_CLICK, 0, 0);
+      } else {
+        const LPARAM point = MAKELPARAM(control.point.x, control.point.y);
+        SendMessage(window, WM_LBUTTONDOWN, MK_LBUTTON, point);
+        SendMessage(window, WM_LBUTTONUP, 0, point);
+      }
       result->Success();
       return;
     }

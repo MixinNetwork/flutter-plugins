@@ -97,8 +97,8 @@ void WebviewWindowPlugin::Create(const Map& arguments,
   options.use_position = Bool(arguments, "useWindowPositionAndSize", false);
   options.open_maximized = Bool(arguments, "openMaximized", false);
   options.open_hidden = Bool(arguments, "openHidden", false);
-  options.show_system_title_bar = Bool(arguments, "showSystemTitleBar", true);
-  options.show_toolbar = Bool(arguments, "showToolbar", true);
+  options.title_bar =
+      static_cast<uint32_t>(Integer(arguments, "titleBar", 0xF));
   options.deny_camera_and_microphone =
       Bool(arguments, "denyCameraAndMicrophone", false);
   const auto* user_data_folder = String(arguments, "userDataFolderWindows");

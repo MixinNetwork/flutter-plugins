@@ -141,8 +141,7 @@ public class DesktopWebviewWindowPlugin: NSObject, FlutterPlugin {
       y: argument["windowPosY"] as? Int ?? 0,
       usePosition: argument["useWindowPositionAndSize"] as? Bool ?? false,
       title: argument["title"] as? String ?? "",
-      showSystemTitleBar: argument["showSystemTitleBar"] as? Bool ?? true,
-      showToolbar: argument["showToolbar"] as? Bool ?? true,
+      titleBar: UInt32(argument["titleBar"] as? Int ?? 0xF),
       composerArguments: argument["composerArguments"] as? String,
       javaScriptBridge: argument["javaScriptBridge"] as? String)
     let controller = WebviewWindowController(viewId: viewId, channel: channel, options: options)

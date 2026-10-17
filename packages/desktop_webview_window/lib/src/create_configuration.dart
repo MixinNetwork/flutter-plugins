@@ -24,6 +24,37 @@ class WindowsWebviewOptions {
       };
 }
 
+/// What the default composer shows in the window's title bar, next to the
+/// system window buttons. An application composer receives the same choices
+/// in `DWWComposeRequest::title_bar` and may ignore them.
+class TitleBarOptions {
+  const TitleBarOptions({
+    this.showNavigation = true,
+    this.showReload = true,
+    this.showTitle = true,
+    this.showHost = true,
+  });
+
+  /// Back and forward buttons.
+  final bool showNavigation;
+
+  /// The reload button, which stops the page while it loads.
+  final bool showReload;
+
+  /// The page title, or [CreateConfiguration.title] while the page has none.
+  final bool showTitle;
+
+  /// The current page's host, for example `example.com`.
+  final bool showHost;
+
+  // DWWTitleBarItem in webview_window_composer.h.
+  int get _flags =>
+      (showNavigation ? 1 : 0) |
+      (showReload ? 2 : 0) |
+      (showTitle ? 4 : 0) |
+      (showHost ? 8 : 0);
+}
+
 class CreateConfiguration {
   /// Window size in logical pixels.
   final int windowWidth;
@@ -34,17 +65,13 @@ class CreateConfiguration {
   final int windowPosX;
   final int windowPosY;
 
-  /// The title of the window.
+  /// The title of the window. The default composer replaces it with the
+  /// page title once the page has one.
   final String title;
 
-  /// Show the system title bar and window buttons on macOS, Windows and Linux.
-  ///
-  /// Provide your own window controls and drag region when hiding it.
-  final bool showSystemTitleBar;
-
-  /// Show the default composer's native toolbar above the page. A native
-  /// composer installed by the application receives it and may ignore it.
-  final bool showToolbar;
+  /// What the default composer shows in the title bar. Applications that want
+  /// another frame, or none, install a native composer.
+  final TitleBarOptions titleBar;
 
   /// Passed unchanged to the native composer's compose callback, for example
   /// to choose a layout per window. The plugin never interprets it.
@@ -70,8 +97,7 @@ class CreateConfiguration {
     this.windowPosX = 0,
     this.windowPosY = 0,
     this.title = "",
-    this.showSystemTitleBar = true,
-    this.showToolbar = true,
+    this.titleBar = const TitleBarOptions(),
     this.composerArguments,
     this.useWindowPositionAndSize = false,
     this.openMaximized = false,
@@ -87,8 +113,7 @@ class CreateConfiguration {
         "windowPosX": windowPosX,
         "windowPosY": windowPosY,
         "title": title,
-        "showSystemTitleBar": showSystemTitleBar,
-        "showToolbar": showToolbar,
+        "titleBar": titleBar._flags,
         "composerArguments": composerArguments,
         "useWindowPositionAndSize": useWindowPositionAndSize,
         "openMaximized": openMaximized,

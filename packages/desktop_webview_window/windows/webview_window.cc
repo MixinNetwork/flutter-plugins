@@ -76,9 +76,7 @@ void WebviewWindow::CreateAndShow(const Options& options,
   if (!options.use_position) GetCursorPos(&target_point);
   HMONITOR monitor = MonitorFromPoint(target_point, MONITOR_DEFAULTTONEAREST);
   double scale_factor = FlutterDesktopGetDpiForMonitor(monitor) / 96.0;
-  DWORD style = options.show_system_title_bar ? WS_OVERLAPPEDWINDOW :
-      WS_POPUP | WS_THICKFRAME | WS_SYSMENU | WS_MINIMIZEBOX | WS_MAXIMIZEBOX;
-  style |= WS_CLIPCHILDREN;
+  DWORD style = WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN;
   if (options.open_maximized) {
     style |= WS_MAXIMIZE;
   }
@@ -93,7 +91,7 @@ void WebviewWindow::CreateAndShow(const Options& options,
     OnClosed();
     return;
   }
-  if (brightness_ != -2) SetBrightness(brightness_);
+  SetBrightness(brightness_);
   if (!options.use_position && !options.open_maximized) {
     ClipOrCenterWindowToMonitor(hwnd_.get(), MONITOR_CENTER);
   }
@@ -114,7 +112,7 @@ void WebviewWindow::CreateAndShow(const Options& options,
   const DWWComposeRequest request{
       window_id_, hwnd_.get(), view,
       options.composer_arguments ? options.composer_arguments->c_str() : nullptr,
-      options.show_toolbar};
+      options.title_bar};
   composer_.Compose(request);
   if (closing_) {
     DestroyNow();
