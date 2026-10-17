@@ -1,10 +1,8 @@
 # desktop_webview_window example
 
-A browser control panel with a built-in local demo page. It works
-without an external website and supports multiple browser windows, navigation,
-JavaScript, page messages, cookies and a per-window event log. On Windows it also
-exposes hidden-window creation, media denial, visibility, activation, positioning
-and DevTools.
+A browser control panel with a built-in local demo page. It works without an
+external website and supports multiple browser windows, an address bar,
+navigation, page messages, JavaScript, cookies and a per-window activity log.
 
 ```shell
 cd packages/desktop_webview_window/example
@@ -13,24 +11,29 @@ flutter run -d macos # or windows / linux
 ```
 
 ```text
-Desktop WebView                                  [Shared theme]
-Built-in demo / Custom URL              [Open window] [Open 3]
-[x] System titlebar [x] Flutter titlebar
-Windows: [ ] Hidden [ ] Deny media
-+----------------------+-------------------------------------+
-| Browser windows      | Navigation / JavaScript / messages   |
-| Select a window      | Cookies / result / window options   |
-+----------------------+-------------------------------------+
-| Event log: all windows or a selected window                 |
-+------------------------------------------------------------+
+Desktop WebView                                      (● Runtime ready)
++------------------+---------------------------------------------------+
+| [+ New window]   | Page title                          [x Close]     |
+|                  | [<] [>] [R]  [ http://127.0.0.1:5123/?id=2    ]   |
+| ● Browser 1      | [Messages] [JavaScript] [Cookies] [Window]        |
+| ● Browser 2   <  |   controls, then this panel's latest result       |
++------------------+---------------------------------------------------+
+| > Activity · 14       [This window | All]                    [clear] |
++----------------------------------------------------------------------+
 ```
 
-The shared theme affects both the control panel and browser titlebars. The
-example uses `WebviewWindowApp` with `WebviewTitleBarConfiguration` to render
-all Flutter titlebars on the application's engine. Each titlebar receives its
-own `Webview` handle and `WebviewNavigationState`. System and Flutter titlebars
-can be enabled independently; disabling the Flutter titlebar gives its space to
-the web content. macOS and Windows also expose per-window theme overrides.
+New window opens a dialog that chooses the page (built-in demo or a URL), the
+layout and the system titlebar. Layouts:
+
+- Toolbar: the plugin's default composer with its native toolbar.
+- Sidebar composer: the example runner's own native composer
+  (`composerArguments: 'sidebar'`), with controls left of the page.
+- None: the page fills the window.
+
+Windows also offers hidden creation and camera/microphone denial. Below 760
+logical pixels the window list becomes a dropdown. The Window panel sets the
+per-window appearance on macOS and Windows and opens DevTools on Windows and
+Linux.
 
 ## Tests
 

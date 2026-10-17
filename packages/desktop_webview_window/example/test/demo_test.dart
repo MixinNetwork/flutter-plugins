@@ -37,29 +37,52 @@ void main() {
   });
 
   test('invalid URL does not create a browser and logs the problem', () async {
-    await state.open(url: 'javascript:alert(1)');
+    await state.open(const DemoWindowOptions(url: 'javascript:alert(1)'));
     expect(calls.where((call) => call.method == 'create'), isEmpty);
     expect(state.events.single.message, contains('valid http'));
     state.dispose();
   });
 
-  test('async results stay with their original window after selection changes',
-      () async {
-    await state.open(count: 2);
+  test('async results stay with their original window and panel', () async {
+    await state.open();
+    await state.open();
     final first = state.windows.first;
     final second = state.windows.last;
     final response = Completer<String>();
-    final operation = state.perform(first, 'Execute', () => response.future);
+    final operation = state.perform(
+        first, DemoPanel.javascript, 'Run', () => response.future);
     state.select(second);
     response.complete('first window result');
     await operation;
-    expect(first.result, contains('first window result'));
-    expect(second.result, isNot(contains('first window result')));
+    expect(
+        first.results[DemoPanel.javascript], contains('first window result'));
+    expect(first.results[DemoPanel.messages], isNull);
+    expect(second.results[DemoPanel.javascript], isNull);
     expect(state.selected, same(second));
     (first.webview as WebviewImpl).onClosed();
     await first.webview.onClose;
     await Future<void>.delayed(Duration.zero);
     expect(state.windows, [second]);
+    state.dispose();
+  });
+
+  test('layouts map to toolbar and composer arguments', () async {
+    for (final layout in DemoLayout.values) {
+      await state.open(DemoWindowOptions(layout: layout));
+      final arguments =
+          calls.lastWhere((call) => call.method == 'create').arguments as Map;
+      expect(arguments['showToolbar'], layout == DemoLayout.toolbar);
+      expect(arguments['composerArguments'],
+          layout == DemoLayout.sidebar ? 'sidebar' : null);
+    }
+    state.dispose();
+  });
+
+  test('address input accepts bare hosts and rejects other schemes', () {
+    expect(DemoState.normalizeUrl('mixin.one'), 'https://mixin.one');
+    expect(DemoState.normalizeUrl(' http://a.test/x '), 'http://a.test/x');
+    expect(DemoState.normalizeUrl('javascript:alert(1)'), isNull);
+    expect(DemoState.normalizeUrl('file:///etc/hosts'), isNull);
     state.dispose();
   });
 
@@ -91,63 +114,78 @@ void main() {
     state.dispose();
   });
 
-  testWidgets('system titlebar and native toolbar switches are independent',
+  testWidgets('new window dialog maps layout and titlebar choices',
       (tester) async {
     await tester.pumpWidget(DemoApp(state: state));
+    await tester.runAsync(() async {
+      while (state.available == null) {
+        await Future<void>.delayed(Duration.zero);
+      }
+    });
     await tester.pumpAndSettle();
-    Future<void> openAndCheck(bool system, bool toolbar) async {
+    Future<Map> openWith(Future<void> Function() choose) async {
+      await tester.tap(find.text('New window').first);
+      await tester.pumpAndSettle();
+      await choose();
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Open'));
       await tester.runAsync(() async {
-        await tester.tap(find.text('Open window'));
+        await Future<void>.delayed(Duration.zero);
         while (state.creating) {
           await Future<void>.delayed(Duration.zero);
         }
       });
       await tester.pumpAndSettle();
-      final arguments =
-          calls.lastWhere((call) => call.method == 'create').arguments as Map;
-      expect(arguments['showSystemTitleBar'], system);
-      expect(arguments['showToolbar'], toolbar);
+      return calls.lastWhere((call) => call.method == 'create').arguments
+          as Map;
     }
 
-    await openAndCheck(true, true);
-    await tester.tap(find.descendant(
-      of: find.widgetWithText(Row, 'System titlebar'),
-      matching: find.byType(Checkbox),
-    ));
-    await tester.pumpAndSettle();
-    await openAndCheck(false, true);
-    await tester.tap(find.descendant(
-      of: find.widgetWithText(Row, 'Native toolbar'),
-      matching: find.byType(Checkbox),
-    ));
-    await tester.pumpAndSettle();
-    await openAndCheck(false, false);
-    await tester.tap(find.descendant(
-      of: find.widgetWithText(Row, 'System titlebar'),
-      matching: find.byType(Checkbox),
-    ));
-    await tester.pumpAndSettle();
-    await openAndCheck(true, false);
+    var arguments = await openWith(() async {});
+    expect(arguments['showSystemTitleBar'], true);
+    expect(arguments['showToolbar'], true);
+    expect(arguments['composerArguments'], isNull);
+
+    arguments = await openWith(() async {
+      await tester.tap(find.text('Sidebar composer'));
+      await tester.tap(find.byType(Switch));
+    });
+    expect(arguments['showSystemTitleBar'], false);
+    expect(arguments['showToolbar'], false);
+    expect(arguments['composerArguments'], 'sidebar');
+
+    // The dialog keeps the previous choices.
+    arguments = await openWith(() => tester.tap(find.text('None')));
+    expect(arguments['showSystemTitleBar'], false);
+    expect(arguments['showToolbar'], false);
+    expect(arguments['composerArguments'], isNull);
+    expect(state.windows, hasLength(3));
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('window selection and shared theme work at a narrow size',
-      (tester) async {
+  testWidgets('narrow layout picks windows from a dropdown', (tester) async {
     tester.view.physicalSize = const Size(620, 760);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    await tester.runAsync(() => state.open(count: 2));
+    await tester.runAsync(() async {
+      await state.open();
+      await state.open();
+    });
     await tester.pumpWidget(DemoApp(state: state));
     await tester.pumpAndSettle();
-    expect(find.text('WINDOWS · 2'), findsOneWidget);
-    await tester.tap(find.widgetWithText(ListTile, 'Browser 1'));
+    expect(state.selectedId, state.windows.last.id);
+    await tester.tap(find.byType(DropdownButton<int>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('Browser 1 ·').last);
     await tester.pumpAndSettle();
     expect(state.selectedId, 1);
-    await tester.tap(find.byTooltip('Toggle shared theme'));
+    await tester.tap(find.text('JavaScript'));
     await tester.pumpAndSettle();
-    expect(state.darkMode.value, isTrue);
+    expect(find.text('Run'), findsOneWidget);
+    await tester.tap(find.textContaining('Activity'));
+    await tester.pumpAndSettle();
+    expect(find.text('This window'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });

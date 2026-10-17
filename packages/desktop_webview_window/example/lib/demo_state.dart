@@ -6,15 +6,58 @@ import 'package:flutter/material.dart';
 
 import 'demo_page_server.dart';
 
+/// How the native window around the page is composed.
+enum DemoLayout {
+  /// The plugin's default composer with its native toolbar.
+  toolbar('Toolbar'),
+
+  /// The example runner's native composer, with controls left of the page.
+  sidebar('Sidebar composer'),
+
+  /// The page fills the window.
+  none('None');
+
+  const DemoLayout(this.label);
+  final String label;
+}
+
+/// Options chosen in the New window dialog.
+class DemoWindowOptions {
+  const DemoWindowOptions({
+    this.url,
+    this.layout = DemoLayout.toolbar,
+    this.systemTitleBar = true,
+    this.openHidden = false,
+    this.denyMedia = false,
+  });
+
+  /// Null opens the built-in demo page.
+  final String? url;
+  final DemoLayout layout;
+  final bool systemTitleBar;
+  final bool openHidden;
+  final bool denyMedia;
+}
+
+/// Panels of the window inspector. Each keeps its own latest result.
+enum DemoPanel { messages, javascript, cookies, window }
+
 class DemoWindow {
-  DemoWindow(this.id, this.webview, this.url);
+  DemoWindow(this.id, this.webview, this.url, this.options);
   final int id;
   final Webview webview;
+  final DemoWindowOptions options;
   String url;
   bool busy = false;
-  String result = 'Execute JavaScript or read cookies to see the result here.';
+  final results = <DemoPanel, String>{};
+  List<WebviewCookie>? cookies;
+  ThemeMode appearance = ThemeMode.system;
   late final VoidCallback navigationListener;
   bool _wasLoading = false;
+
+  WebviewNavigationState get navigation => webview.navigationState.value;
+  String get currentUrl => navigation.url ?? url;
+  String get name => 'Browser $id';
 }
 
 class DemoEvent {
@@ -29,17 +72,6 @@ class DemoState extends ChangeNotifier {
 
   final DemoPageServer pages;
   final String userDataFolder;
-  final darkMode = ValueNotifier(false);
-
-  ThemeData get theme => ThemeData(
-        useMaterial3: true,
-        colorSchemeSeed: Colors.indigo,
-        brightness: darkMode.value ? Brightness.dark : Brightness.light,
-        inputDecorationTheme: const InputDecorationTheme(
-          border: OutlineInputBorder(),
-          isDense: true,
-        ),
-      );
   final windows = <DemoWindow>[];
   final events = <DemoEvent>[];
   int? selectedId;
@@ -88,88 +120,96 @@ class DemoState extends ChangeNotifier {
     _changed();
   }
 
-  Future<void> open({
-    String? url,
-    int count = 1,
-    bool showToolbar = true,
-    bool showSystemTitleBar = true,
-    bool openHidden = false,
-    bool denyMedia = false,
-  }) async {
+  /// Accepts `mixin.one` as `https://mixin.one`; null when not http(s).
+  static String? normalizeUrl(String input) {
+    final text = input.trim();
+    final uri = Uri.tryParse(text.contains('://') ? text : 'https://$text');
+    if (uri == null ||
+        !['http', 'https'].contains(uri.scheme) ||
+        uri.host.isEmpty) {
+      return null;
+    }
+    return uri.toString();
+  }
+
+  Future<void> open(
+      [DemoWindowOptions options = const DemoWindowOptions()]) async {
     if (creating || _disposed) return;
-    if (url != null) {
-      final uri = Uri.tryParse(url);
-      if (uri == null ||
-          !['http', 'https'].contains(uri.scheme) ||
-          uri.host.isEmpty) {
-        log('Enter a valid http:// or https:// URL');
-        return;
-      }
+    final custom = options.url == null ? null : normalizeUrl(options.url!);
+    if (options.url != null && custom == null) {
+      log('Enter a valid http:// or https:// URL');
+      return;
     }
     creating = true;
     _changed();
     try {
-      for (var i = 0; i < count && !_disposed; i++) {
-        final id = ++_nextId;
-        final view = await WebviewWindow.create(
-          configuration: CreateConfiguration(
-            title: 'Browser $id',
-            windowWidth: 960,
-            windowHeight: 720,
-            showSystemTitleBar: showSystemTitleBar,
-            showToolbar: showToolbar,
-            openHidden: openHidden,
-            windows: WindowsWebviewOptions(
-              userDataFolder: userDataFolder,
-              denyCameraAndMicrophone: denyMedia,
-            ),
+      final id = ++_nextId;
+      final view = await WebviewWindow.create(
+        configuration: CreateConfiguration(
+          title: 'Browser $id',
+          windowWidth: 960,
+          windowHeight: 720,
+          showSystemTitleBar: options.systemTitleBar,
+          showToolbar: options.layout == DemoLayout.toolbar,
+          composerArguments:
+              options.layout == DemoLayout.sidebar ? 'sidebar' : null,
+          openHidden: options.openHidden,
+          windows: WindowsWebviewOptions(
+            userDataFolder: userDataFolder,
+            denyCameraAndMicrophone: options.denyMedia,
           ),
-        );
-        if (_disposed) {
-          view.close();
-          break;
+        ),
+      );
+      if (_disposed) {
+        view.close();
+        return;
+      }
+      final window = DemoWindow(id, view, custom ?? pages.url(id), options);
+      windows.add(window);
+      selectedId = id;
+      window.navigationListener = () {
+        final loading = view.navigationState.value.isLoading;
+        if (loading != window._wasLoading) {
+          window._wasLoading = loading;
+          log(loading ? 'Loading' : 'Loading finished', id);
         }
-        final window = DemoWindow(id, view, url ?? pages.url(id));
-        windows.add(window);
-        selectedId = id;
-        window.navigationListener = () {
-          final loading = view.navigationState.value.isLoading;
-          if (loading != window._wasLoading) {
-            window._wasLoading = loading;
-            log(loading ? 'Loading' : 'Loading finished', id);
-          }
-          _changed();
-        };
-        view.navigationState.addListener(window.navigationListener);
-        view.setOnUrlRequestCallback((value) {
-          window.url = value;
-          log('Navigate: $value', id);
-          return true;
+        _changed();
+      };
+      view.navigationState.addListener(window.navigationListener);
+      view.setOnUrlRequestCallback((value) {
+        window.url = value;
+        log('Navigate: $value', id);
+        return true;
+      });
+      view.addJavaScriptHandler('demo', (data) {
+        window.results[DemoPanel.messages] = 'Page → Flutter\n$data';
+        log('Page message: $data', id);
+      });
+      if (Platform.isMacOS) {
+        view.setPromptHandler((prompt, text) {
+          window.results[DemoPanel.messages] = 'Page prompt\n$prompt ($text)';
+          log('Prompt: $prompt ($text)', id);
+          return 'Hello from Flutter: $text';
         });
-        view.addJavaScriptHandler(
-            'demo', (data) => log('Page message: $data', id));
-        if (Platform.isMacOS) {
-          view.setPromptHandler((prompt, text) {
-            log('Prompt: $prompt ($text)', id);
-            return 'Hello from Flutter: $text';
-          });
+      }
+      unawaited(view.onClose.then((_) {
+        _detach(window);
+        windows.remove(window);
+        if (selectedId == id) {
+          selectedId = windows.isEmpty ? null : windows.last.id;
         }
-        unawaited(view.onClose.then((_) {
-          _detach(window);
-          windows.remove(window);
-          if (selectedId == id) {
-            selectedId = windows.isEmpty ? null : windows.last.id;
-          }
-          log('Closed', id);
-        }));
-        log(openHidden ? 'Created hidden window' : 'Created window', id);
-        await perform(window, 'Set user agent', () async {
-          await view.setApplicationNameForUserAgent(' WebviewExample/1.0');
-          return null;
-        });
-        if (!_disposed && windows.contains(window)) {
-          await view.launch(window.url);
-        }
+        log('Closed', id);
+      }));
+      log(
+          '${options.openHidden ? 'Created hidden window' : 'Created window'}'
+          ' · ${options.layout.label}',
+          id);
+      await perform(window, DemoPanel.window, 'Set user agent', () async {
+        await view.setApplicationNameForUserAgent(' WebviewExample/1.0');
+        return null;
+      });
+      if (!_disposed && windows.contains(window)) {
+        await view.launch(window.url);
       }
     } catch (error) {
       log('Create failed: $error');
@@ -179,7 +219,23 @@ class DemoState extends ChangeNotifier {
     }
   }
 
-  Future<void> perform(DemoWindow window, String label,
+  /// Loads [input] in [window]; returns false when it is not an http(s) URL.
+  bool navigate(DemoWindow window, String input) {
+    final url = normalizeUrl(input);
+    if (url == null) {
+      log('Enter a valid http:// or https:// URL', window.id);
+      return false;
+    }
+    unawaited(perform(window, DemoPanel.window, 'Open $url', () async {
+      await window.webview.launch(url);
+      return null;
+    }));
+    return true;
+  }
+
+  /// Runs [action] for [window] and keeps the outcome in [panel], so a result
+  /// stays with the window and panel it came from.
+  Future<void> perform(DemoWindow window, DemoPanel panel, String label,
       Future<Object?> Function() action) async {
     if (_disposed || window.busy || !windows.contains(window)) return;
     window.busy = true;
@@ -187,19 +243,26 @@ class DemoState extends ChangeNotifier {
     try {
       final result = await action();
       if (!_disposed && windows.contains(window)) {
-        window.result = '$label\n${result ?? 'Done'}';
+        window.results[panel] = '$label\n${result ?? 'Done'}';
         log('$label: ${result ?? 'Done'}', window.id);
       }
     } catch (error) {
       if (!_disposed && windows.contains(window)) {
-        window.result = '$label failed: $error';
-        log(window.result, window.id);
+        window.results[panel] = '$label failed\n$error';
+        log('$label failed: $error', window.id);
       }
     } finally {
       window.busy = false;
       _changed();
     }
   }
+
+  Future<void> readCookies(DemoWindow window) =>
+      perform(window, DemoPanel.cookies, 'Read cookies', () async {
+        final cookies = await window.webview.getAllCookies();
+        window.cookies = cookies;
+        return '${cookies.length} cookie${cookies.length == 1 ? '' : 's'}';
+      });
 
   void _detach(DemoWindow window) {
     window.webview.navigationState.removeListener(window.navigationListener);
@@ -212,7 +275,6 @@ class DemoState extends ChangeNotifier {
       _detach(window);
       unawaited(window.webview.close());
     }
-    darkMode.dispose();
     unawaited(pages.close());
     super.dispose();
   }
