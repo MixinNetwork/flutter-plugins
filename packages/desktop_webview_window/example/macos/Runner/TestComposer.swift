@@ -204,17 +204,20 @@ enum TestComposer {
           "kind": sheet is NSSavePanel ? "panel" : "alert",
           "buttons": buttons.map { $0.title }.filter { !$0.isEmpty },
         ])
-      case "answerAlert":
-        // Ends an alert sheet as if its button at index was clicked.
-        guard let sheet = window.attachedSheet, !(sheet is NSSavePanel) else {
-          result(FlutterError(code: "no_sheet", message: "No alert sheet", details: nil))
+      case "endSheet":
+        // Ends the attached sheet as if the alert button at index was
+        // clicked. Panels end as cancelled.
+        guard let sheet = window.attachedSheet else {
+          result(FlutterError(code: "no_sheet", message: "No sheet", details: nil))
           return
         }
         let index = args["index"] as? Int ?? 0
         window.endSheet(
           sheet,
-          returnCode: NSApplication.ModalResponse(
-            rawValue: NSApplication.ModalResponse.alertFirstButtonReturn.rawValue + index))
+          returnCode: sheet is NSSavePanel
+            ? .cancel
+            : NSApplication.ModalResponse(
+              rawValue: NSApplication.ModalResponse.alertFirstButtonReturn.rawValue + index))
         result(nil)
       case "clickButton":
         let buttons = buttons(of: window, content: content)

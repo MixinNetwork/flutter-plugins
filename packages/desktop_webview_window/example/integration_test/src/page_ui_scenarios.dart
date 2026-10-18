@@ -27,6 +27,9 @@ Future<Map<String, Object?>> _waitForSheet(Webview view) async {
   return sheet!;
 }
 
+Future<void> _endSheet(Webview view, [int index = 0]) => _native.invokeMethod(
+    'endSheet', {'handle': view.nativeWindowHandle, 'index': index});
+
 /// Native UI the page opens itself: JavaScript dialogs, file panels and
 /// downloads. Requires the example runner's native test channel.
 void registerPageUiTests() {
@@ -93,8 +96,7 @@ void registerPageUiTests() {
       final sheet = await _waitForSheet(view);
       expect(sheet['kind'], 'alert');
       expect(sheet['buttons'], hasLength(1));
-      await _native.invokeMethod(
-          'answerAlert', {'handle': view.nativeWindowHandle, 'index': 0});
+      await _endSheet(view, 0);
       await _until(
           () async => await view.evaluateJavaScript('window.done') == true,
           'alert returned');
@@ -109,8 +111,7 @@ void registerPageUiTests() {
             "window.answer = undefined; setTimeout(() => { window.answer = confirm('sure?'); })");
         final sheet = await _waitForSheet(view);
         expect(sheet['buttons'], hasLength(2));
-        await _native.invokeMethod('answerAlert',
-            {'handle': view.nativeWindowHandle, 'index': index});
+        await _endSheet(view, index);
         await _until(
             () async =>
                 await view.evaluateJavaScript('window.answer') == expected,
@@ -127,6 +128,26 @@ void registerPageUiTests() {
       await view.close();
       await view.onClose.timeout(const Duration(seconds: 10));
       views.remove(view);
+    });
+  }, skip: dialogsSkip);
+
+  testWidgets('a file input opens a panel and a cancel reaches the page',
+      (tester) async {
+    await runScenario(tester, () async {
+      final view = await open('/upload');
+      await view.evaluateJavaScript('''
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.multiple = true;
+        input.addEventListener('cancel', () => window.cancelled = true);
+        document.body.append(input);
+        input.click();
+      ''');
+      expect((await _waitForSheet(view))['kind'], 'panel');
+      await _endSheet(view);
+      await _until(
+          () async => await view.evaluateJavaScript('window.cancelled') == true,
+          'cancel event');
     });
   }, skip: dialogsSkip);
 }
