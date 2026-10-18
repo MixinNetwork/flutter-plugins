@@ -91,6 +91,7 @@ class WebviewWindow : public dww::Browser {
   void DisconnectCallbacks();
   void Emit(const char *method, FlValue *args = nullptr);
   void OnBridgeMessage(WebKitJavascriptResult *result);
+  void ReportLoadError(const char *url, const char *kind, const char *description);
   void PublishNavigationState();
   void DeliverClosing();
   void FinishStartupBackground();
@@ -109,6 +110,8 @@ class WebviewWindow : public dww::Browser {
   // Owned by container_, removed once the first document can render.
   GtkWidget *startup_cover_ = nullptr;
   bool document_committed_ = false;
+  // The current load already reported its TLS failure.
+  bool tls_error_reported_ = false;
   WebKitUserScript *startup_script_ = nullptr;
   gulong startup_handler_id_ = 0;
   WebKitUserContentManager *content_manager_ = nullptr;

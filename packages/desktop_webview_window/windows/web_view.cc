@@ -279,6 +279,8 @@ HRESULT WebView::OnWebviewControllerCreated() {
                 ICoreWebView2DownloadStartingEventArgs *args) {
               auto self = weak.lock();
               if (!self || self->closed_) return args->put_Cancel(TRUE);
+              // The navigation that became this download completes unsuccessfully.
+              self->download_started_ = true;
               wil::com_ptr<ICoreWebView2Deferral> deferral;
               HRESULT hr = args->GetDeferral(&deferral);
               if (FAILED(hr)) return hr;
@@ -384,6 +386,11 @@ HRESULT WebView::OnWebviewControllerCreated() {
             auto self = weak.lock();
             if (!self || self->closed_) return S_OK;
             self->declined_url_.clear();
+            self->download_started_ = false;
+            wil::unique_cotaskmem_string navigation_uri;
+            if (SUCCEEDED(args->get_Uri(&navigation_uri)) && navigation_uri) {
+              self->navigation_uri_ = navigation_uri.get();
+            }
             self->loading_ = true;
             self->NotifyStateChanged();
             if (!self->triggerOnUrlRequestedEvent) {
@@ -455,6 +462,7 @@ HRESULT WebView::OnWebviewControllerCreated() {
               self->startup_background_ = false;
               self->SetBackgroundColor(RGB(255, 255, 255));
             }
+            self->ReportLoadError(args);
             self->loading_ = false;
             self->NotifyStateChanged();
             return S_OK;
@@ -490,6 +498,113 @@ HRESULT WebView::OnWebviewControllerCreated() {
           .Get(),
       nullptr);
   return S_OK;
+}
+
+namespace {
+
+// Groups WebView2 failures like the other platforms. Returns nullptr for
+// navigations that ended without a load failure.
+const char *LoadErrorKind(COREWEBVIEW2_WEB_ERROR_STATUS status) {
+  switch (status) {
+    case COREWEBVIEW2_WEB_ERROR_STATUS_OPERATION_CANCELED:
+      return nullptr;
+    case COREWEBVIEW2_WEB_ERROR_STATUS_HOST_NAME_NOT_RESOLVED:
+      return "hostLookup";
+    case COREWEBVIEW2_WEB_ERROR_STATUS_TIMEOUT:
+      return "timeout";
+    case COREWEBVIEW2_WEB_ERROR_STATUS_CERTIFICATE_COMMON_NAME_IS_INCORRECT:
+    case COREWEBVIEW2_WEB_ERROR_STATUS_CERTIFICATE_EXPIRED:
+    case COREWEBVIEW2_WEB_ERROR_STATUS_CLIENT_CERTIFICATE_CONTAINS_ERRORS:
+    case COREWEBVIEW2_WEB_ERROR_STATUS_CERTIFICATE_REVOKED:
+    case COREWEBVIEW2_WEB_ERROR_STATUS_CERTIFICATE_IS_INVALID:
+      return "certificate";
+    case COREWEBVIEW2_WEB_ERROR_STATUS_SERVER_UNREACHABLE:
+    case COREWEBVIEW2_WEB_ERROR_STATUS_ERROR_HTTP_INVALID_SERVER_RESPONSE:
+    case COREWEBVIEW2_WEB_ERROR_STATUS_CONNECTION_ABORTED:
+    case COREWEBVIEW2_WEB_ERROR_STATUS_CONNECTION_RESET:
+    case COREWEBVIEW2_WEB_ERROR_STATUS_DISCONNECTED:
+    case COREWEBVIEW2_WEB_ERROR_STATUS_CANNOT_CONNECT:
+      return "connection";
+    default:
+      return "other";
+  }
+}
+
+std::string LoadErrorDescription(COREWEBVIEW2_WEB_ERROR_STATUS status) {
+  switch (status) {
+    case COREWEBVIEW2_WEB_ERROR_STATUS_CERTIFICATE_COMMON_NAME_IS_INCORRECT:
+      return "The certificate's common name does not match the host name.";
+    case COREWEBVIEW2_WEB_ERROR_STATUS_CERTIFICATE_EXPIRED:
+      return "The certificate has expired.";
+    case COREWEBVIEW2_WEB_ERROR_STATUS_CLIENT_CERTIFICATE_CONTAINS_ERRORS:
+      return "The client certificate contains errors.";
+    case COREWEBVIEW2_WEB_ERROR_STATUS_CERTIFICATE_REVOKED:
+      return "The certificate has been revoked.";
+    case COREWEBVIEW2_WEB_ERROR_STATUS_CERTIFICATE_IS_INVALID:
+      return "The certificate is invalid.";
+    case COREWEBVIEW2_WEB_ERROR_STATUS_SERVER_UNREACHABLE:
+      return "The server is unreachable.";
+    case COREWEBVIEW2_WEB_ERROR_STATUS_TIMEOUT:
+      return "The connection timed out.";
+    case COREWEBVIEW2_WEB_ERROR_STATUS_ERROR_HTTP_INVALID_SERVER_RESPONSE:
+      return "The server returned an invalid response.";
+    case COREWEBVIEW2_WEB_ERROR_STATUS_CONNECTION_ABORTED:
+      return "The connection was aborted.";
+    case COREWEBVIEW2_WEB_ERROR_STATUS_CONNECTION_RESET:
+      return "The connection was reset.";
+    case COREWEBVIEW2_WEB_ERROR_STATUS_DISCONNECTED:
+      return "The Internet connection was lost.";
+    case COREWEBVIEW2_WEB_ERROR_STATUS_CANNOT_CONNECT:
+      return "Cannot connect to the server.";
+    case COREWEBVIEW2_WEB_ERROR_STATUS_HOST_NAME_NOT_RESOLVED:
+      return "The host name could not be resolved.";
+    case COREWEBVIEW2_WEB_ERROR_STATUS_REDIRECT_FAILED:
+      return "The redirect failed.";
+    case COREWEBVIEW2_WEB_ERROR_STATUS_UNEXPECTED_ERROR:
+      return "An unexpected error occurred.";
+    case COREWEBVIEW2_WEB_ERROR_STATUS_VALID_AUTHENTICATION_CREDENTIALS_REQUIRED:
+      return "The server requires authentication.";
+    case COREWEBVIEW2_WEB_ERROR_STATUS_VALID_PROXY_AUTHENTICATION_REQUIRED:
+      return "The proxy requires authentication.";
+    default:
+      return "The page could not be loaded (WebView2 error status " +
+             std::to_string(static_cast<int>(status)) + ").";
+  }
+}
+
+}  // namespace
+
+void WebView::ReportLoadError(ICoreWebView2NavigationCompletedEventArgs *args) {
+  BOOL success = TRUE;
+  if (FAILED(args->get_IsSuccess(&success)) || success) return;
+  const bool download = download_started_;
+  download_started_ = false;
+  if (download) return;
+  COREWEBVIEW2_WEB_ERROR_STATUS status = COREWEBVIEW2_WEB_ERROR_STATUS_UNKNOWN;
+  args->get_WebErrorStatus(&status);
+  const char *kind = LoadErrorKind(status);
+  std::string description = LoadErrorDescription(status);
+  if (status == COREWEBVIEW2_WEB_ERROR_STATUS_UNKNOWN) {
+    // HTTP error responses and window.stop() are not load failures.
+    wil::com_ptr<ICoreWebView2NavigationCompletedEventArgs2> args2;
+    int http_status = 0;
+    if (SUCCEEDED(args->QueryInterface(IID_PPV_ARGS(&args2))) &&
+        SUCCEEDED(args2->get_HttpStatusCode(&http_status)) && http_status != 0) {
+      return;
+    }
+    // WebView2 reports some connection failures, such as a refused
+    // connection, without a status. No response arrived.
+    kind = "connection";
+    description = "The server could not be reached.";
+  }
+  if (kind == nullptr) return;
+  Emit("onLoadError", flutter::EncodableMap{
+      {flutter::EncodableValue("url"),
+       flutter::EncodableValue(wide_to_utf8(navigation_uri_))},
+      {flutter::EncodableValue("kind"), flutter::EncodableValue(kind)},
+      {flutter::EncodableValue("description"),
+       flutter::EncodableValue(description)},
+  });
 }
 
 void WebView::UpdateBounds() {

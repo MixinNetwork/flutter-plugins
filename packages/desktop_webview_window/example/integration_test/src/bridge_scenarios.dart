@@ -16,6 +16,16 @@ Future<void> _waitFor(Webview view, String script, Object? expected) async {
   expect(actual, expected, reason: script);
 }
 
+Future<void> _waitForError(List<WebviewLoadError> errors) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 30));
+  while (errors.isEmpty && DateTime.now().isBefore(deadline)) {
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+  }
+  // Give a duplicate report time to arrive.
+  await Future<void>.delayed(const Duration(milliseconds: 500));
+  expect(errors, hasLength(1), reason: '$errors');
+}
+
 /// Cross-platform behavior of the bridge: page messaging, asynchronous
 /// navigation decisions, typed script results and the native window handle.
 void registerBridgeTests() {
@@ -145,6 +155,41 @@ void registerBridgeTests() {
       expect(received, [
         ['top', 'http://127.0.0.1:${server.port}'],
       ]);
+    });
+  });
+
+  testWidgets('failed top-level loads are reported, declined ones are not',
+      (tester) async {
+    await runScenario(tester, () async {
+      final view = await create();
+      final errors = <WebviewLoadError>[];
+      view.onLoadError.listen(errors.add);
+      await view
+          .setOnUrlRequestCallback((value) => !value.contains('/blocked'));
+      await view.launch(url('/start'));
+      await _waitFor(view, 'location.pathname', '/start');
+      await view.launch(url('/blocked'));
+      await Future<void>.delayed(const Duration(seconds: 1));
+      expect(errors, isEmpty);
+
+      final socket = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+      final refused = 'http://127.0.0.1:${socket.port}/';
+      await socket.close();
+      await view.launch(refused);
+      await _waitForError(errors);
+      expect(errors.single.url, refused);
+      expect(errors.single.kind, WebviewLoadErrorKind.connection,
+          reason: '$errors');
+      expect(errors.single.description, isNotEmpty);
+
+      errors.clear();
+      await view.launch('http://unknown-host.invalid/');
+      await _waitForError(errors);
+      // A local DNS proxy can answer for any name and fail the connection.
+      expect(
+          errors.single.kind,
+          anyOf(WebviewLoadErrorKind.hostLookup,
+              WebviewLoadErrorKind.connection));
     });
   });
 

@@ -57,6 +57,59 @@ class WebviewNavigationState {
       Object.hash(canGoBack, canGoForward, isLoading, url, title);
 }
 
+/// Why a top-level page could not be loaded.
+enum WebviewLoadErrorKind {
+  /// The host name could not be resolved.
+  hostLookup,
+
+  /// The connection could not be established, or it was refused, reset or
+  /// lost. Also used when the device is offline.
+  connection,
+
+  /// The connection timed out.
+  timeout,
+
+  /// The TLS connection failed, for example because of an untrusted, expired
+  /// or mismatched certificate.
+  certificate,
+
+  /// Any other failure. See [WebviewLoadError.description].
+  other,
+}
+
+/// A failed top-level navigation. Failures of subresources and iframes are
+/// not reported, nor are HTTP error responses, which load the server's page.
+@immutable
+class WebviewLoadError {
+  const WebviewLoadError({
+    required this.url,
+    required this.kind,
+    required this.description,
+  });
+
+  /// The URL that failed to load.
+  final String url;
+
+  final WebviewLoadErrorKind kind;
+
+  /// The platform's description, suitable for logs. Its wording and
+  /// language differ between platforms.
+  final String description;
+
+  @override
+  bool operator ==(Object other) =>
+      other is WebviewLoadError &&
+      url == other.url &&
+      kind == other.kind &&
+      description == other.description;
+
+  @override
+  int get hashCode => Object.hash(url, kind, description);
+
+  @override
+  String toString() => 'WebviewLoadError($kind, $url, $description)';
+}
+
 /// A browser window. Operations complete when native code has applied them and
 /// fail with a [PlatformException] when it reports an error. Operations a
 /// platform does not support throw [UnsupportedError].
@@ -68,6 +121,12 @@ abstract class Webview {
   Future<void> get onClose;
 
   ValueListenable<WebviewNavigationState> get navigationState;
+
+  /// Reports top-level navigations that failed to load, such as an unknown
+  /// host or a refused connection. Cancelled navigations, navigations
+  /// declined by [setOnUrlRequestCallback] and downloads are not failures.
+  /// The stream closes with the browser.
+  Stream<WebviewLoadError> get onLoadError;
 
   /// Native window pointer: `HWND` on Windows, `NSWindow*` on macOS and
   /// `GtkWindow*` on Linux. Returns 0 once the browser has closed.

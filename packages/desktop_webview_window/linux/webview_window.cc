@@ -14,20 +14,47 @@
 
 namespace {
 
-gboolean on_load_failed_with_tls_errors(WebKitWebView *web_view,
-                                        char *failing_uri,
-                                        GTlsCertificate *certificate,
-                                        GTlsCertificateFlags errors,
-                                        gpointer user_data) {
-  auto *webview = static_cast<WebviewWindow *>(user_data);
-  g_critical("on_load_failed_with_tls_errors: %s %p error= %d", failing_uri,
-             webview, errors);
-  // TODO allow certificate for some certificate ?
-  // maybe we can use the pem from
-  // https://source.chromium.org/chromium/chromium/src/+/master:net/data/ssl/ev_roots/
-  //  webkit_web_context_allow_tls_certificate_for_host(webkit_web_view_get_context(web_view),
-  //  certificate, uri->host); webkit_web_view_load_uri(web_view, failing_uri);
-  return false;
+// Groups WebKitGTK load failures like the other platforms. Returns nullptr
+// for loads that were cancelled, declined or turned into downloads.
+const char *LoadErrorKind(const GError *error) {
+  if (error->domain == WEBKIT_POLICY_ERROR ||
+      g_error_matches(error, WEBKIT_NETWORK_ERROR, WEBKIT_NETWORK_ERROR_CANCELLED) ||
+      g_error_matches(error, G_IO_ERROR, G_IO_ERROR_CANCELLED) ||
+      g_error_matches(error, WEBKIT_PLUGIN_ERROR,
+                      WEBKIT_PLUGIN_ERROR_WILL_HANDLE_LOAD)) {
+    return nullptr;
+  }
+  if (error->domain == G_RESOLVER_ERROR) return "hostLookup";
+  if (error->domain == G_TLS_ERROR) return "certificate";
+  if (error->domain == G_IO_ERROR) {
+    switch (error->code) {
+      case G_IO_ERROR_TIMED_OUT:
+        return "timeout";
+      case G_IO_ERROR_CONNECTION_REFUSED:
+      case G_IO_ERROR_CONNECTION_CLOSED:  // Also G_IO_ERROR_BROKEN_PIPE.
+      case G_IO_ERROR_NETWORK_UNREACHABLE:
+      case G_IO_ERROR_HOST_UNREACHABLE:
+      case G_IO_ERROR_NOT_CONNECTED:
+        return "connection";
+      default:
+        break;
+    }
+  }
+  if (g_error_matches(error, WEBKIT_NETWORK_ERROR, WEBKIT_NETWORK_ERROR_TRANSPORT)) {
+    return "connection";
+  }
+  return "other";
+}
+
+const char *TlsErrorDescription(GTlsCertificateFlags errors) {
+  if (errors & G_TLS_CERTIFICATE_EXPIRED) return "The certificate has expired.";
+  if (errors & G_TLS_CERTIFICATE_NOT_ACTIVATED) return "The certificate is not yet valid.";
+  if (errors & G_TLS_CERTIFICATE_REVOKED) return "The certificate has been revoked.";
+  if (errors & G_TLS_CERTIFICATE_BAD_IDENTITY) {
+    return "The certificate does not match the host name.";
+  }
+  if (errors & G_TLS_CERTIFICATE_UNKNOWN_CA) return "The certificate is not trusted.";
+  return "The certificate is invalid.";
 }
 
 GtkWidget *on_create(WebKitWebView *web_view,
@@ -145,6 +172,7 @@ WebviewWindow::WebviewWindow(EventSink emit,
   g_signal_connect(webview_, "load-changed",
                    G_CALLBACK(+[](WebKitWebView *, WebKitLoadEvent event, gpointer arg) {
                      auto *window = static_cast<WebviewWindow *>(arg);
+                     if (event == WEBKIT_LOAD_STARTED) window->tls_error_reported_ = false;
                      if (event == WEBKIT_LOAD_COMMITTED) window->document_committed_ = true;
                      if (event == WEBKIT_LOAD_FINISHED && window->startup_cover_ &&
                          window->document_committed_) {
@@ -184,8 +212,31 @@ WebviewWindow::WebviewWindow(EventSink emit,
       WEBKIT_USER_CONTENT_INJECT_TOP_FRAME, WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
       kStartupWorld, nullptr, nullptr);
   webkit_user_content_manager_add_script(content_manager_, startup_script_);
-  g_signal_connect(G_OBJECT(webview_), "load-failed-with-tls-errors",
-                   G_CALLBACK(on_load_failed_with_tls_errors), this);
+  // Only top-level loads emit these signals. WebKitGTK may follow an
+  // unhandled TLS failure with load-failed for the same load.
+  g_signal_connect(
+      G_OBJECT(webview_), "load-failed-with-tls-errors",
+      G_CALLBACK(+[](WebKitWebView *, char *failing_uri, GTlsCertificate *,
+                     GTlsCertificateFlags errors, gpointer arg) -> gboolean {
+        auto *window = static_cast<WebviewWindow *>(arg);
+        window->tls_error_reported_ = true;
+        window->ReportLoadError(failing_uri, "certificate",
+                                TlsErrorDescription(errors));
+        return FALSE;
+      }),
+      this);
+  g_signal_connect(
+      G_OBJECT(webview_), "load-failed",
+      G_CALLBACK(+[](WebKitWebView *, WebKitLoadEvent, char *failing_uri,
+                     GError *error, gpointer arg) -> gboolean {
+        auto *window = static_cast<WebviewWindow *>(arg);
+        if (window->tls_error_reported_) return FALSE;
+        if (const char *kind = LoadErrorKind(error)) {
+          window->ReportLoadError(failing_uri, kind, error->message);
+        }
+        return FALSE;
+      }),
+      this);
   g_signal_connect(G_OBJECT(webview_), "create", G_CALLBACK(on_create), this);
   g_signal_connect(G_OBJECT(webview_), "decide-policy",
                    G_CALLBACK(decide_policy_cb), this);
@@ -311,6 +362,17 @@ void WebviewWindow::OnBridgeMessage(WebKitJavascriptResult *result) {
     fl_value_set_string_take(args, "source", fl_value_new_string(uri));
   }
   Emit("onJavaScriptMessage", args);
+}
+
+void WebviewWindow::ReportLoadError(const char *url, const char *kind,
+                                    const char *description) {
+  if (closing_ || closed_) return;
+  g_autoptr(FlValue) args = fl_value_new_map();
+  fl_value_set_string_take(args, "url", fl_value_new_string(url ? url : ""));
+  fl_value_set_string_take(args, "kind", fl_value_new_string(kind));
+  fl_value_set_string_take(args, "description",
+                           fl_value_new_string(description ? description : ""));
+  Emit("onLoadError", args);
 }
 
 void WebviewWindow::OpenInspector() {

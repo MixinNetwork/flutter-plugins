@@ -54,6 +54,9 @@ Future<Object?> _handleEvent(MethodCall call) async {
         url: args['url'] as String?,
         title: args['title'] as String?,
       );
+    case 'onLoadError':
+      webview.onLoadFailed(args['url'] as String, args['kind'] as String,
+          args['description'] as String);
     case 'onUrlRequest':
       return webview.decideNavigation(args['url'] as String);
     default:
