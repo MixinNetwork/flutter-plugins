@@ -129,8 +129,13 @@ class WebView : public std::enable_shared_from_this<WebView> {
   bool url_request_enabled_ = false;
 
   bool loading_ = false;
+  // URI of the latest top-level navigation, reported with its failure.
+  std::wstring navigation_uri_;
+  // The latest navigation became a download rather than failing.
+  bool download_started_ = false;
 
   void NotifyStateChanged();
+  void ReportLoadError(ICoreWebView2NavigationCompletedEventArgs* args);
 
   std::wstring javascript_bridge_;
 

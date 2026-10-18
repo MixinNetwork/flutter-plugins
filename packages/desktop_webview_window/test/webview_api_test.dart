@@ -133,6 +133,39 @@ void main() {
     expect(first.bridgeToken, isNot(second.bridgeToken));
   });
 
+  test('load failures reach onLoadError until the browser closes', () async {
+    final webview = await create();
+    final errors = <WebviewLoadError>[];
+    var done = false;
+    webview.onLoadError.listen(errors.add, onDone: () => done = true);
+    await sendBrowserEvent('onLoadError', {
+      'id': webview.id,
+      'url': 'https://unknown.invalid/',
+      'kind': 'hostLookup',
+      'description': 'not found',
+    });
+    await sendBrowserEvent('onLoadError', {
+      'id': webview.id,
+      'url': 'https://example.com/',
+      'kind': 'somethingNew',
+      'description': 'x',
+    });
+    await sendBrowserEvent('onWindowClose', {'id': webview.id});
+    expect(errors, const [
+      WebviewLoadError(
+        url: 'https://unknown.invalid/',
+        kind: WebviewLoadErrorKind.hostLookup,
+        description: 'not found',
+      ),
+      WebviewLoadError(
+        url: 'https://example.com/',
+        kind: WebviewLoadErrorKind.other,
+        description: 'x',
+      ),
+    ]);
+    expect(done, isTrue);
+  });
+
   test('postMessage sends the JSON message and its WebKit dispatch script',
       () async {
     final webview = await create();

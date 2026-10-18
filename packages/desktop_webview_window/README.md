@@ -192,6 +192,25 @@ await webview.setOnUrlRequestCallback((url) {
 - `launch(url, triggerOnUrlRequestEvent: false)` skips the decision for that
   navigation.
 
+### Load failures
+
+`onLoadError` reports top-level navigations that could not be loaded:
+
+```dart
+webview.onLoadError.listen((error) {
+  if (error.kind == WebviewLoadErrorKind.hostLookup) {
+    showOfflineBanner(error.url);
+  }
+});
+```
+
+`kind` is one of `hostLookup`, `connection`, `timeout`, `certificate` or
+`other`; `description` is the platform's message for logs. Cancelled and
+declined navigations, downloads, HTTP error responses, and failures of
+subresources or iframes are not reported. On Windows, WebView2 reports some
+connection failures, such as a refused connection, without a cause; they are
+reported as `connection`.
+
 ## Controlling the window
 
 The plugin owns each browser window but does not move, show or focus it after

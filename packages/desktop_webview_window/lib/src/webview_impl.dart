@@ -39,10 +39,15 @@ class WebviewImpl extends Webview {
 
   final _navigation = ValueNotifier(const WebviewNavigationState());
 
+  final _loadErrors = StreamController<WebviewLoadError>.broadcast(sync: true);
+
   final int _windowHandle;
 
   @override
   ValueListenable<WebviewNavigationState> get navigationState => _navigation;
+
+  @override
+  Stream<WebviewLoadError> get onLoadError => _loadErrors.stream;
 
   bool get isClosed => _closed;
 
@@ -77,6 +82,17 @@ class WebviewImpl extends Webview {
       );
     }
     _closeCompleter.complete();
+    _loadErrors.close();
+  }
+
+  void onLoadFailed(String url, String kind, String description) {
+    if (_closed) return;
+    _loadErrors.add(WebviewLoadError(
+      url: url,
+      kind: WebviewLoadErrorKind.values.asNameMap()[kind] ??
+          WebviewLoadErrorKind.other,
+      description: description,
+    ));
   }
 
   /// [source] is the URL or origin of the sending document, as reported by

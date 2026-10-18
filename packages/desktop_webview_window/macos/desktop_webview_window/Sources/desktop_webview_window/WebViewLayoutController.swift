@@ -295,6 +295,58 @@ extension WebViewLayoutController: WKNavigationDelegate {
     // A failure after commit still leaves a document. Provisional failures
     // and rejected navigations have no document and keep the placeholder.
     finishStartupBackground()
+    reportLoadError(error)
+  }
+
+  func webView(
+    _ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!,
+    withError error: Error
+  ) {
+    reportLoadError(error)
+  }
+
+  /// Reports a failed top-level load, grouped like the other platforms.
+  /// Cancellations, declined navigations and downloads are not failures.
+  private func reportLoadError(_ error: Error) {
+    guard !isDestroyed else { return }
+    let error = error as NSError
+    let kind: String
+    switch (error.domain, error.code) {
+    case (NSURLErrorDomain, NSURLErrorCancelled),
+      // Frame load interrupted by a policy change or handled by a plug-in.
+      ("WebKitErrorDomain", 102), ("WebKitErrorDomain", 204):
+      return
+    case (NSURLErrorDomain, NSURLErrorCannotFindHost),
+      (NSURLErrorDomain, NSURLErrorDNSLookupFailed):
+      kind = "hostLookup"
+    case (NSURLErrorDomain, NSURLErrorTimedOut):
+      kind = "timeout"
+    case (NSURLErrorDomain, NSURLErrorSecureConnectionFailed),
+      (NSURLErrorDomain, NSURLErrorServerCertificateHasBadDate),
+      (NSURLErrorDomain, NSURLErrorServerCertificateUntrusted),
+      (NSURLErrorDomain, NSURLErrorServerCertificateHasUnknownRoot),
+      (NSURLErrorDomain, NSURLErrorServerCertificateNotYetValid),
+      (NSURLErrorDomain, NSURLErrorClientCertificateRejected),
+      (NSURLErrorDomain, NSURLErrorClientCertificateRequired):
+      kind = "certificate"
+    case (NSURLErrorDomain, NSURLErrorCannotConnectToHost),
+      (NSURLErrorDomain, NSURLErrorNetworkConnectionLost),
+      (NSURLErrorDomain, NSURLErrorNotConnectedToInternet),
+      (NSURLErrorDomain, NSURLErrorBadServerResponse),
+      (NSURLErrorDomain, NSURLErrorDataNotAllowed),
+      (NSURLErrorDomain, NSURLErrorInternationalRoamingOff),
+      (NSURLErrorDomain, NSURLErrorCallIsActive):
+      kind = "connection"
+    default:
+      kind = "other"
+    }
+    let url =
+      error.userInfo[NSURLErrorFailingURLStringErrorKey] as? String
+      ?? (error.userInfo[NSURLErrorFailingURLErrorKey] as? URL)?.absoluteString
+      ?? webView.url?.absoluteString ?? ""
+    channel.invokeMethod("onLoadError", arguments: [
+      "id": viewId, "url": url, "kind": kind, "description": error.localizedDescription,
+    ])
   }
 
   func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
