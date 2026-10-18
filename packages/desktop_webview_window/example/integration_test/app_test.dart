@@ -6,6 +6,7 @@ import 'package:integration_test/integration_test.dart';
 import 'src/bridge_scenarios.dart' as bridge;
 import 'src/background_scenarios.dart' as background;
 import 'src/composer_scenarios.dart' as composer;
+import 'src/page_ui_scenarios.dart' as page_ui;
 import 'src/windows_webview_scenarios.dart' as windows;
 
 // One entrypoint for every platform.
@@ -14,6 +15,7 @@ void main() {
   binding.framePolicy = LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
   bridge.registerBridgeTests();
   background.registerBackgroundTests();
+  page_ui.registerPageUiTests();
   // Every example runner installs the test composer.
   composer.registerComposerTests();
   if (Platform.isWindows) windows.registerWindowsWebviewTests();

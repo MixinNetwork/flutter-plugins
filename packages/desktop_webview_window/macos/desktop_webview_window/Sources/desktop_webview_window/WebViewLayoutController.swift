@@ -173,6 +173,11 @@ class WebViewLayoutController: NSViewController {
     isDestroyed = true
     // Do not force either lazy native view to load while closing an early window.
     if isViewLoaded {
+      // Page dialogs and panels are sheets; ending them runs the completion
+      // handlers WebKit is waiting for.
+      if let window = view.window, let sheet = window.attachedSheet {
+        window.endSheet(sheet)
+      }
       if observesNavigation {
         for key in Self.observedKeys {
           webView.removeObserver(self, forKeyPath: key)
@@ -331,6 +336,38 @@ extension WebViewLayoutController: WKNavigationDelegate {
 }
 
 extension WebViewLayoutController: WKUIDelegate {
+  // AppKit's own button titles, so dialogs follow the application's language.
+  private static func appKitString(_ key: String) -> String {
+    Bundle(for: NSApplication.self).localizedString(forKey: key, value: key, table: "Common")
+  }
+
+  /// Shows a page dialog as a sheet on the browser window. WebKit requires
+  /// every completion handler to run: without a window the dialog answers
+  /// false at once, and destroy() ends open sheets.
+  private func showDialog(_ message: String, cancellable: Bool, completion: @escaping (Bool) -> Void) {
+    guard !isDestroyed, let window = view.window else {
+      completion(false)
+      return
+    }
+    let alert = NSAlert()
+    alert.messageText = message
+    alert.addButton(withTitle: Self.appKitString("OK"))
+    if cancellable {
+      alert.addButton(withTitle: Self.appKitString("Cancel"))
+    }
+    alert.beginSheetModal(for: window) { response in
+      completion(response == .alertFirstButtonReturn)
+    }
+  }
+
+  func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
+    showDialog(message, cancellable: false) { _ in completionHandler() }
+  }
+
+  func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) {
+    showDialog(message, cancellable: true, completion: completionHandler)
+  }
+
   func webView(_ webView: WKWebView, runJavaScriptTextInputPanelWithPrompt prompt: String, defaultText: String?, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (String?) -> Void) {
     channel.invokeMethod(
       "runJavaScriptTextInputPanelWithPrompt",
