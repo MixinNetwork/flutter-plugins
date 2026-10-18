@@ -104,8 +104,20 @@ flutter test integration_test/app_test.dart -d windows --timeout 5m
 The tests use local pages, temporary profiles, and fake media devices. They do
 not require a physical camera or microphone.
 
-The bundled Windows SDK headers, loader DLL, and import library come from
-Microsoft.Web.WebView2 SDK 1.0.4258.31.
+Windows builds fetch Microsoft.Web.WebView2 SDK 1.0.4258.31 and statically link
+the loader for the target architecture. The SDK is reused in the application's
+build directory until `flutter clean`; see [Windows setup](../README.md#windows).
+
+The SDK download/cache checks run on any host with Python 3.9+ and CMake:
+
+```shell
+# From the package directory:
+python3 tool/test_webview2_sdk.py -v
+```
+
+These use a local HTTP server and cover build-local reuse, downloading again
+after deleting the build directory, hash verification and
+target architecture selection. They do not replace Windows build/runtime tests.
 
 ### macOS sandbox
 

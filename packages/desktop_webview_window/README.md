@@ -81,6 +81,15 @@ final webview = await WebviewWindow.create(
 
 A relative path is resolved against the executable's directory.
 
+Windows builds download the pinned WebView2 SDK from NuGet and statically link
+its loader for x64 or ARM64. No separate `WebView2Loader.dll` is required; the
+WebView2 Runtime is still required on the user's machine.
+
+The SDK is downloaded into the application's CMake build directory under
+`build/windows/<architecture>/_deps`. Repeated builds reuse it. After
+`flutter clean`, the next Windows build downloads it again and needs access
+to `api.nuget.org`. No user-wide SDK cache is created.
+
 ### macOS
 
 Sandboxed applications need the
