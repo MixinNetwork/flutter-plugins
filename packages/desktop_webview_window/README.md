@@ -351,3 +351,19 @@ drives the example runner's test composer: default and application-owned
 layouts side by side, resize, title bar buttons, closing from each composer
 callback, and repeated close/recreate. Native keyboard/pointer focus and visual
 rendering still need a short manual check.
+
+### macOS sandbox
+
+The macOS example runs in the App Sandbox, like a shipped application. Its
+entitlements allow outgoing and loopback connections (each test serves its
+pages from `127.0.0.1`) and user-selected files. Keep the sandbox on when
+running the suite: the tests must not touch anything outside the example's
+container.
+
+Page dialogs and file panels open as sheets. Tests inspect and end them through
+the runner's `webview_example/native_test` channel (`sheet`, `endSheet`); a
+panel is only ever cancelled. Choosing a file and saving a download are not
+automated. Inside the sandbox, WebKit can write a download only to a location
+the user picked in the panel, so a location set by a test fails with
+"Operation not permitted"; outside it, the panel ignores the test's folder and
+saves to the last folder the user chose. Check uploads and downloads by hand.
