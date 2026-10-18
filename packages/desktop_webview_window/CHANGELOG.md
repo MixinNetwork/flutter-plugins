@@ -1,3 +1,34 @@
+## 0.4.0
+
+Browser windows are now fully native, and one browser API works the same way on macOS, Windows and Linux. See [Migrating to 0.4.0](https://github.com/MixinNetwork/flutter-plugins/tree/main/packages/desktop_webview_window#migrating-to-040).
+
+### Breaking changes
+
+- Browser windows no longer start a Flutter engine for the title bar. Remove the `runWebViewTitleBarWidget` startup hook and the title bar widget; `TitleBarWebViewController`, `TitleBarWebViewState`, `titleBarHeight` and `titleBarTopPadding` are removed. Use the default native title bar, configured with `TitleBarOptions`, or a native composer. ([#518](https://github.com/MixinNetwork/flutter-plugins/pull/518))
+- Replace the platform-specific JavaScript message APIs with one bridge. Pages call `window.desktopWebview.postMessage(name, data)` and `window.desktopWebview.addEventListener(name, listener)`; Dart uses `addJavaScriptHandler`, `removeJavaScriptHandler` and `postMessage`. `registerJavaScriptMessageHandler`, `unregisterJavaScriptMessageHandler`, `postWebMessageAsString`, `postWebMessageAsJson` and `addOnWebMessageReceivedCallback` are removed, and messages posted to `window.webkit.messageHandlers.<name>` or `chrome.webview` are no longer forwarded. ([#518](https://github.com/MixinNetwork/flutter-plugins/pull/518))
+- JavaScript handlers receive the origin of the sending page: `(Object? data, String origin)`. Check it before a handler acts for a trusted page; messages from iframes are dropped. ([#533](https://github.com/MixinNetwork/flutter-plugins/pull/533))
+- Remove `moveWebviewWindow`, `setWebviewWindowVisibility`, `bringToForeground` and `getPositionalParameters`. Use `nativeWindowHandle` with a window library. ([#518](https://github.com/MixinNetwork/flutter-plugins/pull/518))
+- Replace `isNavigating` and `setOnHistoryChangedCallback` with `navigationState`. ([#518](https://github.com/MixinNetwork/flutter-plugins/pull/518))
+- Move the Windows options into `WindowsWebviewOptions`: use `CreateConfiguration(windows: ...)` and `clearAll(windows: ...)` instead of `userDataFolderWindows` and `denyCameraAndMicrophone`. ([#518](https://github.com/MixinNetwork/flutter-plugins/pull/518))
+- `evaluateJavaScript` returns the decoded result as `Future<Object?>` instead of a JSON string. `launch`, `close`, `setBrightness`, `setOnUrlRequestCallback`, `addScriptToExecuteOnDocumentCreated` and `openDevToolsWindow` return futures and report native errors. ([#518](https://github.com/MixinNetwork/flutter-plugins/pull/518))
+- Operations a platform does not support throw `UnsupportedError` instead of doing nothing, for example `setBrightness` on Linux and `setPromptHandler` outside macOS. ([#518](https://github.com/MixinNetwork/flutter-plugins/pull/518))
+- Linux: Browser windows are independent top-level windows instead of transient children of the application window. ([#518](https://github.com/MixinNetwork/flutter-plugins/pull/518))
+- Require Flutter 3.44.0 or later and macOS 10.15 or later. ([#518](https://github.com/MixinNetwork/flutter-plugins/pull/518))
+
+### Features and fixes
+
+- Add a native title bar with back, forward, reload/stop, page title and host on every platform. `TitleBarOptions` chooses its items per window, and a native composer installed by the runner can replace the layout. ([#518](https://github.com/MixinNetwork/flutter-plugins/pull/518))
+- Add `navigationState`, a `ValueListenable` with `canGoBack`, `canGoForward`, `isLoading`, `url` and `title`. ([#518](https://github.com/MixinNetwork/flutter-plugins/pull/518))
+- Add `onLoadError`, which reports top-level pages that fail to load with the URL, a `WebviewLoadErrorKind` (`hostLookup`, `connection`, `timeout`, `certificate`, `other`) and the platform's description. ([#534](https://github.com/MixinNetwork/flutter-plugins/pull/534))
+- Add `nativeWindowHandle`, the browser's `HWND`, `NSWindow*` or `GtkWindow*`, for showing, focusing or moving the window with other libraries. ([#518](https://github.com/MixinNetwork/flutter-plugins/pull/518))
+- `setOnUrlRequestCallback` can cancel navigations on every platform, and links to schemes the WebView cannot load, such as `mailto:`, reach it. ([#518](https://github.com/MixinNetwork/flutter-plugins/pull/518))
+- Show native `alert` and `confirm` dialogs and the system file chooser, ask where to save downloads, and load links that open a new window in the same window, on every platform. ([#518](https://github.com/MixinNetwork/flutter-plugins/pull/518))
+- Add `CreateConfiguration(brightness:)`, which applies before the window is shown, and support `setBrightness` on Windows. ([#518](https://github.com/MixinNetwork/flutter-plugins/pull/518))
+- Browser IDs are unique per process. ([#518](https://github.com/MixinNetwork/flutter-plugins/pull/518))
+- macOS: `getAllCookies` reports `expires`, `secure`, `httpOnly` and `sessionOnly`. ([#518](https://github.com/MixinNetwork/flutter-plugins/pull/518))
+- Windows: Support ARM64. The WebView2 SDK is downloaded from NuGet at build time and its loader is linked statically, so applications no longer ship `WebView2Loader.dll`. The first build after `flutter clean` needs access to `api.nuget.org`. ([#532](https://github.com/MixinNetwork/flutter-plugins/pull/532))
+- macOS: Remove the deprecated Java applet setting and its build warning. ([#531](https://github.com/MixinNetwork/flutter-plugins/pull/531))
+
 ## 0.3.2
 
 - Windows: Preserve the original HTTP method, POST body, and headers when `setOnUrlRequestCallback` approves navigation. ([#519](https://github.com/MixinNetwork/flutter-plugins/pull/519); thanks [FrankenApps](https://github.com/FrankenApps))
