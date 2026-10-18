@@ -1,5 +1,10 @@
 # Linux shared titlebar engine investigation
 
+> Historical design and validation notes. The shared Flutter titlebar implementation
+> described here has been replaced by native composers. For the current design,
+> see [Native window composer](native_window_composer.md) and the
+> [package README](../README.md).
+
 Research date: 2026-10-13. This note separates source facts from experiments and
 does not establish Linux runtime acceptance.
 

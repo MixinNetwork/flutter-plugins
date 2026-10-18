@@ -129,8 +129,7 @@ void registerBridgeTests() {
     });
   });
 
-  testWidgets('navigations to application schemes reach Dart',
-      (tester) async {
+  testWidgets('navigations to application schemes reach Dart', (tester) async {
     await runScenario(tester, () async {
       final view = await create();
       final requested = Completer<String>();

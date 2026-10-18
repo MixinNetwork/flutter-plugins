@@ -1,5 +1,10 @@
 # Single-engine titlebars: design and validation
 
+> Historical design and validation notes. The shared Flutter titlebar implementation
+> described here has been replaced by native composers. For the current design,
+> see [Native window composer](native_window_composer.md) and the
+> [package README](../README.md).
+
 ## Ownership and startup
 
 The runner owns one application Flutter engine and its main view. Browser windows

@@ -1,5 +1,8 @@
 # desktop_webview_window Windows 测试交接
 
+> 历史交接记录：以下内容针对 0.3.x 的 Windows 实现，部分 API 和导航流程已被替换。
+> 当前用法和测试入口见[主 README](../README.md) 与 [example README](../example/README.md)。
+
 更新时间：2026-10-12
 
 ## 当前状态
