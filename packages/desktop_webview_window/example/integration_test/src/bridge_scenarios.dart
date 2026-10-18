@@ -22,14 +22,20 @@ void registerBridgeTests() {
   late HttpServer server;
   final views = <Webview>[];
 
+  late HttpServer frameServer;
+
   setUp(() async {
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-    server.listen((request) async {
+    frameServer = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    // dart:io sends X-Frame-Options: SAMEORIGIN by default.
+    frameServer.defaultResponseHeaders.removeAll('x-frame-options');
+    Future<void> respond(HttpRequest request) async {
       request.response.headers.contentType = ContentType.html;
       request.response.write(switch (request.uri.path) {
-        // A cross-origin frame: localhost and 127.0.0.1 are different origins.
+        // Another port is another origin.
         '/with-frame' => '<!doctype html><title>with-frame</title><body>'
-            '<iframe src="http://localhost:${server.port}/frame"></iframe>',
+            '<iframe src="http://127.0.0.1:'
+            '${request.uri.queryParameters['port']}/frame"></iframe>',
         '/frame' => '<!doctype html><script>'
             'const forged = JSON.stringify({name: "ping", data: "frame"});'
             'try { webkit.messageHandlers.desktopWebview.postMessage(forged); }'
@@ -41,11 +47,15 @@ void registerBridgeTests() {
         _ => '<!doctype html><title>${request.uri.path}</title><body></body>',
       });
       await request.response.close();
-    });
+    }
+
+    server.listen(respond);
+    frameServer.listen(respond);
   });
 
   tearDown(() async {
     await server.close(force: true);
+    await frameServer.close(force: true);
   });
 
   String url(String path) => 'http://127.0.0.1:${server.port}$path';
@@ -122,7 +132,7 @@ void registerBridgeTests() {
       });
       await view.addScriptToExecuteOnDocumentCreated(
           "addEventListener('message', e => { window.frameSent = e.data; });");
-      await view.launch(url('/with-frame'));
+      await view.launch(url('/with-frame?port=${frameServer.port}'));
       await _waitFor(view, 'window.frameSent', 'sent');
       await view.evaluateJavaScript(
           "window.desktopWebview.postMessage('ping', 'top')");
