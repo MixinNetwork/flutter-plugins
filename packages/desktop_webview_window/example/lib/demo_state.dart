@@ -215,6 +215,13 @@ class DemoState extends ChangeNotifier {
       };
       view.navigationState.addListener(window.navigationListener);
       view.setOnUrlRequestCallback((value) {
+        // Applications handle their own schemes, such as mixin:, here.
+        final scheme = Uri.tryParse(value)?.scheme ?? '';
+        if (!const ['http', 'https', 'file', 'about', 'data']
+            .contains(scheme)) {
+          log('Application link: $value', id);
+          return false;
+        }
         window.url = value;
         log('Navigate: $value', id);
         return true;

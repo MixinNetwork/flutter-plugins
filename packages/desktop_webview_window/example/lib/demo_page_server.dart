@@ -4,6 +4,21 @@ import 'dart:io';
 class DemoPageServer {
   DemoPageServer._(this._server) {
     _server.listen((request) async {
+      // Downloads: an attachment and a type the WebView cannot show.
+      if (request.uri.path == '/download/report.csv') {
+        request.response.headers
+          ..contentType = ContentType('text', 'csv')
+          ..set('Content-Disposition', 'attachment; filename="report.csv"');
+        request.response.write('name,value\nalpha,1\nbeta,2\n');
+        await request.response.close();
+        return;
+      }
+      if (request.uri.path == '/download/data.bin') {
+        request.response.headers.contentType = ContentType.binary;
+        request.response.add(List<int>.generate(1024, (i) => i % 256));
+        await request.response.close();
+        return;
+      }
       final id = int.tryParse(request.uri.queryParameters['id'] ?? '') ?? 0;
       final next = request.uri.path == '/next';
       request.response.headers.contentType = ContentType.html;
@@ -52,8 +67,8 @@ section { background: var(--card); border: 1px solid var(--line); border-radius:
 h2 { margin: 0 0 4px; font-size: 16px; }
 p.note { margin: 0 0 14px; color: var(--muted); font-size: 13px; }
 .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-button, input, a.button { font: inherit; border-radius: 8px; padding: 7px 12px; }
-button, a.button { border: 1px solid var(--line); background: var(--soft); color: inherit;
+button, input, a.button, label.button { font: inherit; border-radius: 8px; padding: 7px 12px; }
+button, a.button, label.button { border: 1px solid var(--line); background: var(--soft); color: inherit;
   cursor: pointer; text-decoration: none; }
 button.primary { background: var(--accent); color: var(--accent-text); border-color: transparent; }
 input { flex: 1; min-width: 0; border: 1px solid var(--line); background: transparent; color: inherit; }
@@ -99,6 +114,27 @@ dd { margin: 0; }
     <button onclick="document.cookie='demo_window_$id=; max-age=0; path=/'; showCookies()">Delete cookie</button>
   </div>
   <p class="mono" id="cookies" style="margin:12px 0 0"></p>
+</section>
+<section>
+  <h2>Page UI</h2>
+  <p class="note">Native browser UI the page opens itself. Right-click anywhere for the context menu.</p>
+  <div class="row">
+    <button onclick="alert('Hello from browser $id')">Alert</button>
+    <button onclick="addLog('Confirm ←', confirm('Continue?'))">Confirm</button>
+    <label class="button">Upload files<input type="file" multiple hidden
+      onchange="addLog('Files ←', [...this.files].map(f => f.name + ' (' + f.size + ' B)').join(', ') || 'none'); this.value = ''"
+      oncancel="addLog('Files ←', 'cancelled')"></label>
+  </div>
+  <div class="row" style="margin-top:10px">
+    <a class="button" href="/download/report.csv">Download attachment</a>
+    <a class="button" href="/download/data.bin">Download binary</a>
+  </div>
+  <div class="row" style="margin-top:10px">
+    <a class="button" href="/next?id=$id" target="_blank">target=_blank</a>
+    <button onclick="window.open('/next?id=$id')">window.open</button>
+    <button onclick="setTimeout(() => window.open('/next?id=$id'), 500)">window.open later</button>
+    <a class="button" href="mixin://users/demo">mixin:// link</a>
+  </div>
 </section>
 <section>
   <h2>Environment</h2>
