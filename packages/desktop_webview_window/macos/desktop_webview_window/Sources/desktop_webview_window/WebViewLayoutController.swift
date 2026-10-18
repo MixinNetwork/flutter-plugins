@@ -304,6 +304,11 @@ extension WebViewLayoutController: WKNavigationDelegate {
       return
     }
 
+    if #available(macOS 11.3, *), navigationAction.shouldPerformDownload {
+      decisionHandler(.download)
+      return
+    }
+
     // WebKit cannot load other schemes, such as mixin: or mailto:. They still
     // reach Dart below so the application can handle them.
     let loadable = WKWebView.handlesURLScheme(url.scheme?.lowercased() ?? "")
@@ -331,7 +336,48 @@ extension WebViewLayoutController: WKNavigationDelegate {
   }
 
   func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse, decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
+    if #available(macOS 11.3, *) {
+      let disposition = (navigationResponse.response as? HTTPURLResponse)?
+        .value(forHTTPHeaderField: "Content-Disposition")?.lowercased()
+      if !navigationResponse.canShowMIMEType || disposition?.hasPrefix("attachment") == true {
+        decisionHandler(.download)
+        return
+      }
+    }
     decisionHandler(.allow)
+  }
+
+  @available(macOS 11.3, *)
+  func webView(_ webView: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) {
+    download.delegate = self
+  }
+
+  @available(macOS 11.3, *)
+  func webView(_ webView: WKWebView, navigationResponse: WKNavigationResponse, didBecome download: WKDownload) {
+    download.delegate = self
+  }
+}
+
+/// Downloads ask where to save, as on Windows and Linux.
+@available(macOS 11.3, *)
+extension WebViewLayoutController: WKDownloadDelegate {
+  func download(_ download: WKDownload, decideDestinationUsing response: URLResponse, suggestedFilename: String, completionHandler: @escaping (URL?) -> Void) {
+    guard !isDestroyed, let window = view.window else {
+      completionHandler(nil)
+      return
+    }
+    let panel = NSSavePanel()
+    panel.nameFieldStringValue = suggestedFilename
+    panel.beginSheetModal(for: window) { result in
+      guard result == .OK, let url = panel.url else {
+        completionHandler(nil)
+        return
+      }
+      // The panel has confirmed replacing an existing file; WKDownload
+      // fails instead of overwriting it.
+      try? FileManager.default.removeItem(at: url)
+      completionHandler(url)
+    }
   }
 }
 

@@ -158,6 +158,13 @@ class WebView : public std::enable_shared_from_this<WebView> {
 
   void Emit(const std::string& method, flutter::EncodableMap args = {});
 
+  // Runs |task| from the host window's message loop, after the current
+  // WebView2 event handler has returned.
+  void RunAsync(std::function<void()> task);
+
+  // Asks where to save a download, or cancels it.
+  void ChooseDownloadPath(ICoreWebView2DownloadStartingEventArgs* args);
+
   // The last declined top-level URL, without its fragment. WebView2 may start
   // the document request before a NavigationStarting cancel takes effect, so
   // WebResourceRequested answers that request locally.

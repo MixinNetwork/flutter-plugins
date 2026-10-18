@@ -48,6 +48,50 @@ constexpr char kBridgeHandler[] = "desktopWebview";
 constexpr char kStartupHandler[] = "desktopWebviewStartup";
 constexpr char kStartupWorld[] = "desktopWebviewStartup";
 
+// Asks where to save a download, as on macOS and Windows. Runs before any
+// data is written; cancelling the chooser cancels the download.
+gboolean on_decide_destination(WebKitDownload *download,
+                               const gchar *suggested_filename,
+                               gpointer) {
+  auto *web_view = webkit_download_get_web_view(download);
+  GtkWidget *toplevel =
+      web_view ? gtk_widget_get_toplevel(GTK_WIDGET(web_view)) : nullptr;
+  GtkFileChooserNative *chooser = gtk_file_chooser_native_new(
+      nullptr, GTK_IS_WINDOW(toplevel) ? GTK_WINDOW(toplevel) : nullptr,
+      GTK_FILE_CHOOSER_ACTION_SAVE, nullptr, nullptr);
+  gtk_file_chooser_set_do_overwrite_confirmation(GTK_FILE_CHOOSER(chooser),
+                                                 TRUE);
+  const gchar *downloads =
+      g_get_user_special_dir(G_USER_DIRECTORY_DOWNLOAD);
+  if (downloads != nullptr) {
+    gtk_file_chooser_set_current_folder(GTK_FILE_CHOOSER(chooser), downloads);
+  }
+  if (suggested_filename != nullptr) {
+    gtk_file_chooser_set_current_name(GTK_FILE_CHOOSER(chooser),
+                                      suggested_filename);
+  }
+  if (gtk_native_dialog_run(GTK_NATIVE_DIALOG(chooser)) ==
+      GTK_RESPONSE_ACCEPT) {
+    g_autofree gchar *uri =
+        gtk_file_chooser_get_uri(GTK_FILE_CHOOSER(chooser));
+    webkit_download_set_allow_overwrite(download, TRUE);
+    webkit_download_set_destination(download, uri);
+  } else {
+    webkit_download_cancel(download);
+  }
+  g_object_unref(chooser);
+  return TRUE;
+}
+
+bool is_attachment(WebKitURIResponse *response) {
+  SoupMessageHeaders *headers = webkit_uri_response_get_http_headers(response);
+  if (headers == nullptr) return false;
+  const char *disposition =
+      soup_message_headers_get_one(headers, "Content-Disposition");
+  return disposition != nullptr &&
+         g_ascii_strncasecmp(disposition, "attachment", 10) == 0;
+}
+
 gboolean decide_policy_cb(WebKitWebView *web_view,
                           WebKitPolicyDecision *decision,
                           WebKitPolicyDecisionType type, gpointer user_data) {
@@ -146,6 +190,21 @@ WebviewWindow::WebviewWindow(EventSink emit,
   g_signal_connect(G_OBJECT(webview_), "create", G_CALLBACK(on_create), this);
   g_signal_connect(G_OBJECT(webview_), "decide-policy",
                    G_CALLBACK(decide_policy_cb), this);
+  // Downloads are reported by the shared web context; keep this view's own.
+  g_signal_connect(
+      webkit_web_view_get_context(WEBKIT_WEB_VIEW(webview_)),
+      "download-started",
+      G_CALLBACK(+[](WebKitWebContext *, WebKitDownload *download,
+                     gpointer arg) {
+        auto *window = static_cast<WebviewWindow *>(arg);
+        if (webkit_download_get_web_view(download) !=
+            WEBKIT_WEB_VIEW(window->webview_)) {
+          return;
+        }
+        g_signal_connect(download, "decide-destination",
+                         G_CALLBACK(on_decide_destination), nullptr);
+      }),
+      this);
   for (const char *property : {"notify::uri", "notify::title",
                                "notify::is-loading"}) {
     g_signal_connect(G_OBJECT(webview_), property,
@@ -290,6 +349,8 @@ void WebviewWindow::DisconnectCallbacks() {
         webkit_web_view_get_back_forward_list(WEBKIT_WEB_VIEW(webview_)),
         this);
     g_signal_handlers_disconnect_by_data(webview_, this);
+    g_signal_handlers_disconnect_by_data(
+        webkit_web_view_get_context(WEBKIT_WEB_VIEW(webview_)), this);
   }
   if (content_manager_ != nullptr && bridge_handler_id_ != 0) {
     g_signal_handler_disconnect(content_manager_, bridge_handler_id_);
@@ -533,6 +594,25 @@ void WebviewWindow::GetAllCookies(FlMethodCall *call) {
 gboolean WebviewWindow::DecidePolicy(WebKitPolicyDecision *decision,
                                      WebKitPolicyDecisionType type) {
   if (closing_ || closed_) return false;
+  if (type == WEBKIT_POLICY_DECISION_TYPE_RESPONSE) {
+    // WebKit ignores main documents it cannot show; download them instead,
+    // as on macOS and Windows.
+    auto *response_decision = WEBKIT_RESPONSE_POLICY_DECISION(decision);
+#ifndef WEBKIT_OLD_USED
+    if (!webkit_response_policy_decision_is_main_frame_main_resource(
+            response_decision)) {
+      return false;
+    }
+#endif
+    if (webkit_response_policy_decision_is_mime_type_supported(
+            response_decision) &&
+        !is_attachment(
+            webkit_response_policy_decision_get_response(response_decision))) {
+      return false;
+    }
+    webkit_policy_decision_download(decision);
+    return true;
+  }
   // Only top-level navigations are decided, as on the other platforms.
   if (type != WEBKIT_POLICY_DECISION_TYPE_NAVIGATION_ACTION) return false;
   if (skip_next_decision_) {

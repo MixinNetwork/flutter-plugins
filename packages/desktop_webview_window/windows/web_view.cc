@@ -6,6 +6,7 @@
 
 #include <tchar.h>
 #include <windows.h>
+#include <shobjidl.h>
 
 #include <cassert>
 #include <map>
@@ -20,10 +21,19 @@
 
 namespace webview_window {
 
+// Runs a task posted by WebView::RunAsync.
+constexpr UINT kRunTask = WM_APP + 1;
+
 // The host window is the composer's webview_view. WebView2 follows its size.
 static LRESULT CALLBACK WndProc(HWND const window, UINT const message,
                                 WPARAM const wparam,
                                 LPARAM const lparam) noexcept {
+  if (message == kRunTask) {
+    std::unique_ptr<std::function<void()>> task(
+        reinterpret_cast<std::function<void()>*>(lparam));
+    (*task)();
+    return 0;
+  }
   if (message == WM_ERASEBKGND) {
     auto* web_view =
         reinterpret_cast<WebView*>(GetWindowLongPtr(window, GWLP_USERDATA));
@@ -255,6 +265,38 @@ HRESULT WebView::OnWebviewControllerCreated() {
           })
           .Get(),
       nullptr);
+
+  wil::com_ptr<ICoreWebView2_4> webview4;
+  if (SUCCEEDED(webview_->QueryInterface(IID_PPV_ARGS(&webview4)))) {
+    // Downloads ask where to save, as on macOS and Linux. WebView2 keeps its
+    // download progress flyout.
+    webview4->add_DownloadStarting(
+        Callback<ICoreWebView2DownloadStartingEventHandler>(
+            [weak = weak_from_this()](
+                ICoreWebView2 *sender,
+                ICoreWebView2DownloadStartingEventArgs *args) {
+              auto self = weak.lock();
+              if (!self || self->closed_) return args->put_Cancel(TRUE);
+              wil::com_ptr<ICoreWebView2Deferral> deferral;
+              HRESULT hr = args->GetDeferral(&deferral);
+              if (FAILED(hr)) return hr;
+              // A modal dialog must not run inside a WebView2 event handler.
+              self->RunAsync([weak, args = wil::com_ptr<
+                                        ICoreWebView2DownloadStartingEventArgs>(args),
+                              deferral] {
+                auto self = weak.lock();
+                if (self && !self->closed_) {
+                  self->ChooseDownloadPath(args.get());
+                } else {
+                  args->put_Cancel(TRUE);
+                }
+                deferral->Complete();
+              });
+              return S_OK;
+            })
+            .Get(),
+        nullptr);
+  }
 
   if (deny_camera_and_microphone_) {
     // Answered here, so the request never reaches Windows' own privacy prompt.
@@ -728,6 +770,56 @@ void WebView::PostJavaScriptMessage(
 
 void WebView::setTriggerOnUrlRequestedEvent(const bool value) {
   this->triggerOnUrlRequestedEvent = value;
+}
+
+void WebView::RunAsync(std::function<void()> task) {
+  auto *posted = new std::function<void()>(std::move(task));
+  if (!view_window_ ||
+      !PostMessage(view_window_.get(), kRunTask, 0,
+                   reinterpret_cast<LPARAM>(posted))) {
+    (*posted)();
+    delete posted;
+  }
+}
+
+void WebView::ChooseDownloadPath(ICoreWebView2DownloadStartingEventArgs *args) {
+  // WebView2 proposes a path in the default download folder.
+  wil::unique_cotaskmem_string proposed;
+  args->get_ResultFilePath(&proposed);
+  std::wstring path = proposed ? proposed.get() : L"";
+  auto separator = path.find_last_of(L"\\/");
+  std::wstring folder =
+      separator == std::wstring::npos ? L"" : path.substr(0, separator);
+  std::wstring name =
+      separator == std::wstring::npos ? path : path.substr(separator + 1);
+
+  auto dialog = wil::CoCreateInstanceNoThrow<IFileSaveDialog>(CLSID_FileSaveDialog);
+  if (!dialog) {
+    args->put_Cancel(TRUE);
+    return;
+  }
+  wil::com_ptr<IShellItem> folder_item;
+  if (!folder.empty() &&
+      SUCCEEDED(SHCreateItemFromParsingName(folder.c_str(), nullptr,
+                                            IID_PPV_ARGS(&folder_item)))) {
+    dialog->SetFolder(folder_item.get());
+  }
+  dialog->SetFileName(name.c_str());
+  auto dot = name.find_last_of(L'.');
+  if (dot != std::wstring::npos) {
+    dialog->SetDefaultExtension(name.substr(dot + 1).c_str());
+  }
+
+  HWND owner = view_window_ ? GetAncestor(view_window_.get(), GA_ROOT) : nullptr;
+  wil::com_ptr<IShellItem> result;
+  wil::unique_cotaskmem_string chosen;
+  if (SUCCEEDED(dialog->Show(owner)) && SUCCEEDED(dialog->GetResult(&result)) &&
+      SUCCEEDED(result->GetDisplayName(SIGDN_FILESYSPATH, &chosen)) &&
+      !closed_) {
+    args->put_ResultFilePath(chosen.get());
+  } else {
+    args->put_Cancel(TRUE);
+  }
 }
 
 void WebView::Close() {
