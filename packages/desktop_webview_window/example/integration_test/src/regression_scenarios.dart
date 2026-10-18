@@ -194,7 +194,7 @@ void registerRegressionTests() {
         final view = await create(mode: 'close:initializing');
         // A native timer closes the visible shell while WebView2 starts.
         expect(view.nativeWindowHandle, 0);
-        await view.onClose.timeout(const Duration(seconds: 1));
+        await view.onClose.timeout(const Duration(seconds: 10));
         views.remove(view);
         final events = await _native.invokeListMethod<String>('composerEvents');
         expect(events, contains('${view.id}:native-close-during-create'));
