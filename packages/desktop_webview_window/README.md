@@ -93,6 +93,30 @@ the appearance before the window is shown, including its startup background.
 The default, null, follows the system. Use `setBrightness` to change it later.
 Linux follows the application's GTK theme.
 
+## Page dialogs, files and downloads
+
+The browser handles what pages expect from a browser, the same way on every
+platform:
+
+- `alert` and `confirm` open native dialogs on the browser window. `prompt`
+  goes to `setPromptHandler` on macOS.
+- `<input type="file">` opens the system file chooser.
+- Files the page cannot show, or that the server sends as an attachment, ask
+  where to save them before downloading. On macOS this needs macOS 11.3.
+- Links that open a new window, such as `target="_blank"` and `window.open`,
+  load in the same window and reach the [navigation decision](#navigation-decisions).
+- Right-clicking shows the WebView's default context menu. Its Inspect item
+  appears only after `openDevToolsWindow`. To disable the menu, add a script:
+
+```dart
+await webview.addScriptToExecuteOnDocumentCreated(
+    "document.addEventListener('contextmenu', e => e.preventDefault());");
+```
+
+Sandboxed macOS applications need the
+`com.apple.security.files.user-selected.read-write` entitlement for file
+choosers and downloads.
+
 ## Platform support
 
 | Feature | macOS | Windows | Linux |
