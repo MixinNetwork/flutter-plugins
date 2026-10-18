@@ -1,3 +1,7 @@
+## Unreleased
+
+* Migrate Android to built-in Kotlin and require Flutter 3.44 / Dart 3.12.
+
 ## 0.5.0
 
 * add SPM Support. [@vicajilau](https://github.com/MixinNetwork/flutter-plugins/pull/463)
