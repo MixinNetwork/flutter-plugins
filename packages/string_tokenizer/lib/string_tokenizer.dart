@@ -51,11 +51,13 @@ List<String> tokenize(
   range.ref.location = 0;
   range.ref.length = string.length;
 
+  final utf8 = string.toNativeUtf8();
   final cfString = _bindings.CFStringCreateWithCString(
     nullptr,
-    string.toNativeUtf8().cast(),
+    utf8.cast(),
     binding.CFStringBuiltInEncodings.kCFStringEncodingUTF8.value,
   );
+  malloc.free(utf8);
 
   int optionsInt = 0;
   for (final option in options) {
