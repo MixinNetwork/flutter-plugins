@@ -226,9 +226,10 @@ class DemoState extends ChangeNotifier {
         log('Navigate: $value', id);
         return true;
       });
-      view.addJavaScriptHandler('demo', (data) {
-        window.results[DemoPanel.messages] = 'Page → Flutter\n$data';
-        log('Page message: $data', id);
+      view.addJavaScriptHandler('demo', (data, origin) {
+        window.results[DemoPanel.messages] =
+            'Page → Flutter\n$data\nfrom $origin';
+        log('Page message from $origin: $data', id);
       });
       if (Platform.isMacOS) {
         view.setPromptHandler((prompt, text) {

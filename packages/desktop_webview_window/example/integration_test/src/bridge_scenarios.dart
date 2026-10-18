@@ -22,18 +22,40 @@ void registerBridgeTests() {
   late HttpServer server;
   final views = <Webview>[];
 
+  late HttpServer frameServer;
+
   setUp(() async {
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-    server.listen((request) async {
+    frameServer = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    // dart:io sends X-Frame-Options: SAMEORIGIN by default.
+    frameServer.defaultResponseHeaders.removeAll('x-frame-options');
+    Future<void> respond(HttpRequest request) async {
       request.response.headers.contentType = ContentType.html;
-      request.response.write(
-          '<!doctype html><title>${request.uri.path}</title><body></body>');
+      request.response.write(switch (request.uri.path) {
+        // Another port is another origin.
+        '/with-frame' => '<!doctype html><title>with-frame</title><body>'
+            '<iframe src="http://127.0.0.1:'
+            '${request.uri.queryParameters['port']}/frame"></iframe>',
+        '/frame' => '<!doctype html><script>'
+            'const forged = JSON.stringify({name: "ping", data: "frame"});'
+            'try { webkit.messageHandlers.desktopWebview.postMessage(forged); }'
+            ' catch (_) {}'
+            'try { chrome.webview.postMessage(forged); } catch (_) {}'
+            'try { desktopWebview.postMessage("ping", "frame"); } catch (_) {}'
+            'parent.postMessage("sent", "*");'
+            '</script>',
+        _ => '<!doctype html><title>${request.uri.path}</title><body></body>',
+      });
       await request.response.close();
-    });
+    }
+
+    server.listen(respond);
+    frameServer.listen(respond);
   });
 
   tearDown(() async {
     await server.close(force: true);
+    await frameServer.close(force: true);
   });
 
   String url(String path) => 'http://127.0.0.1:${server.port}$path';
@@ -76,7 +98,11 @@ void registerBridgeTests() {
     await runScenario(tester, () async {
       final view = await create();
       final received = Completer<Object?>();
-      view.addJavaScriptHandler('ping', received.complete);
+      String? origin;
+      view.addJavaScriptHandler('ping', (data, from) {
+        origin = from;
+        received.complete(data);
+      });
       await view.launch(url('/bridge'));
       await _waitFor(view, 'location.pathname', '/bridge');
       await _waitFor(view, 'typeof window.desktopWebview', 'object');
@@ -90,8 +116,35 @@ void registerBridgeTests() {
         'value': 42,
         'list': [1, 'a'],
       });
+      expect(origin, 'http://127.0.0.1:${server.port}');
       await view.postMessage('pong', {'ok': true});
       await _waitFor(view, 'window.pong && window.pong.ok', true);
+    });
+  });
+
+  testWidgets('only the top-level document reaches JavaScript handlers',
+      (tester) async {
+    await runScenario(tester, () async {
+      final view = await create();
+      final received = <Object?>[];
+      view.addJavaScriptHandler('ping', (data, origin) {
+        received.add([data, origin]);
+      });
+      await view.addScriptToExecuteOnDocumentCreated(
+          "addEventListener('message', e => { window.frameSent = e.data; });");
+      await view.launch(url('/with-frame?port=${frameServer.port}'));
+      await _waitFor(view, 'window.frameSent', 'sent');
+      await view.evaluateJavaScript(
+          "window.desktopWebview.postMessage('ping', 'top')");
+      final deadline = DateTime.now().add(const Duration(seconds: 10));
+      while (received.isEmpty && DateTime.now().isBefore(deadline)) {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }
+      // Frame messages, if any were accepted, would have arrived first.
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      expect(received, [
+        ['top', 'http://127.0.0.1:${server.port}'],
+      ]);
     });
   });
 

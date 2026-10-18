@@ -137,8 +137,8 @@ the host also uses the host as the window title. For a different layout, see
 
 ## Talking to the page
 
-Every page gets the same `window.desktopWebview` object on macOS, Windows and
-Linux. Messages carry any JSON-encodable value.
+Every top-level page gets the same `window.desktopWebview` object on macOS,
+Windows and Linux. Messages carry any JSON-encodable value.
 
 ```js
 // In the page
@@ -147,9 +147,18 @@ window.desktopWebview.addEventListener('theme', data => applyTheme(data));
 ```
 
 ```dart
-webview.addJavaScriptHandler('login', (data) => print(data)); // {token: abc}
+webview.addJavaScriptHandler('login', (data, origin) {
+  if (origin != 'https://app.example.com') return;
+  print(data); // {token: abc}
+});
 await webview.postMessage('theme', {'dark': true});
 ```
+
+The bridge is available to every page the browser navigates to, including
+pages a user reaches through links. `origin` identifies the sending document
+as `scheme://host[:port]`, `file://` for local files or `null` for opaque
+origins; check it before a handler acts on behalf of a trusted page. Messages
+from iframes never reach handlers.
 
 `evaluateJavaScript` returns the decoded result (`Map`, `List`, `String`, `num`,
 `bool` or `null`). `addScriptToExecuteOnDocumentCreated` runs a script in every
@@ -343,7 +352,7 @@ deprecated.
 
 | Removed API | Replacement |
 | --- | --- |
-| `registerJavaScriptMessageHandler(name, (name, body) {...})` | `addJavaScriptHandler(name, (data) {...})`; the page calls `window.desktopWebview.postMessage(name, data)` |
+| `registerJavaScriptMessageHandler(name, (name, body) {...})` | `addJavaScriptHandler(name, (data, origin) {...})`; the page calls `window.desktopWebview.postMessage(name, data)` |
 | `unregisterJavaScriptMessageHandler` | `removeJavaScriptHandler` |
 | `postWebMessageAsString` / `postWebMessageAsJson` | `postMessage(name, data)`; the page listens with `window.desktopWebview.addEventListener(name, ...)` |
 | `addOnWebMessageReceivedCallback` and related | `addJavaScriptHandler` |

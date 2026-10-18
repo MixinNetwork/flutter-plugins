@@ -10,14 +10,21 @@ import 'native_transport.dart';
 import 'webview.dart';
 
 class WebviewImpl extends Webview {
-  WebviewImpl(this.id, {required int windowHandle, NativeTransport? transport})
-      : _windowHandle = windowHandle,
+  WebviewImpl(
+    this.id, {
+    required int windowHandle,
+    this.bridgeToken = '',
+    NativeTransport? transport,
+  })  : _windowHandle = windowHandle,
         _transport = transport ?? NativeTransport.instance;
 
   @override
   final int id;
 
   final NativeTransport _transport;
+
+  /// Prefix of messages from this browser's JavaScript bridge.
+  final String bridgeToken;
 
   final Map<String, JavaScriptMessageHandler> _javaScriptHandlers = {};
 
@@ -72,11 +79,14 @@ class WebviewImpl extends Webview {
     _closeCompleter.complete();
   }
 
-  void onJavaScriptMessage(String raw) {
+  /// [source] is the URL or origin of the sending document, as reported by
+  /// native code.
+  void onJavaScriptMessage(String raw, String? source) {
     if (_closed) return;
-    final message = decodeJavaScriptMessage(raw);
+    final message = decodeJavaScriptMessage(raw, bridgeToken);
     if (message == null) return;
-    _javaScriptHandlers[message.name]?.call(message.data);
+    _javaScriptHandlers[message.name]
+        ?.call(message.data, javaScriptMessageOrigin(source));
   }
 
   String onPrompt(String prompt, String defaultText) =>

@@ -302,6 +302,14 @@ void WebviewWindow::OnBridgeMessage(WebKitJavascriptResult *result) {
   if (message == nullptr) return;
   g_autoptr(FlValue) args = fl_value_new_map();
   fl_value_set_string_take(args, "message", fl_value_new_string(message));
+  // WebKitGTK does not report the sending frame. Every frame can post to the
+  // handler; Dart drops messages without the top-level bridge's token, and
+  // messages are delivered in order with navigations, so the current URI is
+  // the sending document's.
+  const gchar *uri = webkit_web_view_get_uri(WEBKIT_WEB_VIEW(webview_));
+  if (uri != nullptr) {
+    fl_value_set_string_take(args, "source", fl_value_new_string(uri));
+  }
   Emit("onJavaScriptMessage", args);
 }
 

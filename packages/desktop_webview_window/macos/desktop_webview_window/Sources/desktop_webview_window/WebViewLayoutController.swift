@@ -454,7 +454,11 @@ extension WebViewLayoutController: WKScriptMessageHandler {
           let body = message.body as? String else {
       return
     }
-    channel.invokeMethod("onJavaScriptMessage", arguments: ["id": viewId, "message": body])
+    let origin = message.frameInfo.securityOrigin
+    var source = "\(origin.protocol)://\(origin.host)"
+    if origin.port != 0 { source += ":\(origin.port)" }
+    channel.invokeMethod(
+      "onJavaScriptMessage", arguments: ["id": viewId, "message": body, "source": source])
   }
 }
 

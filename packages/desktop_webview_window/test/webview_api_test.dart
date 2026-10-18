@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:desktop_webview_window/desktop_webview_window.dart';
 import 'package:desktop_webview_window/src/js_bridge.dart';
 import 'package:desktop_webview_window/src/browser_runtime.dart';
+import 'package:desktop_webview_window/src/webview_impl.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -55,7 +56,9 @@ void main() {
       ),
     );
     final arguments = calls.single.arguments as Map;
-    expect(arguments['javaScriptBridge'], javaScriptBridgeSource);
+    final token = (browsers.values.single).bridgeToken;
+    expect(token, matches(RegExp(r'^[0-9a-f]{32}$')));
+    expect(arguments['javaScriptBridge'], javaScriptBridgeSource(token));
     expect(arguments['openHidden'], isTrue);
     expect(arguments['brightness'], 0);
     expect(arguments['userDataFolderWindows'], 'profile');
@@ -78,31 +81,56 @@ void main() {
     expect(arguments['brightness'], -1);
   });
 
-  test('page messages reach the named handler with decoded data', () async {
+  test('page messages reach the named handler with decoded data and origin',
+      () async {
     final webview = await create();
+    final token = (webview as WebviewImpl).bridgeToken;
     final received = <Object?>[];
-    webview.addJavaScriptHandler('login', received.add);
-    await sendBrowserEvent('onJavaScriptMessage', {
-      'id': webview.id,
-      'message': jsonEncode({
-        'name': 'login',
-        'data': {'token': 'x'}
-      }),
-    });
-    await sendBrowserEvent('onJavaScriptMessage', {
-      'id': webview.id,
-      'message': jsonEncode({'name': 'other', 'data': 1}),
-    });
-    await sendBrowserEvent(
-        'onJavaScriptMessage', {'id': webview.id, 'message': 'not json'});
+    webview.addJavaScriptHandler(
+        'login', (data, origin) => received.add([data, origin]));
+    Future<void> send(String message, [String? source]) =>
+        sendBrowserEvent('onJavaScriptMessage', {
+          'id': webview.id,
+          'message': message,
+          'source': source,
+        });
+    await send(
+        token +
+            jsonEncode({
+              'name': 'login',
+              'data': {'token': 'x'}
+            }),
+        'https://example.com/login?next=/');
+    await send(token + jsonEncode({'name': 'other', 'data': 1}));
+    await send('${token}not json');
+    // Frames without the bridge cannot know the token.
+    await send(jsonEncode({'name': 'login', 'data': 'forged'}),
+        'https://example.com/');
     webview.removeJavaScriptHandler('login');
-    await sendBrowserEvent('onJavaScriptMessage', {
-      'id': webview.id,
-      'message': jsonEncode({'name': 'login', 'data': 2}),
-    });
+    await send(token + jsonEncode({'name': 'login', 'data': 2}));
     expect(received, [
-      {'token': 'x'}
+      [
+        {'token': 'x'},
+        'https://example.com'
+      ],
     ]);
+  });
+
+  test('message origins are serialized like the web platform', () {
+    expect(javaScriptMessageOrigin('https://Example.com:443/a'),
+        'https://example.com');
+    expect(javaScriptMessageOrigin('http://127.0.0.1:8080/x'),
+        'http://127.0.0.1:8080');
+    expect(javaScriptMessageOrigin('file:///tmp/index.html'), 'file://');
+    expect(javaScriptMessageOrigin('about:blank'), 'null');
+    expect(javaScriptMessageOrigin('data:text/html,hi'), 'null');
+    expect(javaScriptMessageOrigin(null), 'null');
+  });
+
+  test('each browser gets its own bridge token', () async {
+    final first = await create() as WebviewImpl;
+    final second = await create() as WebviewImpl;
+    expect(first.bridgeToken, isNot(second.bridgeToken));
   });
 
   test('postMessage sends the JSON message and its WebKit dispatch script',
