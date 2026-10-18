@@ -89,8 +89,8 @@ enum DefaultComposer {
       let title = state.title.map { String(cString: $0) } ?? ""
       let host = state.url.flatMap { URL(string: String(cString: $0))?.host } ?? ""
       let pageTitle = title.isEmpty ? fallbackTitle : title
-      // The window title also names the window in the Dock and Window menu,
-      // so it follows the page even when the title bar hides it.
+      // The native title also names the window in the Dock and Window menu.
+      // Showing only the host therefore uses it as the window title too.
       window.title = has(DWW_TITLE_BAR_TITLE) || !has(DWW_TITLE_BAR_HOST) ? pageTitle : host
       if #available(macOS 11.0, *) {
         window.subtitle = has(DWW_TITLE_BAR_TITLE) && has(DWW_TITLE_BAR_HOST) ? host : ""

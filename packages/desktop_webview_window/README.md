@@ -121,9 +121,10 @@ CreateConfiguration(
 )
 ```
 
-The window title follows the page title, so the Dock, taskbar and window
-switchers name the page even when the title bar hides it. For a different
-layout, see [Custom window layout](#custom-window-layout).
+By default, the window title follows the page title, so the Dock, taskbar and
+window switchers name the page. On macOS, hiding the page title while showing
+the host also uses the host as the window title. For a different layout, see
+[Custom window layout](#custom-window-layout).
 
 ## Talking to the page
 
