@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:desktop_webview_window/desktop_webview_window.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'demo_page_server.dart';
 
@@ -75,6 +76,7 @@ class DemoState extends ChangeNotifier {
   int _nextId = 0;
   bool creating = false;
   bool? available;
+  ThemeMode themeMode = ThemeMode.system;
   bool _disposed = false;
 
   DemoWindow? get selected {
@@ -117,6 +119,43 @@ class DemoState extends ChangeNotifier {
     _changed();
   }
 
+  Brightness? get _brightness => switch (themeMode) {
+        ThemeMode.dark => Brightness.dark,
+        ThemeMode.light => Brightness.light,
+        ThemeMode.system => null,
+      };
+
+  /// The app menu overrides every browser, including any per-window choice.
+  Future<void> setThemeMode(ThemeMode mode) async {
+    themeMode = mode;
+    _changed();
+    if (Platform.isLinux) {
+      try {
+        // GTK's appearance is app-wide, unlike the per-window APIs on Cocoa
+        // and WebView2. This also updates existing WebKit media queries.
+        await const MethodChannel('webview_example/native_test').invokeMethod(
+            'setAppTheme', {'brightness': _brightness?.index ?? -1});
+        for (final window in windows) {
+          if (themeMode == mode) window.appearance = mode;
+        }
+      } catch (error) {
+        log('App theme failed: $error');
+      }
+    } else {
+      await Future.wait(List.of(windows).map((window) async {
+        try {
+          await window.webview.setBrightness(_brightness);
+          if (themeMode == mode) window.appearance = mode;
+        } catch (error) {
+          if (windows.contains(window)) {
+            log('Appearance failed: $error', window.id);
+          }
+        }
+      }));
+    }
+    _changed();
+  }
+
   /// Accepts `mixin.one` as `https://mixin.one`; null when not http(s).
   static String? normalizeUrl(String input) {
     final text = input.trim();
@@ -141,6 +180,7 @@ class DemoState extends ChangeNotifier {
     _changed();
     try {
       final id = ++_nextId;
+      final initialTheme = themeMode;
       final view = await WebviewWindow.create(
         configuration: CreateConfiguration(
           title: 'Browser $id',
@@ -150,6 +190,7 @@ class DemoState extends ChangeNotifier {
           composerArguments:
               options.layout == DemoLayout.sidebar ? 'sidebar' : null,
           openHidden: options.openHidden,
+          brightness: _brightness,
           windows: WindowsWebviewOptions(
             userDataFolder: userDataFolder,
             denyCameraAndMicrophone: options.denyMedia,
@@ -161,6 +202,7 @@ class DemoState extends ChangeNotifier {
         return;
       }
       final window = DemoWindow(id, view, custom ?? pages.url(id), options);
+      window.appearance = themeMode;
       windows.add(window);
       selectedId = id;
       window.navigationListener = () {
@@ -196,6 +238,10 @@ class DemoState extends ChangeNotifier {
         }
         log('Closed', id);
       }));
+      // A cold WebView2 create can span a theme change in the app menu.
+      if (initialTheme != themeMode && !Platform.isLinux) {
+        await view.setBrightness(_brightness);
+      }
       log(
           '${options.openHidden ? 'Created hidden window' : 'Created window'}'
           ' · ${options.layout.label}',

@@ -9,6 +9,21 @@ import Cocoa
 import FlutterMacOS
 import WebKit
 
+/// Paints the fallback behind transparent WebKit content in the window's theme.
+private final class WebViewBackground: NSView {
+  override func draw(_ dirtyRect: NSRect) {
+    NSColor.textBackgroundColor.setFill()
+    dirtyRect.fill()
+  }
+
+  override func viewDidChangeEffectiveAppearance() {
+    if #available(macOS 10.14, *) {
+      super.viewDidChangeEffectiveAppearance()
+    }
+    needsDisplay = true
+  }
+}
+
 /// Navigation state shared with Dart and the window's composer.
 struct NavigationState: Equatable {
   var canGoBack = false
@@ -22,7 +37,11 @@ struct NavigationState: Equatable {
 /// webview_view; the WebView itself and its delegates stay private.
 class WebViewLayoutController: NSViewController {
   private lazy var webView: WKWebView = {
-    WKWebView()
+    let view = WKWebView()
+    // WKWebView has no public macOS canvas setter; use WebKit's KVC switch.
+    // underPageBackgroundColor alone does not remove the white page canvas.
+    view.setValue(false, forKey: "drawsBackground")
+    return view
   }()
 
   private static let bridgeHandlerName = "desktopWebview"
@@ -37,6 +56,10 @@ class WebViewLayoutController: NSViewController {
   private var observesNavigation = false
 
   private var isDestroyed = false
+
+  // Only the first document needs a themed placeholder. Once WebKit has a
+  // document, its normal canvas must respect that document's color-scheme.
+  private var showsStartupBackground = true
 
   private var defaultUserAgent: String?
 
@@ -64,7 +87,7 @@ class WebViewLayoutController: NSViewController {
   }
 
   override func loadView() {
-    let container = NSView()
+    let container = WebViewBackground()
     view = container
     guard !isDestroyed else { return }
     container.addSubview(webView)
@@ -254,6 +277,22 @@ class WebViewLayoutController: NSViewController {
 }
 
 extension WebViewLayoutController: WKNavigationDelegate {
+  private func finishStartupBackground() {
+    guard showsStartupBackground else { return }
+    showsStartupBackground = false
+    webView.setValue(true, forKey: "drawsBackground")
+  }
+
+  func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+    finishStartupBackground()
+  }
+
+  func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+    // A failure after commit still leaves a document. Provisional failures
+    // and rejected navigations have no document and keep the placeholder.
+    finishStartupBackground()
+  }
+
   func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
     guard let url = navigationAction.request.url else {
       decisionHandler(.cancel)

@@ -84,6 +84,10 @@ input in borderless browser windows.
 
 Creation-time placement stays in `CreateConfiguration`: `openHidden`,
 `openMaximized`, and `useWindowPositionAndSize` with `windowPosX`/`windowPosY`.
+On macOS and Windows, `CreateConfiguration(brightness: Brightness.dark)` applies
+the appearance before the window is shown, including its startup background.
+The default, null, follows the system. Use `setBrightness` to change it later.
+Linux follows the application's GTK theme.
 
 ## Platform support
 

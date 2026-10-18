@@ -33,7 +33,12 @@ layout and the system titlebar. Layouts:
 Windows also offers hidden creation and camera/microphone denial. Below 760
 logical pixels the window list becomes a dropdown. The Window panel sets the
 per-window appearance on macOS and Windows and opens DevTools on Windows and
-Linux.
+Linux. The app theme menu in the header switches the control panel and all open
+browser windows between System, Light and Dark. New windows start in the current
+app theme, including their startup background before the first page loads.
+Changing the app theme also replaces any per-window appearance override. On
+Linux this uses the example process's GTK theme; it does not change the desktop
+settings.
 
 ## Tests
 

@@ -47,6 +47,7 @@ void main() {
     await WebviewWindow.create(
       configuration: const CreateConfiguration(
         openHidden: true,
+        brightness: Brightness.dark,
         windows: WindowsWebviewOptions(
           userDataFolder: 'profile',
           denyCameraAndMicrophone: true,
@@ -56,6 +57,7 @@ void main() {
     final arguments = calls.single.arguments as Map;
     expect(arguments['javaScriptBridge'], javaScriptBridgeSource);
     expect(arguments['openHidden'], isTrue);
+    expect(arguments['brightness'], 0);
     expect(arguments['userDataFolderWindows'], 'profile');
     expect(arguments['denyCameraAndMicrophone'], isTrue);
     expect(arguments['titleBar'], 15);
@@ -73,6 +75,7 @@ void main() {
     final arguments = calls.single.arguments as Map;
     expect(arguments['titleBar'], 2 | 4);
     expect(arguments['composerArguments'], '{"layout":"sidebar"}');
+    expect(arguments['brightness'], -1);
   });
 
   test('page messages reach the named handler with decoded data', () async {

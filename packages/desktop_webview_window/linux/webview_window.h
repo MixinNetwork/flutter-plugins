@@ -93,6 +93,7 @@ class WebviewWindow : public dww::Browser {
   void OnBridgeMessage(WebKitJavascriptResult *result);
   void PublishNavigationState();
   void DeliverClosing();
+  void FinishStartupBackground();
 
   EventSink emit_;
   NavigationRequest request_navigation_;
@@ -105,6 +106,11 @@ class WebviewWindow : public dww::Browser {
   // Holds the WebView; handed to the composer as webview_view.
   GtkWidget *container_ = nullptr;
   GtkWidget *webview_ = nullptr;
+  // Owned by container_, removed once the first document can render.
+  GtkWidget *startup_cover_ = nullptr;
+  bool document_committed_ = false;
+  WebKitUserScript *startup_script_ = nullptr;
+  gulong startup_handler_id_ = 0;
   WebKitUserContentManager *content_manager_ = nullptr;
   GCancellable *javascript_cancellable_ = nullptr;
   dww::ComposerBinding composer_;

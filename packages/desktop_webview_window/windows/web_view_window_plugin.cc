@@ -88,6 +88,7 @@ void WebviewWindowPlugin::Create(const Map& arguments,
     return;
   }
   WebviewWindow::Options options;
+  options.brightness = static_cast<int>(Integer(arguments, "brightness", -1));
   const auto* title = String(arguments, "title");
   options.title = utf8_to_wide(title ? *title : std::string());
   options.width = static_cast<int>(Integer(arguments, "windowWidth", 1280));

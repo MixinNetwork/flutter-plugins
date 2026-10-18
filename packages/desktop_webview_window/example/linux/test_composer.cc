@@ -2,6 +2,7 @@
 
 #include <desktop_webview_window/webview_window_composer.h>
 #include <gtk/gtk.h>
+#include <webkit2/webkit2.h>
 
 #include <cstring>
 #include <map>
@@ -145,6 +146,42 @@ FlMethodResponse* Handle(FlMethodCall* call) {
     events.clear();
     return FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
   }
+  if (strcmp(method, "gtkTheme") == 0) {
+    GtkSettings* settings = gtk_settings_get_default();
+    gchar* name = nullptr;
+    gboolean dark = FALSE;
+    g_object_get(settings, "gtk-theme-name", &name,
+                 "gtk-application-prefer-dark-theme", &dark, nullptr);
+    g_autoptr(FlValue) previous = fl_value_new_map();
+    fl_value_set_string_take(previous, "name", fl_value_new_string(name ? name : ""));
+    fl_value_set_string_take(previous, "dark", fl_value_new_bool(dark));
+    g_free(name);
+    FlValue* new_name = fl_value_lookup_string(args, "name");
+    FlValue* new_dark = fl_value_lookup_string(args, "dark");
+    if (new_name && new_dark) {
+      g_object_set(settings, "gtk-theme-name", fl_value_get_string(new_name),
+                   "gtk-application-prefer-dark-theme", fl_value_get_bool(new_dark), nullptr);
+    }
+    return FL_METHOD_RESPONSE(fl_method_success_response_new(previous));
+  }
+  if (strcmp(method, "setAppTheme") == 0) {
+    GtkSettings* settings = gtk_settings_get_default();
+    const auto brightness = fl_value_get_int(fl_value_lookup_string(args, "brightness"));
+    // Drop application overrides so System resumes following the desktop.
+    gtk_settings_reset_property(settings, "gtk-theme-name");
+    gtk_settings_reset_property(settings, "gtk-application-prefer-dark-theme");
+    if (brightness >= 0) {
+      g_autofree gchar* theme = nullptr;
+      g_object_get(settings, "gtk-theme-name", &theme, nullptr);
+      // Some desktops select the dark variant by name instead of preference.
+      if (theme && g_str_has_suffix(theme, "-dark")) {
+        theme[strlen(theme) - strlen("-dark")] = '\0';
+        g_object_set(settings, "gtk-theme-name", theme, nullptr);
+      }
+      g_object_set(settings, "gtk-application-prefer-dark-theme", brightness == 0, nullptr);
+    }
+    return FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
+  }
   GtkWidget* window = WindowArgument(args);
   if (window == nullptr || !GTK_IS_WINDOW(window)) {
     return FL_METHOD_RESPONSE(
@@ -207,6 +244,29 @@ FlMethodResponse* Handle(FlMethodCall* call) {
 
 }  // namespace
 
+// Read rendered pixels, rather than get_background_color(), which returns
+// white for both an unset override and an explicit white override.
+static void RespondPixel(FlMethodCall* call, cairo_surface_t* surface) {
+  if (!surface || cairo_surface_get_type(surface) != CAIRO_SURFACE_TYPE_IMAGE) {
+    fl_method_call_respond_error(call, "no_snapshot", "No rendered image", nullptr, nullptr);
+    return;
+  }
+  cairo_surface_flush(surface);
+  const int x = cairo_image_surface_get_width(surface) / 2;
+  const int y = cairo_image_surface_get_height(surface) / 2;
+  const auto* row = reinterpret_cast<const uint32_t*>(
+      cairo_image_surface_get_data(surface) + y * cairo_image_surface_get_stride(surface));
+  const uint32_t pixel = row[x];
+  g_autoptr(FlValue) values = fl_value_new_list();
+  for (int shift : {16, 8, 0}) {
+    fl_value_append_take(values, fl_value_new_float(((pixel >> shift) & 255) / 255.0));
+  }
+  const double alpha = cairo_image_surface_get_format(surface) == CAIRO_FORMAT_RGB24
+      ? 1.0 : ((pixel >> 24) & 255) / 255.0;
+  fl_value_append_take(values, fl_value_new_float(alpha));
+  fl_method_call_respond_success(call, values, nullptr);
+}
+
 void test_composer_install() {
   static const DWWComposer composer{nullptr, Compose, NavigationChanged,
                                     nullptr, Closing};
@@ -221,6 +281,38 @@ void test_composer_register_channel(FlBinaryMessenger* messenger) {
   fl_method_channel_set_method_call_handler(
       channel,
       [](FlMethodChannel*, FlMethodCall* call, gpointer) {
+        const char* method = fl_method_call_get_name(call);
+        if (strcmp(method, "webviewPixel") == 0 || strcmp(method, "startupPixel") == 0) {
+          GtkWidget* window = WindowArgument(fl_method_call_get_args(call));
+          const auto views = window ? Find(window, "WebKitWebView") : std::vector<GtkWidget*>();
+          if (views.empty()) {
+            fl_method_call_respond_error(call, "no_webview", "No WebView", nullptr, nullptr);
+            return;
+          }
+          if (strcmp(method, "startupPixel") == 0) {
+            GtkWidget* container = gtk_widget_get_parent(views.front());
+            cairo_surface_t* image = cairo_image_surface_create(CAIRO_FORMAT_ARGB32,
+                gtk_widget_get_allocated_width(container), gtk_widget_get_allocated_height(container));
+            cairo_t* cr = cairo_create(image);
+            gtk_widget_draw(container, cr);
+            cairo_destroy(cr);
+            RespondPixel(call, image);
+            cairo_surface_destroy(image);
+            return;
+          }
+          webkit_web_view_get_snapshot(WEBKIT_WEB_VIEW(views.front()),
+              WEBKIT_SNAPSHOT_REGION_VISIBLE, WEBKIT_SNAPSHOT_OPTIONS_NONE, nullptr,
+              +[](GObject* source, GAsyncResult* result, gpointer data) {
+                g_autoptr(FlMethodCall) call = FL_METHOD_CALL(data);
+                GError* error = nullptr;
+                cairo_surface_t* image = webkit_web_view_get_snapshot_finish(
+                    WEBKIT_WEB_VIEW(source), result, &error);
+                RespondPixel(call, image);
+                if (image) cairo_surface_destroy(image);
+                g_clear_error(&error);
+              }, g_object_ref(call));
+          return;
+        }
         g_autoptr(FlMethodResponse) response = Handle(call);
         fl_method_call_respond(call, response, nullptr);
       },

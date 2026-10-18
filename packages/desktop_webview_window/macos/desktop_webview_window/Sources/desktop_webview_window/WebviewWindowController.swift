@@ -26,6 +26,7 @@ final class WebviewWindowController: NSWindowController {
     let y: Int
     let usePosition: Bool
     let title: String
+    let brightness: Int
     let titleBar: UInt32
     let composerArguments: String?
     let javaScriptBridge: String?
@@ -73,6 +74,7 @@ final class WebviewWindowController: NSWindowController {
       newWindow.center()
     }
     window = newWindow
+    setAppearance(brightness: options.brightness)
   }
 
   required init?(coder: NSCoder) {

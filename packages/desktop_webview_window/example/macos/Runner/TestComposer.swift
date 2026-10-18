@@ -146,6 +146,30 @@ enum TestComposer {
       }
       content.layoutSubtreeIfNeeded()
       switch call.method {
+      case "webviewPixel", "startupPixel":
+        guard let webView = descendants(of: content, WKWebView.self).first else {
+          result(FlutterError(code: "no_webview", message: "No WebView", details: nil))
+          return
+        }
+        func pixel(_ image: NSBitmapImageRep?) {
+          guard let image = image,
+                let color = image.colorAt(x: image.pixelsWide / 2, y: image.pixelsHigh / 2)?
+                  .usingColorSpace(.deviceRGB) else {
+            result(FlutterError(code: "no_snapshot", message: "No rendered image", details: nil))
+            return
+          }
+          result([color.redComponent, color.greenComponent, color.blueComponent, color.alphaComponent])
+        }
+        if call.method == "startupPixel", let container = webView.superview {
+          let image = container.bitmapImageRepForCachingDisplay(in: container.bounds)
+          if let image = image { container.cacheDisplay(in: container.bounds, to: image) }
+          pixel(image)
+        } else {
+          webView.takeSnapshot(with: nil) { image, _ in
+            pixel(image?.cgImage(forProposedRect: nil, context: nil, hints: nil)
+              .map { NSBitmapImageRep(cgImage: $0) })
+          }
+        }
       case "geometry":
         guard let webView = descendants(of: content, WKWebView.self).first else {
           result(FlutterError(code: "no_webview", message: "No WebView", details: nil))

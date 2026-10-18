@@ -41,17 +41,29 @@ class _DemoAppState extends State<DemoApp> {
   }
 
   @override
-  Widget build(BuildContext context) => MaterialApp(
-        debugShowCheckedModeBanner: false,
-        theme: _theme(Brightness.light),
-        darkTheme: _theme(Brightness.dark),
-        home: _Home(state: widget.state),
-      );
+  Widget build(BuildContext context) => ListenableBuilder(
+      listenable: widget.state,
+      builder: (context, _) => MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: _theme(Brightness.light),
+            darkTheme: _theme(Brightness.dark),
+            themeMode: widget.state.themeMode,
+            home: _Home(
+              state: widget.state,
+              themeMode: widget.state.themeMode,
+              onThemeChanged: widget.state.setThemeMode,
+            ),
+          ));
 }
 
 class _Home extends StatefulWidget {
-  const _Home({required this.state});
+  const _Home(
+      {required this.state,
+      required this.themeMode,
+      required this.onThemeChanged});
   final DemoState state;
+  final ThemeMode themeMode;
+  final ValueChanged<ThemeMode> onThemeChanged;
 
   @override
   State<_Home> createState() => _HomeState();
@@ -97,7 +109,7 @@ class _HomeState extends State<_Home> {
           child: Scaffold(
             appBar: AppBar(
               title: const Text('Desktop WebView'),
-              actions: [_runtime(), const SizedBox(width: 12)],
+              actions: [_themeMenu(), _runtime(), const SizedBox(width: 12)],
             ),
             body: LayoutBuilder(builder: (context, constraints) {
               final wide = constraints.maxWidth >= 760;
@@ -121,6 +133,33 @@ class _HomeState extends State<_Home> {
             }),
           ),
         ),
+      );
+
+  Widget _themeMenu() => PopupMenuButton<ThemeMode>(
+        tooltip: 'App theme: ${switch (widget.themeMode) {
+          ThemeMode.system => 'System',
+          ThemeMode.light => 'Light',
+          ThemeMode.dark => 'Dark',
+        }}',
+        icon: Icon(switch (widget.themeMode) {
+          ThemeMode.system => Icons.brightness_auto,
+          ThemeMode.light => Icons.light_mode,
+          ThemeMode.dark => Icons.dark_mode,
+        }),
+        initialValue: widget.themeMode,
+        onSelected: widget.onThemeChanged,
+        itemBuilder: (context) => [
+          for (final (mode, label) in [
+            (ThemeMode.system, 'System'),
+            (ThemeMode.light, 'Light'),
+            (ThemeMode.dark, 'Dark'),
+          ])
+            CheckedPopupMenuItem(
+              value: mode,
+              checked: widget.themeMode == mode,
+              child: Text(label),
+            ),
+        ],
       );
 
   Widget _runtime() {

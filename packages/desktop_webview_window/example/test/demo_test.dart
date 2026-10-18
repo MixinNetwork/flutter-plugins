@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:desktop_webview_window/src/webview_impl.dart';
 import 'package:flutter/material.dart';
@@ -12,15 +13,23 @@ import 'package:webview_window_example/demo_state.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   const channel = MethodChannel('desktop_webview_window');
+  const native = MethodChannel('webview_example/native_test');
   late DemoPageServer pages;
   late DemoState state;
   late List<MethodCall> calls;
+  late List<MethodCall> nativeCalls;
   var nextId = 1000;
 
   setUp(() async {
     pages = await DemoPageServer.start();
     state = DemoState(pages);
     calls = [];
+    nativeCalls = [];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(native, (call) async {
+      nativeCalls.add(call);
+      return null;
+    });
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
       calls.add(call);
@@ -34,6 +43,8 @@ void main() {
     await pages.close();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, null);
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(native, null);
   });
 
   test('invalid URL does not create a browser and logs the problem', () async {
@@ -102,6 +113,34 @@ void main() {
     expect(calls.where((call) => call.method == 'close'), hasLength(1));
   });
 
+  test('a pending create catches up with the latest app theme', () async {
+    final response = Completer<Map<String, Object?>>();
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      calls.add(call);
+      if (call.method == 'create') return response.future;
+      return null;
+    });
+    await state.setThemeMode(ThemeMode.dark);
+    final opening = state.open();
+    await Future<void>.delayed(Duration.zero);
+    expect((calls.single.arguments as Map)['brightness'], 0);
+    await state.setThemeMode(ThemeMode.light);
+    response.complete({'id': ++nextId, 'windowHandle': 1});
+    await opening;
+    expect(state.windows.single.appearance, ThemeMode.light);
+    if (Platform.isLinux) {
+      expect(nativeCalls.map((call) => call.arguments['brightness']), [0, 1]);
+    } else {
+      final update =
+          calls.singleWhere((call) => call.method == 'setBrightness');
+      expect(update.arguments['brightness'], 1);
+      expect(calls.indexOf(update),
+          lessThan(calls.indexWhere((call) => call.method == 'launch')));
+    }
+    state.dispose();
+  });
+
   test('event history retains only the latest 200 entries', () {
     for (var i = 0; i < 250; i++) {
       state.log('Event $i');
@@ -157,6 +196,63 @@ void main() {
     expect(arguments['composerArguments'], 'sidebar');
     expect(state.windows, hasLength(3));
     expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('app theme can override and resume the system appearance',
+      (tester) async {
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.light;
+    addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
+    await tester.runAsync(() async {
+      await state.open();
+      await state.open();
+    });
+    await tester.pumpWidget(DemoApp(state: state));
+    await tester.pumpAndSettle();
+    Brightness brightness() =>
+        Theme.of(tester.element(find.byType(Scaffold))).brightness;
+    Future<void> choose(String current, String next) async {
+      await tester.tap(find.byTooltip('App theme: $current'));
+      await tester.pumpAndSettle();
+      await tester
+          .tap(find.widgetWithText(CheckedPopupMenuItem<ThemeMode>, next));
+      await tester.pumpAndSettle();
+    }
+
+    expect(brightness(), Brightness.light);
+    await choose('System', 'Dark');
+    expect(brightness(), Brightness.dark);
+    expect(state.windows.map((window) => window.appearance),
+        everyElement(ThemeMode.dark));
+    expect(
+        Platform.isLinux
+            ? nativeCalls.map((call) => call.arguments['brightness'])
+            : calls
+                .where((call) => call.method == 'setBrightness')
+                .map((call) => call.arguments['brightness']),
+        Platform.isLinux ? [0] : [0, 0]);
+    await tester.runAsync(state.open);
+    await tester.pumpAndSettle();
+    expect(
+        (calls.lastWhere((call) => call.method == 'create').arguments
+            as Map)['brightness'],
+        0);
+    expect(state.windows.last.appearance, ThemeMode.dark);
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
+    await choose('Dark', 'Light');
+    expect(brightness(), Brightness.light);
+    await choose('Light', 'System');
+    expect(brightness(), Brightness.dark);
+    tester.platformDispatcher.platformBrightnessTestValue = Brightness.light;
+    await tester.pumpAndSettle();
+    expect(brightness(), Brightness.light);
+    expect(
+        Platform.isLinux
+            ? nativeCalls.map((call) => call.arguments['brightness'])
+            : calls
+                .where((call) => call.method == 'setBrightness')
+                .map((call) => call.arguments['brightness']),
+        Platform.isLinux ? [0, 1, -1] : [0, 0, 1, 1, 1, -1, -1, -1]);
     await tester.pumpWidget(const SizedBox());
   });
 

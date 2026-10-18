@@ -12,6 +12,10 @@
 
 namespace webview_window {
 
+inline COLORREF ContentBackgroundColor(bool dark) {
+  return dark ? RGB(32, 32, 32) : RGB(255, 255, 255);
+}
+
 const auto MONITOR_CENTER = 0x0001;        // center rect to monitor
 const auto MONITOR_CLIP = 0x0000;      // clip rect to monitor
 const auto MONITOR_WORKAREA = 0x0002;        // use monitor work area

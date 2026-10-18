@@ -45,6 +45,8 @@ GtkWidget *on_create(WebKitWebView *web_view,
 
 // The JavaScript bridge's single script message handler.
 constexpr char kBridgeHandler[] = "desktopWebview";
+constexpr char kStartupHandler[] = "desktopWebviewStartup";
+constexpr char kStartupWorld[] = "desktopWebviewStartup";
 
 gboolean decide_policy_cb(WebKitWebView *web_view,
                           WebKitPolicyDecision *decision,
@@ -97,8 +99,48 @@ WebviewWindow::WebviewWindow(EventSink emit,
 
   webview_ = webkit_web_view_new();
   g_object_ref_sink(webview_);
+  g_signal_connect(webview_, "load-changed",
+                   G_CALLBACK(+[](WebKitWebView *, WebKitLoadEvent event, gpointer arg) {
+                     auto *window = static_cast<WebviewWindow *>(arg);
+                     if (event == WEBKIT_LOAD_COMMITTED) window->document_committed_ = true;
+                     if (event == WEBKIT_LOAD_FINISHED && window->startup_cover_ &&
+                         window->document_committed_) {
+                       window->FinishStartupBackground();
+                     }
+                   }), this);
   content_manager_ = WEBKIT_USER_CONTENT_MANAGER(g_object_ref(
       webkit_web_view_get_user_content_manager(WEBKIT_WEB_VIEW(webview_))));
+  // Reveal the first contentful paint even if the server is still streaming
+  // HTML. The isolated world keeps page scripts from overriding this signal.
+  webkit_user_content_manager_register_script_message_handler_in_world(
+      content_manager_, kStartupHandler, kStartupWorld);
+  startup_handler_id_ = g_signal_connect(
+      content_manager_, "script-message-received::desktopWebviewStartup",
+      G_CALLBACK(+[](WebKitUserContentManager *, WebKitJavascriptResult *, gpointer arg) {
+        static_cast<WebviewWindow *>(arg)->FinishStartupBackground();
+      }), this);
+  startup_script_ = webkit_user_script_new_for_world(
+      R"JS((() => {
+        const reveal = () => requestAnimationFrame(() => requestAnimationFrame(() =>
+          window.webkit.messageHandlers.desktopWebviewStartup.postMessage(null)));
+        if (typeof PerformanceObserver === 'function' &&
+            PerformanceObserver.supportedEntryTypes &&
+            PerformanceObserver.supportedEntryTypes.indexOf('paint') !== -1) {
+          const observer = new PerformanceObserver(list => {
+            if (list.getEntries().some(entry => entry.name === 'first-contentful-paint')) {
+              observer.disconnect();
+              reveal();
+            }
+          });
+          observer.observe({type: 'paint', buffered: true});
+        } else {
+          // Older WebKit releases can still reveal before images finish.
+          document.addEventListener('DOMContentLoaded', reveal, {once: true});
+        }
+      })();)JS",
+      WEBKIT_USER_CONTENT_INJECT_TOP_FRAME, WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
+      kStartupWorld, nullptr, nullptr);
+  webkit_user_content_manager_add_script(content_manager_, startup_script_);
   g_signal_connect(G_OBJECT(webview_), "load-failed-with-tls-errors",
                    G_CALLBACK(on_load_failed_with_tls_errors), this);
   g_signal_connect(G_OBJECT(webview_), "create", G_CALLBACK(on_create), this);
@@ -139,11 +181,25 @@ WebviewWindow::WebviewWindow(EventSink emit,
     RunJavaScriptWhenContentReady(options.javascript_bridge.c_str());
   }
 
-  container_ = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+  // Keep WebKit's background unset so it can follow each document's
+  // color-scheme. A GTK cover hides the initial blank frame instead.
+  container_ = gtk_overlay_new();
   g_object_ref_sink(container_);
-  gtk_box_pack_start(GTK_BOX(container_), webview_, TRUE, TRUE, 0);
-  gtk_widget_show(webview_);
-  gtk_widget_show(container_);
+  gtk_container_add(GTK_CONTAINER(container_), webview_);
+  startup_cover_ = gtk_drawing_area_new();
+  gtk_widget_set_halign(startup_cover_, GTK_ALIGN_FILL);
+  gtk_widget_set_valign(startup_cover_, GTK_ALIGN_FILL);
+  g_signal_connect(startup_cover_, "draw",
+                   G_CALLBACK((+[](GtkWidget *widget, cairo_t *cr, gpointer) -> gboolean {
+                     GdkRGBA color{1, 1, 1, 1};
+                     gtk_style_context_lookup_color(gtk_widget_get_style_context(widget),
+                                                    "theme_base_color", &color);
+                     gdk_cairo_set_source_rgba(cr, &color);
+                     cairo_paint(cr);
+                     return TRUE;
+                   })), nullptr);
+  gtk_overlay_add_overlay(GTK_OVERLAY(container_), startup_cover_);
+  gtk_widget_show_all(container_);
 }
 
 void WebviewWindow::Start(const Options &options) {
@@ -241,6 +297,26 @@ void WebviewWindow::DisconnectCallbacks() {
         content_manager_, kBridgeHandler);
     bridge_handler_id_ = 0;
   }
+  if (content_manager_ != nullptr && startup_handler_id_ != 0) {
+    g_signal_handler_disconnect(content_manager_, startup_handler_id_);
+    webkit_user_content_manager_unregister_script_message_handler_in_world(
+        content_manager_, kStartupHandler, kStartupWorld);
+    startup_handler_id_ = 0;
+  }
+  if (startup_script_) {
+    webkit_user_content_manager_remove_script(content_manager_, startup_script_);
+    webkit_user_script_unref(startup_script_);
+    startup_script_ = nullptr;
+  }
+}
+
+void WebviewWindow::FinishStartupBackground() {
+  if (closing_ || closed_ || !startup_cover_) return;
+  gtk_widget_destroy(startup_cover_);
+  startup_cover_ = nullptr;
+  webkit_user_content_manager_remove_script(content_manager_, startup_script_);
+  webkit_user_script_unref(startup_script_);
+  startup_script_ = nullptr;
 }
 
 void WebviewWindow::DeliverClosing() { composer_.Closing(window_id_); }

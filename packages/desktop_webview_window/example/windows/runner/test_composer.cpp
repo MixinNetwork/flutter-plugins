@@ -277,6 +277,29 @@ void TestComposerRegisterChannel(flutter::BinaryMessenger* messenger) {
       return;
     }
     HWND web = FindChild(window, L"web_view_window_web_view");
+    if (method == "hostErasePixel" && web) {
+      BITMAPINFO info{};
+      info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+      info.bmiHeader.biWidth = 1;
+      info.bmiHeader.biHeight = -1;
+      info.bmiHeader.biPlanes = 1;
+      info.bmiHeader.biBitCount = 32;
+      info.bmiHeader.biCompression = BI_RGB;
+      void* pixels = nullptr;
+      HDC dc = CreateCompatibleDC(nullptr);
+      HBITMAP bitmap = CreateDIBSection(dc, &info, DIB_RGB_COLORS, &pixels, nullptr, 0);
+      HGDIOBJ previous = SelectObject(dc, bitmap);
+      SendMessage(web, WM_ERASEBKGND, reinterpret_cast<WPARAM>(dc), 0);
+      const COLORREF color = GetPixel(dc, 0, 0);
+      SelectObject(dc, previous);
+      DeleteObject(bitmap);
+      DeleteDC(dc);
+      result->Success(EncodableValue(EncodableList{
+          EncodableValue(GetRValue(color) / 255.0),
+          EncodableValue(GetGValue(color) / 255.0),
+          EncodableValue(GetBValue(color) / 255.0)}));
+      return;
+    }
     if (method == "geometry") {
       if (!web) {
         result->Error("no_webview", "No WebView");

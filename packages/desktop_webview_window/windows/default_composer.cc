@@ -23,6 +23,7 @@
 #include "composer_runtime.h"
 #include "strconv.h"
 #include "title_bar_accessibility.h"
+#include "utils.h"
 
 namespace {
 
@@ -382,7 +383,7 @@ Palette PaletteOf(const TitleBar& bar) {
                                        : RGB(0, 0, 0);
   // Chrome's caption button colors, which match the native buttons.
   return {dark ? kBarBackgroundDark : kBarBackgroundLight,
-          dark ? RGB(32, 32, 32) : RGB(255, 255, 255),
+          webview_window::ContentBackgroundColor(dark),
           primary,
           !bar.active ? primary : dark ? RGB(180, 180, 180) : RGB(96, 96, 96),
           dark ? RGB(110, 110, 110) : RGB(160, 160, 160),

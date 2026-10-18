@@ -1,3 +1,5 @@
+import 'dart:ui' show Brightness;
+
 /// Options that only WebView2 on Windows honours.
 class WindowsWebviewOptions {
   const WindowsWebviewOptions({
@@ -89,6 +91,10 @@ class CreateConfiguration {
   /// whole time.
   final bool openHidden;
 
+  /// The initial window appearance on macOS and Windows, applied before the
+  /// window is shown. Null follows the system. Linux follows the GTK app theme.
+  final Brightness? brightness;
+
   final WindowsWebviewOptions windows;
 
   const CreateConfiguration({
@@ -102,6 +108,7 @@ class CreateConfiguration {
     this.useWindowPositionAndSize = false,
     this.openMaximized = false,
     this.openHidden = false,
+    this.brightness,
     this.windows = const WindowsWebviewOptions(),
   });
 
@@ -118,6 +125,7 @@ class CreateConfiguration {
         "useWindowPositionAndSize": useWindowPositionAndSize,
         "openMaximized": openMaximized,
         "openHidden": openHidden,
+        "brightness": brightness?.index ?? -1,
         ...windows.toMap(),
       };
 }

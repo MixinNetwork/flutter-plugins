@@ -24,6 +24,18 @@ namespace webview_window {
 static LRESULT CALLBACK WndProc(HWND const window, UINT const message,
                                 WPARAM const wparam,
                                 LPARAM const lparam) noexcept {
+  if (message == WM_ERASEBKGND) {
+    auto* web_view =
+        reinterpret_cast<WebView*>(GetWindowLongPtr(window, GWLP_USERDATA));
+    if (web_view) {
+      RECT bounds;
+      GetClientRect(window, &bounds);
+      HBRUSH brush = CreateSolidBrush(web_view->HostBackgroundColor());
+      FillRect(reinterpret_cast<HDC>(wparam), &bounds, brush);
+      DeleteObject(brush);
+      return 1;
+    }
+  }
   if (message == WM_SIZE) {
     auto* web_view =
         reinterpret_cast<WebView*>(GetWindowLongPtr(window, GWLP_USERDATA));
@@ -122,8 +134,7 @@ void WebView::Create(std::function<void(HRESULT)> callback) {
               }
             }
             self->environment_ = env;
-            HRESULT create_result = env->CreateCoreWebView2Controller(
-                self->view_window_.get(),
+            auto completion =
                 Callback<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler>(
                     [weak](HRESULT result, ICoreWebView2Controller *controller) -> HRESULT {
                       auto self = weak.lock();
@@ -141,7 +152,25 @@ void WebView::Create(std::function<void(HRESULT)> callback) {
                       // Configure the browser before completing the Dart create.
                       self->CompleteCreation(self->OnWebviewControllerCreated());
                       return S_OK;
-                    }).Get());
+                    });
+            // Newer runtimes accept the canvas color before creating any
+            // compositor surface, avoiding even the initial white frame.
+            wil::com_ptr<ICoreWebView2Environment10> environment;
+            wil::com_ptr<ICoreWebView2ControllerOptions> options;
+            wil::com_ptr<ICoreWebView2ControllerOptions3> color_options;
+            HRESULT create_result;
+            if (SUCCEEDED(env->QueryInterface(IID_PPV_ARGS(&environment))) &&
+                SUCCEEDED(environment->CreateCoreWebView2ControllerOptions(&options)) &&
+                SUCCEEDED(options->QueryInterface(IID_PPV_ARGS(&color_options)))) {
+              COLORREF color = self->background_color_;
+              color_options->put_DefaultBackgroundColor(
+                  {255, GetRValue(color), GetGValue(color), GetBValue(color)});
+              create_result = environment->CreateCoreWebView2ControllerWithOptions(
+                  self->view_window_.get(), options.get(), completion.Get());
+            } else {
+              create_result = env->CreateCoreWebView2Controller(
+                  self->view_window_.get(), completion.Get());
+            }
             if (FAILED(create_result)) {
               self->CompleteCreation(create_result);
             }
@@ -169,6 +198,7 @@ HRESULT WebView::OnWebviewControllerCreated() {
   if (!webview_controller_) {
     return E_POINTER;
   }
+  SetBackgroundColor(background_color_);
   
   HRESULT hr = webview_controller_->get_CoreWebView2(&webview_);
   if (FAILED(hr) || !webview_) {
@@ -177,6 +207,7 @@ HRESULT WebView::OnWebviewControllerCreated() {
   }
 
   wil::com_ptr<ICoreWebView2Settings> settings;
+  ApplyPreferredColorScheme();
   hr = webview_->get_Settings(&settings);
   if (FAILED(hr) || !settings) {
     std::cerr << "failed to get settings" << std::endl;
@@ -285,6 +316,20 @@ HRESULT WebView::OnWebviewControllerCreated() {
           .Get(),
       nullptr);
 
+  // ContentLoading identifies a document that has committed, unlike a
+  // navigation that was cancelled before replacing the initial empty page.
+  webview_->add_ContentLoading(
+      Callback<ICoreWebView2ContentLoadingEventHandler>(
+          [weak = weak_from_this()](ICoreWebView2 *,
+                                   ICoreWebView2ContentLoadingEventArgs *args) {
+            auto self = weak.lock();
+            if (!self || self->closed_ || !self->startup_background_) return S_OK;
+            UINT64 navigation_id;
+            if (SUCCEEDED(args->get_NavigationId(&navigation_id))) {
+              self->startup_navigation_id_ = navigation_id;
+            }
+            return S_OK;
+          }).Get(), nullptr);
   // NavigationStarting only reports top-level navigations, including redirects.
   // It has no deferral, so Dart decides synchronously before the handler
   // returns; an allowed navigation keeps its method, body and headers.
@@ -353,10 +398,19 @@ HRESULT WebView::OnWebviewControllerCreated() {
       nullptr);
   webview_->add_NavigationCompleted(
       Callback<ICoreWebView2NavigationCompletedEventHandler>(
-          [weak = weak_from_this()](ICoreWebView2 *sender,
+          [weak = weak_from_this()](ICoreWebView2 *,
                  ICoreWebView2NavigationCompletedEventArgs *args) {
             auto self = weak.lock();
             if (!self || self->closed_) return S_OK;
+            UINT64 navigation_id = 0;
+            // Restore only a committed document, including about:blank and
+            // a document whose subresources the user stopped loading.
+            if (self->startup_background_ &&
+                SUCCEEDED(args->get_NavigationId(&navigation_id)) &&
+                self->startup_navigation_id_ == navigation_id) {
+              self->startup_background_ = false;
+              self->SetBackgroundColor(RGB(255, 255, 255));
+            }
             self->loading_ = false;
             self->NotifyStateChanged();
             return S_OK;
@@ -400,6 +454,38 @@ void WebView::Navigate(const std::wstring &url) {
   } else {
     std::cerr << "webview not created" << std::endl;
   }
+}
+
+void WebView::SetBackgroundColor(COLORREF color) {
+  background_color_ = color;
+  if (webview_controller_) {
+    wil::com_ptr<ICoreWebView2Controller2> controller;
+    if (SUCCEEDED(webview_controller_->QueryInterface(IID_PPV_ARGS(&controller)))) {
+      controller->put_DefaultBackgroundColor(
+          {255, GetRValue(color), GetGValue(color), GetBValue(color)});
+    }
+  }
+}
+
+void WebView::SetBrightness(int brightness, bool dark) {
+  brightness_ = brightness;
+  host_background_color_ = ContentBackgroundColor(dark);
+  if (view_window_) InvalidateRect(view_window_.get(), nullptr, TRUE);
+  if (startup_background_) SetBackgroundColor(host_background_color_);
+  ApplyPreferredColorScheme();
+}
+
+void WebView::ApplyPreferredColorScheme() {
+  if (!webview_) return;
+  // PreferredColorScheme belongs to the shared profile. Emulate only this
+  // WebView's media feature so windows can keep independent appearances.
+  const wchar_t* parameters = brightness_ < 0 ? LR"({"features":[]})"
+      : brightness_ == 0
+          ? LR"({"features":[{"name":"prefers-color-scheme","value":"dark"}]})"
+          : LR"({"features":[{"name":"prefers-color-scheme","value":"light"}]})";
+  webview_->CallDevToolsProtocolMethod(L"Emulation.setEmulatedMedia", parameters,
+      Callback<ICoreWebView2CallDevToolsProtocolMethodCompletedHandler>(
+          [](HRESULT, LPCWSTR) { return S_OK; }).Get());
 }
 
 void WebView::SetVisible(bool visible) {

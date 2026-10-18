@@ -88,8 +88,10 @@ abstract class Webview {
   Future<void> launch(String url, {bool triggerOnUrlRequestEvent = true});
 
   /// Changes native window appearance, including the default toolbar, on
-  /// macOS and Windows. Pass null to restore the platform default. macOS also
-  /// applies it to web content.
+  /// macOS and Windows. Pass null to restore the platform default. Web content
+  /// sees the same preference through `prefers-color-scheme`; the page decides
+  /// which colors to render. Windows applies this to the individual WebView,
+  /// without changing other windows sharing its profile.
   Future<void> setBrightness(Brightness? brightness);
 
   Future<void> addScriptToExecuteOnDocumentCreated(String javaScript);

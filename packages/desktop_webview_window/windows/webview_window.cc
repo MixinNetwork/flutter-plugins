@@ -91,7 +91,6 @@ void WebviewWindow::CreateAndShow(const Options& options,
     OnClosed();
     return;
   }
-  SetBrightness(brightness_);
   if (!options.use_position && !options.open_maximized) {
     ClipOrCenterWindowToMonitor(hwnd_.get(), MONITOR_CENTER);
   }
@@ -104,6 +103,7 @@ void WebviewWindow::CreateAndShow(const Options& options,
       },
       window_id_, options.user_data_folder, options.deny_camera_and_microphone,
       options.javascript_bridge);
+  SetBrightness(options.brightness);
   web_view_->SetVisible(!options.open_hidden);
   HWND view = web_view_->NativeWindow().get();
   SetParent(view, hwnd_.get());
@@ -289,6 +289,9 @@ void WebviewWindow::SetBrightness(int brightness) {
   // Read by the default toolbar.
   SetPropW(hwnd_.get(), L"DesktopWebviewDark",
            reinterpret_cast<HANDLE>(static_cast<INT_PTR>(dark ? 1 : 2)));
+  if (web_view_) {
+    web_view_->SetBrightness(brightness, dark != FALSE);
+  }
   RedrawWindow(hwnd_.get(), nullptr, nullptr,
                RDW_INVALIDATE | RDW_ALLCHILDREN);
 }
@@ -327,6 +330,16 @@ WebviewWindow::MessageHandler(
   // those belong to the application's windows (for example window_manager)
   // and must not act on browser windows.
   switch (message) {
+    case WM_ERASEBKGND: {
+      RECT bounds;
+      GetClientRect(hwnd, &bounds);
+      const bool dark = reinterpret_cast<INT_PTR>(
+          GetPropW(hwnd, L"DesktopWebviewDark")) == 1;
+      HBRUSH brush = CreateSolidBrush(ContentBackgroundColor(dark));
+      FillRect(reinterpret_cast<HDC>(wparam), &bounds, brush);
+      DeleteObject(brush);
+      return 1;
+    }
     case WM_CLOSE:
       // The close button takes the same path as every other close request.
       Close();

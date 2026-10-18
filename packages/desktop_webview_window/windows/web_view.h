@@ -10,6 +10,7 @@
 #include <string>
 #include <functional>
 #include <memory>
+#include <optional>
 
 #include <flutter/encodable_value.h>
 #include <flutter/method_result.h>
@@ -102,6 +103,10 @@ class WebView : public std::enable_shared_from_this<WebView> {
   // window is shown unless it is told.
   void SetVisible(bool visible);
 
+  void SetBrightness(int brightness, bool dark);
+
+  [[nodiscard]] COLORREF HostBackgroundColor() const { return host_background_color_; }
+
  private:
   wil::unique_hwnd view_window_;
 
@@ -141,6 +146,15 @@ class WebView : public std::enable_shared_from_this<WebView> {
 
   // Applied when the controller is created, if SetVisible came first.
   bool visible_{true};
+
+  COLORREF background_color_ = RGB(255, 255, 255);
+  COLORREF host_background_color_ = RGB(255, 255, 255);
+  bool startup_background_ = true;
+  std::optional<UINT64> startup_navigation_id_;
+  int brightness_ = -1;
+
+  void SetBackgroundColor(COLORREF color);
+  void ApplyPreferredColorScheme();
 
   void Emit(const std::string& method, flutter::EncodableMap args = {});
 

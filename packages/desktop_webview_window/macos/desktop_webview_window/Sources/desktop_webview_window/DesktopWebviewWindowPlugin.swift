@@ -141,6 +141,7 @@ public class DesktopWebviewWindowPlugin: NSObject, FlutterPlugin {
       y: argument["windowPosY"] as? Int ?? 0,
       usePosition: argument["useWindowPositionAndSize"] as? Bool ?? false,
       title: argument["title"] as? String ?? "",
+      brightness: argument["brightness"] as? Int ?? -1,
       titleBar: UInt32(argument["titleBar"] as? Int ?? 0xF),
       composerArguments: argument["composerArguments"] as? String,
       javaScriptBridge: argument["javaScriptBridge"] as? String)
