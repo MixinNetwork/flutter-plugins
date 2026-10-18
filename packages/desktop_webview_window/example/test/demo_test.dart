@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:desktop_webview_window/src/native_transport.dart';
 import 'package:desktop_webview_window/src/webview_impl.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -21,6 +22,7 @@ void main() {
   var nextId = 1000;
 
   setUp(() async {
+    NativeTransport.debugOverride = _MockChannelTransport(channel);
     pages = await DemoPageServer.start();
     state = DemoState(pages);
     calls = [];
@@ -40,6 +42,7 @@ void main() {
   });
 
   tearDown(() async {
+    NativeTransport.debugOverride = null;
     await pages.close();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, null);
@@ -282,4 +285,15 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });
+}
+
+// Keep widget tests on the mocked channel without loading Windows FFI code.
+class _MockChannelTransport extends NativeTransport {
+  _MockChannelTransport(this.channel) : super.testing();
+
+  final MethodChannel channel;
+
+  @override
+  Future<T?> invoke<T>(String method, [Object? arguments]) =>
+      channel.invokeMethod<T>(method, arguments);
 }
