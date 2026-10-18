@@ -19,6 +19,13 @@
       "runner": "macos-latest",
       "test": "integration_test/app_test.dart",
       "driver": "test_driver/integration_test.dart"
+    },
+    {
+      "package": "desktop_webview_window",
+      "platform": "linux",
+      "runner": "ubuntu-latest",
+      "test": "integration_test/app_test.dart",
+      "setup": "tool/ci/setup_linux.ps1"
     }
   ]
 }
