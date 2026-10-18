@@ -473,10 +473,18 @@ HRESULT WebView::OnWebviewControllerCreated() {
             if (FAILED(args->TryGetWebMessageAsString(&message)) || !message) {
               return S_OK;
             }
-            self->Emit("onJavaScriptMessage", flutter::EncodableMap{
+            // Only the top-level document reaches this event; iframes post
+            // to their own CoreWebView2Frame.
+            wil::unique_cotaskmem_string source;
+            flutter::EncodableMap event{
                 {flutter::EncodableValue("message"),
                  flutter::EncodableValue(wide_to_utf8(std::wstring(message.get())))},
-            });
+            };
+            if (SUCCEEDED(args->get_Source(&source)) && source) {
+              event[flutter::EncodableValue("source")] =
+                  flutter::EncodableValue(wide_to_utf8(std::wstring(source.get())));
+            }
+            self->Emit("onJavaScriptMessage", std::move(event));
             return S_OK;
           })
           .Get(),

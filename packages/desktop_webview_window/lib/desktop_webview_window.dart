@@ -29,7 +29,8 @@ class WebviewWindow {
   static Future<Webview> create({CreateConfiguration? configuration}) async {
     configuration ??= CreateConfiguration.platform();
     final arguments = configuration.toMap();
-    arguments['javaScriptBridge'] = javaScriptBridgeSource;
+    final bridgeToken = createJavaScriptBridgeToken();
+    arguments['javaScriptBridge'] = javaScriptBridgeSource(bridgeToken);
     final transport = attachTransport();
     pendingCreates++;
     try {
@@ -41,6 +42,7 @@ class WebviewWindow {
       }
       final webview = WebviewImpl(id,
           windowHandle: result!['windowHandle'] as int? ?? 0,
+          bridgeToken: bridgeToken,
           transport: transport);
       if (result['closed'] == true || closedDuringCreate.remove(id)) {
         webview.onClosed();

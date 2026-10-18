@@ -41,7 +41,8 @@ Future<Object?> _handleEvent(MethodCall call) async {
       browsers.remove(id);
       webview.onClosed();
     case 'onJavaScriptMessage':
-      webview.onJavaScriptMessage(args['message'] as String);
+      webview.onJavaScriptMessage(
+          args['message'] as String, args['source'] as String?);
     case 'runJavaScriptTextInputPanelWithPrompt':
       return webview.onPrompt(
           args['prompt'] as String, args['defaultText'] as String);

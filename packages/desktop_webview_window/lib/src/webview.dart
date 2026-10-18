@@ -3,9 +3,15 @@ import 'dart:async';
 import 'package:desktop_webview_window/src/cookie.dart';
 import 'package:flutter/foundation.dart';
 
-/// Receives `window.desktopWebview.postMessage(name, data)` from the page.
-/// [data] is the JSON-decoded value.
-typedef JavaScriptMessageHandler = void Function(Object? data);
+/// Receives `window.desktopWebview.postMessage(name, data)` from the
+/// top-level document. [data] is the JSON-decoded value.
+///
+/// [origin] is the origin of the document that sent the message, serialized
+/// as `scheme://host[:port]` (for example `https://example.com`), `file://`
+/// for local files, or `null` for opaque origins. The bridge is available to
+/// every page the browser navigates to, so check [origin] before acting on a
+/// message that needs a trusted page. Messages from iframes are dropped.
+typedef JavaScriptMessageHandler = void Function(Object? data, String origin);
 
 typedef PromptHandler = String Function(String prompt, String defaultText);
 
