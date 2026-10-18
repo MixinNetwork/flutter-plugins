@@ -2,15 +2,93 @@
 
 [![Pub](https://img.shields.io/pub/v/desktop_webview_window.svg)](https://pub.dev/packages/desktop_webview_window)
 
-Show a webview window on your flutter desktop application.
+Open web pages in native browser windows from a Flutter desktop application.
 
-|          |       |     |
-| -------- | ------- | ---- |
-| Windows  | ✅     | [WebView2 SDK](https://www.nuget.org/packages/Microsoft.Web.WebView2/1.0.4258.31) 1.0.4258.31 |
-| Linux    | ✅    |  [WebKitGTK-4.1](https://webkitgtk.org/reference/webkit2gtk/stable/index.html) or [WebKitGTK-4.0](https://webkitgtk.org/reference/webkit2gtk/2.5.1/) |
-| macOS    | ✅     |  WKWebview |
+| Platform | Support | Engine |
+| -------- | ------- | ------ |
+| Windows  | ✅ | [WebView2](https://developer.microsoft.com/en-us/microsoft-edge/webview2) (SDK 1.0.4258.31) |
+| Linux    | ✅ | [WebKitGTK 4.1](https://webkitgtk.org/reference/webkit2gtk/stable/index.html) or [4.0](https://webkitgtk.org/reference/webkit2gtk/2.5.1/) |
+| macOS    | ✅ | WKWebView, macOS 10.15 or later |
 
-## Getting Started
+![Default native title bars on macOS, Windows and Linux, in light and dark mode](doc/images/native-headers.png)
+
+The example's built-in demo page with the default native title bar on each platform, in light and dark mode.
+
+## Contents
+
+- [Setup](#setup)
+- [Getting started](#getting-started)
+- [Talking to the page](#talking-to-the-page)
+- [Navigation](#navigation)
+- [Controlling the window](#controlling-the-window)
+- [Page dialogs, files and downloads](#page-dialogs-files-and-downloads)
+- [Custom window layout](#custom-window-layout)
+- [Platform support](#platform-support)
+- [Migrating to 0.4.0](#migrating-to-040)
+- [Development](#development)
+
+## Setup
+
+Requires Flutter 3.44.0 or later. No runner changes or startup hooks are
+needed. Each platform has its own runtime requirements.
+
+### Linux
+
+Install WebKitGTK and libsoup development packages.
+
+Ubuntu/Debian:
+
+```shell
+sudo apt-get install libwebkit2gtk-4.1-0 libwebkit2gtk-4.1-dev libsoup-3.0-0 libsoup-3.0-dev
+```
+
+Fedora:
+
+```shell
+sudo dnf install webkit2gtk4.1 webkit2gtk4.1-devel libsoup3 libsoup3-devel
+```
+
+### Windows
+
+The **WebView2 Runtime** must be installed. It ships with Windows 11 but may be
+missing on Windows 10, so plan how to
+[distribute it](https://docs.microsoft.com/en-us/microsoft-edge/webview2/concepts/distribution)
+to your users. `WebviewWindow.isWebviewAvailable()` reports whether it is
+present.
+
+WebView2 stores its profile in `webview_window_WebView2` next to the
+executable by default. If the application is installed in a read-only
+directory, browser creation fails with a `PlatformException` whose code is
+`create_failed`. Handle creation errors in the application and choose a writable
+folder. Add `path_provider` and `path` to your dependencies, then use the
+application support directory:
+
+```dart
+import 'package:desktop_webview_window/desktop_webview_window.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+
+// Call after Flutter's widget binding has been initialized.
+final supportDirectory = await getApplicationSupportDirectory();
+final webview = await WebviewWindow.create(
+  configuration: CreateConfiguration(
+    windows: WindowsWebviewOptions(
+      userDataFolder: p.join(supportDirectory.path, 'WebView2'),
+    ),
+  ),
+);
+```
+
+A relative path is resolved against the executable's directory.
+
+### macOS
+
+Sandboxed applications need the
+`com.apple.security.network.client` entitlement to load pages, and
+`com.apple.security.files.user-selected.read-write` for file choosers and
+downloads.
+
+## Getting started
 
 ```dart
 import 'package:desktop_webview_window/desktop_webview_window.dart';
@@ -20,124 +98,7 @@ await webview.launch('https://example.com');
 ```
 
 The window's native title bar carries back, forward, reload/stop, the page
-title and its host, next to the system window buttons. Choose the items with
-`CreateConfiguration(titleBar: TitleBarOptions(...))`, or install a
-[native composer](#window-layout) to lay the window out yourself. No runner
-changes or startup hooks are needed.
-
-## Talking to the page
-
-Every page gets the same `window.desktopWebview` object on macOS, Windows and
-Linux. Messages carry any JSON-encodable value.
-
-```js
-// In the page
-window.desktopWebview.postMessage('login', {token: 'abc'});
-window.desktopWebview.addEventListener('theme', data => applyTheme(data));
-```
-
-```dart
-webview.addJavaScriptHandler('login', (data) => print(data)); // {token: abc}
-await webview.postMessage('theme', {'dark': true});
-```
-
-`evaluateJavaScript` returns the decoded result (`Map`, `List`, `String`, `num`,
-`bool` or `null`).
-
-## Navigation decisions
-
-`setOnUrlRequestCallback` runs before every top-level navigation, including
-redirects, while a callback is installed. The navigation waits for it, so the
-callback answers synchronously. Return false to cancel; a callback that throws
-allows the navigation. `launch(url, triggerOnUrlRequestEvent: false)` skips the
-decision for that navigation.
-
-Links to schemes the WebView cannot load, such as `mixin:` or `mailto:`, reach
-the callback too. Handle them there, for example with `url_launcher`, and
-return false; without a callback they are cancelled.
-
-`webview.navigationState` reports `canGoBack`, `canGoForward`, `isLoading`, and
-the current page's `url` and `title`. Native composers receive the same state.
-
-## Controlling the window
-
-The plugin owns each browser window but does not move, show or focus it after
-creation. `webview.nativeWindowHandle` returns the native window — `HWND` on
-Windows, `NSWindow*` on macOS and `GtkWindow*` on Linux — for a window library
-or your own FFI code:
-
-```dart
-import 'dart:ffi';
-import 'package:nativeapi/nativeapi.dart';
-
-final window = Window.createWithNativeWindow(
-    Pointer.fromAddress(webview.nativeWindowHandle))!;
-window.show();
-window.focus();
-unawaited(webview.onClose.then((_) => window.dispose()));
-```
-
-The handle is valid until `onClose` completes and is 0 afterwards. Borrow it:
-do not destroy or close the window through it, replace its delegate or window
-procedure, or keep it beyond `onClose`. Use `webview.close()` to close the
-window. A source review of `nativeapi-core` (commit `ead6a88`) found that
-wrapping a window does not destroy it on any desktop platform; its ownership
-semantics are not documented upstream, so verify again when upgrading. Its
-macOS `setNonActivating(true)` changes the window class and disables keyboard
-input in borderless browser windows.
-
-Creation-time placement stays in `CreateConfiguration`: `openHidden`,
-`openMaximized`, and `useWindowPositionAndSize` with `windowPosX`/`windowPosY`.
-On macOS and Windows, `CreateConfiguration(brightness: Brightness.dark)` applies
-the appearance before the window is shown, including its startup background.
-The default, null, follows the system. Use `setBrightness` to change it later.
-Linux follows the application's GTK theme.
-
-## Page dialogs, files and downloads
-
-The browser handles what pages expect from a browser, the same way on every
-platform:
-
-- `alert` and `confirm` open native dialogs on the browser window. `prompt`
-  goes to `setPromptHandler` on macOS.
-- `<input type="file">` opens the system file chooser.
-- Files the page cannot show, or that the server sends as an attachment, ask
-  where to save them before downloading. On macOS this needs macOS 11.3.
-- Links that open a new window, such as `target="_blank"` and `window.open`,
-  load in the same window and reach the [navigation decision](#navigation-decisions).
-- Right-clicking shows the WebView's default context menu. Its Inspect item
-  appears only after `openDevToolsWindow`. To disable the menu, add a script:
-
-```dart
-await webview.addScriptToExecuteOnDocumentCreated(
-    "document.addEventListener('contextmenu', e => e.preventDefault());");
-```
-
-Sandboxed macOS applications need the
-`com.apple.security.files.user-selected.read-write` entitlement for file
-choosers and downloads.
-
-## Platform support
-
-| Feature | macOS | Windows | Linux |
-| --- | --- | --- | --- |
-| Page messaging, navigation decisions, script results | ✅ | ✅ | ✅ |
-| `nativeWindowHandle`, `openHidden`, `openMaximized`, position | ✅ | ✅ | ✅ |
-| `openDevToolsWindow` | ❌ Safari Web Inspector (debug builds) | ✅ | ✅ |
-| `setBrightness` | ✅ | ✅ | ❌ |
-| `setPromptHandler` | ✅ | ❌ | ❌ |
-| `WindowsWebviewOptions` | — | ✅ | — |
-
-Calling an unsupported operation throws `UnsupportedError`. Operations return
-futures that complete once native code has applied them and fail with a
-`PlatformException` when it reports an error.
-
-## Window layout
-
-The plugin owns each browser window and its WebView. A *composer* decides what
-else the window contains and where the WebView sits. Without one, the default
-composer merges navigation into the window's title bar, like a Chrome app
-window:
+title and its host, next to the system window buttons:
 
 ```
 macOS    ● ● ●  ‹ › ⟳  Page title          (NSToolbar, unified)
@@ -161,13 +122,152 @@ CreateConfiguration(
 ```
 
 The window title follows the page title, so the Dock, taskbar and window
-switchers name the page even when the title bar hides it.
+switchers name the page even when the title bar hides it. For a different
+layout, see [Custom window layout](#custom-window-layout).
 
-To use a different layout (a sidebar, an overlay, your own toolbar, no title
-bar at all), install a
-native composer from the runner before the first browser is created. It
-receives the window and a view containing the WebView, and may arrange them
-however it likes:
+## Talking to the page
+
+Every page gets the same `window.desktopWebview` object on macOS, Windows and
+Linux. Messages carry any JSON-encodable value.
+
+```js
+// In the page
+window.desktopWebview.postMessage('login', {token: 'abc'});
+window.desktopWebview.addEventListener('theme', data => applyTheme(data));
+```
+
+```dart
+webview.addJavaScriptHandler('login', (data) => print(data)); // {token: abc}
+await webview.postMessage('theme', {'dark': true});
+```
+
+`evaluateJavaScript` returns the decoded result (`Map`, `List`, `String`, `num`,
+`bool` or `null`). `addScriptToExecuteOnDocumentCreated` runs a script in every
+new document before the page's own scripts.
+
+## Navigation
+
+`webview.navigationState` reports `canGoBack`, `canGoForward`, `isLoading`, and
+the current page's `url` and `title`. `back`, `forward`, `reload` and `stop`
+drive it, so the main application window can draw its own controls.
+
+### Navigation decisions
+
+`setOnUrlRequestCallback` runs before every top-level navigation, including
+redirects, while a callback is installed:
+
+```dart
+await webview.setOnUrlRequestCallback((url) {
+  if (url.startsWith('mailto:')) {
+    launchUrl(Uri.parse(url)); // package:url_launcher
+    return false;
+  }
+  return true;
+});
+```
+
+- The navigation waits for the callback, so it answers synchronously.
+- Return false to cancel. A callback that throws allows the navigation.
+- Links to schemes the WebView cannot load, such as `mixin:` or `mailto:`,
+  reach the callback too. Without a callback they are cancelled.
+- `launch(url, triggerOnUrlRequestEvent: false)` skips the decision for that
+  navigation.
+
+## Controlling the window
+
+The plugin owns each browser window but does not move, show or focus it after
+creation.
+
+Creation-time placement lives in `CreateConfiguration`: `windowWidth`/
+`windowHeight`, `openHidden`, `openMaximized`, and `useWindowPositionAndSize`
+with `windowPosX`/`windowPosY`. Without a position the window opens centred.
+
+`openHidden: true` is useful on Windows, where `create` resolves only after
+WebView2 has started; a window created visible stays blank until then. WebView2
+resumes rendering once the window is shown.
+
+### Native window handle
+
+For anything after creation, `webview.nativeWindowHandle` returns the native
+window — `HWND` on Windows, `NSWindow*` on macOS and `GtkWindow*` on Linux — for
+a window library or your own FFI code:
+
+```dart
+import 'dart:ffi';
+import 'package:nativeapi/nativeapi.dart';
+
+final window = Window.createWithNativeWindow(
+    Pointer.fromAddress(webview.nativeWindowHandle))!;
+window.show();
+window.focus();
+unawaited(webview.onClose.then((_) => window.dispose()));
+```
+
+The handle is borrowed. It is valid until `onClose` completes and is 0
+afterwards. Do not destroy or close the window through it, replace its
+delegate or window procedure, or keep it beyond `onClose`; call
+`webview.close()` instead.
+
+Notes on `nativeapi`: wrapping a window does not destroy it on any desktop
+platform (checked against `nativeapi-core` commit `ead6a88`; upstream does not
+document this, so recheck when upgrading). On macOS, `setNonActivating(true)`
+changes the window class and disables keyboard input in borderless browser
+windows.
+
+### Appearance
+
+On macOS and Windows, `CreateConfiguration(brightness: Brightness.dark)` sets
+the appearance before the window is shown, including its startup background.
+The default, null, follows the system. `setBrightness` changes it later. Pages
+see the preference through `prefers-color-scheme`. Linux follows the
+application's GTK theme.
+
+### Windows options
+
+`WindowsWebviewOptions` holds options only WebView2 honours:
+
+- `userDataFolder`: the WebView2 profile folder; see [Setup](#windows).
+- `denyCameraAndMicrophone: true` denies the page's camera and microphone
+  requests without saving the denial in the shared profile. It requires
+  WebView2 Runtime 111.0.1661.34 or later; window creation fails on older
+  runtimes when it is enabled.
+
+## Page dialogs, files and downloads
+
+The browser handles what pages expect from a browser, the same way on every
+platform:
+
+- `alert` and `confirm` open native dialogs on the browser window. `prompt`
+  goes to `setPromptHandler` on macOS.
+- `<input type="file">` opens the system file chooser.
+- Files the page cannot show, or that the server sends as an attachment, ask
+  where to save them before downloading. On macOS this needs macOS 11.3.
+- Links that open a new window, such as `target="_blank"` and `window.open`,
+  load in the same window and reach the [navigation decision](#navigation-decisions).
+- Right-clicking shows the WebView's default context menu. On Windows and Linux,
+  its Inspect item appears after `openDevToolsWindow()`. On macOS 13.3 or later,
+  debug builds enable inspection through Safari's Develop menu;
+  `openDevToolsWindow()` is unsupported on macOS.
+
+To disable the context menu, add a script:
+
+```dart
+await webview.addScriptToExecuteOnDocumentCreated(
+    "document.addEventListener('contextmenu', e => e.preventDefault());");
+```
+
+Sandboxed macOS applications need the entitlements listed in [Setup](#macos).
+
+## Custom window layout
+
+A *composer* decides what a browser window contains besides the WebView and
+where the WebView sits. The default composer produces the title bar shown in
+[Getting started](#getting-started).
+
+For another layout — a sidebar, an overlay, your own toolbar, no title bar at
+all — install a native composer from the runner before the first browser is
+created. It receives the window and a view containing the WebView, and may
+arrange them however it likes. A Linux example:
 
 ```c
 #include <desktop_webview_window/webview_window_composer.h>
@@ -186,33 +286,50 @@ static const DWWComposer composer = {NULL, compose, navigation_changed, NULL, cl
 dww_set_composer(&composer);  // In the runner, before the first create.
 ```
 
-Controls call `dww_browser_go_back`, `dww_browser_reload`, `dww_browser_close`
-and friends with the browser ID; `navigation_changed` delivers the navigation
-state. `CreateConfiguration(composerArguments: ...)` is passed to `compose`
-unchanged, so one composer can lay out different windows differently. A
-composer that returns `DWW_COMPOSE_DEFAULT` hands that window to the default
-composer for its whole lifetime. `request->title_bar` carries the
-`TitleBarOptions` flags (`DWW_TITLE_BAR_*`) for composers that want to honor
-them. A composer may restyle the window, for example to remove its title bar;
-on Windows it handles window messages by subclassing the window with
-`SetWindowSubclass`.
+- Controls call `dww_browser_go_back`, `dww_browser_reload`,
+  `dww_browser_close` and friends with the browser ID. `navigation_changed`
+  delivers the navigation state.
+- `CreateConfiguration(composerArguments: ...)` reaches `compose` unchanged, so
+  one composer can lay out different windows differently.
+- Returning `DWW_COMPOSE_DEFAULT` hands that window to the default composer for
+  its whole lifetime.
+- `request->title_bar` carries the `TitleBarOptions` flags (`DWW_TITLE_BAR_*`)
+  for composers that want to honour them.
+- A composer may restyle the window, for example to remove its title bar. On
+  Windows it handles window messages by subclassing the window with
+  `SetWindowSubclass`.
 
 The header documents the window and view types per platform and the rules for
 borrowed pointers, closing from inside callbacks, and Windows resizing. The
-example runner's `linux/test_composer.cc` is a complete composer. See
-[the design](doc/native_window_composer.md) for the full contract.
+example runner's `linux/test_composer.cc` is a complete composer, and
+[the design](doc/native_window_composer.md) describes the full contract.
 
 The composer is native code, so a Flutter UI inside a browser window means
 creating your own Flutter view there. On Linux X11 that is subject to
 [Flutter #186577](https://github.com/flutter/flutter/issues/186577), which is
 why the plugin itself no longer renders Flutter toolbars.
 
-## Migration
+## Platform support
+
+| Feature | macOS | Windows | Linux |
+| --- | --- | --- | --- |
+| Page messaging, navigation decisions, script results | ✅ | ✅ | ✅ |
+| `nativeWindowHandle`, `openHidden`, `openMaximized`, position | ✅ | ✅ | ✅ |
+| `openDevToolsWindow` | ❌ Safari Web Inspector (debug builds) | ✅ | ✅ |
+| `setBrightness` | ✅ | ✅ | ❌ |
+| `setPromptHandler` | ✅ | ❌ | ❌ |
+| `WindowsWebviewOptions` | — | ✅ | — |
+
+Calling an unsupported operation throws `UnsupportedError`. Operations return
+futures that complete once native code has applied them and fail with a
+`PlatformException` when it reports an error.
+
+## Migrating to 0.4.0
 
 0.4.0 is a breaking release. The APIs below were removed rather than
 deprecated.
 
-### Browser API changes
+### Browser API
 
 | Removed API | Replacement |
 | --- | --- |
@@ -222,35 +339,19 @@ deprecated.
 | `addOnWebMessageReceivedCallback` and related | `addJavaScriptHandler` |
 | `isNavigating` | `navigationState.value.isLoading` |
 | `setOnHistoryChangedCallback` | Listen to `navigationState` |
-| `moveWebviewWindow`, `setWebviewWindowVisibility`, `bringToForeground`, `getPositionalParameters` | `nativeWindowHandle` with a window library; see [Controlling the window](#controlling-the-window) |
+| `moveWebviewWindow`, `setWebviewWindowVisibility`, `bringToForeground`, `getPositionalParameters` | `nativeWindowHandle` with a window library; see [Native window handle](#native-window-handle) |
 | `CreateConfiguration(userDataFolderWindows:, denyCameraAndMicrophone:)` | `CreateConfiguration(windows: WindowsWebviewOptions(userDataFolder:, denyCameraAndMicrophone:))` |
 | `clearAll(userDataFolderWindows:)` | `clearAll(windows: WindowsWebviewOptions(...))` |
 
-Behavior changes:
+### Title bars
 
-- `launch`, `close`, `setBrightness`, `setOnUrlRequestCallback`,
-  `addScriptToExecuteOnDocumentCreated` and `openDevToolsWindow` return futures
-  and report native errors.
-- `evaluateJavaScript` returns `Future<Object?>` with the decoded value instead
-  of a JSON string.
-- `setOnUrlRequestCallback` can cancel navigations on every platform.
-- On Linux, browser windows are independent top-level windows, as on macOS and
-  Windows, instead of transient children of the application window: they no
-  longer stay above it, and open centred on the screen.
-- Pages from the old bridges must switch to `window.desktopWebview`;
-  `window.webkit.messageHandlers.<name>` and `chrome.webview` messages are no
-  longer forwarded.
-- macOS cookies now report `expires`, `secure`, `httpOnly` and `sessionOnly`.
-- Browser IDs (`Webview.id`) are unique per process.
-
-### Titlebars
-
-Browser windows no longer run Flutter. Remove the `runWebViewTitleBarWidget(args)`
-startup hook and its early return, and delete the titlebar widget:
+Browser windows no longer run Flutter. Remove the
+`runWebViewTitleBarWidget(args)` startup hook and its early return, and delete
+the title bar widget:
 
 | Removed API | Replacement |
 | --- | --- |
-| `runWebViewTitleBarWidget(args, builder: ...)` | The default native title bar, or a [native composer](#window-layout) |
+| `runWebViewTitleBarWidget(args, builder: ...)` | The default native title bar, or a [native composer](#custom-window-layout) |
 | `TitleBarWebViewController.of(context)` | `dww_browser_*` in a composer, or the `Webview` in Dart |
 | `TitleBarWebViewState.of(context)` | `navigation_changed` in a composer, or `webview.navigationState` in Dart |
 | `CreateConfiguration(titleBarHeight: 0)` | `CreateConfiguration(titleBar: TitleBarOptions(showNavigation: false, showReload: false))` |
@@ -260,110 +361,28 @@ Navigation controls drawn by the main application window can keep using
 `webview.back()`, `forward()`, `reload()`, `stop()`, `close()` and
 `webview.navigationState`.
 
-## linux requirement
+### Behavior changes
 
-In Ubuntu/Debian:
-```shell
-sudo apt-get install libwebkit2gtk-4.1-0 libwebkit2gtk-4.1-dev libsoup-3.0-0 libsoup-3.0-dev
-```
+- `launch`, `close`, `setBrightness`, `setOnUrlRequestCallback`,
+  `addScriptToExecuteOnDocumentCreated` and `openDevToolsWindow` return futures
+  and report native errors.
+- `evaluateJavaScript` returns `Future<Object?>` with the decoded value instead
+  of a JSON string.
+- `setOnUrlRequestCallback` can cancel navigations on every platform.
+- Pages from the old bridges must switch to `window.desktopWebview`;
+  `window.webkit.messageHandlers.<name>` and `chrome.webview` messages are no
+  longer forwarded.
+- On Linux, browser windows are independent top-level windows, as on macOS and
+  Windows, instead of transient children of the application window: they no
+  longer stay above it, and open centred on the screen.
+- macOS cookies now report `expires`, `secure`, `httpOnly` and `sessionOnly`.
+- Browser IDs (`Webview.id`) are unique per process.
 
-In Fedora/RPM:
-```shell
-sudo dnf install webkit2gtk4.1 webkit2gtk4.1-devel libsoup3 libsoup3-devel
-```
+## Development
 
-## Windows
-
-### Requirement
-
-The backend of desktop_webview_window on Windows is WebView2, which requires **WebView2 Runtime** installed.
-
-[WebView2 Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2) is ship in box with Windows11, but
-it may not installed on Windows10 devices. So you need consider how to distribute the runtime to your users.
-
-See more: https://docs.microsoft.com/en-us/microsoft-edge/webview2/concepts/distribution
-
-For convenience, you can use `WebviewWindow.isWebviewAvailable()` check whether the WebView2 is available.
-
-### Attention
-
-The default user data folder of WebView2 is `your_exe_file\WebView2`, which is not a good place to store user data.
-
-eg. if the application is installed in a read-only directory, the application will crash when WebView2 try to write data.
-
-you can use `WebviewWindow.create()` to create a webview with a custom user data folder.
-
-```dart
-final webview = await WebviewWindow.create(
-  configuration: CreateConfiguration(
-    windows: WindowsWebviewOptions(userDataFolder: 'your_custom_user_data_folder'),
-  ),
-);
-```
-
-### Window and media options
-
-`CreateConfiguration(openHidden: true)` creates the window without showing it,
-so nothing is painted while WebView2 starts. Show it later through
-`nativeWindowHandle`; WebView2 resumes rendering when its window becomes
-visible.
-
-`WindowsWebviewOptions(denyCameraAndMicrophone: true)` denies camera and microphone
-requests for that window without saving the denial in the shared profile.
-This option requires WebView2 Runtime 111.0.1661.34 or later. Window creation
-fails on older runtimes when this option is enabled. Both options default to
-`false`.
-
-### Windows regression tests
-
-Run from `example/` on Windows with WebView2 Runtime installed:
-
-```powershell
-$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--use-fake-device-for-media-stream'
-flutter test integration_test/app_test.dart -d windows --timeout 5m
-```
-
-The tests use local pages, temporary profiles, and fake media devices. They do
-not require a physical camera or microphone.
-
-The bundled Windows SDK headers, loader DLL, and import library come from
-Microsoft.Web.WebView2 SDK 1.0.4258.31.
+See the [example README](example/README.md) for running the demo, unit and
+integration tests, platform coverage, and macOS sandbox requirements.
 
 ## License
 
-see [LICENSE](./LICENSE)
-
-## Integration tests
-
-All platform scenarios register through the package's single application test
-entry point, `example/integration_test/app_test.dart`. Files under
-`integration_test/src/` contain scenarios only, with no additional `main()`.
-
-From `example`:
-
-```sh
-flutter test integration_test/app_test.dart -d linux
-```
-
-The suite launches real WebViews and checks page messaging, navigation
-decisions, script results and the native window handle. On Linux it also
-drives the example runner's test composer: default and application-owned
-layouts side by side, resize, title bar buttons, closing from each composer
-callback, and repeated close/recreate. Native keyboard/pointer focus and visual
-rendering still need a short manual check.
-
-### macOS sandbox
-
-The macOS example runs in the App Sandbox, like a shipped application. Its
-entitlements allow outgoing and loopback connections (each test serves its
-pages from `127.0.0.1`) and user-selected files. Keep the sandbox on when
-running the suite: the tests must not touch anything outside the example's
-container.
-
-Page dialogs and file panels open as sheets. Tests inspect and end them through
-the runner's `webview_example/native_test` channel (`sheet`, `endSheet`); a
-panel is only ever cancelled. Choosing a file and saving a download are not
-automated. Inside the sandbox, WebKit can write a download only to a location
-the user picked in the panel, so a location set by a test fails with
-"Operation not permitted"; outside it, the panel ignores the test's folder and
-saves to the last folder the user chose. Check uploads and downloads by hand.
+See [LICENSE](./LICENSE).
