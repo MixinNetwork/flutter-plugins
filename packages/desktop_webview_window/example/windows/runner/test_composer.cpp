@@ -88,6 +88,34 @@ DWWComposeResult Compose(void*, const DWWComposeRequest* request) {
   Handled entry;
   entry.mode = request->arguments;
   entry.view = static_cast<HWND>(request->webview_view);
+  if (entry.mode == "minimize:compose") {
+    // Compose precedes WebView::Create: WM_SIZE must tolerate a null controller.
+    ShowWindow(static_cast<HWND>(request->window), SW_MINIMIZE);
+    Record(request->browser, IsIconic(static_cast<HWND>(request->window))
+                                 ? "minimized-before-create"
+                                 : "minimize-failed");
+  }
+  if (entry.mode == "close:initializing") {
+    struct PendingClose {
+      HWND window;
+      int64_t browser;
+    };
+    static std::map<UINT_PTR, PendingClose> pending;
+    const UINT_PTR timer = SetTimer(
+        nullptr, 0, 1,
+        [](HWND, UINT, UINT_PTR id, DWORD) {
+          KillTimer(nullptr, id);
+          const auto found = pending.find(id);
+          if (found == pending.end()) return;
+          const auto target = found->second;
+          pending.erase(found);
+          if (IsWindow(target.window)) {
+            Record(target.browser, "native-close-during-create");
+            SendMessage(target.window, WM_CLOSE, 0, 0);
+          }
+        });
+    pending[timer] = {static_cast<HWND>(request->window), request->browser};
+  }
   if (entry.mode == "close:compose") {
     handled[request->browser] = entry;
     Record(request->browser, dww_browser_close(request->browser)
@@ -274,6 +302,16 @@ void TestComposerRegisterChannel(flutter::BinaryMessenger* messenger) {
     }
     if (method == "windowTitle") {
       result->Success(EncodableValue(WindowTitle(window)));
+      return;
+    }
+    if (method == "nativeClose") {
+      SendMessage(window, WM_CLOSE, 0, 0);
+      result->Success();
+      return;
+    }
+    if (method == "restore") {
+      ShowWindow(window, SW_RESTORE);
+      result->Success();
       return;
     }
     HWND web = FindChild(window, L"web_view_window_web_view");

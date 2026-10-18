@@ -146,6 +146,9 @@ enum TestComposer {
       }
       content.layoutSubtreeIfNeeded()
       switch call.method {
+      case "nativeClose":
+        window.performClose(nil)
+        result(nil)
       case "webviewPixel", "startupPixel":
         guard let webView = descendants(of: content, WKWebView.self).first else {
           result(FlutterError(code: "no_webview", message: "No WebView", details: nil))
