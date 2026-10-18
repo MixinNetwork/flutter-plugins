@@ -89,8 +89,35 @@ The repository CI selects affected package/platform targets from
 [`.github/integration-tests.json`](../../../.github/integration-tests.json),
 validates the example, runs the shared suite and uploads its log. A target may
 optionally provide a driver. Keep new scenarios in the suite instead of adding
-scenario-specific CI jobs. Linux has no registered CI target yet; run its suite
-locally using the command above.
+scenario-specific CI jobs. CI runs the suite on macOS, Windows and Linux.
+
+### Reported-issue regressions
+
+The shared suite also checks SPA `pushState`, `replaceState`, hash and history
+changes; macOS `srcdoc` rendering and reopen; native and API close/reopen;
+and Windows minimize/close while WebView2 is still initializing. SPA history
+is driven through `history.back()`/`forward()`: WebKit may skip entries created
+without a user gesture when its native back button is used.
+
+To exercise these cases in a standalone Release build, use the same entry
+point with `DWW_ISSUE_RETEST`. For example, from this directory on Linux:
+
+```shell
+flutter build linux --release --target=integration_test/app_test.dart --dart-define=DWW_ISSUE_RETEST=true
+./build/linux/x64/release/bundle/webview_window_example
+```
+
+On Windows, build `windows` instead and run the executable under
+`build/windows/x64/runner/Release/`. The process exits with 0 only when the
+registered regression tests pass. On Linux, run it once with
+`GDK_BACKEND=x11` and once with `GDK_BACKEND=wayland` in a suitable desktop
+session.
+
+Add `--dart-define=DWW_MEMORY_PROBE=true` to measure a ten-second playlist:
+five warmup windows followed by thirty measured close/reopen cycles. It logs
+`DWW_MEMORY` samples with the host PID and resident memory after each close.
+Measure the browser child processes separately, too. This probe does not
+assert a memory threshold or prove absence of leaks; it is disabled in CI.
 
 ### Windows
 

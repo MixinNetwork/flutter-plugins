@@ -187,6 +187,10 @@ FlMethodResponse* Handle(FlMethodCall* call) {
     return FL_METHOD_RESPONSE(
         fl_method_error_response_new("no_window", "Unknown window", nullptr));
   }
+  if (strcmp(method, "nativeClose") == 0) {
+    gtk_window_close(GTK_WINDOW(window));
+    return FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
+  }
   if (strcmp(method, "geometry") == 0) {
     GtkWidget* content = gtk_bin_get_child(GTK_BIN(window));
     const auto webviews = Find(window, "WebKitWebView");
