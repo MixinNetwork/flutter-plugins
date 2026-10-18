@@ -129,6 +129,27 @@ void registerBridgeTests() {
     });
   });
 
+  testWidgets('navigations to application schemes reach Dart',
+      (tester) async {
+    await runScenario(tester, () async {
+      final view = await create();
+      final requested = Completer<String>();
+      await view.setOnUrlRequestCallback((value) {
+        if (value.startsWith('mixin:') && !requested.isCompleted) {
+          requested.complete(value);
+        }
+        return !value.startsWith('mixin:');
+      });
+      await view.launch(url('/scheme'));
+      await _waitFor(view, 'location.pathname', '/scheme');
+      await view.evaluateJavaScript("location.href = 'mixin://pay?x=1'");
+      expect(await requested.future.timeout(const Duration(seconds: 10)),
+          'mixin://pay?x=1');
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      expect(await view.evaluateJavaScript('location.pathname'), '/scheme');
+    });
+  });
+
   testWidgets('native window handle is valid until the window closes',
       (tester) async {
     await runScenario(tester, () async {

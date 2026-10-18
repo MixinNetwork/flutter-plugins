@@ -11,7 +11,9 @@ typedef PromptHandler = String Function(String prompt, String defaultText);
 
 /// Decides whether the browser may navigate to [url]. Return false to cancel.
 /// The navigation waits for the callback, so it must answer synchronously; a
-/// callback that throws allows the navigation.
+/// callback that throws allows the navigation. Schemes the WebView cannot
+/// load, such as `mixin:`, reach the callback too; handle them and return
+/// false.
 typedef OnUrlRequestCallback = bool Function(String url);
 
 /// Current browser navigation state, the same state native composers receive.

@@ -299,30 +299,29 @@ extension WebViewLayoutController: WKNavigationDelegate {
       return
     }
 
-    guard ["http", "https", "file"].contains(url.scheme?.lowercased() ?? "") else {
-      decisionHandler(.cancel)
-      return
-    }
+    // WebKit cannot load other schemes, such as mixin: or mailto:. They still
+    // reach Dart below so the application can handle them.
+    let loadable = WKWebView.handlesURLScheme(url.scheme?.lowercased() ?? "")
 
     // Only top-level navigations are decided, as on the other platforms.
     guard navigationAction.targetFrame?.isMainFrame ?? true else {
-      decisionHandler(.allow)
+      decisionHandler(loadable ? .allow : .cancel)
       return
     }
     if skipNextDecision {
       skipNextDecision = false
-      decisionHandler(.allow)
+      decisionHandler(loadable ? .allow : .cancel)
       return
     }
     guard urlRequestEnabled else {
-      decisionHandler(.allow)
+      decisionHandler(loadable ? .allow : .cancel)
       return
     }
     // The navigation waits for Dart. Anything but an explicit false allows it.
     channel.invokeMethod("onUrlRequest", arguments: [
       "id": viewId, "url": url.absoluteString,
     ] as [String: Any]) { result in
-      decisionHandler((result as? Bool) == false ? .cancel : .allow)
+      decisionHandler((result as? Bool) == false || !loadable ? .cancel : .allow)
     }
   }
 

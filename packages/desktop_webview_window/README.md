@@ -52,6 +52,10 @@ callback answers synchronously. Return false to cancel; a callback that throws
 allows the navigation. `launch(url, triggerOnUrlRequestEvent: false)` skips the
 decision for that navigation.
 
+Links to schemes the WebView cannot load, such as `mixin:` or `mailto:`, reach
+the callback too. Handle them there, for example with `url_launcher`, and
+return false; without a callback they are cancelled.
+
 `webview.navigationState` reports `canGoBack`, `canGoForward`, `isLoading`, and
 the current page's `url` and `title`. Native composers receive the same state.
 
