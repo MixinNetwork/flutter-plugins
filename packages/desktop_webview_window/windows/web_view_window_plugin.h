@@ -12,29 +12,36 @@
 #include "strconv.h"
 #include "webview_window.h"
 
+#include <map>
 #include <memory>
 
-class WebviewWindowPlugin: public flutter::Plugin {
+class WebviewWindowPlugin : public flutter::Plugin {
  public:
+  static void RegisterWithRegistrar(FlutterDesktopPluginRegistrarRef registrar);
 
-  using MethodChannelPtr = std::shared_ptr<flutter::MethodChannel<flutter::EncodableValue>>;
-
-  static void RegisterWithRegistrar(flutter::PluginRegistrarWindows *registrar);
-
-  explicit WebviewWindowPlugin(MethodChannelPtr method_channel);
+  explicit WebviewWindowPlugin(flutter::BinaryMessenger* messenger);
 
   ~WebviewWindowPlugin() override;
 
  private:
-  // Called when a method is called on this plugin's channel from Dart.
-  void HandleMethodCall(
-      const flutter::MethodCall<flutter::EncodableValue> &method_call,
-      std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+  using Value = flutter::EncodableValue;
+  using Result = flutter::MethodResult<Value>;
 
-  MethodChannelPtr method_channel_;
+  void HandleMethodCall(const flutter::MethodCall<Value>& method_call,
+                        std::unique_ptr<Result> result);
 
-  std::map<int64_t, std::unique_ptr<WebviewWindow>> windows_;
+  void Create(const flutter::EncodableMap& arguments,
+              std::unique_ptr<Result> result);
 
+  void Emit(const std::string& method, flutter::EncodableMap args);
+
+  // Declared first: destroyed last, after every window has stopped emitting.
+  std::unique_ptr<flutter::MethodChannel<Value>> channel_;
+
+  std::map<int64_t, std::shared_ptr<WebviewWindow>> windows_;
+
+  // Guards native close callbacks during plugin teardown.
+  std::shared_ptr<bool> lifetime_ = std::make_shared<bool>(true);
 };
 
-#endif //DESKTOP_WEBVIEW_WINDOW_WINDOWS_WEB_VIEW_PLUGIN_H_
+#endif  // DESKTOP_WEBVIEW_WINDOW_WINDOWS_WEB_VIEW_PLUGIN_H_

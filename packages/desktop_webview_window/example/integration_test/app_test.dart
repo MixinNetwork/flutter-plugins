@@ -1,23 +1,22 @@
 import 'dart:io';
 
-import 'package:desktop_webview_window/desktop_webview_window.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
-import 'src/macos_webview_scenarios.dart' as macos;
-import 'src/test_title_bar.dart';
+import 'src/bridge_scenarios.dart' as bridge;
+import 'src/background_scenarios.dart' as background;
+import 'src/composer_scenarios.dart' as composer;
+import 'src/page_ui_scenarios.dart' as page_ui;
 import 'src/windows_webview_scenarios.dart' as windows;
 
-void main([List<String> args = const []]) {
-  if (runWebViewTitleBarWidget(args, builder: (_) => const TestTitleBar())) {
-    return;
-  }
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
-  if (Platform.isMacOS) {
-    macos.registerMacOSWebviewTests();
-  } else if (Platform.isWindows) {
-    windows.registerWindowsWebviewTests();
-  } else {
-    throw UnsupportedError(
-        'No integration scenarios for ${Platform.operatingSystem}');
-  }
+// One entrypoint for every platform.
+void main() {
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  binding.framePolicy = LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
+  bridge.registerBridgeTests();
+  background.registerBackgroundTests();
+  page_ui.registerPageUiTests();
+  // Every example runner installs the test composer.
+  composer.registerComposerTests();
+  if (Platform.isWindows) windows.registerWindowsWebviewTests();
 }

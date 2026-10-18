@@ -3,58 +3,14 @@
 //
 
 #include "webview_window.h"
-#include <utility>
-#include "message_channel_plugin.h"
-#include <unordered_map>
+#include <memory>
 #include <string>
+#include <utility>
 
 #if WEBKIT_MAJOR_VERSION < 2 || \
     (WEBKIT_MAJOR_VERSION == 2 && WEBKIT_MINOR_VERSION < 40)
 #define WEBKIT_OLD_USED
 #endif
-
-void get_cookies_callback(WebKitCookieManager *manager, GAsyncResult *res,
-                          gpointer user_data) {
-  CookieData *data = (CookieData *)user_data;
-  GError *error = NULL;
-
-  GList *cookies =
-      webkit_cookie_manager_get_cookies_finish(manager, res, &error);
-  if (error != NULL) {
-    g_print("Error getting cookies: %s\n", error->message);
-    g_error_free(error);
-    data->cookies = NULL;
-  } else {
-    data->cookies = cookies;
-  }
-
-  g_main_loop_quit(data->loop);
-}
-
-GList *get_cookies_sync(WebKitWebView *web_view) {
-  WebKitCookieManager *cookie_manager;
-  GMainLoop *loop;
-  CookieData data = {0};
-
-  cookie_manager = webkit_web_context_get_cookie_manager(
-      webkit_web_view_get_context(web_view));
-  loop = g_main_loop_new(NULL, FALSE);
-  data.loop = loop;
-
-  const gchar *uri = webkit_web_view_get_uri(web_view);
-
-  // Start the asynchronous operation
-  webkit_cookie_manager_get_cookies(cookie_manager, uri, NULL,
-                                    (GAsyncReadyCallback)get_cookies_callback,
-                                    &data);
-
-  // Run the main loop until the callback is called
-  g_main_loop_run(loop);
-
-  g_main_loop_unref(loop);
-
-  return data.cookies;
-}
 
 namespace {
 
@@ -78,19 +34,61 @@ GtkWidget *on_create(WebKitWebView *web_view,
                      WebKitNavigationAction *navigation_action,
                      gpointer user_data) {
   // WebKit expects either a new view related to web_view or nullptr here.
-  // Handing back web_view itself aborts in WebCore on some builds, so open
-  // user-clicked links in the same view and drop script-opened windows.
-  if (webkit_navigation_action_is_user_gesture(navigation_action)) {
-    webkit_web_view_load_request(
-        web_view, webkit_navigation_action_get_request(navigation_action));
-  }
+  // Handing back web_view itself aborts in WebCore on some builds, so load
+  // new windows in the same view, as on macOS and Windows. The load goes
+  // through the navigation decision.
+  webkit_web_view_load_request(
+      web_view, webkit_navigation_action_get_request(navigation_action));
   return nullptr;
 }
 
-void on_load_changed(WebKitWebView *web_view, WebKitLoadEvent load_event,
-                     gpointer user_data) {
-  auto *window = static_cast<WebviewWindow *>(user_data);
-  window->OnLoadChanged(load_event);
+// The JavaScript bridge's single script message handler.
+constexpr char kBridgeHandler[] = "desktopWebview";
+constexpr char kStartupHandler[] = "desktopWebviewStartup";
+constexpr char kStartupWorld[] = "desktopWebviewStartup";
+
+// Asks where to save a download, as on macOS and Windows. Runs before any
+// data is written; cancelling the chooser cancels the download.
+gboolean on_decide_destination(WebKitDownload *download,
+                               const gchar *suggested_filename,
+                               gpointer) {
+  auto *web_view = webkit_download_get_web_view(download);
+  GtkWidget *toplevel =
+      web_view ? gtk_widget_get_toplevel(GTK_WIDGET(web_view)) : nullptr;
+  GtkFileChooserNative *chooser = gtk_file_chooser_native_new(
+      nullptr, GTK_IS_WINDOW(toplevel) ? GTK_WINDOW(toplevel) : nullptr,
+      GTK_FILE_CHOOSER_ACTION_SAVE, nullptr, nullptr);
+  gtk_file_chooser_set_do_overwrite_confirmation(GTK_FILE_CHOOSER(chooser),
+                                                 TRUE);
+  const gchar *downloads =
+      g_get_user_special_dir(G_USER_DIRECTORY_DOWNLOAD);
+  if (downloads != nullptr) {
+    gtk_file_chooser_set_current_folder(GTK_FILE_CHOOSER(chooser), downloads);
+  }
+  if (suggested_filename != nullptr) {
+    gtk_file_chooser_set_current_name(GTK_FILE_CHOOSER(chooser),
+                                      suggested_filename);
+  }
+  if (gtk_native_dialog_run(GTK_NATIVE_DIALOG(chooser)) ==
+      GTK_RESPONSE_ACCEPT) {
+    g_autofree gchar *uri =
+        gtk_file_chooser_get_uri(GTK_FILE_CHOOSER(chooser));
+    webkit_download_set_allow_overwrite(download, TRUE);
+    webkit_download_set_destination(download, uri);
+  } else {
+    webkit_download_cancel(download);
+  }
+  g_object_unref(chooser);
+  return TRUE;
+}
+
+bool is_attachment(WebKitURIResponse *response) {
+  SoupMessageHeaders *headers = webkit_uri_response_get_http_headers(response);
+  if (headers == nullptr) return false;
+  const char *disposition =
+      soup_message_headers_get_one(headers, "Content-Disposition");
+  return disposition != nullptr &&
+         g_ascii_strncasecmp(disposition, "attachment", 10) == 0;
 }
 
 gboolean decide_policy_cb(WebKitWebView *web_view,
@@ -102,267 +100,541 @@ gboolean decide_policy_cb(WebKitWebView *web_view,
 
 }  // namespace
 
-WebviewWindow::WebviewWindow(FlMethodChannel *method_channel, int64_t window_id,
+WebviewWindow::WebviewWindow(EventSink emit,
+                             NavigationRequest request_navigation,
+                             int64_t window_id,
                              std::function<void()> on_close_callback,
-                             const std::string &title, int width, int height,
-                             int title_bar_height, GtkWindow *parent)
-    : method_channel_(method_channel),
+                             const Options &options)
+    : emit_(std::move(emit)),
+      request_navigation_(std::move(request_navigation)),
       window_id_(window_id),
       on_close_callback_(std::move(on_close_callback)),
       default_user_agent_() {
-  g_object_ref(method_channel_);
-
+  javascript_cancellable_ = g_cancellable_new();
+  // An independent top-level window, as on macOS and Windows: not transient
+  // for the app window, so it does not stay above it.
   window_ = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-  if (parent != nullptr) {
-    // Declared as a child of the app window, so window managers treat it like
-    // a dialog: centred over the app and kept above it on stacking ones,
-    // floated instead of tiled on tiling ones.
-    gtk_window_set_transient_for(GTK_WINDOW(window_), parent);
-  }
+  g_object_ref_sink(window_);
   g_signal_connect(G_OBJECT(window_), "destroy",
                    G_CALLBACK(+[](GtkWidget *, gpointer arg) {
                      auto *window = static_cast<WebviewWindow *>(arg);
-                     // on_close_callback_ erases this window from the plugin's
-                     // map, which deletes it, so notify Dart first and run the
-                     // callback last, from a local copy.
-                     auto on_close = std::move(window->on_close_callback_);
-                     auto *args = fl_value_new_map();
-                     fl_value_set(args, fl_value_new_string("id"),
-                                  fl_value_new_int(window->window_id_));
-                     fl_method_channel_invoke_method(
-                         FL_METHOD_CHANNEL(window->method_channel_),
-                         "onWindowClose", args, nullptr, nullptr, nullptr);
-                     if (on_close) {
-                       on_close();
-                     }
+                     window->OnDestroyed();
                    }),
                    this);
-  gtk_window_set_title(GTK_WINDOW(window_), title.c_str());
-  gtk_window_set_default_size(GTK_WINDOW(window_), width, height);
-  gtk_window_set_position(GTK_WINDOW(window_),
-                          parent != nullptr ? GTK_WIN_POS_CENTER_ON_PARENT
-                                            : GTK_WIN_POS_CENTER);
-
-  box_ = GTK_BOX(gtk_box_new(GTK_ORIENTATION_VERTICAL, 0));
-  gtk_container_add(GTK_CONTAINER(window_), GTK_WIDGET(box_));
-
-  // initial flutter_view
-  // The title bar is a second Flutter engine. Tearing it down when the window
-  // closes breaks the host app's GL context, so a title_bar_height of 0 skips
-  // it for apps that draw their own controls.
-  FlView *title_bar = nullptr;
-  if (title_bar_height > 0) {
-    g_autoptr(FlDartProject) project = fl_dart_project_new();
-    const char *args[] = {"web_view_title_bar",
-                          g_strdup_printf("%ld", window_id), nullptr};
-    fl_dart_project_set_dart_entrypoint_arguments(project,
-                                                  const_cast<char **>(args));
-    title_bar = fl_view_new(project);
-
-    g_autoptr(FlPluginRegistrar) desktop_webview_window_registrar =
-        fl_plugin_registry_get_registrar_for_plugin(
-            FL_PLUGIN_REGISTRY(title_bar), "DesktopWebviewWindowPlugin");
-    client_message_channel_plugin_register_with_registrar(
-        desktop_webview_window_registrar);
-
-    gtk_widget_set_size_request(GTK_WIDGET(title_bar), -1, title_bar_height);
-    gtk_widget_set_vexpand(GTK_WIDGET(title_bar), FALSE);
-    gtk_box_pack_start(box_, GTK_WIDGET(title_bar), FALSE, FALSE, 0);
+  // Window-manager close requests take the same path as every other close.
+  g_signal_connect(G_OBJECT(window_), "delete-event",
+                   G_CALLBACK(+[](GtkWidget *, GdkEvent *, gpointer arg) {
+                     static_cast<WebviewWindow *>(arg)->Close();
+                     return TRUE;
+                   }),
+                   this);
+  gtk_window_set_title(GTK_WINDOW(window_), options.title.c_str());
+  gtk_window_set_default_size(GTK_WINDOW(window_), options.width,
+                              options.height);
+  if (options.use_position) {
+    gtk_window_move(GTK_WINDOW(window_), options.x, options.y);
+  } else {
+    gtk_window_set_position(GTK_WINDOW(window_), GTK_WIN_POS_CENTER);
+  }
+  if (options.open_maximized) {
+    gtk_window_maximize(GTK_WINDOW(window_));
   }
 
-  // initial web_view
   webview_ = webkit_web_view_new();
+  g_object_ref_sink(webview_);
+  g_signal_connect(webview_, "load-changed",
+                   G_CALLBACK(+[](WebKitWebView *, WebKitLoadEvent event, gpointer arg) {
+                     auto *window = static_cast<WebviewWindow *>(arg);
+                     if (event == WEBKIT_LOAD_COMMITTED) window->document_committed_ = true;
+                     if (event == WEBKIT_LOAD_FINISHED && window->startup_cover_ &&
+                         window->document_committed_) {
+                       window->FinishStartupBackground();
+                     }
+                   }), this);
+  content_manager_ = WEBKIT_USER_CONTENT_MANAGER(g_object_ref(
+      webkit_web_view_get_user_content_manager(WEBKIT_WEB_VIEW(webview_))));
+  // Reveal the first contentful paint even if the server is still streaming
+  // HTML. The isolated world keeps page scripts from overriding this signal.
+  webkit_user_content_manager_register_script_message_handler_in_world(
+      content_manager_, kStartupHandler, kStartupWorld);
+  startup_handler_id_ = g_signal_connect(
+      content_manager_, "script-message-received::desktopWebviewStartup",
+      G_CALLBACK(+[](WebKitUserContentManager *, WebKitJavascriptResult *, gpointer arg) {
+        static_cast<WebviewWindow *>(arg)->FinishStartupBackground();
+      }), this);
+  startup_script_ = webkit_user_script_new_for_world(
+      R"JS((() => {
+        const reveal = () => requestAnimationFrame(() => requestAnimationFrame(() =>
+          window.webkit.messageHandlers.desktopWebviewStartup.postMessage(null)));
+        if (typeof PerformanceObserver === 'function' &&
+            PerformanceObserver.supportedEntryTypes &&
+            PerformanceObserver.supportedEntryTypes.indexOf('paint') !== -1) {
+          const observer = new PerformanceObserver(list => {
+            if (list.getEntries().some(entry => entry.name === 'first-contentful-paint')) {
+              observer.disconnect();
+              reveal();
+            }
+          });
+          observer.observe({type: 'paint', buffered: true});
+        } else {
+          // Older WebKit releases can still reveal before images finish.
+          document.addEventListener('DOMContentLoaded', reveal, {once: true});
+        }
+      })();)JS",
+      WEBKIT_USER_CONTENT_INJECT_TOP_FRAME, WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
+      kStartupWorld, nullptr, nullptr);
+  webkit_user_content_manager_add_script(content_manager_, startup_script_);
   g_signal_connect(G_OBJECT(webview_), "load-failed-with-tls-errors",
                    G_CALLBACK(on_load_failed_with_tls_errors), this);
   g_signal_connect(G_OBJECT(webview_), "create", G_CALLBACK(on_create), this);
-  g_signal_connect(G_OBJECT(webview_), "load-changed",
-                   G_CALLBACK(on_load_changed), this);
   g_signal_connect(G_OBJECT(webview_), "decide-policy",
                    G_CALLBACK(decide_policy_cb), this);
+  // Downloads are reported by the shared web context; keep this view's own.
+  g_signal_connect(
+      webkit_web_view_get_context(WEBKIT_WEB_VIEW(webview_)),
+      "download-started",
+      G_CALLBACK(+[](WebKitWebContext *, WebKitDownload *download,
+                     gpointer arg) {
+        auto *window = static_cast<WebviewWindow *>(arg);
+        if (webkit_download_get_web_view(download) !=
+            WEBKIT_WEB_VIEW(window->webview_)) {
+          return;
+        }
+        g_signal_connect(download, "decide-destination",
+                         G_CALLBACK(on_decide_destination), nullptr);
+      }),
+      this);
+  for (const char *property : {"notify::uri", "notify::title",
+                               "notify::is-loading"}) {
+    g_signal_connect(G_OBJECT(webview_), property,
+                     G_CALLBACK(+[](GObject *, GParamSpec *, gpointer arg) {
+                       static_cast<WebviewWindow *>(arg)
+                           ->PublishNavigationState();
+                     }),
+                     this);
+  }
+  g_signal_connect(
+      webkit_web_view_get_back_forward_list(WEBKIT_WEB_VIEW(webview_)),
+      "changed",
+      G_CALLBACK(+[](WebKitBackForwardList *, WebKitBackForwardListItem *,
+                     gpointer, gpointer arg) {
+        static_cast<WebviewWindow *>(arg)->PublishNavigationState();
+      }),
+      this);
 
   auto settings = webkit_web_view_get_settings(WEBKIT_WEB_VIEW(webview_));
   webkit_settings_set_javascript_can_open_windows_automatically(settings, true);
   default_user_agent_ = webkit_settings_get_user_agent(settings);
-  gtk_box_pack_end(box_, webview_, true, true, 0);
 
-  gtk_widget_show_all(GTK_WIDGET(window_));
-  gtk_widget_grab_focus(GTK_WIDGET(webview_));
+  if (!options.javascript_bridge.empty()) {
+    webkit_user_content_manager_register_script_message_handler(
+        content_manager_, kBridgeHandler);
+    bridge_handler_id_ = g_signal_connect(
+        content_manager_, "script-message-received::desktopWebview",
+        G_CALLBACK(+[](WebKitUserContentManager *, WebKitJavascriptResult *result,
+                       gpointer user_data) {
+          static_cast<WebviewWindow *>(user_data)->OnBridgeMessage(result);
+        }),
+        this);
+    RunJavaScriptWhenContentReady(options.javascript_bridge.c_str());
+  }
 
-  // FROM: https://github.com/leanflutter/window_manager/pull/343
-  // Disconnect all delete-event handlers first in flutter 3.10.1, which causes
-  // delete_event not working. Issues from flutter/engine:
-  // https://github.com/flutter/engine/pull/40033
-  if (title_bar != nullptr) {
-    guint handler_id = g_signal_handler_find(window_, G_SIGNAL_MATCH_DATA, 0,
-                                             0, NULL, NULL, title_bar);
-    if (handler_id > 0) {
-      g_signal_handler_disconnect(window_, handler_id);
+  // Keep WebKit's background unset so it can follow each document's
+  // color-scheme. A GTK cover hides the initial blank frame instead.
+  container_ = gtk_overlay_new();
+  g_object_ref_sink(container_);
+  gtk_container_add(GTK_CONTAINER(container_), webview_);
+  startup_cover_ = gtk_drawing_area_new();
+  gtk_widget_set_halign(startup_cover_, GTK_ALIGN_FILL);
+  gtk_widget_set_valign(startup_cover_, GTK_ALIGN_FILL);
+  g_signal_connect(startup_cover_, "draw",
+                   G_CALLBACK((+[](GtkWidget *widget, cairo_t *cr, gpointer) -> gboolean {
+                     GdkRGBA color{1, 1, 1, 1};
+                     gtk_style_context_lookup_color(gtk_widget_get_style_context(widget),
+                                                    "theme_base_color", &color);
+                     gdk_cairo_set_source_rgba(cr, &color);
+                     cairo_paint(cr);
+                     return TRUE;
+                   })), nullptr);
+  gtk_overlay_add_overlay(GTK_OVERLAY(container_), startup_cover_);
+  gtk_widget_show_all(container_);
+}
+
+void WebviewWindow::Start(const Options &options) {
+  dww::RegisterBrowser(window_id_, this);
+  const DWWComposeRequest request{
+      window_id_, window_, container_,
+      options.has_composer_arguments ? options.composer_arguments.c_str()
+                                     : nullptr,
+      options.title_bar};
+  composer_.Compose(request);
+  if (closing_) return;
+  if (gtk_widget_get_parent(container_) == nullptr) {
+    if (gtk_bin_get_child(GTK_BIN(window_)) == nullptr) {
+      gtk_container_add(GTK_CONTAINER(window_), container_);
+    } else {
+      g_warning("desktop_webview_window: the composer filled browser %" G_GINT64_FORMAT
+                " without placing its webview_view",
+                window_id_);
     }
   }
+  PublishNavigationState();
+  if (closing_) return;
+  if (!options.open_hidden) {
+    gtk_widget_show(window_);
+  }
+  gtk_widget_grab_focus(webview_);
+}
+
+void WebviewWindow::Emit(const char *method, FlValue *args) {
+  if (closed_ || !emit_) return;
+  g_autoptr(FlValue) map = args ? fl_value_ref(args) : fl_value_new_map();
+  fl_value_set_string_take(map, "id", fl_value_new_int(window_id_));
+  emit_(method, map);
+}
+
+void WebviewWindow::OnBridgeMessage(WebKitJavascriptResult *result) {
+  if (closing_ || closed_) return;
+  JSCValue *value = webkit_javascript_result_get_js_value(result);
+  // The injected bridge always posts a JSON string.
+  if (!jsc_value_is_string(value)) return;
+  g_autofree gchar *message = jsc_value_to_string(value);
+  if (message == nullptr) return;
+  g_autoptr(FlValue) args = fl_value_new_map();
+  fl_value_set_string_take(args, "message", fl_value_new_string(message));
+  Emit("onJavaScriptMessage", args);
+}
+
+void WebviewWindow::OpenInspector() {
+  if (closing_ || closed_) return;
+  auto *settings = webkit_web_view_get_settings(WEBKIT_WEB_VIEW(webview_));
+  webkit_settings_set_enable_developer_extras(settings, TRUE);
+  webkit_web_inspector_show(
+      webkit_web_view_get_inspector(WEBKIT_WEB_VIEW(webview_)));
 }
 
 WebviewWindow::~WebviewWindow() {
-  if (webview_ != nullptr) {
-    WebKitUserContentManager *manager = webkit_web_view_get_user_content_manager(WEBKIT_WEB_VIEW(webview_));
-    for (auto &entry : js_channel_handler_ids_) {
-      g_signal_handler_disconnect(manager, entry.second);
-    }
-    js_channel_handler_ids_.clear();
+  // The plugin can also dispose a still-open window during engine shutdown.
+  // Remove callbacks first so GTK destruction cannot re-enter its owner map.
+  on_close_callback_ = nullptr;
+  if (close_source_ != 0) {
+    g_source_remove(close_source_);
+    close_source_ = 0;
   }
-  g_object_unref(method_channel_);
-  printf("~WebviewWindow\n");
+  if (!closed_) {
+    closing_ = true;
+    composer_.BeginClose();
+    DeliverClosing();
+    dww::UnregisterBrowser(window_id_);
+  }
+  DisconnectCallbacks();
+  if (window_ != nullptr) {
+    g_signal_handlers_disconnect_by_data(window_, this);
+    gtk_widget_destroy(window_);
+    g_clear_object(&window_);
+  }
+  g_clear_object(&container_);
+  g_clear_object(&webview_);
+  g_clear_object(&content_manager_);
+  g_clear_object(&javascript_cancellable_);
 }
 
-void WebviewWindow::Navigate(const char *url) {
+void WebviewWindow::DisconnectCallbacks() {
+  if (javascript_cancellable_ != nullptr) {
+    g_cancellable_cancel(javascript_cancellable_);
+  }
+  if (webview_ != nullptr) {
+    g_signal_handlers_disconnect_by_data(
+        webkit_web_view_get_back_forward_list(WEBKIT_WEB_VIEW(webview_)),
+        this);
+    g_signal_handlers_disconnect_by_data(webview_, this);
+    g_signal_handlers_disconnect_by_data(
+        webkit_web_view_get_context(WEBKIT_WEB_VIEW(webview_)), this);
+  }
+  if (content_manager_ != nullptr && bridge_handler_id_ != 0) {
+    g_signal_handler_disconnect(content_manager_, bridge_handler_id_);
+    webkit_user_content_manager_unregister_script_message_handler(
+        content_manager_, kBridgeHandler);
+    bridge_handler_id_ = 0;
+  }
+  if (content_manager_ != nullptr && startup_handler_id_ != 0) {
+    g_signal_handler_disconnect(content_manager_, startup_handler_id_);
+    webkit_user_content_manager_unregister_script_message_handler_in_world(
+        content_manager_, kStartupHandler, kStartupWorld);
+    startup_handler_id_ = 0;
+  }
+  if (startup_script_) {
+    webkit_user_content_manager_remove_script(content_manager_, startup_script_);
+    webkit_user_script_unref(startup_script_);
+    startup_script_ = nullptr;
+  }
+}
+
+void WebviewWindow::FinishStartupBackground() {
+  if (closing_ || closed_ || !startup_cover_) return;
+  gtk_widget_destroy(startup_cover_);
+  startup_cover_ = nullptr;
+  webkit_user_content_manager_remove_script(content_manager_, startup_script_);
+  webkit_user_script_unref(startup_script_);
+  startup_script_ = nullptr;
+}
+
+void WebviewWindow::DeliverClosing() { composer_.Closing(window_id_); }
+
+void WebviewWindow::OnDestroyed() {
+  if (closed_) return;
+  closing_ = true;
+  composer_.BeginClose();
+  // Normally delivered by DestroyNow(); this covers an external destroy.
+  DeliverClosing();
+  closed_ = true;
+  dww::UnregisterBrowser(window_id_);
+  DisconnectCallbacks();
+
+  if (emit_) {
+    g_autoptr(FlValue) args = fl_value_new_map();
+    fl_value_set_string_take(args, "id", fl_value_new_int(window_id_));
+    emit_("onWindowClose", args);
+  }
+
+  // This erases the owning unique_ptr. Move the callable off the object and
+  // perform ALL member access, notifications and cleanup before invoking it.
+  // In particular, do not read window_id_ or emit_ after this call.
+  auto on_close = std::move(on_close_callback_);
+  if (on_close) on_close();
+}
+
+void WebviewWindow::Navigate(const char *url, bool decide) {
+  if (closing_ || closed_) return;
+  skip_next_decision_ = !decide;
   webkit_web_view_load_uri(WEBKIT_WEB_VIEW(webview_), url);
 }
 
 void WebviewWindow::RunJavaScriptWhenContentReady(const char *java_script) {
-  auto *manager =
-      webkit_web_view_get_user_content_manager(WEBKIT_WEB_VIEW(webview_));
-  webkit_user_content_manager_add_script(
-      manager,
-      webkit_user_script_new(java_script, WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
-                             WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START,
-                             nullptr, nullptr));
+  if (closing_ || closed_) return;
+  WebKitUserScript *script = webkit_user_script_new(
+      java_script, WEBKIT_USER_CONTENT_INJECT_TOP_FRAME,
+      WEBKIT_USER_SCRIPT_INJECT_AT_DOCUMENT_START, nullptr, nullptr);
+  webkit_user_content_manager_add_script(content_manager_, script);
+  webkit_user_script_unref(script);
 }
 
 void WebviewWindow::SetApplicationNameForUserAgent(
     const std::string &app_name) {
+  if (closing_ || closed_) return;
   auto *setting = webkit_web_view_get_settings(WEBKIT_WEB_VIEW(webview_));
   webkit_settings_set_user_agent(setting,
                                  (default_user_agent_ + app_name).c_str());
 }
 
-void WebviewWindow::Close() { gtk_window_close(GTK_WINDOW(window_)); }
-
-void WebviewWindow::OnLoadChanged(WebKitLoadEvent load_event) {
-  // notify history changed event.
-  {
-    auto can_go_back = webkit_web_view_can_go_back(WEBKIT_WEB_VIEW(webview_));
-    auto can_go_forward =
-        webkit_web_view_can_go_forward(WEBKIT_WEB_VIEW(webview_));
-    auto *args = fl_value_new_map();
-    fl_value_set(args, fl_value_new_string("id"), fl_value_new_int(window_id_));
-    fl_value_set(args, fl_value_new_string("canGoBack"),
-                 fl_value_new_bool(can_go_back));
-    fl_value_set(args, fl_value_new_string("canGoForward"),
-                 fl_value_new_bool(can_go_forward));
-    fl_method_channel_invoke_method(FL_METHOD_CHANNEL(method_channel_),
-                                    "onHistoryChanged", args, nullptr, nullptr,
-                                    nullptr);
+bool WebviewWindow::Close() {
+  if (closing_ || closed_ || window_ == nullptr) return false;
+  closing_ = true;
+  composer_.BeginClose();
+  if (composer_.dispatching()) {
+    // Composer code is on the stack; tear down once it has returned.
+    close_source_ = g_idle_add(
+        +[](gpointer arg) -> gboolean {
+          auto *window = static_cast<WebviewWindow *>(arg);
+          window->close_source_ = 0;
+          window->DestroyNow();
+          return G_SOURCE_REMOVE;
+        },
+        this);
+    return true;
   }
-
-  // notify load start/finished event.
-  switch (load_event) {
-    case WEBKIT_LOAD_STARTED: {
-      auto *args = fl_value_new_map();
-      fl_value_set(args, fl_value_new_string("id"),
-                   fl_value_new_int(window_id_));
-      fl_method_channel_invoke_method(FL_METHOD_CHANNEL(method_channel_),
-                                      "onNavigationStarted", args, nullptr,
-                                      nullptr, nullptr);
-      break;
-    }
-    case WEBKIT_LOAD_FINISHED: {
-      auto *args = fl_value_new_map();
-      fl_value_set(args, fl_value_new_string("id"),
-                   fl_value_new_int(window_id_));
-      fl_method_channel_invoke_method(FL_METHOD_CHANNEL(method_channel_),
-                                      "onNavigationCompleted", args, nullptr,
-                                      nullptr, nullptr);
-      break;
-    }
-    default:
-      break;
-  }
+  // Destroys this object; touch nothing afterwards.
+  DestroyNow();
+  return true;
 }
 
-void WebviewWindow::GoForward() {
+void WebviewWindow::DestroyNow() {
+  if (close_source_ != 0) {
+    g_source_remove(close_source_);
+    close_source_ = 0;
+  }
+  if (closed_ || window_ == nullptr) return;
+  closing_ = true;
+  composer_.BeginClose();
+  DeliverClosing();
+  // Emits destroy, whose handler releases this object.
+  gtk_widget_destroy(window_);
+}
+
+void WebviewWindow::PublishNavigationState() {
+  if (closing_ || closed_) return;
+  auto *view = WEBKIT_WEB_VIEW(webview_);
+  NavigationState next;
+  next.can_go_back = webkit_web_view_can_go_back(view);
+  next.can_go_forward = webkit_web_view_can_go_forward(view);
+  next.is_loading = webkit_web_view_is_loading(view);
+  const char *uri = webkit_web_view_get_uri(view);
+  next.url = uri != nullptr ? uri : "";
+  const char *title = webkit_web_view_get_title(view);
+  next.title = title != nullptr ? title : "";
+  if (published_ && next == navigation_) return;
+  published_ = true;
+  navigation_ = next;
+
+  const char *url_value = navigation_.url.empty() ? nullptr : navigation_.url.c_str();
+  const char *title_value =
+      navigation_.title.empty() ? nullptr : navigation_.title.c_str();
+  g_autoptr(FlValue) args = fl_value_new_map();
+  fl_value_set_string_take(args, "canGoBack",
+                           fl_value_new_bool(navigation_.can_go_back));
+  fl_value_set_string_take(args, "canGoForward",
+                           fl_value_new_bool(navigation_.can_go_forward));
+  fl_value_set_string_take(args, "isLoading",
+                           fl_value_new_bool(navigation_.is_loading));
+  fl_value_set_string_take(
+      args, "url", url_value ? fl_value_new_string(url_value) : fl_value_new_null());
+  fl_value_set_string_take(
+      args, "title",
+      title_value ? fl_value_new_string(title_value) : fl_value_new_null());
+  Emit("onNavigationStateChanged", args);
+
+  const DWWNavigationState state{window_id_,
+                                 navigation_.can_go_back,
+                                 navigation_.can_go_forward,
+                                 navigation_.is_loading,
+                                 url_value,
+                                 title_value};
+  composer_.NavigationChanged(state);
+}
+
+bool WebviewWindow::GoForward() {
+  if (closing_ || closed_) return false;
   webkit_web_view_go_forward(WEBKIT_WEB_VIEW(webview_));
+  return true;
 }
 
-void WebviewWindow::GoBack() {
+bool WebviewWindow::GoBack() {
+  if (closing_ || closed_) return false;
   webkit_web_view_go_back(WEBKIT_WEB_VIEW(webview_));
+  return true;
 }
 
-void WebviewWindow::Reload() {
+bool WebviewWindow::Reload() {
+  if (closing_ || closed_) return false;
   webkit_web_view_reload(WEBKIT_WEB_VIEW(webview_));
+  return true;
 }
 
-void WebviewWindow::StopLoading() {
+bool WebviewWindow::Stop() {
+  if (closing_ || closed_) return false;
   webkit_web_view_stop_loading(WEBKIT_WEB_VIEW(webview_));
+  return true;
 }
 
-FlValue *WebviewWindow::GetAllCookies() {
-  GList *cookies = get_cookies_sync(WEBKIT_WEB_VIEW(webview_));
+namespace {
 
-  g_autoptr(FlValue) fl_cookie_list = fl_value_new_list();
+void RespondError(FlMethodCall *call, const char *code, const char *message) {
+  fl_method_call_respond_error(call, code, message, nullptr, nullptr);
+}
 
-  FlValue* cookie_list = fl_value_ref(fl_cookie_list);
+}  // namespace
 
-  for (GList *l = cookies; l; l = l->next) {
-    SoupCookie *cookie = (SoupCookie *)l->data;
-    g_autoptr(FlValue) cookie_map = fl_value_new_map();
-
-    fl_value_set_string_take(cookie_map, "name",
-                             fl_value_new_string(soup_cookie_get_name(cookie)));
-    fl_value_set_string_take(
-        cookie_map, "value",
-        fl_value_new_string(soup_cookie_get_value(cookie)));
-    fl_value_set_string_take(
-        cookie_map, "domain",
-        fl_value_new_string(soup_cookie_get_domain(cookie)));
-    fl_value_set_string_take(cookie_map, "path",
-                             fl_value_new_string(soup_cookie_get_path(cookie)));
-
-    gdouble expires = g_date_time_get_seconds(soup_cookie_get_expires(cookie));
-
-    if (expires >= 0) {
-      fl_value_set_string_take(cookie_map, "expires",
-                               fl_value_new_float(expires));
-    } else {
-      fl_value_set_string_take(cookie_map, "expires", fl_value_new_null());
-    }
-
-    fl_value_set_string_take(
-        cookie_map, "httpOnly",
-        fl_value_new_bool(soup_cookie_get_http_only(cookie)));
-    fl_value_set_string_take(cookie_map, "secure",
-                             fl_value_new_bool(soup_cookie_get_secure(cookie)));
-    fl_value_set_string_take(cookie_map, "sessionOnly",
-                             fl_value_new_bool(false));
-
-    fl_value_append(cookie_list, cookie_map);
-    soup_cookie_free(cookie);
+void WebviewWindow::GetAllCookies(FlMethodCall *call) {
+  if (closing_ || closed_) {
+    RespondError(call, "browser_closed", "The browser has closed");
+    return;
   }
-
-  g_free(cookies);
-
-  return cookie_list;
+  auto *manager = webkit_web_context_get_cookie_manager(
+      webkit_web_view_get_context(WEBKIT_WEB_VIEW(webview_)));
+  webkit_cookie_manager_get_cookies(
+      manager, webkit_web_view_get_uri(WEBKIT_WEB_VIEW(webview_)),
+      javascript_cancellable_,
+      [](GObject *object, GAsyncResult *res, gpointer user_data) {
+        g_autoptr(FlMethodCall) call = FL_METHOD_CALL(user_data);
+        g_autoptr(GError) error = nullptr;
+        GList *cookies = webkit_cookie_manager_get_cookies_finish(
+            WEBKIT_COOKIE_MANAGER(object), res, &error);
+        if (error != nullptr) {
+          RespondError(call, "cookies_failed", error->message);
+          return;
+        }
+        g_autoptr(FlValue) list = fl_value_new_list();
+        for (GList *l = cookies; l; l = l->next) {
+          auto *cookie = static_cast<SoupCookie *>(l->data);
+          g_autoptr(FlValue) map = fl_value_new_map();
+          fl_value_set_string_take(map, "name",
+                                   fl_value_new_string(soup_cookie_get_name(cookie)));
+          fl_value_set_string_take(map, "value",
+                                   fl_value_new_string(soup_cookie_get_value(cookie)));
+          fl_value_set_string_take(map, "domain",
+                                   fl_value_new_string(soup_cookie_get_domain(cookie)));
+          fl_value_set_string_take(map, "path",
+                                   fl_value_new_string(soup_cookie_get_path(cookie)));
+          auto *expiration = soup_cookie_get_expires(cookie);
+          if (expiration != nullptr) {
+#if SOUP_MAJOR_VERSION >= 3
+            const gdouble expires = g_date_time_to_unix(expiration);
+#else
+            const gdouble expires = soup_date_to_time_t(expiration);
+#endif
+            fl_value_set_string_take(map, "expires", fl_value_new_float(expires));
+          } else {
+            fl_value_set_string_take(map, "expires", fl_value_new_null());
+          }
+          fl_value_set_string_take(map, "httpOnly",
+                                   fl_value_new_bool(soup_cookie_get_http_only(cookie)));
+          fl_value_set_string_take(map, "secure",
+                                   fl_value_new_bool(soup_cookie_get_secure(cookie)));
+          fl_value_set_string_take(map, "sessionOnly",
+                                   fl_value_new_bool(expiration == nullptr));
+          fl_value_append(list, map);
+        }
+        g_list_free_full(cookies, reinterpret_cast<GDestroyNotify>(soup_cookie_free));
+        fl_method_call_respond_success(call, list, nullptr);
+      },
+      g_object_ref(call));
 }
 
 gboolean WebviewWindow::DecidePolicy(WebKitPolicyDecision *decision,
                                      WebKitPolicyDecisionType type) {
-  if (type == WEBKIT_POLICY_DECISION_TYPE_NAVIGATION_ACTION) {
-    auto *navigation_decision = WEBKIT_NAVIGATION_POLICY_DECISION(decision);
-    auto *navigation_action =
-        webkit_navigation_policy_decision_get_navigation_action(
-            navigation_decision);
-    auto *request = webkit_navigation_action_get_request(navigation_action);
-    auto *uri = webkit_uri_request_get_uri(request);
-    auto *args = fl_value_new_map();
-    fl_value_set(args, fl_value_new_string("id"), fl_value_new_int(window_id_));
-    fl_value_set(args, fl_value_new_string("url"), fl_value_new_string(uri));
-    fl_method_channel_invoke_method(FL_METHOD_CHANNEL(method_channel_),
-                                    "onUrlRequested", args, nullptr, nullptr,
-                                    nullptr);
+  if (closing_ || closed_) return false;
+  if (type == WEBKIT_POLICY_DECISION_TYPE_RESPONSE) {
+    // WebKit ignores main documents it cannot show; download them instead,
+    // as on macOS and Windows.
+    auto *response_decision = WEBKIT_RESPONSE_POLICY_DECISION(decision);
+#ifndef WEBKIT_OLD_USED
+    if (!webkit_response_policy_decision_is_main_frame_main_resource(
+            response_decision)) {
+      return false;
+    }
+#endif
+    if (webkit_response_policy_decision_is_mime_type_supported(
+            response_decision) &&
+        !is_attachment(
+            webkit_response_policy_decision_get_response(response_decision))) {
+      return false;
+    }
+    webkit_policy_decision_download(decision);
+    return true;
   }
-  return false;
+  // Only top-level navigations are decided, as on the other platforms.
+  if (type != WEBKIT_POLICY_DECISION_TYPE_NAVIGATION_ACTION) return false;
+  if (skip_next_decision_) {
+    skip_next_decision_ = false;
+    return false;
+  }
+  if (!url_request_enabled_ || !request_navigation_) return false;
+  auto *navigation_action = webkit_navigation_policy_decision_get_navigation_action(
+      WEBKIT_NAVIGATION_POLICY_DECISION(decision));
+  auto *request = webkit_navigation_action_get_request(navigation_action);
+  const char *uri = webkit_uri_request_get_uri(request);
+  if (uri == nullptr) return false;
+  // WebKit waits until the referenced decision is used or ignored.
+  request_navigation_(uri, decision);
+  return true;
 }
 
 void WebviewWindow::EvaluateJavaScript(const char *java_script,
                                        FlMethodCall *call) {
+  if (closing_ || closed_) {
+    RespondError(call, "browser_closed", "The browser has closed");
+    return;
+  }
 #ifdef WEBKIT_OLD_USED
   webkit_web_view_run_javascript(
 #else
@@ -372,9 +644,9 @@ void WebviewWindow::EvaluateJavaScript(const char *java_script,
 #ifndef WEBKIT_OLD_USED
       -1, nullptr, nullptr,
 #endif
-      nullptr,
+      javascript_cancellable_,
       [](GObject *object, GAsyncResult *result, gpointer user_data) {
-        auto *call = static_cast<FlMethodCall *>(user_data);
+        g_autoptr(FlMethodCall) call = FL_METHOD_CALL(user_data);
         GError *error = nullptr;
         auto *js_result =
 #ifdef WEBKIT_OLD_USED
@@ -384,100 +656,25 @@ void WebviewWindow::EvaluateJavaScript(const char *java_script,
 #endif
                 WEBKIT_WEB_VIEW(object), result, &error);
         if (!js_result) {
-          fl_method_call_respond_error(call, "failed to evaluate javascript.",
-                                       error->message, nullptr, nullptr);
-          g_error_free(error);
+          RespondError(call, "javascript_error",
+                       error ? error->message : "Unknown error");
+          g_clear_error(&error);
         } else {
-          auto *js_value = jsc_value_to_json(
+          g_autofree gchar *js_value = jsc_value_to_json(
 #ifdef WEBKIT_OLD_USED
               webkit_javascript_result_get_js_value
 #endif
               (js_result),
               0);
-          fl_method_call_respond_success(
-              call, js_value ? fl_value_new_string(js_value) : nullptr,
-              nullptr);
+          g_autoptr(FlValue) value =
+              js_value ? fl_value_new_string(js_value) : nullptr;
+          fl_method_call_respond_success(call, value, nullptr);
+#ifdef WEBKIT_OLD_USED
+          webkit_javascript_result_unref(js_result);
+#else
+          g_object_unref(js_result);
+#endif
         }
-        g_object_unref(call);
       },
       g_object_ref(call));
 }
-
-void WebviewWindow::RegisterJavaScriptChannel(const std::string &name) {
-    WebKitUserContentManager *manager =
-            webkit_web_view_get_user_content_manager(WEBKIT_WEB_VIEW(webview_));
-
-    webkit_user_content_manager_register_script_message_handler(
-            manager, name.c_str());
-
-    struct HandlerData {
-        WebviewWindow *self;
-        std::string name;
-    };
-
-    HandlerData *data = new HandlerData{this, name};
-    auto it = js_channel_handler_ids_.find(name);
-    if (it != js_channel_handler_ids_.end()) {
-        g_signal_handler_disconnect(manager, it->second);
-        js_channel_handler_ids_.erase(it);
-    }
-
-    gulong handler_id = g_signal_connect_data(
-            manager,
-            ("script-message-received::" + name).c_str(),
-            G_CALLBACK(+[](WebKitUserContentManager *manager,
-                           WebKitJavascriptResult *result,
-                           gpointer user_data) {
-                HandlerData *data = static_cast<HandlerData *>(user_data);
-                WebviewWindow *self = data->self;
-                const std::string &handler_name = data->name;
-
-                JSCValue *value = webkit_javascript_result_get_js_value(result);
-
-                if (jsc_value_is_string(value)) {
-                    gchar *str_value = jsc_value_to_string(value);
-                    if (str_value != nullptr) {
-                        FlValue *args = fl_value_new_map();
-                        fl_value_set_string(args, "name",
-                                            fl_value_new_string(handler_name.c_str()));
-                        fl_value_set_string(args, "body",
-                                            fl_value_new_string(str_value));
-                        fl_value_set_string(args, "id",
-                                            fl_value_new_int(self->window_id_));
-
-                        fl_method_channel_invoke_method(
-                                self->method_channel_,
-                                "onJavaScriptMessage",
-                                args,
-                                nullptr,
-                                nullptr,
-                                nullptr);
-
-                        g_free(str_value);
-                    }
-                }
-            }),
-            data,
-            +[](gpointer user_data, GClosure *) {
-                delete static_cast<HandlerData *>(user_data);
-            },
-            static_cast<GConnectFlags>(0));
-
-    js_channel_handler_ids_[name] = handler_id;
-}
-
-
-void WebviewWindow::UnregisterJavaScriptChannel(const std::string &name) {
-    WebKitUserContentManager *manager =
-            webkit_web_view_get_user_content_manager(WEBKIT_WEB_VIEW(webview_));
-
-    auto it = js_channel_handler_ids_.find(name);
-    if (it != js_channel_handler_ids_.end()) {
-        g_signal_handler_disconnect(manager, it->second);
-        js_channel_handler_ids_.erase(it);
-    }
-
-    webkit_user_content_manager_unregister_script_message_handler(
-            manager, name.c_str());
-}
-

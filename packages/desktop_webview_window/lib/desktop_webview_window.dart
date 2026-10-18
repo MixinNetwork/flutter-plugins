@@ -1,202 +1,82 @@
-// You have generated a new plugin project without
-// specifying the `--platforms` flag. A plugin project supports no platforms is generated.
-// To add platforms, run `flutter create -t plugin --platforms <platforms> .` under the same
-// directory. You can also find a detailed instruction on how to add platforms in the `pubspec.yaml` at https://flutter.dev/docs/development/packages-and-plugins/developing-packages#plugin-platforms.
-
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/cupertino.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
+import 'src/browser_runtime.dart';
 import 'src/create_configuration.dart';
-import 'src/message_channel.dart';
-import 'src/title_bar_state.dart';
+import 'src/js_bridge.dart';
 import 'src/webview.dart';
 import 'src/webview_impl.dart';
 
+export 'src/cookie.dart';
 export 'src/create_configuration.dart';
-export 'src/title_bar.dart';
 export 'src/webview.dart';
 
-final List<WebviewImpl> _webviews = [];
-
 class WebviewWindow {
-  static const MethodChannel _channel = MethodChannel('webview_window');
-
-  static const _otherIsolateMessageHandler = ClientMessageChannel();
-
-  static bool _inited = false;
-
-  static void _init() {
-    if (_inited) {
-      return;
-    }
-    _inited = true;
-    _channel.setMethodCallHandler((call) async {
-      try {
-        return await _handleMethodCall(call);
-      } catch (e, s) {
-        debugPrint("method: ${call.method} args: ${call.arguments}");
-        debugPrint('handleMethodCall error: $e $s');
-      }
-    });
-    _otherIsolateMessageHandler.setMessageHandler((call) async {
-      try {
-        return await _handleOtherIsolateMethodCall(call);
-      } catch (e, s) {
-        debugPrint('_handleOtherIsolateMethodCall error: $e $s');
-      }
-    });
-  }
-
   /// Check if WebView runtime is available on the current devices.
   static Future<bool> isWebviewAvailable() async {
     if (Platform.isWindows) {
-      final ret = await _channel.invokeMethod<bool>('isWebviewAvailable');
+      final ret = await attachTransport().invoke<bool>('isWebviewAvailable');
       return ret == true;
     }
     return true;
   }
 
-  static Future<Webview> create({
-    CreateConfiguration? configuration,
-  }) async {
+  /// Creates a browser window. Its layout comes from the native composer the
+  /// application installed, or the default composer's native toolbar.
+  static Future<Webview> create({CreateConfiguration? configuration}) async {
     configuration ??= CreateConfiguration.platform();
-    _init();
     final arguments = configuration.toMap();
-    if (!titleBarInitialized) {
-      arguments['titleBarHeight'] = 0;
-      arguments['titleBarTopPadding'] = 0;
-    }
-    final viewId = await _channel.invokeMethod(
-      "create",
-      arguments,
-    ) as int;
-    final webview = WebviewImpl(viewId, _channel);
-    _webviews.add(webview);
-    return webview;
-  }
-
-  static Future<dynamic> _handleOtherIsolateMethodCall(MethodCall call) async {
-    final webViewId = call.arguments['webViewId'] as int;
-    final webView = _webviews
-        .cast<WebviewImpl?>()
-        .firstWhere((w) => w?.viewId == webViewId, orElse: () => null);
-    if (webView == null) {
-      return;
-    }
-    switch (call.method) {
-      case 'onBackPressed':
-        await webView.back();
-        break;
-      case 'onForwardPressed':
-        await webView.forward();
-        break;
-      case 'onRefreshPressed':
-        await webView.reload();
-        break;
-      case 'onStopPressed':
-        await webView.stop();
-        break;
-      case 'onClosePressed':
-        webView.close();
-        break;
-    }
-  }
-
-  static Future<dynamic> _handleMethodCall(MethodCall call) async {
-    final args = call.arguments as Map;
-    final viewId = args['id'] as int;
-    final webview = _webviews
-        .cast<WebviewImpl?>()
-        .firstWhere((e) => e?.viewId == viewId, orElse: () => null);
-    assert(webview != null);
-    if (webview == null) {
-      return;
-    }
-    switch (call.method) {
-      case "onWindowClose":
-        _webviews.remove(webview);
+    arguments['javaScriptBridge'] = javaScriptBridgeSource;
+    final transport = attachTransport();
+    pendingCreates++;
+    try {
+      final result =
+          await transport.invoke<Map<Object?, Object?>>('create', arguments);
+      final id = result?['id'] as int?;
+      if (id == null) {
+        throw StateError('Native create returned no browser ID');
+      }
+      final webview = WebviewImpl(id,
+          windowHandle: result!['windowHandle'] as int? ?? 0,
+          transport: transport);
+      if (result['closed'] == true || closedDuringCreate.remove(id)) {
         webview.onClosed();
-        break;
-      case "onJavaScriptMessage":
-        webview.onJavaScriptMessage(args['name'], args['body']);
-        break;
-      case "runJavaScriptTextInputPanelWithPrompt":
-        return webview.onRunJavaScriptTextInputPanelWithPrompt(
-          args['prompt'],
-          args['defaultText'],
-        );
-      case "onHistoryChanged":
-        webview.onHistoryChanged(args['canGoBack'], args['canGoForward']);
-        await _otherIsolateMessageHandler.invokeMethod('onHistoryChanged', {
-          'webViewId': viewId,
-          'canGoBack': args['canGoBack'] as bool,
-          'canGoForward': args['canGoForward'] as bool,
-        });
-        break;
-      case "onNavigationStarted":
-        webview.onNavigationStarted();
-        await _otherIsolateMessageHandler.invokeMethod('onNavigationStarted', {
-          'webViewId': viewId,
-        });
-        break;
-      case "onUrlRequested":
-        final url = args['url'] as String;
-        final ret = webview.notifyUrlChanged(url);
-        await _otherIsolateMessageHandler.invokeMethod('onUrlRequested', {
-          'webViewId': viewId,
-          'url': url,
-        });
-        return ret;
-      case "onWebMessageReceived":
-        final message = args['message'] as String;
-        webview.notifyWebMessageReceived(message);
-        await _otherIsolateMessageHandler.invokeMethod('onWebMessageReceived', {
-          'webViewId': viewId,
-          'message': message,
-        });
-        break;
-      case "onNavigationCompleted":
-        webview.onNavigationCompleted();
-        await _otherIsolateMessageHandler
-            .invokeMethod('onNavigationCompleted', {
-          'webViewId': viewId,
-        });
-        break;
-      default:
-        return;
+      } else {
+        browsers[id] = webview;
+      }
+      return webview;
+    } finally {
+      pendingCreates--;
+      if (pendingCreates == 0) closedDuringCreate.clear();
     }
   }
 
-  /// Clear all cookies and storage.
+  /// Clear all cookies and storage. Closes every open browser on Windows and
+  /// Linux first.
   static Future<void> clearAll({
-    String userDataFolderWindows = 'webview_window_WebView2',
+    WindowsWebviewOptions windows = const WindowsWebviewOptions(),
   }) async {
-    await _channel.invokeMethod('clearAll');
+    await attachTransport().invoke<void>('clearAll');
 
-    // FIXME(boyan01) Move the logic to windows platform if WebView2 provider a way to clean caches.
+    // WebView2 has no profile-independent way to clear a user data folder.
     // https://docs.microsoft.com/en-us/microsoft-edge/webview2/concepts/user-data-folder#create-user-data-folders
     if (Platform.isWindows) {
-      final Directory webview2Dir;
-      if (p.isAbsolute(userDataFolderWindows)) {
-        webview2Dir = Directory(userDataFolderWindows);
-      } else {
-        webview2Dir = Directory(p.join(
-            p.dirname(Platform.resolvedExecutable), userDataFolderWindows));
-      }
-
-      if (await (webview2Dir.exists())) {
+      final folder = windows.userDataFolder;
+      final webview2Dir = Directory(p.isAbsolute(folder)
+          ? folder
+          : p.join(p.dirname(Platform.resolvedExecutable), folder));
+      if (await webview2Dir.exists()) {
         for (var i = 0; i <= 4; i++) {
           try {
             await webview2Dir.delete(recursive: true);
             break;
           } catch (e) {
-            debugPrint("delete cache failed. retring.... $e");
+            debugPrint('delete cache failed. retrying.... $e');
           }
-          // wait to ensure all web window has been closed and file handle has been release.
+          // Wait until closed windows release their file handles.
           await Future.delayed(const Duration(seconds: 1));
         }
       }

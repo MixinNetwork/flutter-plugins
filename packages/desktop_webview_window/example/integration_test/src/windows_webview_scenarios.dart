@@ -1,13 +1,27 @@
 import 'dart:convert';
+import 'dart:ffi';
 import 'dart:io';
 
 import 'package:desktop_webview_window/desktop_webview_window.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-Future<Object?> readScript(Webview view, String script) async {
-  final result = await view.evaluateJavaScript(script);
-  return result == null ? null : jsonDecode(result);
+Future<Object?> readScript(Webview view, String script) =>
+    view.evaluateJavaScript(script);
+
+// The plugin no longer controls windows; borrow the native handle instead.
+final _user32 = DynamicLibrary.open('user32.dll');
+final _showWindow = _user32.lookupFunction<Int32 Function(IntPtr, Int32),
+    int Function(int, int)>('ShowWindow');
+final _setForegroundWindow =
+    _user32.lookupFunction<Int32 Function(IntPtr), int Function(int)>(
+        'SetForegroundWindow');
+const _swHide = 0;
+const _swShowMaximized = 3;
+
+void showMaximized(Webview view) {
+  _showWindow(view.nativeWindowHandle, _swShowMaximized);
+  _setForegroundWindow(view.nativeWindowHandle);
 }
 
 Future<void> waitForScript(Webview view, String script, Object expected) async {
@@ -91,10 +105,11 @@ void registerWindowsWebviewTests() {
   Future<Webview> create({bool hidden = false, bool denyMedia = false}) async {
     final view = await WebviewWindow.create(
       configuration: CreateConfiguration(
-        titleBarHeight: 0,
         openHidden: hidden,
-        denyCameraAndMicrophone: denyMedia,
-        userDataFolderWindows: profile.path,
+        windows: WindowsWebviewOptions(
+          userDataFolder: profile.path,
+          denyCameraAndMicrophone: denyMedia,
+        ),
       ),
     );
     views.add(view);
@@ -107,7 +122,7 @@ void registerWindowsWebviewTests() {
     await runScenario(tester, () async {
       final view = await create();
       var replaced = false;
-      view.setOnUrlRequestCallback((requested) {
+      await view.setOnUrlRequestCallback((requested) {
         if (requested == url('/old') && !replaced) {
           replaced = true;
           view.launch(url('/new'), triggerOnUrlRequestEvent: false);
@@ -129,11 +144,11 @@ void registerWindowsWebviewTests() {
       view.launch(url('/visibility'), triggerOnUrlRequestEvent: false);
       await waitForScript(view, 'location.pathname', '/visibility');
       await waitForScript(view, 'document.visibilityState', 'hidden');
-      await view.bringToForeground(maximized: true);
+      showMaximized(view);
       await waitForScript(view, 'document.visibilityState', 'visible');
-      await view.setWebviewWindowVisibility(false);
+      _showWindow(view.nativeWindowHandle, _swHide);
       await waitForScript(view, 'document.visibilityState', 'hidden');
-      await view.bringToForeground(maximized: true);
+      showMaximized(view);
       await waitForScript(view, 'document.visibilityState', 'visible');
     });
   });
@@ -178,7 +193,7 @@ void registerWindowsWebviewTests() {
   testWidgets('allowed form preserves POST body exactly once', (tester) async {
     await runScenario(tester, () async {
       final view = await create();
-      view.setOnUrlRequestCallback((_) => true);
+      await view.setOnUrlRequestCallback((_) => true);
       view.launch(url('/form'));
       await waitForScript(view, 'location.pathname', '/form');
       await view.evaluateJavaScript("""
@@ -200,7 +215,7 @@ void registerWindowsWebviewTests() {
       view.launch(url('/initial'), triggerOnUrlRequestEvent: false);
       await waitForScript(view, 'location.pathname', '/initial');
       var denied = false;
-      view.setOnUrlRequestCallback((u) {
+      await view.setOnUrlRequestCallback((u) {
         denied = true;
         return false;
       });
@@ -218,7 +233,7 @@ void registerWindowsWebviewTests() {
       view.launch(url('/initial'), triggerOnUrlRequestEvent: false);
       await waitForScript(view, 'location.pathname', '/initial');
       final decisions = <String>[];
-      view.setOnUrlRequestCallback((u) {
+      await view.setOnUrlRequestCallback((u) {
         decisions.add(u);
         return !u.endsWith('/blocked');
       });
@@ -239,7 +254,7 @@ void registerWindowsWebviewTests() {
       view.launch(url('/initial'), triggerOnUrlRequestEvent: false);
       await waitForScript(view, 'location.pathname', '/initial');
       final decisions = <String>[];
-      view.setOnUrlRequestCallback((u) {
+      await view.setOnUrlRequestCallback((u) {
         decisions.add(u);
         return false;
       });
@@ -259,7 +274,7 @@ void registerWindowsWebviewTests() {
       view.launch(url('/initial'), triggerOnUrlRequestEvent: false);
       await waitForScript(view, 'location.pathname', '/initial');
       final decisions = <String>[];
-      view.setOnUrlRequestCallback((u) {
+      await view.setOnUrlRequestCallback((u) {
         decisions.add(u);
         return false;
       });

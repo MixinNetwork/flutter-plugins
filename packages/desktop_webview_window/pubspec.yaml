@@ -6,7 +6,7 @@ homepage: https://github.com/MixinNetwork/flutter-plugins/tree/main/packages/des
 
 environment:
   sdk: ">=3.5.0 <4.0.0"
-  flutter: ">=2.5.0"
+  flutter: ">=3.44.0"
 
 dependencies:
   flutter:

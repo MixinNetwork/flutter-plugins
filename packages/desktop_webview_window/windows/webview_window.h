@@ -7,74 +7,88 @@
 
 #include <Windows.h>
 
-#include <flutter/dart_project.h>
-#include <flutter/method_channel.h>
 #include <flutter/encodable_value.h>
-#include <flutter/flutter_view_controller.h>
 
-#include <string>
-#include <memory>
 #include <functional>
+#include <memory>
+#include <optional>
+#include <string>
 
 #include <wrl.h>
 #include "wil/com.h"
 #include "WebView2.h"
 
-#include "flutter_view.h"
+#include "composer_runtime.h"
 #include "web_view.h"
 
-class WebviewWindow {
-
+class WebviewWindow : public std::enable_shared_from_this<WebviewWindow>,
+                      public dww::Browser {
  public:
+  using EventSink = webview_window::WebView::EventSink;
+  using NavigationRequest = webview_window::WebView::NavigationRequest;
 
-  using MethodChannelPtr = std::shared_ptr<flutter::MethodChannel<flutter::EncodableValue>>;
+  enum class CreateOutcome { kReady, kClosed, kFailed };
+  using CreateCallback =
+      std::function<void(CreateOutcome outcome, const std::string& error)>;
 
-  WebviewWindow(MethodChannelPtr method_channel,
-                int64_t window_id,
-                int title_bar_height,
-                std::function<void()> on_close_callback);
+  struct Options {
+    std::wstring title;
+    int width = 1280;
+    int height = 720;
+    int x = 0;
+    int y = 0;
+    bool use_position = false;
+    bool open_maximized = false;
+    bool open_hidden = false;
+    int brightness = -1;
+    uint32_t title_bar = 0xF;
+    bool deny_camera_and_microphone = false;
+    std::wstring user_data_folder;
+    std::wstring javascript_bridge;
+    std::optional<std::string> composer_arguments;
+  };
 
-  virtual ~WebviewWindow();
+  WebviewWindow(EventSink emit, NavigationRequest request_navigation,
+                int64_t window_id, std::function<void()> on_close_callback);
 
-  using CreateCallback = std::function<void(bool success)>;
+  ~WebviewWindow() override;
 
-  void CreateAndShow(const std::wstring &title, int height, int width,
-                     const std::wstring &userDataFolder,
-                     int windowPosX, int windowPosY, bool useWindowPositionAndSize,
-                     bool openMaximized, bool openHidden,
-                     bool denyCameraAndMicrophone, CreateCallback callback);
+  // Creates the window, composes it and starts WebView2. |callback| runs once:
+  // ready, closed (also when closed before WebView2 finished), or failed.
+  void CreateAndShow(const Options& options, CreateCallback callback);
 
-
-  // OS callback called by message pump. Handles the WM_NCCREATE message which
-  // is passed when the non-client area is being created and enables automatic
-  // non-client DPI scaling so that the non-client area automatically
-  // responsponds to changes in DPI. All other messages are handled by
-  // MessageHandler.
+  // OS callback called by message pump.
   static LRESULT CALLBACK WndProc(HWND window,
                                   UINT message,
                                   WPARAM wparam,
                                   LPARAM lparam) noexcept;
 
+  // Requests closing. Inside a composer callback it takes effect afterwards.
+  bool Close() override;
+
+  bool GoBack() override;
+
+  bool GoForward() override;
+
+  bool Reload() override;
+
+  bool Stop() override;
+
   void SetBrightness(int brightness);
 
-  void setVisibility(bool visible);
+  [[nodiscard]] HWND GetHwnd() const { return hwnd_.get(); }
 
-  void moveWebviewWindow(int left, int top, int width, int height);
-
-  void bringToForeground(bool maximized);
-
-  void getPositionalParameters(std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> completer);
-
-  [[nodiscard]] const std::unique_ptr<webview_window::WebView> &GetWebView() const {
+  [[nodiscard]] const std::shared_ptr<webview_window::WebView>& GetWebView() const {
     return web_view_;
   }
 
  private:
-
   // Retrieves a class instance pointer for |window|
-  static WebviewWindow *GetThisFromHandle(HWND window) noexcept;
+  static WebviewWindow* GetThisFromHandle(HWND window) noexcept;
 
-  MethodChannelPtr method_channel_;
+  EventSink emit_;
+
+  NavigationRequest request_navigation_;
 
   wil::unique_hwnd hwnd_;
 
@@ -82,28 +96,37 @@ class WebviewWindow {
 
   std::function<void()> on_close_callback_;
 
-  std::unique_ptr<webview_window::FlutterView> flutter_action_bar_;
+  std::shared_ptr<webview_window::WebView> web_view_;
 
-  std::unique_ptr<webview_window::WebView> web_view_;
+  CreateCallback create_callback_;
 
-  int last_title_bar_width_ = 0;
+  dww::ComposerBinding composer_;
+
+  bool closing_ = false;
 
   bool destroyed_ = false;
 
-  int title_bar_height_;
+  // Follow the system theme until Webview.setBrightness pins one, so the frame
+  // and the default title bar agree.
+  int brightness_ = -1;
 
-  // Processes and route salient window messages for mouse handling,
-  // size change and DPI. Delegates handling of these to member overloads that
-  // inheriting classes can handle.
+  std::optional<webview_window::WebView::NavigationState> published_;
+
+  void CompleteCreation(CreateOutcome outcome, const std::string& error = "");
+
+  // Tears the window down now. Only valid outside composer callbacks.
+  void DestroyNow();
+
+  void OnClosed();
+
+  void Layout();
+
+  void PublishNavigationState();
+
   LRESULT MessageHandler(HWND window,
                          UINT message,
                          WPARAM wparam,
                          LPARAM lparam) noexcept;
-
-  LRESULT HandleNCHitTest(int x, int y) noexcept;
-
-  void SetBorderless() noexcept;
-
 };
 
 #endif //_WEBVIEW_WINDOW_WEBVIEW_WINDOW_H_
