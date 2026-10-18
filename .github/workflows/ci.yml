@@ -34,7 +34,7 @@ jobs:
       - name: Set PR diff base
         if: github.event_name == 'pull_request'
         run: |
-          git fetch --no-tags origin ${{ github.base_ref }} --depth=1
+          git fetch --no-tags origin ${{ github.base_ref }}
           echo "MELOS_DIFF=origin/${{ github.base_ref }}...HEAD" >> "$GITHUB_ENV"
 
       - name: List workspace packages
