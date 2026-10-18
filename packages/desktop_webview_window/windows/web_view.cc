@@ -226,7 +226,9 @@ HRESULT WebView::OnWebviewControllerCreated() {
   
   settings->put_IsScriptEnabled(true);
   settings->put_IsZoomControlEnabled(false);
-  settings->put_AreDefaultContextMenusEnabled(false);
+  // The page's own context menu, as on macOS and Linux. DevTools, and with
+  // them the menu's Inspect item, stay off until openDevToolsWindow.
+  settings->put_AreDevToolsEnabled(FALSE);
   settings->put_IsStatusBarEnabled(false);
   settings->put_IsWebMessageEnabled(true);
 
@@ -703,9 +705,12 @@ void WebView::GetAllCookies(
 }
 
 void WebView::openDevToolsWindow() {
-  if (webview_) {
-    webview_->OpenDevToolsWindow();
+  if (!webview_) return;
+  wil::com_ptr<ICoreWebView2Settings> settings;
+  if (SUCCEEDED(webview_->get_Settings(&settings)) && settings) {
+    settings->put_AreDevToolsEnabled(TRUE);
   }
+  webview_->OpenDevToolsWindow();
 }
 
 bool WebView::CanGoBack() const {
