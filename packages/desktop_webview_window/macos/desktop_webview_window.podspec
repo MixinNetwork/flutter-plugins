@@ -17,7 +17,7 @@ A new flutter plugin project.
   s.source_files     = 'desktop_webview_window/Sources/**/*.{h,cc,swift}'
   s.dependency 'FlutterMacOS'
 
-  s.platform = :osx, '10.13'
+  s.platform = :osx, '10.15'
   s.pod_target_xcconfig = {
     'DEFINES_MODULE' => 'YES',
     'CLANG_CXX_LANGUAGE_STANDARD' => 'c++17'

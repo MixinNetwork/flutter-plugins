@@ -6,7 +6,7 @@ import PackageDescription
 let package = Package(
     name: "desktop_webview_window",
     platforms: [
-        .macOS("10.13")
+        .macOS("10.15")
     ],
     products: [
         .library(name: "desktop-webview-window", targets: ["desktop_webview_window"])
