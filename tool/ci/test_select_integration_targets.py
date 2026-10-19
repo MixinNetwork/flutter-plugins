@@ -156,7 +156,7 @@ class TargetSelectionTest(unittest.TestCase):
                         load_targets(root)
 
     def test_package_rejects_additional_integration_entry_points(self):
-        target = next(target for target in self.targets if target['platform'] == 'windows')
+        target = next(target for target in self.targets if target['platform'] == 'windows' and 'setup' in target)
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / '.github').mkdir()
