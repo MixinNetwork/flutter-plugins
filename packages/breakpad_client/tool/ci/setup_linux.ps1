@@ -14,6 +14,7 @@ tar -xzf "$cmake.tar.gz" -C $env:RUNNER_TEMP
 if ($LASTEXITCODE -ne 0) {
     throw 'Installing CMake 3.22 failed.'
 }
+& "$cmake/bin/cmake" --version
 "$cmake/bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
 
 # The example window needs an X display; later steps inherit DISPLAY.

@@ -14,6 +14,7 @@ void main() {
   final crashDir = Platform.environment[_crashDirVariable];
   if (crashDir != null) {
     breakpad.initExceptionHandle(crashDir);
+    stdout.writeln('breakpad_client: crashing');
     Pointer<Char>.fromAddress(0).value = 1;
     return;
   }
@@ -55,14 +56,19 @@ void main() {
         [],
         environment: {_crashDirVariable: temp.path},
       );
+      final output = StringBuffer();
+      process.stdout.transform(systemEncoding.decoder).listen(output.write);
+      process.stderr.transform(systemEncoding.decoder).listen(output.write);
       final exitCode = await process.exitCode.timeout(
         const Duration(seconds: 60),
         onTimeout: () {
           process.kill();
-          throw TimeoutException('crashing child did not exit');
+          throw TimeoutException('crashing child did not exit\n'
+              'files: ${temp.listSync().map((e) => e.path).toList()}\n'
+              'output:\n$output');
         },
       );
-      expect(exitCode, isNot(0));
+      expect(exitCode, isNot(0), reason: '$output');
       final dumps =
           temp.listSync().where((entry) => entry.path.endsWith('.dmp'));
       expect(dumps, hasLength(1));
