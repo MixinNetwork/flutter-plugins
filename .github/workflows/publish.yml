@@ -19,6 +19,7 @@ on:
           - pasteboard
           - desktop_multi_window
           - mixin_markdown_widget
+          - breakpad_client
   push:
     tags:
       - 'ogg_opus_player-v[0-9]+.[0-9]+.[0-9]+*'
@@ -32,6 +33,7 @@ on:
       - 'pasteboard-v[0-9]+.[0-9]+.[0-9]+*'
       - 'desktop_multi_window-v[0-9]+.[0-9]+.[0-9]+*'
       - 'mixin_markdown_widget-v[0-9]+.[0-9]+.[0-9]+*'
+      - 'breakpad_client-v[0-9]+.[0-9]+.[0-9]+*'
 jobs:
   publish:
 
@@ -43,6 +45,14 @@ jobs:
     steps:
       # Checkout repository
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # Pub skips gitignored files but warns when they are tracked, which
+      # third-party submodules such as Breakpad do. Untrack them in this
+      # checkout so validation matches the published contents.
+      - name: Untrack ignored submodule files
+        run: git submodule foreach --quiet --recursive 'git ls-files -ci --exclude-standard -z | xargs -0 -r git rm --cached -q'
 
       - uses: subosito/flutter-action@v2
         with:
