@@ -5,7 +5,7 @@ cmake_minimum_required(VERSION 3.10)
 
 project(breakpad_client_library VERSION 0.0.1 LANGUAGES CXX)
 
-add_compile_options("-fPIC")
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 # https://github.com/getsentry/sentry-native/blob/master/external/CMakeLists.txt#L1
 # The list of files is drived from: breakpad/Makefile.am
@@ -138,7 +138,8 @@ set_property(TARGET s_breakpad_client PROPERTY CXX_STANDARD 17)
 set_property(TARGET s_breakpad_client PROPERTY CXX_STANDARD_REQUIRED On)
 target_sources(s_breakpad_client PRIVATE ${BREAKPAD_SOURCES_COMMON})
 
-if (LINUX OR ANDROID)
+# LINUX is only defined by CMake 3.25+, so match the system name instead.
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux" OR ANDROID)
     target_sources(s_breakpad_client PRIVATE ${BREAKPAD_SOURCES_COMMON_LINUX} ${BREAKPAD_SOURCES_CLIENT_LINUX})
 
     if (ANDROID)
@@ -154,8 +155,6 @@ if (LINUX OR ANDROID)
     else ()
         target_sources(s_breakpad_client PRIVATE ${BREAKPAD_SOURCES_COMMON_LINUX_GETCONTEXT})
     endif ()
-
-    set_property(TARGET s_breakpad_client PROPERTY POSITION_INDEPENDENT_CODE ON)
 endif ()
 
 if (APPLE)
@@ -209,6 +208,9 @@ set_target_properties(breakpad_client PROPERTIES
 target_include_directories(breakpad_client PUBLIC include)
 
 target_link_libraries(breakpad_client s_breakpad_client)
+if (WIN32)
+    target_link_libraries(breakpad_client ole32)
+endif ()
 
 target_compile_definitions(breakpad_client PUBLIC DART_SHARED_LIB)
 
