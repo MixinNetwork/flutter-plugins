@@ -51,10 +51,18 @@ void main() {
 
   testWidgets('writes a minidump when the process crashes', (tester) async {
     await tester.runAsync(() async {
+      // flutter test passes engine switches such as start-paused through the
+      // environment; the child must not inherit them or it waits for a debugger.
+      final environment = {
+        for (final MapEntry(:key, :value) in Platform.environment.entries)
+          if (!key.startsWith('FLUTTER_ENGINE_SWITCH')) key: value,
+        _crashDirVariable: temp.path,
+      };
       final process = await Process.start(
         Platform.resolvedExecutable,
         [],
-        environment: {_crashDirVariable: temp.path},
+        environment: environment,
+        includeParentEnvironment: false,
       );
       final output = StringBuffer();
       process.stdout.transform(systemEncoding.decoder).listen(output.write);
