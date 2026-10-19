@@ -1,6 +1,19 @@
 {
   "targets": [
     {
+      "package": "breakpad_client",
+      "platform": "windows",
+      "runner": "windows-latest",
+      "test": "integration_test/app_test.dart"
+    },
+    {
+      "package": "breakpad_client",
+      "platform": "linux",
+      "runner": "ubuntu-latest",
+      "test": "integration_test/app_test.dart",
+      "setup": "tool/ci/setup_linux.ps1"
+    },
+    {
       "package": "desktop_drop",
       "platform": "web",
       "runner": "ubuntu-latest",
