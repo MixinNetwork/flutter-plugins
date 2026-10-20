@@ -12,6 +12,7 @@ from select_integration_targets import (
     ROOT,
     base_manifest_targets,
     changed_files,
+    diffable_base,
     load_targets,
     load_workspace,
     read_pubspec,
@@ -250,6 +251,55 @@ flutter:
             head_targets = json.loads(manifest('first', 'second', 'third'))['targets']
             self.assertEqual(select_targets(head_targets, [path], base_targets), head_targets[2:])
             self.assertEqual(fork, git('merge-base', base, head))
+
+    def test_push_base_falls_back_when_it_cannot_be_diffed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+
+            def git(*args):
+                return subprocess.check_output(['git', *args], cwd=root, stderr=subprocess.DEVNULL).decode().strip()
+
+            git('init', '-b', 'main')
+            git('config', 'user.name', 'CI Test')
+            git('config', 'user.email', 'ci@example.invalid')
+            (root / 'README.md').write_text('fixture')
+            git('add', '.')
+            git('commit', '-m', 'test fixture')
+            before = git('rev-parse', 'HEAD')
+            self.assertEqual(diffable_base(root, before), before)
+            # New branch.
+            self.assertIsNone(diffable_base(root, '0' * 40))
+            # Force push that dropped the previous tip from the history.
+            self.assertIsNone(diffable_base(root, 'f' * 40))
+            self.assertIsNone(diffable_base(root, git('rev-parse', 'HEAD^{tree}')))
+
+    def test_workflow_selection_arguments(self):
+        workflow = (ROOT / '.github/workflows/integration-tests.yml').read_text()
+        script = workflow.split('      - name: Select targets\n', 1)[1].split('        run: |\n', 1)[1]
+        script = '\n'.join(line[10:] for line in script.split('\n\n', 1)[0].splitlines())
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            selector = root / 'tool/ci/select_integration_targets.py'
+            selector.parent.mkdir(parents=True)
+            selector.write_text('import sys\nprint(" ".join(sys.argv[1:]))\n')
+            env = {
+                **os.environ,
+                'PR_BASE': 'pr-base',
+                'PR_HEAD': 'pr-head',
+                'PUSH_BEFORE': 'push-before',
+                'GITHUB_SHA': 'pushed',
+                'GITHUB_OUTPUT': 'output',
+            }
+            cases = {
+                'pull_request': '--base pr-base --head pr-head --output output',
+                'push': '--base push-before --head pushed --output output',
+                'schedule': '--output output',
+                'workflow_dispatch': '--output output',
+            }
+            for event, expected in cases.items():
+                with self.subTest(event=event):
+                    output = subprocess.check_output(['bash', '-e', '-c', script], cwd=root, env={**env, 'EVENT': event})
+                    self.assertEqual(output.decode().strip(), expected)
 
     def test_invalid_manifest_fails_instead_of_skipping(self):
         with tempfile.TemporaryDirectory() as directory:

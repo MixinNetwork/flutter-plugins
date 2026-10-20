@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import re
 import subprocess
+import sys
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -59,6 +60,16 @@ def load_targets(root):
         if 'setup' in target and not target['setup'].endswith('.ps1'):
             raise ValueError('Setup scripts must use PowerShell (.ps1)')
     return targets
+
+
+def diffable_base(root, base):
+    """Return base when it names a local commit, or None when a push diff cannot be computed.
+
+    A new branch reports an all-zero base, and a force push can report a base
+    that is no longer in the history.
+    """
+    exists = subprocess.run(['git', 'cat-file', '-e', f'{base}^{{commit}}'], cwd=root, capture_output=True)
+    return base if exists.returncode == 0 else None
 
 
 def changed_files(root, base, head):
@@ -147,13 +158,16 @@ def select_targets(targets, paths, base_targets=(), workspace=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--base', help='PR base SHA; omit to select all targets')
-    parser.add_argument('--head', default='HEAD', help='PR head SHA')
+    parser.add_argument('--base', help='PR base or pushed-before SHA; omit to select all targets')
+    parser.add_argument('--head', default='HEAD', help='PR head or pushed SHA')
     parser.add_argument('--output', type=Path, help='GitHub Actions output file')
     args = parser.parse_args()
     targets = load_targets(ROOT)
-    paths = changed_files(ROOT, args.base, args.head) if args.base else None
-    base_targets = base_manifest_targets(ROOT, args.base, args.head) if args.base else []
+    base = args.base and diffable_base(ROOT, args.base)
+    if args.base and not base:
+        print(f'Cannot diff from {args.base}; selecting all targets.', file=sys.stderr)
+    paths = changed_files(ROOT, base, args.head) if base else None
+    base_targets = base_manifest_targets(ROOT, base, args.head) if base else []
     selected = select_targets(targets, paths, base_targets, load_workspace(ROOT))
     matrix = json.dumps({'include': selected}, separators=(',', ':'))
     print(matrix)
