@@ -4,13 +4,17 @@ on:
   pull_request:
   push:
     branches: [main]
+  schedule:
+    # Weekly full regression run; pushes to main only run affected targets.
+    - cron: '23 19 * * 0'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: integration-${{ github.event.pull_request.number || github.ref }}
+  # Only PR runs share a group: a replaced pending run on main would leave its pushed changes untested.
+  group: integration-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -30,13 +34,16 @@ jobs:
         id: targets
         env:
           EVENT: ${{ github.event_name }}
-          BASE: ${{ github.event.pull_request.base.sha }}
-          HEAD: ${{ github.event.pull_request.head.sha }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
         run: |
-          args=()
-          if [[ "$EVENT" == "pull_request" ]]; then
-            args+=(--base "$BASE" --head "$HEAD")
-          fi
+          case "$EVENT" in
+            pull_request) args=(--base "$PR_BASE" --head "$PR_HEAD") ;;
+            push) args=(--base "$PUSH_BEFORE" --head "$GITHUB_SHA") ;;
+            # schedule and workflow_dispatch run every target.
+            *) args=() ;;
+          esac
           python3 -B tool/ci/select_integration_targets.py "${args[@]}" --output "$GITHUB_OUTPUT"
 
   integration:

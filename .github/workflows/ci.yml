@@ -31,6 +31,14 @@ jobs:
       - name: Install workspace dependencies
         run: dart pub get
 
+      # Integration target selection treats an unchanged lockfile as unchanged resolution.
+      - name: Check committed lockfile
+        run: |
+          if ! git diff --exit-code pubspec.lock; then
+            echo "::error file=pubspec.lock::dart pub get changed pubspec.lock. Run dart pub get and commit pubspec.lock."
+            exit 1
+          fi
+
       - name: Set PR diff base
         if: github.event_name == 'pull_request'
         run: |
