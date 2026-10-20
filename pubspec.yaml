@@ -33,14 +33,14 @@ workspace:
   - packages/ogg_opus_player/example
   - packages/pasteboard
   - packages/pasteboard/example
-  - packages/string_tokenizer
-  - packages/string_tokenizer/example
   - packages/ui_device
   - packages/ui_device/example
   - packages/web_qrcode
   - packages/web_qrcode/example
   - packages/win_toast
   - packages/win_toast/example
+  - packages/word_segmenter
+  - packages/word_segmenter/example
 
 dev_dependencies:
   melos: ^8.9.0
