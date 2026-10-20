@@ -14,8 +14,9 @@ typedef MixinSelectionParticipantExactHitTest = DocumentPosition? Function(
 );
 
 typedef MixinSelectionParticipantSelectWord = void Function(
-  DocumentPosition position,
-);
+  DocumentPosition position, {
+  Offset? globalPosition,
+});
 
 typedef MixinSelectionParticipantSelectBlock = void Function(
   int blockIndex,

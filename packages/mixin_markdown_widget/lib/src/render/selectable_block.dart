@@ -87,7 +87,35 @@ class SelectableMarkdownBlock extends StatefulWidget {
       SelectableMarkdownBlockState();
 }
 
-class SelectableMarkdownBlockState extends State<SelectableMarkdownBlock> {
+/// The selection queries the document view makes on the states of its
+/// top-level block keys.
+abstract interface class MarkdownSelectableBlockHandle {
+  Rect? get globalRect;
+
+  DocumentPosition? hitTestGlobal(Offset globalPosition);
+
+  DocumentPosition? hitTestTextGlobal(Offset globalPosition);
+
+  DocumentPosition boundaryPositionForGlobal(Offset globalPosition);
+
+  /// The word at [position]. A [globalPosition] tells which side of the
+  /// caret position the pointer is on, which matters where words are a
+  /// single character, as in CJK text.
+  DocumentSelection selectWord(
+    DocumentPosition position, {
+    Offset? globalPosition,
+  });
+
+  DocumentSelection selectWholeBlock();
+
+  DocumentSelection selectSelectionUnit(
+    DocumentPosition position, {
+    Offset? globalPosition,
+  });
+}
+
+class SelectableMarkdownBlockState extends State<SelectableMarkdownBlock>
+    implements MarkdownSelectableBlockHandle {
   VoidCallback? _repaintListener;
 
   @override
@@ -111,6 +139,7 @@ class SelectableMarkdownBlockState extends State<SelectableMarkdownBlock> {
     super.dispose();
   }
 
+  @override
   Rect? get globalRect {
     final renderObject = context.findRenderObject();
     if (renderObject is! RenderBox || !renderObject.hasSize) {
@@ -150,6 +179,7 @@ class SelectableMarkdownBlockState extends State<SelectableMarkdownBlock> {
 
   int get textLength => widget.spec.plainText.length;
 
+  @override
   DocumentSelection selectWholeBlock() {
     final structure = widget.spec.selectionStructure;
     if (structure != null && !structure.isEmpty) {
@@ -172,36 +202,40 @@ class SelectableMarkdownBlockState extends State<SelectableMarkdownBlock> {
     );
   }
 
-  DocumentSelection selectWord(DocumentPosition position) {
+  @override
+  DocumentSelection selectWord(
+    DocumentPosition position, {
+    Offset? globalPosition,
+  }) {
     if (widget.spec.hitTestBehavior == SelectableBlockHitTestBehavior.block ||
         widget.spec.plainText.isEmpty) {
       return selectWholeBlock();
     }
+    final upstream = globalPosition != null &&
+        _pointerIsOnPrecedingCharacter(position.textOffset, globalPosition);
+    ({int start, int end}) wordRangeAt(String text, int offset) =>
+        markdownWordRangeAt(text, offset, upstream: upstream);
     final structure = widget.spec.selectionStructure;
     if (structure != null) {
       final range = structure.wordRangeForPosition(
         blockIndex: widget.blockIndex,
         position: position,
-        isWordCharacter: _isWordCharacter,
+        wordRangeAt: wordRangeAt,
       );
       if (range != null) {
         return DocumentSelection(base: range.start, extent: range.end);
       }
     }
-    var start = position.textOffset < 0
-        ? 0
-        : position.textOffset > widget.spec.plainText.length
-            ? widget.spec.plainText.length
-            : position.textOffset;
-    var end = start;
-
-    while (start > 0 && _isWordCharacter(widget.spec.plainText[start - 1])) {
-      start -= 1;
-    }
-    while (end < widget.spec.plainText.length &&
-        _isWordCharacter(widget.spec.plainText[end])) {
-      end += 1;
-    }
+    final word = wordRangeAt(
+      widget.spec.plainText,
+      position.textOffset < 0
+          ? 0
+          : position.textOffset > widget.spec.plainText.length
+              ? widget.spec.plainText.length
+              : position.textOffset,
+    );
+    var start = word.start;
+    var end = word.end;
 
     if (start == end && widget.spec.plainText.isNotEmpty) {
       if (end < widget.spec.plainText.length) {
@@ -225,6 +259,7 @@ class SelectableMarkdownBlockState extends State<SelectableMarkdownBlock> {
     );
   }
 
+  @override
   DocumentSelection selectSelectionUnit(
     DocumentPosition position, {
     Offset? globalPosition,
@@ -264,6 +299,7 @@ class SelectableMarkdownBlockState extends State<SelectableMarkdownBlock> {
     return DocumentSelection(base: range.start, extent: range.end);
   }
 
+  @override
   DocumentPosition? hitTestGlobal(Offset globalPosition) {
     final renderObject = context.findRenderObject();
     if (renderObject is! RenderBox || !renderObject.hasSize) {
@@ -276,6 +312,7 @@ class SelectableMarkdownBlockState extends State<SelectableMarkdownBlock> {
     return _hitTestLocal(localPosition, renderObject.size);
   }
 
+  @override
   DocumentPosition? hitTestTextGlobal(Offset globalPosition) {
     final renderObject = context.findRenderObject();
     if (renderObject is! RenderBox || !renderObject.hasSize) {
@@ -303,6 +340,7 @@ class SelectableMarkdownBlockState extends State<SelectableMarkdownBlock> {
     return position;
   }
 
+  @override
   DocumentPosition boundaryPositionForGlobal(Offset globalPosition) {
     final renderObject = context.findRenderObject();
     if (renderObject is! RenderBox || !renderObject.hasSize) {
@@ -515,6 +553,62 @@ class SelectableMarkdownBlockState extends State<SelectableMarkdownBlock> {
     return false;
   }
 
+  /// Whether [globalPosition] is over the character that ends at
+  /// [textOffset], rather than the one that starts there.
+  bool _pointerIsOnPrecedingCharacter(int textOffset, Offset globalPosition) {
+    final renderObject = context.findRenderObject();
+    if (textOffset <= 0 ||
+        textOffset > widget.spec.plainText.length ||
+        renderObject is! RenderBox ||
+        !renderObject.hasSize) {
+      return false;
+    }
+    final localPosition = renderObject.globalToLocal(globalPosition);
+    final List<Rect> rects;
+    final selectionRectResolver = widget.spec.selectionRectResolver;
+    if (selectionRectResolver != null) {
+      final structure = widget.spec.selectionStructure;
+      rects = selectionRectResolver(
+        context,
+        renderObject.size,
+        structure?.rangeForDisplayedOffsets(
+              blockIndex: widget.blockIndex,
+              startOffset: textOffset - 1,
+              endOffset: textOffset,
+            ) ??
+            DocumentRange(
+              start: DocumentPosition(
+                blockIndex: widget.blockIndex,
+                path: const PathInBlock(<int>[0]),
+                textOffset: textOffset - 1,
+              ),
+              end: DocumentPosition(
+                blockIndex: widget.blockIndex,
+                path: const PathInBlock(<int>[0]),
+                textOffset: textOffset,
+              ),
+            ),
+      );
+    } else if (widget.spec.textSpan != null) {
+      final textPainter =
+          _buildTextPainter(renderObject.size, Directionality.of(context));
+      final contentOffset = Offset(
+        widget.spec.measurementPadding.left,
+        widget.spec.measurementPadding.top,
+      );
+      rects = textPainter
+          .getBoxesForSelection(
+            TextSelection(baseOffset: textOffset - 1, extentOffset: textOffset),
+          )
+          .map((box) => box.toRect().shift(contentOffset))
+          .toList(growable: false);
+      textPainter.dispose();
+    } else {
+      return false;
+    }
+    return rects.any((rect) => rect.contains(localPosition));
+  }
+
   DocumentPosition _edgePosition({required bool preferEnd}) {
     final structure = widget.spec.selectionStructure;
     if (structure != null && !structure.isEmpty) {
@@ -591,40 +685,6 @@ class SelectableMarkdownBlockState extends State<SelectableMarkdownBlock> {
       return true;
     });
     return containsWidget;
-  }
-
-  bool _isWordCharacter(String character) {
-    if (character.trim().isEmpty) {
-      return false;
-    }
-    const separators = <String>{
-      '.',
-      ',',
-      ';',
-      ':',
-      '!',
-      '?',
-      '(',
-      ')',
-      '[',
-      ']',
-      '{',
-      '}',
-      '<',
-      '>',
-      '/',
-      '\\',
-      '"',
-      '\'',
-      '`',
-      '|',
-      '-',
-      '+',
-      '=',
-      '*',
-      '&',
-    };
-    return !separators.contains(character);
   }
 }
 
@@ -1023,4 +1083,102 @@ enum _SelectionCornerQuadrant {
   topRight,
   bottomLeft,
   bottomRight,
+}
+
+/// The word around [offset] in [text], for double-click selection.
+///
+/// A word is a run of characters between whitespace and the separators of
+/// [_isWordCharacter], which include CJK punctuation. Text such as Chinese
+/// does not put spaces between words, so a run with non-ASCII characters is
+/// narrowed to its ICU word boundary: the word of the character after
+/// [offset], or before it when [upstream]. ASCII runs keep the separator rule.
+({int start, int end}) markdownWordRangeAt(
+  String text,
+  int offset, {
+  bool upstream = false,
+}) {
+  var start = offset;
+  var end = offset;
+  while (start > 0 && _isWordCharacter(text[start - 1])) {
+    start -= 1;
+  }
+  while (end < text.length && _isWordCharacter(text[end])) {
+    end += 1;
+  }
+  if (start == end || !text.substring(start, end).runes.any((r) => r > 0x7f)) {
+    return (start: start, end: end);
+  }
+
+  final run = text.substring(start, end);
+  final painter = TextPainter(
+    text: TextSpan(text: run),
+    textDirection: TextDirection.ltr,
+  )..layout();
+  final boundary = painter.getWordBoundary(
+    TextPosition(
+      offset: (upstream ? offset - start - 1 : offset - start)
+          .clamp(0, run.length - 1),
+    ),
+  );
+  painter.dispose();
+  return (start: start + boundary.start, end: start + boundary.end);
+}
+
+bool _isWordCharacter(String character) {
+  if (character.trim().isEmpty) {
+    return false;
+  }
+  const separators = <String>{
+    '.',
+    ',',
+    ';',
+    ':',
+    '!',
+    '?',
+    '(',
+    ')',
+    '[',
+    ']',
+    '{',
+    '}',
+    '<',
+    '>',
+    '/',
+    '\\',
+    '"',
+    '\'',
+    '`',
+    '|',
+    '-',
+    '+',
+    '=',
+    '*',
+    '&',
+    // Full-width and CJK punctuation.
+    '，',
+    '。',
+    '！',
+    '？',
+    '；',
+    '：',
+    '、',
+    '（',
+    '）',
+    '「',
+    '」',
+    '『',
+    '』',
+    '《',
+    '》',
+    '〈',
+    '〉',
+    '【',
+    '】',
+    '“',
+    '”',
+    '…',
+    '—',
+    '～',
+  };
+  return !separators.contains(character);
 }

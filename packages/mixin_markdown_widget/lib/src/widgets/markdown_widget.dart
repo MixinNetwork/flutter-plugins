@@ -54,6 +54,8 @@ class MarkdownWidget extends StatefulWidget {
   State<MarkdownWidget> createState() => _MarkdownWidgetState();
 }
 
+@Deprecated(
+    'Use MarkdownWidget instead. This misspelled alias will be removed.')
 typedef MarkownWidget = MarkdownWidget;
 
 class _MarkdownWidgetState extends State<MarkdownWidget> {

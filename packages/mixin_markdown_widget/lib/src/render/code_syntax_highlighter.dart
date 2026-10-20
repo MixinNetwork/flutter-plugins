@@ -349,6 +349,7 @@ class MarkdownCodeHighlightCache extends ChangeNotifier {
   final MarkdownCodeSyntaxHighlighter _highlighter;
   final Map<String, _MarkdownCodeHighlightCacheEntry> _entries =
       <String, _MarkdownCodeHighlightCacheEntry>{};
+  final Set<String> _highlightingBlockIds = <String>{};
   int _nextRequestId = 0;
   bool _isDisposed = false;
 
@@ -377,8 +378,15 @@ class MarkdownCodeHighlightCache extends ChangeNotifier {
     }
 
     final requestId = ++_nextRequestId;
+    final request = _MarkdownCodeHighlightRequest(
+      source: source,
+      baseStyle: baseStyle,
+      theme: theme,
+      language: language,
+    );
     if (_highlighter.shouldDegradeHighlight(source: source, theme: theme)) {
       _entries[blockId] = _MarkdownCodeHighlightCacheEntry(
+        request: request,
         contentSignature: contentSignature,
         presentationSignature: presentationSignature,
         requestId: requestId,
@@ -396,39 +404,50 @@ class MarkdownCodeHighlightCache extends ChangeNotifier {
     );
     if (cachedPresentation != null) {
       _entries[blockId] = _MarkdownCodeHighlightCacheEntry(
+        request: request,
         contentSignature: contentSignature,
         presentationSignature: presentationSignature,
         requestId: requestId,
         presentation: cachedPresentation,
         isPending: false,
+        highlightedPrefix: cachedPresentation.isHighlighted
+            ? _MarkdownHighlightedPrefix(
+                source: source,
+                styleSignature: request.styleSignature,
+                presentation: cachedPresentation,
+              )
+            : null,
       );
       return cachedPresentation;
     }
 
+    // While a streamed block grows, show its last highlight with the new tail
+    // in plain text instead of flashing the whole block back to plain.
+    final highlightedPrefix = existing?.highlightedPrefix;
     final placeholderPresentation = existing != null &&
             existing.contentSignature == contentSignature &&
             existing.presentation.isHighlighted
         ? existing.presentation
-        : plainPresentation;
+        : highlightedPrefix?.extendTo(
+              source,
+              styleSignature: request.styleSignature,
+              baseStyle: baseStyle,
+            ) ??
+            plainPresentation;
     _entries[blockId] = _MarkdownCodeHighlightCacheEntry(
+      request: request,
       contentSignature: contentSignature,
       presentationSignature: presentationSignature,
       requestId: requestId,
       presentation: placeholderPresentation,
       isPending: true,
+      highlightedPrefix: highlightedPrefix,
     );
-    unawaited(
-      _startHighlight(
-        blockId: blockId,
-        requestId: requestId,
-        contentSignature: contentSignature,
-        presentationSignature: presentationSignature,
-        source: source,
-        baseStyle: baseStyle,
-        theme: theme,
-        language: language,
-      ),
-    );
+    // At most one highlight runs for a block; it picks up the latest source
+    // when it finishes, so a streamed block does not start one per chunk.
+    if (_highlightingBlockIds.add(blockId)) {
+      unawaited(_runHighlights(blockId));
+    }
     return placeholderPresentation;
   }
 
@@ -439,55 +458,67 @@ class MarkdownCodeHighlightCache extends ChangeNotifier {
     }
     final state = entry.presentation.isHighlighted ? 'ready' : 'plain';
     final pending = entry.isPending ? 'pending' : 'stable';
-    return 'highlight:$state:$pending:${entry.presentationSignature}';
+    return 'highlight:$state:$pending:${entry.presentationSignature}:'
+        '${identityHashCode(entry.presentation)}';
   }
 
-  Future<void> _startHighlight({
-    required String blockId,
-    required int requestId,
-    required int contentSignature,
-    required int presentationSignature,
-    required String source,
-    required TextStyle baseStyle,
-    required MarkdownThemeData theme,
-    required String? language,
-  }) async {
-    if (_isDisposed) {
-      return;
-    }
-    final current = _entries[blockId];
-    if (current == null ||
-        current.requestId != requestId ||
-        current.presentationSignature != presentationSignature ||
-        !current.isPending) {
-      return;
-    }
-
-    final presentation = await _highlighter.buildPresentationAsync(
-      source: source,
-      baseStyle: baseStyle,
-      theme: theme,
-      language: language,
-    );
-    if (_isDisposed) {
-      return;
-    }
-    final latest = _entries[blockId];
-    if (latest == null ||
-        latest.requestId != requestId ||
-        latest.presentationSignature != presentationSignature) {
-      return;
-    }
-
-    _entries[blockId] = _MarkdownCodeHighlightCacheEntry(
-      contentSignature: contentSignature,
-      presentationSignature: presentationSignature,
-      requestId: requestId,
-      presentation: presentation,
-      isPending: false,
-    );
-    if (!_isDisposed) {
-      notifyListeners();
+  Future<void> _runHighlights(String blockId) async {
+    try {
+      while (!_isDisposed) {
+        final entry = _entries[blockId];
+        if (entry == null || !entry.isPending) {
+          return;
+        }
+        final request = entry.request;
+        final presentation = await _highlighter.buildPresentationAsync(
+          source: request.source,
+          baseStyle: request.baseStyle,
+          theme: request.theme,
+          language: request.language,
+        );
+        if (_isDisposed) {
+          return;
+        }
+        final latest = _entries[blockId];
+        if (latest == null) {
+          return;
+        }
+        final highlightedPrefix = presentation.isHighlighted
+            ? _MarkdownHighlightedPrefix(
+                source: request.source,
+                styleSignature: request.styleSignature,
+                presentation: presentation,
+              )
+            : latest.highlightedPrefix;
+        if (latest.requestId == entry.requestId) {
+          _entries[blockId] = latest.copyWith(
+            presentation: presentation,
+            isPending: false,
+            highlightedPrefix: highlightedPrefix,
+          );
+          notifyListeners();
+          return;
+        }
+        if (!latest.isPending) {
+          return;
+        }
+        // The source moved on while this ran: show what is highlighted so
+        // far, then run the latest source.
+        final placeholder = highlightedPrefix?.extendTo(
+          latest.request.source,
+          styleSignature: latest.request.styleSignature,
+          baseStyle: latest.request.baseStyle,
+        );
+        _entries[blockId] = latest.copyWith(
+          presentation: placeholder ?? latest.presentation,
+          highlightedPrefix: highlightedPrefix,
+        );
+        if (placeholder != null) {
+          notifyListeners();
+        }
+      }
+    } finally {
+      _highlightingBlockIds.remove(blockId);
     }
   }
 
@@ -510,20 +541,101 @@ class MarkdownCodeHighlightCache extends ChangeNotifier {
   }
 }
 
+class _MarkdownCodeHighlightRequest {
+  const _MarkdownCodeHighlightRequest({
+    required this.source,
+    required this.baseStyle,
+    required this.theme,
+    required this.language,
+  });
+
+  final String source;
+  final TextStyle baseStyle;
+  final MarkdownThemeData theme;
+  final String? language;
+
+  int get styleSignature => Object.hash(language, baseStyle, theme);
+}
+
+class _MarkdownHighlightedPrefix {
+  const _MarkdownHighlightedPrefix({
+    required this.source,
+    required this.styleSignature,
+    required this.presentation,
+  });
+
+  final String source;
+  final int styleSignature;
+  final MarkdownCodeHighlightPresentation presentation;
+
+  /// This highlight followed by the rest of [source] in plain text, or null
+  /// when [source] does not extend it in the same style.
+  MarkdownCodeHighlightPresentation? extendTo(
+    String source, {
+    required int styleSignature,
+    required TextStyle baseStyle,
+  }) {
+    if (styleSignature != this.styleSignature ||
+        source.length <= this.source.length ||
+        !source.startsWith(this.source)) {
+      return null;
+    }
+    final suffix = source.substring(this.source.length);
+    final span = presentation.span;
+    return MarkdownCodeHighlightPresentation(
+      span: TextSpan(
+        style: span.style,
+        children: <InlineSpan>[
+          ...?span.children,
+          if (span.text != null) TextSpan(text: span.text),
+          TextSpan(text: suffix, style: baseStyle),
+        ],
+      ),
+      runs: <MarkdownPretextInlineRun>[
+        ...presentation.runs,
+        MarkdownPretextInlineRun(text: suffix, style: baseStyle),
+      ],
+      isHighlighted: false,
+    );
+  }
+}
+
 class _MarkdownCodeHighlightCacheEntry {
   const _MarkdownCodeHighlightCacheEntry({
+    required this.request,
     required this.contentSignature,
     required this.presentationSignature,
     required this.requestId,
     required this.presentation,
     required this.isPending,
+    this.highlightedPrefix,
   });
 
+  final _MarkdownCodeHighlightRequest request;
   final int contentSignature;
   final int presentationSignature;
   final int requestId;
   final MarkdownCodeHighlightPresentation presentation;
   final bool isPending;
+
+  /// The latest real highlight of this block, kept to fill placeholders.
+  final _MarkdownHighlightedPrefix? highlightedPrefix;
+
+  _MarkdownCodeHighlightCacheEntry copyWith({
+    required MarkdownCodeHighlightPresentation presentation,
+    bool? isPending,
+    _MarkdownHighlightedPrefix? highlightedPrefix,
+  }) {
+    return _MarkdownCodeHighlightCacheEntry(
+      request: request,
+      contentSignature: contentSignature,
+      presentationSignature: presentationSignature,
+      requestId: requestId,
+      presentation: presentation,
+      isPending: isPending ?? this.isPending,
+      highlightedPrefix: highlightedPrefix ?? this.highlightedPrefix,
+    );
+  }
 }
 
 @immutable

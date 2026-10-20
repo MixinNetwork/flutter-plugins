@@ -94,6 +94,36 @@ class MarkdownController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Shows [data] as the whole source.
+  ///
+  /// When [data] extends the current [data], only the appended part is parsed,
+  /// as with [appendChunk]; otherwise it is parsed in full, as with [setData].
+  /// Unless [streaming] is true, the stream is then committed, as with
+  /// [commitStream]. Listeners are notified at most once.
+  void updateData(String data, {bool streaming = false}) {
+    final current = _source.text;
+    var changed = false;
+    if (data != current) {
+      // A pending CR swallows the next LF, so its delta would not append as is.
+      if (data.startsWith(current) && !_source.hasPendingCarriageReturn) {
+        _streamingDraftMode = true;
+        _appendData(data.substring(current.length));
+      } else {
+        _streamingDraftMode = false;
+        _replaceData(data);
+      }
+      changed = true;
+    }
+    if (!streaming && _streamingDraftMode) {
+      _streamingDraftMode = false;
+      _syncStreamingState();
+      changed = true;
+    }
+    if (changed) {
+      notifyListeners();
+    }
+  }
+
   void clear() {
     if (_source.isEmpty) {
       return;
@@ -206,6 +236,7 @@ class _MarkdownSourceBuffer {
   bool get isEmpty => _length == 0;
   int get length => _length;
   List<String> get lines => _lines;
+  bool get hasPendingCarriageReturn => _pendingCarriageReturn;
 
   bool get endsWithNewline =>
       _length > 0 && _lines.length > 1 && _lines.last.isEmpty;
