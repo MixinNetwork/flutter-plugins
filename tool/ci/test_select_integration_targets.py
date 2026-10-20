@@ -8,12 +8,21 @@ import subprocess
 import tempfile
 import unittest
 
-from select_integration_targets import ROOT, changed_files, load_targets, select_targets
+from select_integration_targets import (
+    ROOT,
+    base_manifest_targets,
+    changed_files,
+    load_targets,
+    load_workspace,
+    read_pubspec,
+    select_targets,
+)
 
 
 class TargetSelectionTest(unittest.TestCase):
     def setUp(self):
         self.targets = load_targets(ROOT)
+        self.workspace = load_workspace(ROOT)
 
     def test_related_and_unrelated_paths(self):
         native = [target for target in self.targets if target['package'] == 'desktop_webview_window']
@@ -26,16 +35,103 @@ class TargetSelectionTest(unittest.TestCase):
             'packages/desktop_drop/test/browser/web_drop_test.dart': browser,
             'packages/desktop_webview_window_other/lib/test.dart': [],
             'README.md': [],
-            'pubspec.yaml': self.targets,
+            'pubspec.yaml': [],
             'pubspec.lock': self.targets,
-            'packages/desktop_drop/pubspec.yaml': self.targets,
-            '.github/integration-tests.json': self.targets,
+            'packages/desktop_drop/pubspec.yaml': browser,
+            'packages/desktop_drop/example/pubspec.yaml': browser,
+            '.github/integration-tests.json': [],
             '.github/workflows/integration-tests.yml': self.targets,
+            '.github/workflows/ci.yml': self.targets,
             'tool/ci/select_integration_targets.py': self.targets,
         }
         for path, expected in cases.items():
             with self.subTest(path=path):
-                self.assertEqual(select_targets(self.targets, [path]), expected)
+                self.assertEqual(select_targets(self.targets, [path], self.targets, self.workspace), expected)
+
+    def test_read_pubspec(self):
+        pubspec = read_pubspec('''name: 'sample' # comment
+environment:
+  sdk: ^3.12.0
+workspace:
+  - packages/first
+  - "packages/first/example/"  # trailing slash
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # commented_out: ^1.0.0
+  local:
+    path: ../local
+  hosted: ^1.0.0
+dev_dependencies:
+    lints: ^6.0.0
+    git_package:
+      git:
+        url: https://example.invalid/repo.git#main
+dependency_overrides:
+  overridden: ^1.0.0
+flutter:
+  plugin:
+    platforms:
+      linux:
+        pluginClass: SamplePlugin
+''')
+        self.assertEqual(pubspec, {
+            'name': 'sample',
+            'workspace': ['packages/first', 'packages/first/example'],
+            'dependencies': {'flutter', 'local', 'hosted', 'lints', 'git_package'},
+        })
+
+    def test_real_workspace_dependencies(self):
+        self.assertEqual(self.workspace['packages/desktop_drop']['name'], 'desktop_drop')
+        self.assertIn('desktop_drop', self.workspace['packages/desktop_drop/example']['dependencies'])
+        targets = [
+            {'package': 'mixin_logger', 'platform': 'linux'},
+            {'package': 'desktop_multi_window', 'platform': 'linux'},
+            {'package': 'win_toast', 'platform': 'windows'},
+            {'package': 'desktop_drop', 'platform': 'web'},
+        ]
+        # Both examples depend on mixin_logger.
+        self.assertEqual(
+            select_targets(targets, ['packages/mixin_logger/pubspec.yaml'], workspace=self.workspace),
+            targets[:3],
+        )
+
+    def test_package_pubspec_selects_transitive_dependents(self):
+        workspace = {
+            'packages/base': {'name': 'base', 'workspace': [], 'dependencies': {'flutter'}},
+            'packages/base/example': {'name': 'base_example', 'workspace': [], 'dependencies': {'base'}},
+            'packages/middle': {'name': 'middle', 'workspace': [], 'dependencies': {'base'}},
+            'packages/top': {'name': 'top', 'workspace': [], 'dependencies': {'middle'}},
+            'packages/other': {'name': 'other', 'workspace': [], 'dependencies': {'flutter'}},
+        }
+        targets = [{'package': package, 'platform': 'linux'} for package in ['base', 'middle', 'top', 'other']]
+        cases = {
+            'packages/base/pubspec.yaml': targets[:3],
+            'packages/base/example/pubspec.yaml': targets[:1],
+            'packages/middle/pubspec.yaml': targets[1:3],
+            'packages/top/pubspec.yaml': targets[2:3],
+            'packages/base/lib/base.dart': targets[:1],
+            'packages/removed/pubspec.yaml': [],
+            'pubspec.yaml': [],
+        }
+        for path, expected in cases.items():
+            with self.subTest(path=path):
+                self.assertEqual(select_targets(targets, [path], workspace=workspace), expected)
+
+    def test_manifest_change_selects_added_and_edited_targets(self):
+        unchanged = {'package': 'unchanged', 'platform': 'linux', 'runner': 'ubuntu-latest'}
+        edited = {'package': 'edited', 'platform': 'macos', 'runner': 'macos-latest'}
+        removed = {'package': 'removed', 'platform': 'linux', 'runner': 'ubuntu-latest'}
+        added = {'package': 'added', 'platform': 'windows', 'runner': 'windows-latest'}
+        base = [unchanged, edited, removed]
+        head = [unchanged, {**edited, 'runner': 'macos-15'}, added]
+        manifest = '.github/integration-tests.json'
+        self.assertEqual(select_targets(head, [manifest], base), head[1:])
+        self.assertEqual(select_targets(head, [manifest], head), [])
+        self.assertEqual(select_targets(head, [manifest], []), head)
+        # Unrelated targets in the base manifest do not matter when it is unchanged.
+        self.assertEqual(select_targets(head, ['packages/unchanged/lib/a.dart'], []), head[:1])
 
     def test_all_and_empty(self):
         self.assertEqual(select_targets(self.targets, None), self.targets)
@@ -117,6 +213,43 @@ class TargetSelectionTest(unittest.TestCase):
             )
             with self.assertRaises(subprocess.CalledProcessError):
                 changed_files(root, 'missing-base', 'HEAD')
+
+    def test_base_manifest_uses_merge_base_and_handles_missing_manifest(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+
+            def git(*args):
+                return subprocess.check_output(['git', *args], cwd=root, stderr=subprocess.DEVNULL).decode().strip()
+
+            def commit(path, content):
+                file = root / path
+                file.parent.mkdir(parents=True, exist_ok=True)
+                file.write_text(content)
+                git('add', '.')
+                git('commit', '-m', 'test fixture')
+                return git('rev-parse', 'HEAD')
+
+            def manifest(*packages):
+                return json.dumps({'targets': [{'package': package, 'platform': 'linux'} for package in packages]})
+
+            git('init', '-b', 'main')
+            git('config', 'user.name', 'CI Test')
+            git('config', 'user.email', 'ci@example.invalid')
+            path = '.github/integration-tests.json'
+            original = commit('README.md', 'fixture')
+            head = commit(path, manifest('first'))
+            self.assertEqual(base_manifest_targets(root, original, head), [])
+            fork = commit(path, manifest('first', 'second'))
+            git('checkout', '-b', 'feature')
+            head = commit(path, manifest('first', 'second', 'third'))
+            git('checkout', 'main')
+            # The base branch edits the manifest after the PR forks; compare against the fork point.
+            base = commit(path, manifest('first', 'second', 'base_only'))
+            base_targets = base_manifest_targets(root, base, head)
+            self.assertEqual(base_targets, json.loads(manifest('first', 'second'))['targets'])
+            head_targets = json.loads(manifest('first', 'second', 'third'))['targets']
+            self.assertEqual(select_targets(head_targets, [path], base_targets), head_targets[2:])
+            self.assertEqual(fork, git('merge-base', base, head))
 
     def test_invalid_manifest_fails_instead_of_skipping(self):
         with tempfile.TemporaryDirectory() as directory:

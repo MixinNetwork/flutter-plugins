@@ -70,17 +70,78 @@ def changed_files(root, base, head):
     return output.decode().split('\0')[:-1]
 
 
-def select_targets(targets, paths):
+def read_pubspec(text):
+    """Read the package name, workspace members, and direct dependency names from pubspec text.
+
+    Only the top-level keys this selector needs are parsed, line by line, because
+    the standard library has no YAML parser.
+    """
+    pubspec = {'name': None, 'workspace': [], 'dependencies': set()}
+    section = child_indent = None
+    for line in text.splitlines():
+        content = line.split('#', 1)[0].rstrip()
+        if not content.strip():
+            continue
+        indent = len(content) - len(content.lstrip())
+        if indent == 0:
+            section, _, value = content.partition(':')
+            child_indent = None
+            if section == 'name':
+                pubspec['name'] = value.strip().strip('\'"')
+            continue
+        if child_indent is None:
+            child_indent = indent
+        if section == 'workspace' and content.lstrip().startswith('- '):
+            pubspec['workspace'].append(content.lstrip()[2:].strip().strip('\'"').rstrip('/'))
+        elif section in {'dependencies', 'dev_dependencies'} and indent == child_indent:
+            match = re.fullmatch(r'\s*([A-Za-z_][A-Za-z0-9_]*)\s*:.*', content)
+            if match:
+                pubspec['dependencies'].add(match.group(1))
+    return pubspec
+
+
+def load_workspace(root):
+    """Map each workspace member directory to its parsed pubspec."""
+    members = read_pubspec((root / 'pubspec.yaml').read_text())['workspace']
+    return {member: read_pubspec((root / member / 'pubspec.yaml').read_text()) for member in members}
+
+
+def base_manifest_targets(root, base, head):
+    """Return the registered targets at the PR merge base, or none when the manifest did not exist."""
+    merge_base = subprocess.check_output(['git', 'merge-base', base, head], cwd=root).decode().strip()
+    revision = f'{merge_base}:.github/integration-tests.json'
+    if subprocess.run(['git', 'cat-file', '-e', revision], cwd=root, capture_output=True).returncode:
+        return []
+    return json.loads(subprocess.check_output(['git', 'show', revision], cwd=root))['targets']
+
+
+def select_targets(targets, paths, base_targets=(), workspace=None):
     if paths is None:
         return targets
-    shared = any(
-        path in {'pubspec.yaml', 'pubspec.lock', '.github/integration-tests.json'}
-        or path.startswith(('.github/workflows/', 'tool/ci/'))
-        or (path.startswith('packages/') and path.endswith('/pubspec.yaml'))
+    # Lockfile and CI changes can affect every job.
+    if any(path == 'pubspec.lock' or path.startswith(('.github/workflows/', 'tool/ci/')) for path in paths):
+        return targets
+    workspace = workspace or {}
+    packages = {path.split('/')[1] for path in paths if path.startswith('packages/') and path.count('/') > 1}
+    # A member pubspec change also affects workspace members that depend on it, directly or transitively.
+    names = {
+        workspace[path.removesuffix('/pubspec.yaml')]['name']
         for path in paths
-    )
-    return [target for target in targets if shared or any(
-        path.startswith(f'packages/{target["package"]}/') for path in paths
+        if path.endswith('/pubspec.yaml') and path.removesuffix('/pubspec.yaml') in workspace
+    }
+    while dependents := {
+        pubspec['name'] for pubspec in workspace.values() if pubspec['dependencies'] & names
+    } - names:
+        names |= dependents
+    packages |= {
+        member.split('/')[1]
+        for member, pubspec in workspace.items()
+        if member.startswith('packages/') and pubspec['name'] in names
+    }
+    # A manifest change affects only added or edited targets; removed targets need no job.
+    manifest_changed = '.github/integration-tests.json' in paths
+    return [target for target in targets if target['package'] in packages or (
+        manifest_changed and target not in base_targets
     )]
 
 
@@ -92,7 +153,8 @@ def main():
     args = parser.parse_args()
     targets = load_targets(ROOT)
     paths = changed_files(ROOT, args.base, args.head) if args.base else None
-    selected = select_targets(targets, paths)
+    base_targets = base_manifest_targets(ROOT, args.base, args.head) if args.base else []
+    selected = select_targets(targets, paths, base_targets, load_workspace(ROOT))
     matrix = json.dumps({'include': selected}, separators=(',', ':'))
     print(matrix)
     if args.output:
