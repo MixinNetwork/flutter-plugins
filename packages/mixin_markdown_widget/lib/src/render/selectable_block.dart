@@ -233,9 +233,18 @@ class SelectableMarkdownBlockState extends State<SelectableMarkdownBlock>
         markdownWordRangeAt(text, offset, upstream: upstream);
     final structure = widget.spec.selectionStructure;
     if (structure != null) {
+      // The end of a leaf is also the start of the next one, and hit testing
+      // resolves it downstream. A pointer over the character before it
+      // belongs to the leaf that ends there.
       final range = structure.wordRangeForPosition(
         blockIndex: widget.blockIndex,
-        position: position,
+        position: upstream
+            ? structure.positionForDisplayedOffset(
+                blockIndex: widget.blockIndex,
+                displayedOffset: position.textOffset,
+                affinity: StructuredSelectionAffinity.upstream,
+              )
+            : position,
         wordRangeAt: wordRangeAt,
       );
       if (range != null) {

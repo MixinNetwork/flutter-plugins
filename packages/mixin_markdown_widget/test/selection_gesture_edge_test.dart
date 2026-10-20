@@ -112,6 +112,45 @@ Offset _charCenter(WidgetTester tester, String text, int charIndex) {
   return paragraph.localToGlobal(boxes.first.toRect().center);
 }
 
+/// A global point on the right half of the [charIndex]th character of [text].
+Offset _charRightHalf(WidgetTester tester, String text, int charIndex) {
+  final finder = _richTextContaining(text).first;
+  final paragraph = tester.renderObject<RenderParagraph>(finder);
+  final plain = paragraph.text.toPlainText();
+  final offset = plain.indexOf(text) + charIndex;
+  final boxes = paragraph.getBoxesForSelection(
+    TextSelection(baseOffset: offset, extentOffset: offset + 1),
+  );
+  expect(boxes, isNotEmpty, reason: 'no box for "$text"[$charIndex]');
+  final box = boxes.first.toRect();
+  return paragraph.localToGlobal(Offset(box.right - 1, box.center.dy));
+}
+
+/// Records the text written to the clipboard; the getter returns the last.
+String? Function() _captureClipboard() {
+  String? copiedText;
+  TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+      .setMockMethodCallHandler(SystemChannels.platform, (methodCall) async {
+    if (methodCall.method == 'Clipboard.setData') {
+      final arguments = methodCall.arguments as Map<Object?, Object?>;
+      copiedText = arguments['text'] as String?;
+    }
+    return null;
+  });
+  addTearDown(() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, null);
+  });
+  return () => copiedText;
+}
+
+Future<void> _copy(WidgetTester tester) async {
+  await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+  await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
+  await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+  await tester.pump();
+}
+
 /// Global rect of the rendered characters of [text].
 Rect _textRect(WidgetTester tester, String text) {
   final finder = _richTextContaining(text).first;
@@ -413,6 +452,92 @@ void main() {
     }
   });
 
+  group('double click on the right half of the last character of a leaf', () {
+    // The end offset of a leaf is also the start of the next one; the click
+    // must select the word under the pointer, not the next leaf's word.
+    const sparseTable = '| Alpha |       | Charlie |\n'
+        '| ----- | ----- | ------- |\n'
+        '|       | Bravo | z       |';
+
+    testWidgets('table cell before an empty cell copies its word', (
+      tester,
+    ) async {
+      final copiedText = _captureClipboard();
+      final controller = await _pump(tester, sparseTable);
+      await _click(tester, _charRightHalf(tester, 'Alpha', 4), count: 2);
+      _expectSelection(controller, '0[0, 0]@0 -> 0[0, 0]@5 | "Alpha"');
+      await _copy(tester);
+      expect(copiedText(), 'Alpha');
+    });
+
+    final targets = <String, (String, String, int, String)>{
+      'last cell of a table row': (
+        sparseTable,
+        'Charlie',
+        6,
+        '0[0, 2]@6 -> 0[0, 2]@13 | "Charlie"',
+      ),
+      'table cell after an empty cell': (
+        sparseTable,
+        'Bravo',
+        4,
+        '0[1, 1]@14 -> 0[1, 1]@19 | "Bravo"',
+      ),
+      'table cell before a filled cell': (
+        '| Alpha | Bravo |\n| --- | --- |\n| x | y |',
+        'Alpha',
+        4,
+        '0[0, 0]@0 -> 0[0, 0]@5 | "Alpha"',
+      ),
+      'quote paragraph': (
+        '> First\n>\n> Second',
+        'First',
+        4,
+        '0[0]@0 -> 0[0]@5 | "First"',
+      ),
+      'list item': (
+        '- one\n- two',
+        'one',
+        2,
+        '0[0, 1]@2 -> 0[0, 1]@5 | "one"',
+      ),
+      'list item before a nested list': (
+        '- one\n  - two',
+        'one',
+        2,
+        '0[0, 1]@2 -> 0[0, 1]@5 | "one"',
+      ),
+      'details summary': (
+        '<details><summary>Sum</summary>\n\nBody text\n\n</details>',
+        'Sum',
+        2,
+        '0[0]@0 -> 0[0]@3 | "Sum"',
+      ),
+    };
+    for (final entry in targets.entries) {
+      final (data, text, charIndex, expected) = entry.value;
+      testWidgets(entry.key, (tester) async {
+        final controller = await _pump(tester, data);
+        await _click(
+          tester,
+          _charRightHalf(tester, text, charIndex),
+          count: 2,
+        );
+        _expectSelection(controller, expected);
+      });
+    }
+
+    testWidgets('left half of the first character of the next cell', (
+      tester,
+    ) async {
+      final controller = await _pump(tester, sparseTable);
+      final charlie = _textRect(tester, 'Charlie');
+      await _click(tester, Offset(charlie.left + 1, charlie.center.dy),
+          count: 2);
+      _expectSelection(controller, '0[0, 2]@6 -> 0[0, 2]@13 | "Charlie"');
+    });
+  });
+
   group('link taps with selection enabled', () {
     final cases = <String, String>{
       'list': '- see [Link](https://list.example) here',
@@ -437,20 +562,7 @@ void main() {
   testWidgets(
       'copying a drag selection that spans a block scrolled out of a ListView',
       (tester) async {
-    String? copiedText;
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(SystemChannels.platform, (methodCall) async {
-      if (methodCall.method == 'Clipboard.setData') {
-        final arguments = methodCall.arguments as Map<Object?, Object?>;
-        copiedText = arguments['text'] as String?;
-      }
-      return null;
-    });
-    addTearDown(() {
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(SystemChannels.platform, null);
-    });
-
+    final copiedText = _captureClipboard();
     final paragraphs = List<String>.generate(30, (index) => 'Paragraph $index');
     final expectedCopiedText = <String>[
       paragraphs.first.substring(3),
@@ -479,11 +591,7 @@ void main() {
     _expectSelection(controller,
         '0[0]@3 -> 24[0]@7 | "${expectedCopiedText.replaceAll('\n', r'\n')}"');
 
-    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
-    await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
-    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
-    await tester.pump();
-
-    expect(copiedText, expectedCopiedText);
+    await _copy(tester);
+    expect(copiedText(), expectedCopiedText);
   });
 }
