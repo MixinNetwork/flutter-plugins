@@ -22,7 +22,7 @@ Any questions join the [Mixin Flutter group][mixin_group_url]
 | [mixin_logger](./packages/mixin_logger)                     | [![pub package][mixin_logger_version]][mixin_logger_pub]                     | [![likes][mixin_logger_likes]][mixin_logger_score]                     | All Platforms              |
 | [mixin_markdown_widget](./packages/mixin_markdown_widget)   | [![pub package][mixin_markdown_widget_version]][mixin_markdown_widget_pub]   | [![likes][mixin_markdown_widget_likes]][mixin_markdown_widget_score]   | Windows, Linux, macOS      |
 | [ui_device](./packages/ui_device)                           | [![pub package][ui_device_version]][ui_device_pub]                           | [![likes][ui_device_likes]][ui_device_score]                           | iOS                        |
-| [string_tokenizer](./packages/string_tokenizer)             | Not Published                                                                | Not Published                                                          | macOS, iOS                 |
+| [word_segmenter](./packages/word_segmenter)                 | Not Published                                                                | Not Published                                                          | Windows, Linux, macOS, iOS, Android, web |
 
 [desktop_drop_version]: https://img.shields.io/pub/v/desktop_drop.svg
 
