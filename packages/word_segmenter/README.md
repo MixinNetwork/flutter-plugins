@@ -1,5 +1,7 @@
 # word_segmenter
 
+[![Pub](https://img.shields.io/pub/v/word_segmenter.svg)](https://pub.dev/packages/word_segmenter)
+
 Splits text at word boundaries with the platform's own text services.
 
 Flutter's engine bundles ICU without the CJK dictionary, so

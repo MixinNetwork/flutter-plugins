@@ -22,7 +22,7 @@ Any questions join the [Mixin Flutter group][mixin_group_url]
 | [mixin_logger](./packages/mixin_logger)                     | [![pub package][mixin_logger_version]][mixin_logger_pub]                     | [![likes][mixin_logger_likes]][mixin_logger_score]                     | All Platforms              |
 | [mixin_markdown_widget](./packages/mixin_markdown_widget)   | [![pub package][mixin_markdown_widget_version]][mixin_markdown_widget_pub]   | [![likes][mixin_markdown_widget_likes]][mixin_markdown_widget_score]   | Windows, Linux, macOS      |
 | [ui_device](./packages/ui_device)                           | [![pub package][ui_device_version]][ui_device_pub]                           | [![likes][ui_device_likes]][ui_device_score]                           | iOS                        |
-| [word_segmenter](./packages/word_segmenter)                 | Not Published                                                                | Not Published                                                          | Windows, Linux, macOS, iOS, Android, web |
+| [word_segmenter](./packages/word_segmenter)                 | [![pub package][word_segmenter_version]][word_segmenter_pub]                 | [![likes][word_segmenter_likes]][word_segmenter_score]                 | Windows, Linux, macOS, iOS, Android, web |
 
 [desktop_drop_version]: https://img.shields.io/pub/v/desktop_drop.svg
 
@@ -111,3 +111,11 @@ Any questions join the [Mixin Flutter group][mixin_group_url]
 [ui_device_likes]: https://img.shields.io/pub/likes/ui_device
 
 [ui_device_score]: https://pub.dev/packages/ui_device/score
+
+[word_segmenter_version]: https://img.shields.io/pub/v/word_segmenter.svg
+
+[word_segmenter_pub]: https://pub.dev/packages/word_segmenter
+
+[word_segmenter_likes]: https://img.shields.io/pub/likes/word_segmenter
+
+[word_segmenter_score]: https://pub.dev/packages/word_segmenter/score
