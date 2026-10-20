@@ -1,7 +1,7 @@
 name: word_segmenter
 resolution: workspace
 description: Splits text at word boundaries with the platform's own text services, including dictionary-based segmentation for Chinese and Japanese.
-version: 0.0.1
+version: 0.1.0
 homepage: https://github.com/MixinNetwork/flutter-plugins/tree/main/packages/word_segmenter
 
 environment:
