@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.2
+
+- Android: Stop Flutter from warning that the plugin applies the Kotlin Gradle Plugin when built-in Kotlin is enabled. ([#547](https://github.com/MixinNetwork/flutter-plugins/pull/547); thanks [xsahil03x](https://github.com/xsahil03x))
+
 ## 0.9.1
 
 - Windows: Fix a startup crash caused by queued platform tasks being freed before execution on affected Flutter engines. ([#526](https://github.com/MixinNetwork/flutter-plugins/pull/526))
