@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/services.dart';
 import 'dart:math' as math;
 
@@ -16,7 +15,9 @@ import '../pretext_text_block.dart';
 import '../selectable_block.dart';
 import 'markdown_inline_builder.dart';
 import '../selection/markdown_descriptor_extractor.dart';
-import '../selection/markdown_selection_resolver.dart';
+import '../selection/markdown_selectable_leaf.dart';
+import '../selection/markdown_selection_geometry.dart';
+import '../selection/markdown_block_keys_registry.dart';
 import '../local_image_provider_stub.dart'
     if (dart.library.io) '../local_image_provider_io.dart';
 
@@ -30,7 +31,6 @@ class MarkdownBlockBuilder {
     required this.isSelectable,
     required this.keysRegistry,
     required this.descriptorExtractor,
-    required this.selectionResolver,
     required this.inlineBuilder,
     required this.codeSyntaxHighlighter,
     required this.plainTextSerializer,
@@ -50,7 +50,6 @@ class MarkdownBlockBuilder {
   final bool isSelectable;
   final MarkdownBlockKeysRegistry keysRegistry;
   final MarkdownDescriptorExtractor descriptorExtractor;
-  final MarkdownSelectionResolver selectionResolver;
   final MarkdownInlineBuilder inlineBuilder;
   final MarkdownCodeSyntaxHighlighter codeSyntaxHighlighter;
   final MarkdownPlainTextSerializer plainTextSerializer;
@@ -373,27 +372,19 @@ class MarkdownBlockBuilder {
         final style = theme.headingStyleForLevel(heading.level);
         final plainText =
             MarkdownInlineBuilder.flattenInlineText(heading.inlines);
-        final runs = inlineBuilder.buildPretextRuns(style, heading.inlines);
-        final directTextKey = _createDirectTextKeyIfNeeded(runs);
-        return _buildPretextTextSpec(
-          child: _wrapHeadingBlock(
-            level: heading.level,
-            child: MarkdownPretextTextBlock.rich(
-              runs: runs,
-              fallbackStyle: style,
-              directTextKey: directTextKey,
-              preferDirectRichText: directTextKey != null,
-              textAlign: MarkdownInlineBuilder.resolvedInlineTextAlign(
-                heading.inlines,
-              ),
-            ),
-          ),
-          plainText: plainText,
-          runs: runs,
+        final geometry = MarkdownTextLeafGeometry(
+          runs: inlineBuilder.buildPretextRuns(style, heading.inlines),
           fallbackStyle: style,
-          directTextKey: directTextKey,
           textAlign:
               MarkdownInlineBuilder.resolvedInlineTextAlign(heading.inlines),
+        );
+        return _buildTextLeafSpec(
+          child: _wrapHeadingBlock(
+            level: heading.level,
+            child: _textLeaf(_topLevelLeafPath, geometry),
+          ),
+          plainText: plainText,
+          geometry: geometry,
         );
       case MarkdownBlockKind.paragraph:
         final paragraph = block as ParagraphBlock;
@@ -406,127 +397,64 @@ class MarkdownBlockBuilder {
             hitTestBehavior: SelectableBlockHitTestBehavior.block,
           );
         }
-        final runs = inlineBuilder.buildPretextRuns(
-          theme.bodyStyle,
-          paragraph.inlines,
-        );
-        final directTextKey = _createDirectTextKeyIfNeeded(runs);
-        return _buildPretextTextSpec(
-          plainText: plainText,
-          runs: runs,
+        final geometry = MarkdownTextLeafGeometry(
+          runs: inlineBuilder.buildPretextRuns(
+            theme.bodyStyle,
+            paragraph.inlines,
+          ),
           fallbackStyle: theme.bodyStyle,
-          directTextKey: directTextKey,
           textAlign:
               MarkdownInlineBuilder.resolvedInlineTextAlign(paragraph.inlines),
+        );
+        return _buildTextLeafSpec(
+          child: _textLeaf(_topLevelLeafPath, geometry),
+          plainText: plainText,
+          geometry: geometry,
         );
       case MarkdownBlockKind.quote:
         final quoteBlock = block as QuoteBlock;
         final descriptor =
             descriptorExtractor.buildSelectableDescriptorForBlock(quoteBlock);
-        return SelectableBlockSpec(
+        return _buildContainerSpec(
+          block: quoteBlock,
           child: MarkdownQuoteBlockView(
             theme: theme,
             child: _buildQuoteContent(
               context,
               quoteBlock,
-              childKeys: keysRegistry.quoteChildKeysFor(quoteBlock),
+              path: const <int>[],
             ),
           ),
-          plainText: descriptor.plainText,
-          selectionStructure: _matchingSelectionStructure(
-            quoteBlock,
-            descriptor.plainText,
-          ),
-          hitTestBehavior: SelectableBlockHitTestBehavior.text,
           textSpan: descriptor.span,
           highlightBorderRadius: theme.quoteBorderRadius,
           selectionPaintOrder: SelectableBlockSelectionPaintOrder.aboveChild,
           selectionColor: _quoteSelectionColor,
           repaintListenable:
               _nestedScrollableRepaintListenableForBlocks(quoteBlock.children),
-          selectionRectResolver: (context, _, range) =>
-              selectionResolver.resolveQuoteSelectionRects(
-            context,
-            quoteBlock,
-            range,
-          ),
-          textOffsetResolver: (context, _, localPosition) =>
-              selectionResolver.resolveQuoteTextOffset(
-            context,
-            quoteBlock,
-            localPosition,
-          ),
-          selectionUnitRangeResolver: (context, _, localPosition, position) =>
-              localPosition == null
-                  ? descriptorExtractor.resolveSelectionUnitRange(
-                      position,
-                      quoteBlock,
-                    )
-                  : selectionResolver.resolveQuoteSelectionUnitRange(
-                        context,
-                        quoteBlock,
-                        localPosition,
-                        position,
-                      ) ??
-                      descriptorExtractor.resolveSelectionUnitRange(
-                        position,
-                        quoteBlock,
-                      ),
         );
       case MarkdownBlockKind.orderedList:
       case MarkdownBlockKind.unorderedList:
         final listBlock = block as ListBlock;
         final descriptor =
             descriptorExtractor.buildSelectableDescriptorForBlock(listBlock);
-        final itemRowKeys = keysRegistry.listItemKeysFor(listBlock);
-        final itemContentKeys = keysRegistry.listItemContentKeysFor(listBlock);
-        return SelectableBlockSpec(
+        return _buildContainerSpec(
+          block: listBlock,
           child: MarkdownListBlockView(
             theme: theme,
             block: listBlock,
-            itemBuilder: (index, item) =>
-                _buildListItemContent(context, listBlock, index, item),
-            itemRowKeyBuilder: (index) => itemRowKeys[index],
-            itemContentKeyBuilder: (index) => itemContentKeys[index],
+            itemBuilder: (index, item) => _buildListItemContent(
+              context,
+              listBlock,
+              index,
+              item,
+              path: const <int>[],
+            ),
+            itemSlotBuilder: _listItemSlotBuilder(const <int>[]),
             bulletBuilder: bulletBuilder,
           ),
-          plainText: descriptor.plainText,
-          selectionStructure: _matchingSelectionStructure(
-            listBlock,
-            descriptor.plainText,
-          ),
-          hitTestBehavior: SelectableBlockHitTestBehavior.text,
           textSpan: descriptor.span,
           repaintListenable:
               _nestedScrollableRepaintListenableForListBlock(listBlock),
-          selectionRectResolver: (context, _, range) =>
-              selectionResolver.resolveListSelectionRects(
-            context,
-            listBlock,
-            range,
-          ),
-          textOffsetResolver: (context, _, localPosition) =>
-              selectionResolver.resolveListTextOffset(
-            context,
-            listBlock,
-            localPosition,
-          ),
-          selectionUnitRangeResolver: (context, _, localPosition, position) =>
-              localPosition == null
-                  ? descriptorExtractor.resolveSelectionUnitRange(
-                      position,
-                      listBlock,
-                    )
-                  : selectionResolver.resolveListSelectionUnitRange(
-                        context,
-                        listBlock,
-                        localPosition,
-                        position,
-                      ) ??
-                      descriptorExtractor.resolveSelectionUnitRange(
-                        position,
-                        listBlock,
-                      ),
           selectionPaintOrder: SelectableBlockSelectionPaintOrder.aboveChild,
         );
       case MarkdownBlockKind.definitionList:
@@ -546,111 +474,45 @@ class MarkdownBlockBuilder {
             MarkdownDescriptorExtractor.footnoteListAsOrderedList(footnoteList);
         final footnoteDescriptor = descriptorExtractor
             .buildFootnoteListSelectableDescriptor(footnoteList);
-        final itemRowKeys = keysRegistry.listItemKeysFor(orderedFootnotes);
-        final itemContentKeys =
-            keysRegistry.listItemContentKeysFor(orderedFootnotes);
-        return SelectableBlockSpec(
+        return _buildContainerSpec(
+          block: footnoteList,
           child: _buildFootnoteListContainer(
             child: MarkdownListBlockView(
               theme: theme,
               block: orderedFootnotes,
-              itemBuilder: (index, item) =>
-                  _buildListItemContent(context, orderedFootnotes, index, item),
-              itemRowKeyBuilder: (index) => itemRowKeys[index],
-              itemContentKeyBuilder: (index) => itemContentKeys[index],
+              itemBuilder: (index, item) => _buildListItemContent(
+                context,
+                orderedFootnotes,
+                index,
+                item,
+                path: const <int>[],
+              ),
+              itemSlotBuilder: _listItemSlotBuilder(const <int>[]),
               bulletBuilder: bulletBuilder,
             ),
           ),
-          plainText: footnoteDescriptor.plainText,
-          selectionStructure: _matchingSelectionStructure(
-            orderedFootnotes,
-            footnoteDescriptor.plainText,
-          ),
-          hitTestBehavior: SelectableBlockHitTestBehavior.text,
           textSpan: footnoteDescriptor.span,
           repaintListenable:
               _nestedScrollableRepaintListenableForListBlock(orderedFootnotes),
-          selectionRectResolver: (context, _, range) =>
-              selectionResolver.resolveListSelectionRects(
-            context,
-            orderedFootnotes,
-            range,
-          ),
-          textOffsetResolver: (context, _, localPosition) =>
-              selectionResolver.resolveListTextOffset(
-            context,
-            orderedFootnotes,
-            localPosition,
-          ),
-          selectionUnitRangeResolver: (context, _, localPosition, position) =>
-              localPosition == null
-                  ? descriptorExtractor.resolveSelectionUnitRange(
-                      position,
-                      orderedFootnotes,
-                    )
-                  : selectionResolver.resolveListSelectionUnitRange(
-                        context,
-                        orderedFootnotes,
-                        localPosition,
-                        position,
-                      ) ??
-                      descriptorExtractor.resolveSelectionUnitRange(
-                        position,
-                        orderedFootnotes,
-                      ),
           highlightBorderRadius: BorderRadius.circular(8),
         );
       case MarkdownBlockKind.details:
         final detailsBlock = block as DetailsBlock;
         final descriptor =
             descriptorExtractor.buildDetailsSelectableDescriptor(detailsBlock);
-        final childKeys = keysRegistry.detailsChildKeysFor(detailsBlock);
-        return SelectableBlockSpec(
+        return _buildContainerSpec(
+          block: detailsBlock,
           child: _buildDetails(
             context,
             detailsBlock,
-            childKeys: childKeys,
+            path: const <int>[],
           ),
-          plainText: descriptor.plainText,
-          selectionStructure: _matchingSelectionStructure(
-            detailsBlock,
-            descriptor.plainText,
-          ),
-          hitTestBehavior: SelectableBlockHitTestBehavior.text,
           textSpan: descriptor.span,
           highlightBorderRadius: theme.quoteBorderRadius,
           selectionPaintOrder: SelectableBlockSelectionPaintOrder.aboveChild,
           repaintListenable: _nestedScrollableRepaintListenableForBlocks(
             detailsBlock.children,
           ),
-          selectionRectResolver: (context, _, range) =>
-              selectionResolver.resolveDetailsSelectionRects(
-            context,
-            detailsBlock,
-            range,
-          ),
-          textOffsetResolver: (context, _, localPosition) =>
-              selectionResolver.resolveDetailsTextOffset(
-            context,
-            detailsBlock,
-            localPosition,
-          ),
-          selectionUnitRangeResolver: (context, _, localPosition, position) =>
-              localPosition == null
-                  ? descriptorExtractor.resolveSelectionUnitRange(
-                      position,
-                      detailsBlock,
-                    )
-                  : selectionResolver.resolveDetailsSelectionUnitRange(
-                        context,
-                        detailsBlock,
-                        localPosition,
-                        position,
-                      ) ??
-                      descriptorExtractor.resolveSelectionUnitRange(
-                        position,
-                        detailsBlock,
-                      ),
         );
       case MarkdownBlockKind.codeBlock:
         final codeBlock = block as CodeBlock;
@@ -661,29 +523,32 @@ class MarkdownBlockBuilder {
           theme: theme,
           language: codeBlock.language,
         );
-        final codeRuns = codeHighlightPresentation.runs;
-        final codeSpan = codeHighlightPresentation.span;
-        final directTextKey = _createDirectTextKeyIfNeeded(codeRuns);
         final scrollController = keysRegistry.codeBlockScrollControllers
             .putIfAbsent(codeBlock.id, ScrollController.new);
         final viewportKey = keysRegistry.codeBlockViewportKeys.putIfAbsent(
           codeBlock.id,
           () => GlobalKey(debugLabel: 'code-viewport-${codeBlock.id}'),
         );
-        return _buildPretextTextSpec(
-          child: _buildDecoratedCodeBlock(
-            codeBlock,
-            codeSpan: codeSpan,
-            directTextKey: directTextKey,
-            scrollController: scrollController,
-            viewportKey: viewportKey,
+        final geometry = MarkdownTextLeafGeometry(
+          runs: codeHighlightPresentation.runs,
+          fallbackStyle: theme.codeBlockStyle,
+          direct: true,
+          viewportKey: viewportKey,
+        );
+        return _buildTextLeafSpec(
+          child: MarkdownSelectableLeaf(
+            path: _topLevelLeafPath,
+            geometry: geometry,
+            child: _buildDecoratedCodeBlock(
+              codeBlock,
+              codeSpan: codeHighlightPresentation.span,
+              scrollController: scrollController,
+              viewportKey: viewportKey,
+            ),
           ),
           plainText: codeBlock.code,
-          runs: codeRuns,
-          fallbackStyle: theme.codeBlockStyle,
-          directTextKey: directTextKey,
-          selectionClipRectResolver: (context, _) =>
-              _resolveChildViewportRect(context, viewportKey),
+          geometry: geometry,
+          clipToLeaf: true,
           measurementPadding: EdgeInsets.fromLTRB(
             theme.codeBlockPadding.resolve(Directionality.of(context)).left,
             math.max(
@@ -728,8 +593,6 @@ class MarkdownBlockBuilder {
         );
       case MarkdownBlockKind.table:
         final tableBlock = block as TableBlock;
-        final cellKeys = keysRegistry.tableCellKeysFor(tableBlock);
-        final cellTextKeys = keysRegistry.tableCellTextKeysFor(tableBlock);
         final descriptor =
             descriptorExtractor.buildSelectableDescriptorForBlock(tableBlock);
         final scrollController = keysRegistry.tableScrollControllers
@@ -738,55 +601,19 @@ class MarkdownBlockBuilder {
           tableBlock.id,
           () => GlobalKey(debugLabel: 'table-viewport-${tableBlock.id}'),
         );
-        return SelectableBlockSpec(
+        return _buildContainerSpec(
+          block: tableBlock,
           child: _buildTable(
             context,
             tableBlock,
-            cellKeyBuilder: (rowIndex, columnIndex) =>
-                cellKeys[rowIndex][columnIndex],
-            cellTextKeyBuilder: (rowIndex, columnIndex) =>
-                cellTextKeys[rowIndex][columnIndex],
             scrollController: scrollController,
             viewportKey: viewportKey,
           ),
-          plainText: descriptor.plainText,
-          selectionStructure: _matchingSelectionStructure(
-            tableBlock,
-            descriptor.plainText,
-          ),
-          hitTestBehavior: SelectableBlockHitTestBehavior.text,
           textSpan: descriptor.span,
           highlightBorderRadius: theme.tableBorderRadius,
           selectionPaintOrder: SelectableBlockSelectionPaintOrder.aboveChild,
           repaintListenable: scrollController,
           selectionColor: theme.selectionColor,
-          selectionRectResolver: (context, _, range) =>
-              selectionResolver.resolveNestedBlockSelectionRects(
-            context,
-            rootRenderObject: context.findRenderObject() as RenderBox,
-            block: tableBlock,
-            descriptor: descriptor,
-            range: range,
-            renderObject: context.findRenderObject() as RenderBox,
-            origin: Offset.zero,
-            textDirection: Directionality.of(context),
-          ),
-          textOffsetResolver: (context, _, localPosition) =>
-              selectionResolver.resolveNestedBlockTextOffset(
-            context,
-            rootRenderObject: context.findRenderObject() as RenderBox,
-            block: tableBlock,
-            descriptor: descriptor,
-            renderObject: context.findRenderObject() as RenderBox,
-            globalPosition: (context.findRenderObject() as RenderBox)
-                .localToGlobal(localPosition),
-            textDirection: Directionality.of(context),
-          ),
-          selectionUnitRangeResolver: (_, __, ___, position) =>
-              descriptorExtractor.resolveSelectionUnitRange(
-            position,
-            tableBlock,
-          ),
         );
       case MarkdownBlockKind.image:
         return SelectableBlockSpec(
@@ -808,33 +635,98 @@ class MarkdownBlockBuilder {
     }
   }
 
-  SelectableBlockSpec _buildPretextTextSpec({
-    Widget? child,
+  static const PathInBlock _topLevelLeafPath = PathInBlock(<int>[0]);
+
+  /// The spec of a container block: a quote, details, list, footnote list,
+  /// or table. Its text and offsets are those of the block's
+  /// [StructuredBlockSelection], and its geometry is read from the leaves and
+  /// slots rendered in [child].
+  SelectableBlockSpec _buildContainerSpec({
+    required BlockNode block,
+    required Widget child,
+    required InlineSpan textSpan,
+    BorderRadius? highlightBorderRadius,
+    SelectableBlockSelectionPaintOrder selectionPaintOrder =
+        SelectableBlockSelectionPaintOrder.behindChild,
+    Color? selectionColor,
+    Listenable? repaintListenable,
+  }) {
+    final structure = StructuredBlockSelection.forBlock(block);
+    return SelectableBlockSpec(
+      child: child,
+      plainText: structure.plainText,
+      selectionStructure: structure.isEmpty ? null : structure,
+      hitTestBehavior: SelectableBlockHitTestBehavior.text,
+      textSpan: textSpan,
+      highlightBorderRadius: highlightBorderRadius,
+      selectionPaintOrder: selectionPaintOrder,
+      selectionColor: selectionColor,
+      repaintListenable: repaintListenable,
+      selectionRectResolver: (context, _, range) =>
+          MarkdownContainerSelectionGeometry.rects(context, block, range),
+      textOffsetResolver: (context, _, localPosition) =>
+          MarkdownContainerSelectionGeometry.offsetAt(
+        context,
+        block,
+        localPosition,
+      ),
+      selectionUnitRangeResolver: (context, _, localPosition, position) =>
+          MarkdownContainerSelectionGeometry.unitAt(
+        context,
+        block,
+        localPosition,
+        position,
+      ),
+    );
+  }
+
+  /// A selectable text leaf rendering the runs of [geometry].
+  Widget _textLeaf(PathInBlock path, MarkdownTextLeafGeometry geometry) {
+    return MarkdownSelectableLeaf(
+      path: path,
+      geometry: geometry,
+      child: MarkdownPretextTextBlock.rich(
+        runs: geometry.runs,
+        fallbackStyle: geometry.fallbackStyle,
+        textAlign: geometry.textAlign,
+        preferDirectRichText: geometry.direct,
+      ),
+    );
+  }
+
+  /// The spec of a block that is a single text leaf at [_topLevelLeafPath],
+  /// whose local offsets are the block's display offsets. Before the leaf is
+  /// laid out, geometry falls back to the pretext layout at the block width.
+  SelectableBlockSpec _buildTextLeafSpec({
+    required Widget child,
     required String plainText,
-    required List<MarkdownPretextInlineRun> runs,
-    required TextStyle fallbackStyle,
-    TextAlign textAlign = TextAlign.start,
-    GlobalKey? directTextKey,
+    required MarkdownTextLeafGeometry geometry,
     EdgeInsets measurementPadding = EdgeInsets.zero,
     BorderRadius? highlightBorderRadius,
     SelectableBlockSelectionPaintOrder? selectionPaintOrder,
     Listenable? repaintListenable,
     EdgeInsets? selectionClipPadding,
     StructuredBlockSelection? selectionStructure,
-    Rect? Function(BuildContext context, Size size)? selectionClipRectResolver,
+    bool clipToLeaf = false,
   }) {
-    final hasInlineSurface = runs.any(
+    final hasInlineSurface = geometry.runs.any(
       (run) => run.decoration != null || run.renderSpan != null,
     );
+    ({MarkdownSelectableLeafState leaf, Offset origin})? leafOf(
+      BuildContext context,
+    ) {
+      final leaf = SelectableMarkdownBlockState.leafRegistryOf(context)
+          ?.leaf(_topLevelLeafPath);
+      final blockBox = context.findRenderObject();
+      if (leaf == null || blockBox is! RenderBox || !blockBox.hasSize) {
+        return null;
+      }
+      final origin = leaf.originIn(blockBox);
+      return origin == null ? null : (leaf: leaf, origin: origin);
+    }
+
     return SelectableBlockSpec(
-      child: child ??
-          MarkdownPretextTextBlock.rich(
-            runs: runs,
-            fallbackStyle: fallbackStyle,
-            directTextKey: directTextKey,
-            preferDirectRichText: directTextKey != null,
-            textAlign: textAlign,
-          ),
+      child: child,
       plainText: plainText,
       hitTestBehavior: SelectableBlockHitTestBehavior.text,
       selectionStructure: selectionStructure,
@@ -846,420 +738,63 @@ class MarkdownBlockBuilder {
               : SelectableBlockSelectionPaintOrder.behindChild),
       repaintListenable: repaintListenable,
       selectionClipPadding: selectionClipPadding,
-      selectionClipRectResolver: selectionClipRectResolver,
-      selectionRectResolver: (context, constraints, range) {
-        if (directTextKey != null) {
-          final directRects = _resolveDirectRichTextSelectionRects(
-            context,
-            directTextKey,
-            range,
-            runs,
-          );
-          if (directRects != null) {
-            return directRects;
-          }
+      selectionClipRectResolver: clipToLeaf
+          ? (context, _) {
+              final resolved = leafOf(context);
+              return resolved?.leaf.clipRect?.shift(resolved.origin);
+            }
+          : null,
+      selectionRectResolver: (context, size, range) {
+        final start = range.start.textOffset;
+        final end = range.end.textOffset;
+        final resolved = leafOf(context);
+        if (resolved == null) {
+          return geometry.layoutRects(context, size.width, start, end);
         }
-        final textScaler =
-            MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling;
-        final layout = computeMarkdownPretextLayoutFromRuns(
-          runs: runs,
-          fallbackStyle: fallbackStyle,
-          maxWidth: constraints.width,
-          textScaleFactor: textScaler.scale(1.0),
-          textAlign: textAlign,
-          textDirection: Directionality.of(context),
-        );
-        return layout.selectionRectsForRange(
-          range,
-          textDirection: Directionality.of(context),
-        );
+        return resolved.leaf
+            .rectsFor(start, end)
+            .map((rect) => rect.shift(resolved.origin))
+            .toList(growable: false);
       },
       textOffsetResolver: (context, size, localPosition) {
-        if (directTextKey != null) {
-          final directOffset = _resolveDirectRichTextTextOffset(
-            context,
-            directTextKey,
-            localPosition,
-            runs,
-          );
-          if (directOffset != null) {
-            return directOffset;
-          }
+        final resolved = leafOf(context);
+        if (resolved == null) {
+          return geometry.layoutOffsetAt(context, size.width, localPosition);
         }
-        final textScaler =
-            MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling;
-        final layout = computeMarkdownPretextLayoutFromRuns(
-          runs: runs,
-          fallbackStyle: fallbackStyle,
-          maxWidth: size.width,
-          textScaleFactor: textScaler.scale(1.0),
-          textAlign: textAlign,
-          textDirection: Directionality.of(context),
-        );
-        return layout.textOffsetAt(
-          localPosition,
-          textDirection: Directionality.of(context),
-        );
+        return resolved.leaf.offsetAt(localPosition - resolved.origin);
       },
       selectionUnitRangeResolver: (context, size, localPosition, position) {
-        if (directTextKey != null) {
-          final directRange = _resolveDirectRichTextLineRange(
-            context,
-            directTextKey,
-            position,
-            localPosition,
-            runs,
-          );
-          if (directRange != null) {
-            return directRange;
-          }
-        }
-        final textScaler =
-            MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling;
-        final layout = computeMarkdownPretextLayoutFromRuns(
-          runs: runs,
-          fallbackStyle: fallbackStyle,
-          maxWidth: size.width,
-          textScaleFactor: textScaler.scale(1.0),
-          textAlign: textAlign,
-          textDirection: Directionality.of(context),
-        );
-        final lineRange = localPosition == null
-            ? layout.lineRangeForTextOffset(position.textOffset)
-            : layout.visualLineRangeForLocalPosition(localPosition) ??
-                layout.lineRangeForTextOffset(position.textOffset);
+        final resolved = leafOf(context);
+        final lineRange = resolved == null
+            ? geometry.layoutLineRangeAt(
+                context,
+                size.width,
+                position.textOffset,
+                localPosition: localPosition,
+              )
+            : resolved.leaf.lineRangeAt(
+                position.textOffset,
+                localPosition: localPosition == null
+                    ? null
+                    : localPosition - resolved.origin,
+              );
         if (lineRange == null) {
           return null;
         }
         return DocumentRange(
           start: DocumentPosition(
             blockIndex: position.blockIndex,
-            path: const PathInBlock(<int>[0]),
+            path: _topLevelLeafPath,
             textOffset: lineRange.start,
           ),
           end: DocumentPosition(
             blockIndex: position.blockIndex,
-            path: const PathInBlock(<int>[0]),
+            path: _topLevelLeafPath,
             textOffset: lineRange.end,
           ),
         );
       },
     );
-  }
-
-  DocumentRange? _resolveDirectRichTextLineRange(
-    BuildContext context,
-    GlobalKey directTextKey,
-    DocumentPosition position,
-    Offset? localPosition,
-    List<MarkdownPretextInlineRun> runs,
-  ) {
-    final blockRenderObject = context.findRenderObject();
-    final renderParagraph = _resolveDirectRenderParagraph(
-      directTextKey,
-      runs: runs,
-      fallbackRoot: blockRenderObject,
-    );
-    if (renderParagraph == null ||
-        blockRenderObject is! RenderBox ||
-        !blockRenderObject.hasSize) {
-      return null;
-    }
-
-    final textPosition = localPosition == null
-        ? TextPosition(
-            offset: markdownPretextRenderOffsetForPlainOffset(
-              runs,
-              position.textOffset,
-              preferEnd: false,
-            ),
-          )
-        : renderParagraph.getPositionForOffset(
-            renderParagraph.globalToLocal(
-              blockRenderObject.localToGlobal(localPosition),
-            ),
-          );
-    final lineBoundary = _resolveDirectRenderParagraphLineBoundary(
-      renderParagraph,
-      textPosition.offset,
-    );
-    if (lineBoundary == null) {
-      return null;
-    }
-    final plainText = runs.map((run) => run.text).join();
-    var plainStart = markdownPretextPlainOffsetForRenderOffset(
-      runs,
-      lineBoundary.start,
-    );
-    var plainEnd = markdownPretextPlainOffsetForRenderOffset(
-      runs,
-      lineBoundary.end,
-    );
-    if (plainStart < plainText.length &&
-        plainText.codeUnitAt(plainStart) == 0x0A) {
-      plainStart += 1;
-    }
-    if (plainEnd > plainStart &&
-        plainEnd <= plainText.length &&
-        plainText.codeUnitAt(plainEnd - 1) == 0x0A) {
-      plainEnd -= 1;
-    }
-
-    return DocumentRange(
-      start: DocumentPosition(
-        blockIndex: position.blockIndex,
-        path: const PathInBlock(<int>[0]),
-        textOffset: plainStart,
-      ),
-      end: DocumentPosition(
-        blockIndex: position.blockIndex,
-        path: const PathInBlock(<int>[0]),
-        textOffset: plainEnd,
-      ),
-    );
-  }
-
-  ({int start, int end})? _resolveDirectRenderParagraphLineBoundary(
-    RenderParagraph renderParagraph,
-    int renderOffset,
-  ) {
-    final fullText =
-        renderParagraph.text.toPlainText(includePlaceholders: true);
-    if (fullText.isEmpty) {
-      return const (start: 0, end: 0);
-    }
-    final lineExtents = _computeParagraphLineExtents(renderParagraph);
-    if (lineExtents.isEmpty) {
-      return null;
-    }
-
-    var probe = renderOffset.clamp(0, fullText.length).toInt();
-    if (probe == fullText.length && probe > 0) {
-      probe -= 1;
-    }
-
-    List<TextBox> probeBoxes = _boxesForDirectRenderOffset(
-      renderParagraph,
-      fullText,
-      probe,
-    );
-    while (probeBoxes.isEmpty && probe > 0) {
-      probe -= 1;
-      probeBoxes =
-          _boxesForDirectRenderOffset(renderParagraph, fullText, probe);
-    }
-    while (probeBoxes.isEmpty && probe < fullText.length - 1) {
-      probe += 1;
-      probeBoxes =
-          _boxesForDirectRenderOffset(renderParagraph, fullText, probe);
-    }
-    if (probeBoxes.isEmpty) {
-      return null;
-    }
-
-    final lineExtent = lineExtents.firstWhere(
-      (extent) => _boxesOverlapLineExtent(probeBoxes, extent),
-      orElse: () => lineExtents.last,
-    );
-
-    var start = probe;
-    while (start > 0) {
-      final previousBoxes = _boxesForDirectRenderOffset(
-        renderParagraph,
-        fullText,
-        start - 1,
-      );
-      if (previousBoxes.isEmpty ||
-          !_boxesOverlapLineExtent(previousBoxes, lineExtent)) {
-        break;
-      }
-      start -= 1;
-    }
-
-    var end = probe + 1;
-    while (end < fullText.length) {
-      final nextBoxes = _boxesForDirectRenderOffset(
-        renderParagraph,
-        fullText,
-        end,
-      );
-      if (nextBoxes.isEmpty ||
-          !_boxesOverlapLineExtent(nextBoxes, lineExtent)) {
-        break;
-      }
-      end += 1;
-    }
-
-    return (start: start, end: end);
-  }
-
-  List<TextBox> _boxesForDirectRenderOffset(
-    RenderParagraph renderParagraph,
-    String fullText,
-    int renderOffset,
-  ) {
-    if (fullText.isEmpty) {
-      return const <TextBox>[];
-    }
-    final start = renderOffset.clamp(0, fullText.length - 1).toInt();
-    final end = math.min(start + 1, fullText.length);
-    if (start >= end) {
-      return const <TextBox>[];
-    }
-    return renderParagraph.getBoxesForSelection(
-      TextSelection(baseOffset: start, extentOffset: end),
-    );
-  }
-
-  bool _boxesOverlapLineExtent(
-    List<TextBox> boxes,
-    ({double top, double bottom}) lineExtent,
-  ) {
-    for (final box in boxes) {
-      final overlapTop = math.max(box.top, lineExtent.top);
-      final overlapBottom = math.min(box.bottom, lineExtent.bottom);
-      if (overlapBottom - overlapTop > 0.5) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  GlobalKey? _createDirectTextKeyIfNeeded(
-    List<MarkdownPretextInlineRun> runs,
-  ) {
-    if (markdownPretextCanUseDirectRichTextGeometry(runs)) {
-      return GlobalKey();
-    }
-    return null;
-  }
-
-  List<Rect>? _resolveDirectRichTextSelectionRects(
-    BuildContext context,
-    GlobalKey directTextKey,
-    DocumentRange range,
-    List<MarkdownPretextInlineRun> runs,
-  ) {
-    final blockRenderObject = context.findRenderObject();
-    final renderParagraph = _resolveDirectRenderParagraph(
-      directTextKey,
-      runs: runs,
-      fallbackRoot: blockRenderObject,
-    );
-    if (renderParagraph == null ||
-        blockRenderObject is! RenderBox ||
-        !blockRenderObject.hasSize) {
-      return null;
-    }
-
-    final renderSelection = TextSelection(
-      baseOffset: markdownPretextRenderOffsetForPlainOffset(
-        runs,
-        range.start.textOffset,
-        preferEnd: false,
-      ),
-      extentOffset: markdownPretextRenderOffsetForPlainOffset(
-        runs,
-        range.end.textOffset,
-        preferEnd: true,
-      ),
-    );
-    final paragraphOrigin = blockRenderObject.globalToLocal(
-      renderParagraph.localToGlobal(Offset.zero),
-    );
-    // The paragraph found via GlobalKey may not have completed layout
-    // in the current frame (e.g. during scroll-triggered rebuilds).
-    final List<TextBox> selectionBoxes;
-    List<({double top, double bottom})> lineExtents;
-    try {
-      lineExtents = _computeParagraphLineExtents(renderParagraph);
-      selectionBoxes = renderParagraph.getBoxesForSelection(renderSelection);
-    } on AssertionError {
-      return null;
-    }
-    final boxes = _mergeDirectTextSelectionBoxes(
-      _normalizeBoxesToLineExtents(selectionBoxes, lineExtents),
-    );
-    return boxes
-        .map(
-          (box) => Rect.fromLTRB(
-            box.left + paragraphOrigin.dx - 1.5,
-            box.top + paragraphOrigin.dy,
-            box.right + paragraphOrigin.dx + 1.5,
-            box.bottom + paragraphOrigin.dy,
-          ),
-        )
-        .toList(growable: false);
-  }
-
-  int? _resolveDirectRichTextTextOffset(
-    BuildContext context,
-    GlobalKey directTextKey,
-    Offset localPosition,
-    List<MarkdownPretextInlineRun> runs,
-  ) {
-    final blockRenderObject = context.findRenderObject();
-    final renderParagraph = _resolveDirectRenderParagraph(
-      directTextKey,
-      runs: runs,
-      fallbackRoot: blockRenderObject,
-    );
-    if (renderParagraph == null ||
-        blockRenderObject is! RenderBox ||
-        !blockRenderObject.hasSize) {
-      return null;
-    }
-
-    final paragraphPosition = renderParagraph.globalToLocal(
-      blockRenderObject.localToGlobal(localPosition),
-    );
-    final textPosition = renderParagraph.getPositionForOffset(
-      paragraphPosition,
-    );
-    return markdownPretextPlainOffsetForRenderOffset(runs, textPosition.offset);
-  }
-
-  RenderParagraph? _resolveDirectRenderParagraph(
-    GlobalKey directTextKey, {
-    List<MarkdownPretextInlineRun>? runs,
-    RenderObject? fallbackRoot,
-  }) {
-    final renderObject = directTextKey.currentContext?.findRenderObject();
-    final expectedRenderText =
-        runs == null ? null : markdownPretextRenderText(runs);
-    if (renderObject is RenderParagraph &&
-        renderObject.hasSize &&
-        (expectedRenderText == null ||
-            renderObject.text.toPlainText(includePlaceholders: true) ==
-                expectedRenderText)) {
-      return renderObject;
-    }
-    RenderParagraph? paragraph;
-
-    void visit(RenderObject node) {
-      if (paragraph != null) {
-        return;
-      }
-      if (node is RenderParagraph &&
-          node.hasSize &&
-          (expectedRenderText == null ||
-              node.text.toPlainText(includePlaceholders: true) ==
-                  expectedRenderText)) {
-        paragraph = node;
-        return;
-      }
-      node.visitChildren(visit);
-    }
-
-    if (renderObject != null) {
-      visit(renderObject);
-    }
-    if (paragraph == null &&
-        fallbackRoot != null &&
-        fallbackRoot != renderObject) {
-      visit(fallbackRoot);
-    }
-    return paragraph;
   }
 
   TextStyle _styleForContext(TextStyle style, TextStyle? textStyleContext) {
@@ -1292,10 +827,19 @@ class MarkdownBlockBuilder {
     );
   }
 
+  /// The leaf path of a block at [path]: a top-level block's own leaf is
+  /// at `[0]`.
+  PathInBlock _leafPath(List<int> path) {
+    return PathInBlock(path.isEmpty ? const <int>[0] : path);
+  }
+
+  /// Builds a block nested at [path] in its top-level block, tagging its
+  /// leaves and slots with the paths of the block's selection structure.
   Widget _buildNestedBlockContent(
     BuildContext context,
     BlockNode block, {
     TextStyle? paragraphStyle,
+    List<int> path = const <int>[],
   }) {
     final effectiveParagraphStyle = paragraphStyle ?? theme.bodyStyle;
     final effectiveInlineCodeStyle = _styleForContext(
@@ -1317,6 +861,7 @@ class MarkdownBlockBuilder {
             inlines: heading.inlines,
             inlineCodeStyle: effectiveInlineCodeStyle,
             linkStyle: effectiveLinkStyle,
+            path: _leafPath(path),
           ),
         );
       case MarkdownBlockKind.paragraph:
@@ -1332,33 +877,45 @@ class MarkdownBlockBuilder {
           inlines: paragraph.inlines,
           inlineCodeStyle: effectiveInlineCodeStyle,
           linkStyle: effectiveLinkStyle,
+          path: _leafPath(path),
         );
       case MarkdownBlockKind.quote:
-        return _buildQuote(context, block as QuoteBlock);
+        return _buildQuote(context, block as QuoteBlock, path: path);
       case MarkdownBlockKind.orderedList:
       case MarkdownBlockKind.unorderedList:
         return _buildList(
           context,
           block as ListBlock,
           paragraphStyle: paragraphStyle,
+          path: path,
         );
       case MarkdownBlockKind.definitionList:
-        return _buildDefinitionList(context, block as DefinitionListBlock);
+        return _buildDefinitionList(
+          context,
+          block as DefinitionListBlock,
+          path: path,
+        );
       case MarkdownBlockKind.footnoteList:
-        return _buildFootnoteList(context, block as FootnoteListBlock);
+        return _buildFootnoteList(
+          context,
+          block as FootnoteListBlock,
+          path: path,
+        );
       case MarkdownBlockKind.details:
         return _buildDetails(
           context,
           block as DetailsBlock,
           paragraphStyle: paragraphStyle,
+          path: path,
         );
       case MarkdownBlockKind.codeBlock:
-        return _buildCodeBlock(context, block as CodeBlock);
+        return _buildCodeBlock(context, block as CodeBlock, path: path);
       case MarkdownBlockKind.table:
         return _buildTable(
           context,
           block as TableBlock,
           textStyleContext: paragraphStyle,
+          path: path,
         );
       case MarkdownBlockKind.image:
         return _buildImage(context, block as ImageBlock);
@@ -1371,13 +928,17 @@ class MarkdownBlockBuilder {
     }
   }
 
-  Widget _buildQuote(BuildContext context, QuoteBlock block) {
+  Widget _buildQuote(
+    BuildContext context,
+    QuoteBlock block, {
+    required List<int> path,
+  }) {
     return MarkdownQuoteBlockView(
       theme: theme,
       child: _buildQuoteContent(
         context,
         block,
-        childKeys: keysRegistry.quoteChildKeysFor(block),
+        path: path,
       ),
     );
   }
@@ -1385,7 +946,7 @@ class MarkdownBlockBuilder {
   Widget _buildQuoteContent(
     BuildContext context,
     QuoteBlock block, {
-    List<GlobalKey>? childKeys,
+    required List<int> path,
   }) {
     return DefaultTextStyle.merge(
       style: theme.quoteStyle,
@@ -1395,8 +956,7 @@ class MarkdownBlockBuilder {
           context,
           block.children,
           paragraphStyle: theme.quoteStyle,
-          blockKeyBuilder:
-              childKeys == null ? null : (index) => childKeys[index],
+          pathFor: (index) => <int>[...path, index],
         ),
       ),
     );
@@ -1406,13 +966,14 @@ class MarkdownBlockBuilder {
     BuildContext context,
     List<BlockNode> blocks, {
     TextStyle? paragraphStyle,
-    Key? Function(int index)? blockKeyBuilder,
+    required List<int> Function(int index) pathFor,
   }) {
     return <Widget>[
       for (var index = 0; index < blocks.length; index++)
-        KeyedSubtree(
-          key: blockKeyBuilder?.call(index),
-          child: Padding(
+        _nestedChildSlot(
+          blocks[index],
+          pathFor(index),
+          Padding(
             padding: EdgeInsets.only(
               bottom: index == blocks.length - 1
                   ? 0
@@ -1426,19 +987,46 @@ class MarkdownBlockBuilder {
               context,
               blocks[index],
               paragraphStyle: paragraphStyle,
+              path: pathFor(index),
             ),
           ),
         ),
     ];
   }
 
+  /// The slot of a child block of a quote, details, or list item. A child
+  /// drawn as a box, such as an image, is a placeholder leaf spanning the
+  /// whole slot.
+  Widget _nestedChildSlot(BlockNode block, List<int> path, Widget child) {
+    final textLength = _isPlaceholderLeafBlock(block)
+        ? StructuredBlockSelection.forBlock(block).plainText.length
+        : null;
+    return MarkdownSelectionSlot(
+      path: PathInBlock(path),
+      role: MarkdownSelectionSlotRole.child,
+      child: textLength == null
+          ? child
+          : MarkdownSelectableLeaf(
+              path: PathInBlock(path),
+              geometry: MarkdownPlaceholderLeafGeometry(textLength: textLength),
+              child: child,
+            ),
+    );
+  }
+
+  bool _isPlaceholderLeafBlock(BlockNode block) {
+    return block.kind == MarkdownBlockKind.image ||
+        block.kind == MarkdownBlockKind.thematicBreak ||
+        _isStandaloneLineBreakBlock(block) ||
+        (block.kind == MarkdownBlockKind.codeBlock && codeBlockBuilder != null);
+  }
+
   Widget _buildList(
     BuildContext context,
     ListBlock block, {
     TextStyle? paragraphStyle,
+    required List<int> path,
   }) {
-    final itemRowKeys = keysRegistry.listItemKeysFor(block);
-    final itemContentKeys = keysRegistry.listItemContentKeysFor(block);
     return MarkdownListBlockView(
       theme: theme,
       block: block,
@@ -1448,34 +1036,53 @@ class MarkdownBlockBuilder {
         index,
         item,
         paragraphStyle: paragraphStyle,
+        path: path,
       ),
-      itemRowKeyBuilder: (index) => itemRowKeys[index],
-      itemContentKeyBuilder: (index) => itemContentKeys[index],
+      itemSlotBuilder: _listItemSlotBuilder(path),
       markerStyle: _styleForContext(theme.bodyStyle, paragraphStyle),
       bulletBuilder: bulletBuilder,
     );
   }
 
-  Widget _buildDefinitionList(BuildContext context, DefinitionListBlock block) {
-    final descriptor =
-        descriptorExtractor.buildDefinitionListSelectableDescriptor(block);
-    return _buildDescriptorTextWidget(descriptor);
+  /// Wraps the row and the content of each list item in the slots the list
+  /// selection geometry reads.
+  MarkdownListItemSlotBuilder _listItemSlotBuilder(List<int> path) {
+    return (index, role, child) => MarkdownSelectionSlot(
+          path: PathInBlock(<int>[...path, index]),
+          role: role,
+          child: child,
+        );
   }
 
-  Widget _buildFootnoteList(BuildContext context, FootnoteListBlock block) {
+  Widget _buildDefinitionList(
+    BuildContext context,
+    DefinitionListBlock block, {
+    required List<int> path,
+  }) {
+    final descriptor =
+        descriptorExtractor.buildDefinitionListSelectableDescriptor(block);
+    return _buildDescriptorTextWidget(descriptor, leafPath: _leafPath(path));
+  }
+
+  Widget _buildFootnoteList(
+    BuildContext context,
+    FootnoteListBlock block, {
+    required List<int> path,
+  }) {
     final orderedFootnotes =
         MarkdownDescriptorExtractor.footnoteListAsOrderedList(block);
-    final itemRowKeys = keysRegistry.listItemKeysFor(orderedFootnotes);
-    final itemContentKeys =
-        keysRegistry.listItemContentKeysFor(orderedFootnotes);
     return _buildFootnoteListContainer(
       child: MarkdownListBlockView(
         theme: theme,
         block: orderedFootnotes,
-        itemBuilder: (index, item) =>
-            _buildListItemContent(context, orderedFootnotes, index, item),
-        itemRowKeyBuilder: (index) => itemRowKeys[index],
-        itemContentKeyBuilder: (index) => itemContentKeys[index],
+        itemBuilder: (index, item) => _buildListItemContent(
+          context,
+          orderedFootnotes,
+          index,
+          item,
+          path: path,
+        ),
+        itemSlotBuilder: _listItemSlotBuilder(path),
         bulletBuilder: bulletBuilder,
       ),
     );
@@ -1484,24 +1091,26 @@ class MarkdownBlockBuilder {
   Widget _buildDetails(
     BuildContext context,
     DetailsBlock block, {
-    List<GlobalKey>? childKeys,
     TextStyle? paragraphStyle,
+    required List<int> path,
   }) {
-    final resolvedKeys = childKeys ?? keysRegistry.detailsChildKeysFor(block);
     final summaryStyle = (paragraphStyle ?? theme.bodyStyle).copyWith(
       fontWeight: FontWeight.w600,
     );
+    final summaryPath = PathInBlock(<int>[...path, 0]);
     return MarkdownDetailsBlockView(
       theme: theme,
       initiallyExpanded: block.initiallyExpanded,
-      summary: KeyedSubtree(
-        key: resolvedKeys.first,
+      summary: MarkdownSelectionSlot(
+        path: summaryPath,
+        role: MarkdownSelectionSlotRole.child,
         child: _buildTextBlock(
           style: summaryStyle,
           inlines: block.summary,
           inlineCodeStyle:
               _styleForContext(theme.inlineCodeStyle, paragraphStyle),
           linkStyle: _linkStyleForContext(paragraphStyle),
+          path: summaryPath,
         ),
       ),
       content: block.children.isEmpty
@@ -1512,31 +1121,35 @@ class MarkdownBlockBuilder {
                 context,
                 block.children,
                 paragraphStyle: paragraphStyle,
-                blockKeyBuilder: (index) => resolvedKeys[index + 1],
+                pathFor: (index) => <int>[...path, index + 1],
               ),
             ),
     );
   }
 
+  /// The content of list item [itemIndex] of the list at [path].
   Widget _buildListItemContent(
     BuildContext context,
     ListBlock block,
     int itemIndex,
     ListItemNode item, {
     TextStyle? paragraphStyle,
+    required List<int> path,
   }) {
     if (item.children.isEmpty) {
       return const SizedBox.shrink();
     }
 
-    final childKeys = keysRegistry.listItemChildKeysFor(block, itemIndex);
+    List<int> childPath(int index) => <int>[...path, itemIndex, index + 1];
     if (item.children.length == 1) {
-      return KeyedSubtree(
-        key: childKeys.first,
-        child: _buildNestedBlockContent(
+      return _nestedChildSlot(
+        item.children.first,
+        childPath(0),
+        _buildNestedBlockContent(
           context,
           item.children.first,
           paragraphStyle: paragraphStyle,
+          path: childPath(0),
         ),
       );
     }
@@ -1546,7 +1159,7 @@ class MarkdownBlockBuilder {
         context,
         item.children,
         paragraphStyle: paragraphStyle,
-        blockKeyBuilder: (index) => childKeys[index],
+        pathFor: childPath,
       ),
     );
   }
@@ -1557,18 +1170,20 @@ class MarkdownBlockBuilder {
     TextAlign textAlign = TextAlign.start,
     TextStyle? inlineCodeStyle,
     TextStyle? linkStyle,
+    required PathInBlock path,
   }) {
-    final runs = inlineBuilder.buildPretextRuns(
-      style,
-      inlines,
-      inlineCodeStyle: inlineCodeStyle,
-      linkStyle: linkStyle,
-    );
-    return MarkdownPretextTextBlock.rich(
-      runs: runs,
-      fallbackStyle: style,
-      textAlign: textAlign,
-      preferDirectRichText: markdownPretextCanUseDirectRichTextGeometry(runs),
+    return _textLeaf(
+      path,
+      MarkdownTextLeafGeometry(
+        runs: inlineBuilder.buildPretextRuns(
+          style,
+          inlines,
+          inlineCodeStyle: inlineCodeStyle,
+          linkStyle: linkStyle,
+        ),
+        fallbackStyle: style,
+        textAlign: textAlign,
+      ),
     );
   }
 
@@ -1626,7 +1241,11 @@ class MarkdownBlockBuilder {
     );
   }
 
-  Widget _buildCodeBlock(BuildContext context, CodeBlock block) {
+  Widget _buildCodeBlock(
+    BuildContext context,
+    CodeBlock block, {
+    List<int> path = const <int>[],
+  }) {
     if (codeBlockBuilder != null) {
       return codeBlockBuilder!(context, block.code, block.language, theme);
     }
@@ -1643,11 +1262,20 @@ class MarkdownBlockBuilder {
       block.id,
       () => GlobalKey(debugLabel: 'code-viewport-${block.id}'),
     );
-    return _buildDecoratedCodeBlock(
-      block,
-      codeSpan: codeHighlightPresentation.span,
-      scrollController: scrollController,
-      viewportKey: viewportKey,
+    return MarkdownSelectableLeaf(
+      path: _leafPath(path),
+      geometry: MarkdownTextLeafGeometry(
+        runs: codeHighlightPresentation.runs,
+        fallbackStyle: theme.codeBlockStyle,
+        direct: true,
+        viewportKey: viewportKey,
+      ),
+      child: _buildDecoratedCodeBlock(
+        block,
+        codeSpan: codeHighlightPresentation.span,
+        scrollController: scrollController,
+        viewportKey: viewportKey,
+      ),
     );
   }
 
@@ -1655,13 +1283,11 @@ class MarkdownBlockBuilder {
     CodeBlock block, {
     required InlineSpan codeSpan,
     ScrollController? scrollController,
-    GlobalKey? directTextKey,
     GlobalKey? viewportKey,
   }) {
     return MarkdownCodeBlockView(
       theme: theme,
       codeSpan: codeSpan,
-      directTextKey: directTextKey,
       viewportKey: viewportKey,
       scrollController: scrollController ??
           keysRegistry.codeBlockScrollControllers
@@ -1670,21 +1296,6 @@ class MarkdownBlockBuilder {
         Clipboard.setData(ClipboardData(text: block.code));
       },
     );
-  }
-
-  Rect? _resolveChildViewportRect(BuildContext context, GlobalKey viewportKey) {
-    final blockRenderObject = context.findRenderObject();
-    final viewportRenderObject = viewportKey.currentContext?.findRenderObject();
-    if (blockRenderObject is! RenderBox ||
-        !blockRenderObject.hasSize ||
-        viewportRenderObject is! RenderBox ||
-        !viewportRenderObject.hasSize) {
-      return null;
-    }
-    final origin = blockRenderObject.globalToLocal(
-      viewportRenderObject.localToGlobal(Offset.zero),
-    );
-    return origin & viewportRenderObject.size;
   }
 
   Listenable? _nestedScrollableRepaintListenableForListBlock(ListBlock block) {
@@ -1765,13 +1376,10 @@ class MarkdownBlockBuilder {
     BuildContext context,
     TableBlock block, {
     TextStyle? textStyleContext,
-    Key? Function(int rowIndex, int columnIndex)? cellKeyBuilder,
-    GlobalKey? Function(int rowIndex, int columnIndex)? cellTextKeyBuilder,
     ScrollController? scrollController,
     GlobalKey? viewportKey,
+    List<int> path = const <int>[],
   }) {
-    final resolvedCellKeys = keysRegistry.tableCellKeysFor(block);
-    final resolvedCellTextKeys = keysRegistry.tableCellTextKeysFor(block);
     final resolvedViewportKey = viewportKey ??
         keysRegistry.tableViewportKeys.putIfAbsent(
           block.id,
@@ -1781,7 +1389,41 @@ class MarkdownBlockBuilder {
       theme: theme,
       block: block,
       layoutPlan: tableLayoutPlanCache.planFor(block),
-      textWidgetBuilder: _buildInlineTextWidget,
+      textWidgetBuilder: (
+        context,
+        style,
+        inlines,
+        textAlign, {
+        required int rowIndex,
+        required int columnIndex,
+        bool alignInlineMathToBaseline = true,
+        TextStyle? inlineCodeStyle,
+        TextStyle? linkStyle,
+      }) {
+        final runs = inlineBuilder.buildPretextRuns(
+          style,
+          inlines,
+          alignInlineMathToBaseline: alignInlineMathToBaseline,
+          inlineCodeStyle: inlineCodeStyle,
+          linkStyle: linkStyle,
+        );
+        return MarkdownSelectableLeaf(
+          path: PathInBlock(<int>[...path, rowIndex, columnIndex]),
+          geometry: MarkdownTextLeafGeometry(
+            runs: runs,
+            fallbackStyle: style,
+            textAlign: textAlign,
+            direct: true,
+            viewportKey: resolvedViewportKey,
+          ),
+          child: MarkdownPretextTextBlock.rich(
+            runs: runs,
+            fallbackStyle: style,
+            textAlign: textAlign,
+            intrinsicWidthSafe: true,
+          ),
+        );
+      },
       bodyStyle: _styleForContext(theme.bodyStyle, textStyleContext),
       tableHeaderStyle: _styleForContext(
         theme.tableHeaderStyle,
@@ -1792,40 +1434,10 @@ class MarkdownBlockBuilder {
         textStyleContext,
       ),
       linkStyle: _linkStyleForContext(textStyleContext),
-      cellKeyBuilder: cellKeyBuilder ??
-          (rowIndex, columnIndex) => resolvedCellKeys[rowIndex][columnIndex],
-      cellTextKeyBuilder: cellTextKeyBuilder ??
-          (rowIndex, columnIndex) =>
-              resolvedCellTextKeys[rowIndex][columnIndex],
       viewportKey: resolvedViewportKey,
       scrollController: scrollController ??
           keysRegistry.tableScrollControllers
               .putIfAbsent(block.id, ScrollController.new),
-    );
-  }
-
-  Widget _buildInlineTextWidget(
-    BuildContext context,
-    TextStyle style,
-    List<InlineNode> inlines,
-    TextAlign textAlign, {
-    GlobalKey? directTextKey,
-    bool alignInlineMathToBaseline = true,
-    TextStyle? inlineCodeStyle,
-    TextStyle? linkStyle,
-  }) {
-    return MarkdownPretextTextBlock.rich(
-      runs: inlineBuilder.buildPretextRuns(
-        style,
-        inlines,
-        alignInlineMathToBaseline: alignInlineMathToBaseline,
-        inlineCodeStyle: inlineCodeStyle,
-        linkStyle: linkStyle,
-      ),
-      fallbackStyle: style,
-      textAlign: textAlign,
-      intrinsicWidthSafe: true,
-      directTextKey: directTextKey,
     );
   }
 
@@ -2016,7 +1628,7 @@ class MarkdownBlockBuilder {
   Widget _buildDescriptorTextWidget(
     SelectableTextDescriptor descriptor, {
     bool intrinsicWidthSafe = false,
-    GlobalKey? directTextKey,
+    PathInBlock? leafPath,
   }) {
     final pretext = descriptor.pretext;
     if (pretext == null) {
@@ -2025,178 +1637,24 @@ class MarkdownBlockBuilder {
         style: pretext?.fallbackStyle,
       );
     }
+    if (leafPath != null) {
+      return _textLeaf(
+        leafPath,
+        MarkdownTextLeafGeometry(
+          runs: pretext.runs,
+          fallbackStyle: pretext.fallbackStyle,
+          textAlign: pretext.textAlign,
+        ),
+      );
+    }
     return MarkdownPretextTextBlock.rich(
       runs: pretext.runs,
       fallbackStyle: pretext.fallbackStyle,
-      directTextKey: directTextKey,
       textAlign: pretext.textAlign,
       intrinsicWidthSafe: intrinsicWidthSafe,
       preferDirectRichText:
           markdownPretextCanUseDirectRichTextGeometry(pretext.runs),
     );
-  }
-
-  List<TextBox> _mergeDirectTextSelectionBoxes(List<TextBox> boxes) {
-    if (boxes.length < 2) {
-      return boxes;
-    }
-
-    const lineTolerance = 2.0;
-    const gapTolerance = double.infinity;
-
-    final sorted = boxes.toList(growable: false)
-      ..sort((a, b) {
-        final topCompare = a.top.compareTo(b.top);
-        if (topCompare != 0) {
-          return topCompare;
-        }
-        return a.left.compareTo(b.left);
-      });
-
-    final merged = <TextBox>[];
-    var current = sorted.first;
-    for (final next in sorted.skip(1)) {
-      final sameLine = (next.top - current.top).abs() <= lineTolerance &&
-          (next.bottom - current.bottom).abs() <= lineTolerance;
-      final closeEnough = next.left <= current.right + gapTolerance;
-      if (sameLine && closeEnough) {
-        current = TextBox.fromLTRBD(
-          math.min(current.left, next.left),
-          math.min(current.top, next.top),
-          math.max(current.right, next.right),
-          math.max(current.bottom, next.bottom),
-          current.direction,
-        );
-        continue;
-      }
-      merged.add(current);
-      current = next;
-    }
-    merged.add(current);
-    return merged;
-  }
-
-  /// Compute each visual line's vertical extent by grouping the full
-  /// paragraph's boxes (all characters selected) by vertical overlap.
-  List<({double top, double bottom})> _computeParagraphLineExtents(
-    RenderParagraph renderParagraph,
-  ) {
-    final fullText =
-        renderParagraph.text.toPlainText(includePlaceholders: true);
-    if (fullText.isEmpty) {
-      return const <({double top, double bottom})>[];
-    }
-    if (fullText.contains('\uFFFC')) {
-      final allBoxes = renderParagraph.getBoxesForSelection(
-        TextSelection(baseOffset: 0, extentOffset: fullText.length),
-      );
-      return _resolveContiguousLinesFromBoxes(allBoxes);
-    }
-
-    final textPainter = TextPainter(
-      text: renderParagraph.text,
-      textAlign: renderParagraph.textAlign,
-      textDirection: renderParagraph.textDirection,
-      textScaler: renderParagraph.textScaler,
-      maxLines: null,
-    )..layout(maxWidth: renderParagraph.size.width);
-    final lines = textPainter.computeLineMetrics();
-    if (lines.isEmpty) {
-      return const <({double top, double bottom})>[];
-    }
-
-    // Eliminate vertical gaps between lines by expanding their top/bottom bounds
-    // to meet halfway. TextPainter limits boxes to glyph metrics, which omits
-    // the line-height multiplier spacing and leaves ugly horizontal gaps in the
-    // selection background.
-    final contiguousLines = <({double top, double bottom})>[];
-    for (var i = 0; i < lines.length; i++) {
-      final current = lines[i];
-      final previous = i > 0 ? lines[i - 1] : null;
-      final next = i < lines.length - 1 ? lines[i + 1] : null;
-      final currentTop = current.baseline - current.ascent;
-      final currentBottom = currentTop + current.height;
-
-      final resolvedTop = previous != null
-          ? (previous.baseline -
-                  previous.ascent +
-                  previous.height +
-                  currentTop) /
-              2.0
-          : currentTop;
-      final resolvedBottom = next != null
-          ? (currentBottom + next.baseline - next.ascent) / 2.0
-          : currentBottom;
-
-      contiguousLines.add((top: resolvedTop, bottom: resolvedBottom));
-    }
-    return contiguousLines;
-  }
-
-  List<({double top, double bottom})> _resolveContiguousLinesFromBoxes(
-    List<TextBox> allBoxes,
-  ) {
-    if (allBoxes.isEmpty) {
-      return const <({double top, double bottom})>[];
-    }
-    final sorted = allBoxes.toList(growable: false)
-      ..sort((a, b) => a.top.compareTo(b.top));
-
-    final lines = <({double top, double bottom})>[];
-    var lineTop = sorted.first.top;
-    var lineBottom = sorted.first.bottom;
-    for (final box in sorted.skip(1)) {
-      if (box.top < lineBottom - 1.0) {
-        lineTop = math.min(lineTop, box.top);
-        lineBottom = math.max(lineBottom, box.bottom);
-      } else {
-        lines.add((top: lineTop, bottom: lineBottom));
-        lineTop = box.top;
-        lineBottom = box.bottom;
-      }
-    }
-    lines.add((top: lineTop, bottom: lineBottom));
-
-    final contiguousLines = <({double top, double bottom})>[];
-    for (var i = 0; i < lines.length; i++) {
-      final current = lines[i];
-      final previous = i > 0 ? lines[i - 1] : null;
-      final next = i < lines.length - 1 ? lines[i + 1] : null;
-
-      final resolvedTop = previous != null
-          ? (previous.bottom + current.top) / 2.0
-          : current.top;
-      final resolvedBottom =
-          next != null ? (current.bottom + next.top) / 2.0 : current.bottom;
-
-      contiguousLines.add((top: resolvedTop, bottom: resolvedBottom));
-    }
-    return contiguousLines;
-  }
-
-  List<TextBox> _normalizeBoxesToLineExtents(
-    List<TextBox> boxes,
-    List<({double top, double bottom})> lineExtents,
-  ) {
-    if (lineExtents.isEmpty) {
-      return boxes;
-    }
-    return boxes.map((box) {
-      for (final extent in lineExtents) {
-        final overlapTop = math.max(box.top, extent.top);
-        final overlapBottom = math.min(box.bottom, extent.bottom);
-        if (overlapBottom - overlapTop > 0.5) {
-          return TextBox.fromLTRBD(
-            box.left,
-            extent.top,
-            box.right,
-            extent.bottom,
-            box.direction,
-          );
-        }
-      }
-      return box;
-    }).toList(growable: false);
   }
 
   SelectableBlockSpec _buildSelectableDescriptorTextSpec({
@@ -2213,17 +1671,15 @@ class MarkdownBlockBuilder {
         selectionStructure: selectionStructure,
       );
     }
-    final directTextKey = _createDirectTextKeyIfNeeded(pretext.runs);
-    return _buildPretextTextSpec(
-      child: _buildDescriptorTextWidget(
-        descriptor,
-        directTextKey: directTextKey,
-      ),
-      plainText: descriptor.plainText,
+    final geometry = MarkdownTextLeafGeometry(
       runs: pretext.runs,
       fallbackStyle: pretext.fallbackStyle,
-      directTextKey: directTextKey,
       textAlign: pretext.textAlign,
+    );
+    return _buildTextLeafSpec(
+      child: _textLeaf(_topLevelLeafPath, geometry),
+      plainText: descriptor.plainText,
+      geometry: geometry,
       selectionStructure: selectionStructure,
     );
   }

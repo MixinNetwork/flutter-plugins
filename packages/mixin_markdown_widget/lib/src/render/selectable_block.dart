@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../core/document.dart';
 import '../selection/structured_block_selection.dart';
+import 'selection/markdown_selectable_leaf.dart';
 
 enum SelectableBlockHitTestBehavior {
   text,
@@ -117,6 +118,21 @@ abstract interface class MarkdownSelectableBlockHandle {
 class SelectableMarkdownBlockState extends State<SelectableMarkdownBlock>
     implements MarkdownSelectableBlockHandle {
   VoidCallback? _repaintListener;
+  final MarkdownSelectionLeafRegistry _leafRegistry =
+      MarkdownSelectionLeafRegistry();
+
+  /// The leaves and slots of the selectable block at or above [context].
+  static MarkdownSelectionLeafRegistry? leafRegistryOf(BuildContext context) {
+    if (context is StatefulElement) {
+      final state = context.state;
+      if (state is SelectableMarkdownBlockState) {
+        return state._leafRegistry;
+      }
+    }
+    return context
+        .findAncestorStateOfType<SelectableMarkdownBlockState>()
+        ?._leafRegistry;
+  }
 
   @override
   void initState() {
@@ -407,7 +423,10 @@ class SelectableMarkdownBlockState extends State<SelectableMarkdownBlock>
                   SelectableBlockSelectionPaintOrder.aboveChild
               ? selectionPainter
               : null,
-          child: widget.spec.child,
+          child: MarkdownSelectionLeafScope(
+            registry: _leafRegistry,
+            child: widget.spec.child,
+          ),
         );
         if (widget.spec.highlightBorderRadius == null) {
           return paintedChild;

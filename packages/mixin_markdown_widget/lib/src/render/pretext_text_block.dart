@@ -83,7 +83,6 @@ class MarkdownPretextTextBlock extends StatelessWidget {
     required this.style,
     this.textAlign = TextAlign.start,
     this.intrinsicWidthSafe = false,
-    this.directTextKey,
     this.preferDirectRichText = false,
   })  : runs = null,
         fallbackStyle = style;
@@ -94,7 +93,6 @@ class MarkdownPretextTextBlock extends StatelessWidget {
     required this.fallbackStyle,
     this.textAlign = TextAlign.start,
     this.intrinsicWidthSafe = false,
-    this.directTextKey,
     this.preferDirectRichText = false,
   })  : text = '',
         style = fallbackStyle;
@@ -105,7 +103,6 @@ class MarkdownPretextTextBlock extends StatelessWidget {
   final TextStyle fallbackStyle;
   final TextAlign textAlign;
   final bool intrinsicWidthSafe;
-  final GlobalKey? directTextKey;
   final bool preferDirectRichText;
 
   @override
@@ -125,7 +122,6 @@ class MarkdownPretextTextBlock extends StatelessWidget {
           runs: effectiveRuns,
           fallbackStyle: fallbackStyle,
         ),
-        key: directTextKey,
         style: fallbackStyle,
         textAlign: textAlign,
         textScaler: textScaler,
@@ -141,7 +137,6 @@ class MarkdownPretextTextBlock extends StatelessWidget {
               runs: effectiveRuns,
               fallbackStyle: fallbackStyle,
             ),
-            key: directTextKey,
             style: fallbackStyle,
             textAlign: textAlign,
             textScaler: textScaler,
