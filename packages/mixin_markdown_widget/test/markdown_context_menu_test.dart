@@ -33,21 +33,13 @@ Offset _characterCenter(
   return renderBox.localToGlobal(box.center);
 }
 
-Future<void> _rightClick(
-  WidgetTester tester,
-  Offset position, {
-  bool settle = true,
-}) async {
+Future<void> _rightClick(WidgetTester tester, Offset position) async {
   await tester.tapAt(
     position,
     buttons: kSecondaryMouseButton,
     kind: PointerDeviceKind.mouse,
   );
-  if (settle) {
-    await tester.pumpAndSettle();
-  } else {
-    await tester.pump();
-  }
+  await tester.pumpAndSettle();
 }
 
 Future<void> _doubleClick(WidgetTester tester, Offset position) async {
@@ -166,12 +158,10 @@ void main() {
           ),
         );
 
-        await tester.pump();
+        await tester.pumpAndSettle();
         await _rightClick(
           tester,
           _characterCenter(tester, containing: 'Hello', character: 'v'),
-          // MixinSelectionArea keeps scheduling frames, so it never settles.
-          settle: false,
         );
         expect(selection.selectedPlainText, 'brave');
         expect(_menu, findsOneWidget);
