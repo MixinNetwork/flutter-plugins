@@ -110,6 +110,10 @@ abstract interface class MarkdownSelectableBlockHandle {
 
   DocumentSelection selectWholeBlock();
 
+  /// Whether [globalPosition] is over the character before the caret at
+  /// [textOffset] rather than the one after it.
+  bool isPointerOnPrecedingCharacter(int textOffset, Offset globalPosition);
+
   DocumentSelection selectSelectionUnit(
     DocumentPosition position, {
     Offset? globalPosition,
@@ -229,7 +233,7 @@ class SelectableMarkdownBlockState extends State<SelectableMarkdownBlock>
       return selectWholeBlock();
     }
     final upstream = globalPosition != null &&
-        _pointerIsOnPrecedingCharacter(position.textOffset, globalPosition);
+        isPointerOnPrecedingCharacter(position.textOffset, globalPosition);
     ({int start, int end}) wordRangeAt(String text, int offset) =>
         markdownWordRangeAt(text, offset, upstream: upstream);
     final structure = widget.spec.selectionStructure;
@@ -584,7 +588,8 @@ class SelectableMarkdownBlockState extends State<SelectableMarkdownBlock>
 
   /// Whether [globalPosition] is over the character that ends at
   /// [textOffset], rather than the one that starts there.
-  bool _pointerIsOnPrecedingCharacter(int textOffset, Offset globalPosition) {
+  @override
+  bool isPointerOnPrecedingCharacter(int textOffset, Offset globalPosition) {
     final renderObject = context.findRenderObject();
     if (textOffset <= 0 ||
         textOffset > widget.spec.plainText.length ||
