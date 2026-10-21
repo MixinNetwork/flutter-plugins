@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:word_segmenter/word_segmenter.dart';
 
 import '../core/document.dart';
 import '../selection/structured_block_selection.dart';
@@ -1118,8 +1119,8 @@ enum _SelectionCornerQuadrant {
 /// A word is a run of characters between whitespace and the separators of
 /// [_isWordCharacter], which include CJK punctuation. Text such as Chinese
 /// does not put spaces between words, so a run with non-ASCII characters is
-/// narrowed to its ICU word boundary: the word of the character after
-/// [offset], or before it when [upstream]. ASCII runs keep the separator rule.
+/// narrowed to the word of the character after [offset], or before it when
+/// [upstream]. ASCII runs keep the separator rule.
 ({int start, int end}) markdownWordRangeAt(
   String text,
   int offset, {
@@ -1138,18 +1139,33 @@ enum _SelectionCornerQuadrant {
   }
 
   final run = text.substring(start, end);
+  final word = _wordInRun(
+    run,
+    (upstream ? offset - start - 1 : offset - start).clamp(0, run.length - 1),
+  );
+  return (start: start + word.start, end: start + word.end);
+}
+
+/// The word containing [index] in [run].
+///
+/// Flutter's bundled ICU has no CJK dictionary and splits Chinese into single
+/// characters, so the platform's segmenter is asked first.
+TextRange _wordInRun(String run, int index) {
+  final segments = wordBoundaries(run);
+  if (segments != null) {
+    for (final segment in segments) {
+      if (index < segment.end) {
+        return segment;
+      }
+    }
+  }
   final painter = TextPainter(
     text: TextSpan(text: run),
     textDirection: TextDirection.ltr,
   )..layout();
-  final boundary = painter.getWordBoundary(
-    TextPosition(
-      offset: (upstream ? offset - start - 1 : offset - start)
-          .clamp(0, run.length - 1),
-    ),
-  );
+  final boundary = painter.getWordBoundary(TextPosition(offset: index));
   painter.dispose();
-  return (start: start + boundary.start, end: start + boundary.end);
+  return boundary;
 }
 
 bool _isWordCharacter(String character) {

@@ -95,15 +95,18 @@ void main() {
     expect('你好', contains(_wordAt(text, 2)));
   });
 
-  testWidgets('Chinese text breaks at ICU word boundaries', (tester) async {
+  testWidgets('Chinese text breaks at dictionary words', (tester) async {
     const text = '我们使用Flutter开发桌面应用';
-    final flutterStart = text.indexOf('Flutter');
-    for (var offset = flutterStart; offset < flutterStart + 7; offset += 1) {
-      expect(_wordAt(text, offset), 'Flutter');
+    for (final word in ['我们', '使用', 'Flutter', '开发', '桌面', '应用']) {
+      final start = text.indexOf(word);
+      for (var offset = start; offset < start + word.length; offset += 1) {
+        expect(_wordAt(text, offset), word, reason: '$offset');
+      }
+      // The pointer on the right half of the word's last character.
+      final end = start + word.length;
+      final range = markdownWordRangeAt(text, end, upstream: true);
+      expect(text.substring(range.start, range.end), word);
     }
-    final develop = _wordAt(text, text.indexOf('开'));
-    expect(develop, startsWith('开'));
-    expect(develop.length, lessThan(text.length - flutterStart - 7));
   });
 
   testWidgets('double click selects a word in a Chinese paragraph',
@@ -134,11 +137,15 @@ void main() {
       containing: '我们使用',
       character: '效',
     );
-    final selected = selectionController.selectedPlainText;
-    expect(selected, startsWith('效'));
-    expect(selected, isNot(contains('，')));
-    expect(selected, isNot(contains('。')));
-    expect(selected.length, lessThan('效果很好'.length + 1));
+    expect(selectionController.selectedPlainText, '效果');
+
+    await _resetTapCount(tester);
+    await _doubleTapCharacter(
+      tester,
+      containing: '我们使用',
+      character: '桌',
+    );
+    expect(selectionController.selectedPlainText, '桌面');
   });
 
   testWidgets('double click selects a word in Chinese list text',
