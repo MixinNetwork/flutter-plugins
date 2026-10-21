@@ -16,7 +16,7 @@ import 'builder/markdown_block_builder.dart';
 import 'builder/markdown_inline_builder.dart';
 import 'selection/markdown_descriptor_extractor.dart';
 import 'selection/markdown_selection_gesture_detector.dart';
-import 'selection/markdown_selection_resolver.dart';
+import 'selection/markdown_block_keys_registry.dart';
 import 'shortcuts/markdown_shortcuts_scope.dart';
 
 class MarkdownDocumentView extends StatefulWidget {
@@ -447,13 +447,6 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       cache: _descriptorCache,
     );
 
-    final selectionResolver = MarkdownSelectionResolver(
-      theme: widget.theme,
-      extractor: descriptorExtractor,
-      keysRegistry: _keysRegistry,
-      codeSyntaxHighlighter: _codeSyntaxHighlighter,
-    );
-
     _blockBuilder = MarkdownBlockBuilder(
       theme: widget.theme,
       selectionController: widget.selectionController,
@@ -461,7 +454,6 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       isSelectable: widget.selectable,
       keysRegistry: _keysRegistry,
       descriptorExtractor: descriptorExtractor,
-      selectionResolver: selectionResolver,
       inlineBuilder: inlineBuilder,
       codeSyntaxHighlighter: _codeSyntaxHighlighter,
       plainTextSerializer: _plainTextSerializer,

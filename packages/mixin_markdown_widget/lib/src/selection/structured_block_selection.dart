@@ -77,19 +77,30 @@ class StructuredBlockSelectionLeaf {
 
 @immutable
 class StructuredBlockSelection {
-  const StructuredBlockSelection._({
+  StructuredBlockSelection._({
     required this.plainText,
     required this.serializedText,
     required this.leaves,
   });
 
+  // Blocks are immutable, so the selection index of a block is computed once
+  // and shared by the renderer, the controller, and the serializer.
+  static final Expando<StructuredBlockSelection> _cache =
+      Expando<StructuredBlockSelection>('StructuredBlockSelection');
+  static final Expando<String> _serializedBlockTextCache =
+      Expando<String>('serializedBlockText');
+
   factory StructuredBlockSelection.forBlock(BlockNode block) {
-    return StructuredBlockSelection._fromBlueprints(
+    return _cache[block] ??= StructuredBlockSelection._fromBlueprints(
       _StructuredBlockSelectionBuilder().build(block),
     );
   }
 
   static String serializeBlockText(BlockNode block) {
+    return _serializedBlockTextCache[block] ??= _serializeBlockText(block);
+  }
+
+  static String _serializeBlockText(BlockNode block) {
     final structure = StructuredBlockSelection.forBlock(block);
     if (!structure.isEmpty) {
       return structure.serializedText;
@@ -97,7 +108,7 @@ class StructuredBlockSelection {
     return _StructuredBlockSelectionBuilder().exportBlockText(block);
   }
 
-  factory StructuredBlockSelection._fromBlueprints(
+  static StructuredBlockSelection _fromBlueprints(
     List<_LeafBlueprint> blueprints,
   ) {
     final leaves = <StructuredBlockSelectionLeaf>[];
@@ -130,15 +141,15 @@ class StructuredBlockSelection {
   final String serializedText;
   final List<StructuredBlockSelectionLeaf> leaves;
 
+  late final Map<PathInBlock, StructuredBlockSelectionLeaf> _leavesByPath =
+      <PathInBlock, StructuredBlockSelectionLeaf>{
+    for (final leaf in leaves) leaf.path: leaf,
+  };
+
   bool get isEmpty => leaves.isEmpty;
 
   StructuredBlockSelectionLeaf? leafForPath(PathInBlock path) {
-    for (final leaf in leaves) {
-      if (leaf.path == path) {
-        return leaf;
-      }
-    }
-    return null;
+    return _leavesByPath[path];
   }
 
   DocumentPosition startPosition({required int blockIndex}) {

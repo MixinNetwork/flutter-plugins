@@ -46,62 +46,9 @@ class _PrefixedPretextRuns {
   final List<MarkdownPretextInlineRun> runs;
 }
 
-@immutable
-class IndexedListSelectionDescriptor {
-  const IndexedListSelectionDescriptor({
-    required this.itemIndex,
-    required this.startOffset,
-    required this.prefixLength,
-    required this.contentIndentLevel,
-    required this.descriptor,
-    required this.contentDescriptor,
-  });
-
-  final int itemIndex;
-  final int startOffset;
-  final int prefixLength;
-  final int contentIndentLevel;
-  final SelectableTextDescriptor descriptor;
-  final SelectableTextDescriptor contentDescriptor;
-}
-
-@immutable
-class IndexedBlockDescriptor {
-  const IndexedBlockDescriptor({
-    required this.childIndex,
-    required this.block,
-    required this.startOffset,
-    required this.indentLevel,
-    required this.descriptor,
-  });
-
-  final int childIndex;
-  final BlockNode block;
-  final int startOffset;
-  final int indentLevel;
-  final SelectableTextDescriptor descriptor;
-}
-
-@immutable
-class ResolvedIndexedBlockEntry {
-  const ResolvedIndexedBlockEntry({
-    required this.entry,
-    required this.renderObject,
-    required this.rect,
-  });
-
-  final IndexedBlockDescriptor entry;
-  final RenderBox renderObject;
-  final Rect rect;
-}
-
 class MarkdownDescriptorCache {
   final Map<String, _CachedBlockDescriptor> _blockDescriptors =
       <String, _CachedBlockDescriptor>{};
-  final Map<String, _CachedIndexedBlockDescriptors> _indexedBlockDescriptors =
-      <String, _CachedIndexedBlockDescriptors>{};
-  final Map<String, _CachedIndexedListDescriptors> _indexedListDescriptors =
-      <String, _CachedIndexedListDescriptors>{};
 
   _CachedBlockDescriptor? _blockDescriptor(String key) =>
       _blockDescriptors[key];
@@ -121,64 +68,10 @@ class MarkdownDescriptorCache {
     );
   }
 
-  _CachedIndexedBlockDescriptors? _indexedBlockDescriptorsFor(String key) =>
-      _indexedBlockDescriptors[key];
-
-  void _storeIndexedBlockDescriptors(
-    String key,
-    String ownerId,
-    List<BlockNode> blocks,
-    int indentLevel,
-    String separator,
-    List<IndexedBlockDescriptor> descriptors,
-  ) {
-    _indexedBlockDescriptors[key] = _CachedIndexedBlockDescriptors(
-      ownerId: ownerId,
-      blocks: blocks,
-      indentLevel: indentLevel,
-      separator: separator,
-      descriptors: descriptors,
-    );
-  }
-
-  _CachedIndexedListDescriptors? _indexedListDescriptorsFor(String key) =>
-      _indexedListDescriptors[key];
-
-  void _storeIndexedListDescriptors(
-    String key,
-    ListBlock block,
-    int indentLevel,
-    List<IndexedListSelectionDescriptor> descriptors,
-  ) {
-    _indexedListDescriptors[key] = _CachedIndexedListDescriptors(
-      block: block,
-      indentLevel: indentLevel,
-      descriptors: descriptors,
-    );
-  }
-
   void cleanup(Set<String> validIds) {
     _blockDescriptors.removeWhere(
       (_, entry) => !validIds.contains(entry.blockId),
     );
-    _indexedBlockDescriptors.removeWhere(
-      (_, entry) => !_ownerIdIsValid(entry.ownerId, validIds),
-    );
-    _indexedListDescriptors.removeWhere(
-      (_, entry) => !validIds.contains(entry.block.id),
-    );
-  }
-
-  bool _ownerIdIsValid(String ownerId, Set<String> validIds) {
-    for (final part in ownerId.split('|')) {
-      if (part.isEmpty || part == 'empty') {
-        continue;
-      }
-      if (!validIds.contains(part)) {
-        return false;
-      }
-    }
-    return true;
   }
 }
 
@@ -194,34 +87,6 @@ class _CachedBlockDescriptor {
   final BlockNode block;
   final int indentLevel;
   final SelectableTextDescriptor descriptor;
-}
-
-class _CachedIndexedBlockDescriptors {
-  const _CachedIndexedBlockDescriptors({
-    required this.ownerId,
-    required this.blocks,
-    required this.indentLevel,
-    required this.separator,
-    required this.descriptors,
-  });
-
-  final String ownerId;
-  final List<BlockNode> blocks;
-  final int indentLevel;
-  final String separator;
-  final List<IndexedBlockDescriptor> descriptors;
-}
-
-class _CachedIndexedListDescriptors {
-  const _CachedIndexedListDescriptors({
-    required this.block,
-    required this.indentLevel,
-    required this.descriptors,
-  });
-
-  final ListBlock block;
-  final int indentLevel;
-  final List<IndexedListSelectionDescriptor> descriptors;
 }
 
 class MarkdownDescriptorExtractor {
@@ -363,11 +228,17 @@ class MarkdownDescriptorExtractor {
     int indentLevel = 0,
     TextStyle? paragraphStyle,
   }) {
-    final itemDescriptors = buildIndexedListSelectionDescriptors(
-      block,
-      indentLevel: indentLevel,
-      paragraphStyle: paragraphStyle,
-    ).map((entry) => entry.descriptor).toList(growable: false);
+    final itemDescriptors = <SelectableTextDescriptor>[
+      for (var index = 0; index < block.items.length; index++)
+        if (_buildListItemDescriptor(
+          block,
+          index,
+          indentLevel: indentLevel,
+          paragraphStyle: paragraphStyle,
+        )
+            case final descriptor?)
+          descriptor,
+    ];
     return joinSelectableTextDescriptors(
       itemDescriptors,
       separator: '\n',
@@ -435,156 +306,21 @@ class MarkdownDescriptorExtractor {
   SelectableTextDescriptor buildDetailsSelectableDescriptor(
     DetailsBlock block,
   ) {
-    final descriptors = buildIndexedBlockDescriptors(
-      detailsSelectionBlocks(block),
-      separator: '\n\n',
-    ).map((entry) => entry.descriptor).toList(growable: false);
     return joinSelectableTextDescriptors(
-      descriptors,
+      <SelectableTextDescriptor>[
+        for (final child in detailsSelectionBlocks(block))
+          buildSelectableDescriptorForBlock(child),
+      ],
       separator: '\n\n',
       separatorStyle: theme.bodyStyle,
     );
   }
 
-  List<IndexedBlockDescriptor> buildIndexedBlockDescriptors(
-    List<BlockNode> blocks, {
-    int indentLevel = 0,
-    required String separator,
-    String? cacheOwnerId,
-    TextStyle? paragraphStyle,
-  }) {
-    if (cacheOwnerId != null && paragraphStyle == null) {
-      final cacheKey = '$cacheOwnerId:$indentLevel:$separator';
-      final cached = cache._indexedBlockDescriptorsFor(cacheKey);
-      if (cached != null &&
-          cached.ownerId == cacheOwnerId &&
-          cached.indentLevel == indentLevel &&
-          cached.separator == separator &&
-          _sameBlockList(cached.blocks, blocks)) {
-        return cached.descriptors;
-      }
-
-      final descriptors = _buildIndexedBlockDescriptors(
-        blocks,
-        indentLevel: indentLevel,
-        separator: separator,
-      );
-      cache._storeIndexedBlockDescriptors(
-        cacheKey,
-        cacheOwnerId,
-        blocks,
-        indentLevel,
-        separator,
-        descriptors,
-      );
-      return descriptors;
-    }
-
-    return _buildIndexedBlockDescriptors(
-      blocks,
-      indentLevel: indentLevel,
-      separator: separator,
-      paragraphStyle: paragraphStyle,
-    );
-  }
-
-  List<IndexedBlockDescriptor> _buildIndexedBlockDescriptors(
-    List<BlockNode> blocks, {
-    int indentLevel = 0,
-    required String separator,
-    TextStyle? paragraphStyle,
-  }) {
-    final entries = <IndexedBlockDescriptor>[];
-    var offset = 0;
-    for (var index = 0; index < blocks.length; index++) {
-      final descriptor = buildSelectableDescriptorForBlock(
-        blocks[index],
-        indentLevel: indentLevel,
-        paragraphStyle: paragraphStyle,
-      );
-      if (descriptor.isEmpty) {
-        continue;
-      }
-      if (entries.isNotEmpty) {
-        offset += separator.length;
-      }
-      entries.add(
-        IndexedBlockDescriptor(
-          childIndex: index,
-          block: blocks[index],
-          startOffset: offset,
-          indentLevel: indentLevel,
-          descriptor: descriptor,
-        ),
-      );
-      offset += descriptor.plainText.length;
-    }
-    return entries;
-  }
-
-  List<IndexedListSelectionDescriptor> buildIndexedListSelectionDescriptors(
-    ListBlock block, {
-    int indentLevel = 0,
-    TextStyle? paragraphStyle,
-  }) {
-    if (paragraphStyle != null) {
-      return _buildIndexedListSelectionDescriptors(
-        block,
-        indentLevel: indentLevel,
-        paragraphStyle: paragraphStyle,
-      );
-    }
-
-    final cacheKey = '${block.id}:$indentLevel';
-    final cached = cache._indexedListDescriptorsFor(cacheKey);
-    if (cached != null &&
-        identical(cached.block, block) &&
-        cached.indentLevel == indentLevel) {
-      return cached.descriptors;
-    }
-
-    final entries = _buildIndexedListSelectionDescriptors(
-      block,
-      indentLevel: indentLevel,
-    );
-    cache._storeIndexedListDescriptors(cacheKey, block, indentLevel, entries);
-    return entries;
-  }
-
-  List<IndexedListSelectionDescriptor> _buildIndexedListSelectionDescriptors(
-    ListBlock block, {
-    int indentLevel = 0,
-    TextStyle? paragraphStyle,
-  }) {
-    final entries = <IndexedListSelectionDescriptor>[];
-    var offset = 0;
-    for (var index = 0; index < block.items.length; index++) {
-      if (entries.isNotEmpty) {
-        offset += 1;
-      }
-      final entry = _buildIndexedListSelectionDescriptor(
-        block,
-        index,
-        startOffset: offset,
-        indentLevel: indentLevel,
-        paragraphStyle: paragraphStyle,
-      );
-      if (entry == null) {
-        if (entries.isNotEmpty) {
-          offset -= 1;
-        }
-        continue;
-      }
-      entries.add(entry);
-      offset += entry.descriptor.plainText.length;
-    }
-    return entries;
-  }
-
-  IndexedListSelectionDescriptor? _buildIndexedListSelectionDescriptor(
+  /// The text of list item [index]: its marker followed by its content, or
+  /// null for an empty item without a task checkbox.
+  SelectableTextDescriptor? _buildListItemDescriptor(
     ListBlock block,
     int index, {
-    required int startOffset,
     int indentLevel = 0,
     TextStyle? paragraphStyle,
   }) {
@@ -603,30 +339,13 @@ class MarkdownDescriptorExtractor {
       return null;
     }
     if (contentDescriptor.isEmpty) {
-      final prefixOnly = prefix.trimRight();
-      return IndexedListSelectionDescriptor(
-        itemIndex: index,
-        startOffset: startOffset,
-        prefixLength: prefixOnly.length,
-        contentIndentLevel: indentLevel + 1,
-        descriptor: plainTextDescriptor(prefixOnly, effectiveParagraphStyle),
-        contentDescriptor: plainTextDescriptor('', effectiveParagraphStyle),
-      );
+      return plainTextDescriptor(prefix.trimRight(), effectiveParagraphStyle);
     }
-    final continuationPrefix = ' ' * prefix.length;
-    final descriptor = prefixSelectableTextDescriptor(
+    return prefixSelectableTextDescriptor(
       contentDescriptor,
       firstPrefix: prefix,
-      continuationPrefix: continuationPrefix,
+      continuationPrefix: ' ' * prefix.length,
       style: effectiveParagraphStyle,
-    );
-    return IndexedListSelectionDescriptor(
-      itemIndex: index,
-      startOffset: startOffset,
-      prefixLength: prefix.length,
-      contentIndentLevel: indentLevel + 1,
-      descriptor: descriptor,
-      contentDescriptor: contentDescriptor,
     );
   }
 
@@ -699,91 +418,6 @@ class MarkdownDescriptorExtractor {
       color: linkColor,
       decoration: theme.linkStyle.decoration,
       decorationColor: theme.linkStyle.decorationColor ?? linkColor,
-    );
-  }
-
-  DocumentRange? resolveSelectionUnitRange(
-    DocumentPosition position,
-    BlockNode block, {
-    int baseOffset = 0,
-    int indentLevel = 0,
-  }) {
-    switch (block.kind) {
-      case MarkdownBlockKind.quote:
-        final quoteBlock = block as QuoteBlock;
-        return _resolveQuoteBlockSelectionRange(
-          position,
-          quoteBlock,
-          indexedBlocks: buildIndexedBlockDescriptors(
-            quoteBlock.children,
-            cacheOwnerId: quoteBlock.id,
-            separator: '\n\n',
-            paragraphStyle: theme.quoteStyle,
-          ),
-          baseOffset: baseOffset,
-        );
-      case MarkdownBlockKind.details:
-        final detailsBlock = block as DetailsBlock;
-        return _resolveQuoteBlockSelectionRange(
-          position,
-          QuoteBlock(
-            id: detailsBlock.id,
-            children: MarkdownDescriptorExtractor.detailsSelectionBlocks(
-              detailsBlock,
-            ),
-          ),
-          indexedBlocks: buildIndexedBlockDescriptors(
-            MarkdownDescriptorExtractor.detailsSelectionBlocks(detailsBlock),
-            separator: '\n\n',
-          ),
-          baseOffset: baseOffset,
-        );
-      case MarkdownBlockKind.orderedList:
-      case MarkdownBlockKind.unorderedList:
-        final listBlock = block as ListBlock;
-        return _resolveListItemSelectionRange(
-          position,
-          listBlock,
-          indexedItems: buildIndexedListSelectionDescriptors(
-            listBlock,
-            indentLevel: indentLevel,
-          ),
-          baseOffset: baseOffset,
-        );
-      case MarkdownBlockKind.footnoteList:
-        return resolveSelectionUnitRange(
-          position,
-          footnoteListAsOrderedList(block as FootnoteListBlock),
-          baseOffset: baseOffset,
-          indentLevel: indentLevel,
-        );
-      case MarkdownBlockKind.table:
-        return resolveTableCellSelectionRange(
-          position,
-          block as TableBlock,
-          baseOffset: baseOffset,
-        );
-      default:
-        return null;
-    }
-  }
-
-  DocumentRange? resolveTableCellSelectionRange(
-    DocumentPosition position,
-    TableBlock block, {
-    int baseOffset = 0,
-  }) {
-    final cellRange = _tableCellTextRange(
-      block,
-      position.textOffset - baseOffset,
-    );
-    if (cellRange == null) {
-      return null;
-    }
-    return _rangeForBlockOffsets(
-      blockIndex: position.blockIndex,
-      startOffset: baseOffset + cellRange.start,
-      endOffset: baseOffset + cellRange.end,
     );
   }
 
@@ -940,217 +574,6 @@ class MarkdownDescriptorExtractor {
       plainText: buffer.toString(),
       span: TextSpan(children: children),
     );
-  }
-
-  DocumentRange? _resolveListItemSelectionRange(
-    DocumentPosition position,
-    ListBlock block, {
-    required List<IndexedListSelectionDescriptor> indexedItems,
-    int baseOffset = 0,
-  }) {
-    if (indexedItems.isEmpty) {
-      return null;
-    }
-    final offset = position.textOffset;
-    for (final item in indexedItems) {
-      final start = baseOffset + item.startOffset;
-      final end = start + item.descriptor.plainText.length;
-      if (offset >= start && offset <= end) {
-        final childUnit = _resolveListItemChildSelectionRange(
-          position,
-          block.items[item.itemIndex].children,
-          itemStartOffset: start,
-          contentBaseOffset: start + item.prefixLength,
-          indentLevel: item.contentIndentLevel,
-          continuationIndent: item.prefixLength,
-        );
-        if (childUnit != null) {
-          return childUnit;
-        }
-        return _rangeForBlockOffsets(
-          blockIndex: position.blockIndex,
-          startOffset: start,
-          endOffset: end,
-        );
-      }
-    }
-    final last = indexedItems.last;
-    return _rangeForBlockOffsets(
-      blockIndex: position.blockIndex,
-      startOffset: baseOffset + last.startOffset,
-      endOffset:
-          baseOffset + last.startOffset + last.descriptor.plainText.length,
-    );
-  }
-
-  DocumentRange? _resolveQuoteBlockSelectionRange(
-    DocumentPosition position,
-    QuoteBlock block, {
-    required List<IndexedBlockDescriptor> indexedBlocks,
-    int baseOffset = 0,
-  }) {
-    if (indexedBlocks.isEmpty) {
-      return null;
-    }
-    final offset = position.textOffset;
-    for (final entry in indexedBlocks) {
-      final start = baseOffset + entry.startOffset;
-      final end = start + entry.descriptor.plainText.length;
-      if (offset >= start && offset <= end) {
-        final nested = resolveSelectionUnitRange(
-          position,
-          entry.block,
-          baseOffset: start,
-          indentLevel: entry.indentLevel,
-        );
-        if (nested != null) {
-          return nested;
-        }
-        return _rangeForBlockOffsets(
-          blockIndex: position.blockIndex,
-          startOffset: start,
-          endOffset: end,
-        );
-      }
-    }
-    final last = indexedBlocks.last;
-    return _rangeForBlockOffsets(
-      blockIndex: position.blockIndex,
-      startOffset: baseOffset + last.startOffset,
-      endOffset:
-          baseOffset + last.startOffset + last.descriptor.plainText.length,
-    );
-  }
-
-  DocumentRange? _resolveListItemChildSelectionRange(
-    DocumentPosition position,
-    List<BlockNode> blocks, {
-    required int itemStartOffset,
-    required int contentBaseOffset,
-    required int indentLevel,
-    int continuationIndent = 0,
-  }) {
-    final indexedBlocks = buildIndexedBlockDescriptors(
-      blocks,
-      indentLevel: indentLevel,
-      separator: '\n',
-      cacheOwnerId: _childBlockOwnerId(blocks),
-    );
-    if (indexedBlocks.isEmpty) {
-      return null;
-    }
-    final offset = position.textOffset;
-    for (final entry in indexedBlocks) {
-      final rawChildBaseOffset = contentBaseOffset + entry.startOffset;
-      final rawChildEndOffset =
-          rawChildBaseOffset + entry.descriptor.plainText.length;
-      if (offset < rawChildBaseOffset || offset > rawChildEndOffset) {
-        continue;
-      }
-
-      final childUnit = resolveSelectionUnitRange(
-            position,
-            entry.block,
-            baseOffset: rawChildBaseOffset +
-                (entry.childIndex > 0 ? continuationIndent : 0),
-            indentLevel: entry.indentLevel,
-          ) ??
-          _rangeForBlockOffsets(
-            blockIndex: position.blockIndex,
-            startOffset: rawChildBaseOffset,
-            endOffset: rawChildEndOffset,
-          );
-
-      if (entry.childIndex == 0 && _isLeadListTextBlock(entry.block)) {
-        return _rangeForBlockOffsets(
-          blockIndex: position.blockIndex,
-          startOffset: itemStartOffset,
-          endOffset: childUnit.end.textOffset,
-        );
-      }
-      return childUnit;
-    }
-    return null;
-  }
-
-  bool _sameBlockList(List<BlockNode> left, List<BlockNode> right) {
-    if (identical(left, right)) {
-      return true;
-    }
-    if (left.length != right.length) {
-      return false;
-    }
-    for (var index = 0; index < left.length; index++) {
-      if (!identical(left[index], right[index])) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  String _childBlockOwnerId(List<BlockNode> blocks) {
-    if (blocks.isEmpty) {
-      return 'empty';
-    }
-    return blocks.map((block) => block.id).join('|');
-  }
-
-  bool _isLeadListTextBlock(BlockNode block) {
-    switch (block.kind) {
-      case MarkdownBlockKind.paragraph:
-      case MarkdownBlockKind.heading:
-        return true;
-      case MarkdownBlockKind.quote:
-      case MarkdownBlockKind.orderedList:
-      case MarkdownBlockKind.unorderedList:
-      case MarkdownBlockKind.definitionList:
-      case MarkdownBlockKind.footnoteList:
-      case MarkdownBlockKind.details:
-      case MarkdownBlockKind.codeBlock:
-      case MarkdownBlockKind.table:
-      case MarkdownBlockKind.image:
-      case MarkdownBlockKind.thematicBreak:
-        return false;
-    }
-  }
-
-  DocumentRange _rangeForBlockOffsets({
-    required int blockIndex,
-    required int startOffset,
-    required int endOffset,
-  }) {
-    return DocumentRange(
-      start: DocumentPosition(
-        blockIndex: blockIndex,
-        path: const PathInBlock(<int>[0]),
-        textOffset: startOffset,
-      ),
-      end: DocumentPosition(
-        blockIndex: blockIndex,
-        path: const PathInBlock(<int>[0]),
-        textOffset: endOffset,
-      ),
-    );
-  }
-
-  ({int start, int end})? _tableCellTextRange(
-      TableBlock block, int textOffset) {
-    var currentOffset = 0;
-    for (var rowIndex = 0; rowIndex < block.rows.length; rowIndex++) {
-      final row = block.rows[rowIndex];
-      for (var columnIndex = 0; columnIndex < row.cells.length; columnIndex++) {
-        final cellLength = MarkdownInlineBuilder.flattenInlineText(
-          row.cells[columnIndex].inlines,
-        ).length;
-        final cellStart = currentOffset;
-        final cellEnd = cellStart + cellLength;
-        if (textOffset <= cellEnd) {
-          return (start: cellStart, end: cellEnd);
-        }
-        currentOffset = cellEnd + 1;
-      }
-    }
-    return null;
   }
 
   SelectableTextDescriptor prefixSelectableTextDescriptor(
