@@ -262,7 +262,8 @@ class StructuredBlockSelection {
   DocumentRange? wordRangeForPosition({
     required int blockIndex,
     required DocumentPosition position,
-    required bool Function(String character) isWordCharacter,
+    required ({int start, int end}) Function(String text, int offset)
+        wordRangeAt,
   }) {
     final leaf = leafForPath(position.path) ??
         _leafContainingOffset(position.textOffset);
@@ -270,23 +271,18 @@ class StructuredBlockSelection {
       return null;
     }
 
+    final text = leaf.visibleText;
     var localOffset = leaf.localOffsetForDisplayedOffset(position.textOffset);
-    if (localOffset > 0 &&
-        localOffset == leaf.visibleText.length &&
-        !isWordCharacter(leaf.visibleText[localOffset - 1])) {
-      localOffset -= 1;
+    if (localOffset > 0 && localOffset == text.length) {
+      final trailing = wordRangeAt(text, localOffset);
+      if (trailing.start == trailing.end) {
+        localOffset -= 1;
+      }
     }
 
-    var start = localOffset.clamp(0, leaf.visibleText.length).toInt();
-    var end = start;
-
-    while (start > 0 && isWordCharacter(leaf.visibleText[start - 1])) {
-      start -= 1;
-    }
-    while (end < leaf.visibleText.length &&
-        isWordCharacter(leaf.visibleText[end])) {
-      end += 1;
-    }
+    final word = wordRangeAt(text, localOffset.clamp(0, text.length).toInt());
+    var start = word.start;
+    var end = word.end;
 
     if (start == end && leaf.visibleText.isNotEmpty) {
       if (end < leaf.visibleText.length) {

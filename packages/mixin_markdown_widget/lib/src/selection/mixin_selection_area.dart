@@ -281,7 +281,7 @@ class _MixinSelectionAreaState extends State<MixinSelectionArea> {
     return null;
   }
 
-  void _selectWordAt(DocumentPosition position) {
+  void _selectWordAt(DocumentPosition position, {Offset? globalPosition}) {
     final participant = _participantForBlockIndex(position.blockIndex);
     if (participant == null) {
       _controller.setSelection(
@@ -289,7 +289,7 @@ class _MixinSelectionAreaState extends State<MixinSelectionArea> {
       );
       return;
     }
-    participant.selectWordAt(position);
+    participant.selectWordAt(position, globalPosition: globalPosition);
   }
 
   void _selectBlockAt(int blockIndex) {
@@ -492,8 +492,10 @@ class _MixinSelectableState extends State<MixinSelectable> {
             : hitTestGlobal(globalPosition);
       },
       hitTestExactTextPosition: hitTestTextGlobal,
-      selectWordAt: (position) {
-        _registrar?.controller.setSelection(selectWord(position));
+      selectWordAt: (position, {globalPosition}) {
+        _registrar?.controller.setSelection(
+          selectWord(position, globalPosition: globalPosition),
+        );
       },
       selectBlockAt: (blockIndex) {
         _registrar?.controller.setSelection(selectWholeBlock());
@@ -558,8 +560,12 @@ class _MixinSelectableState extends State<MixinSelectable> {
         );
   }
 
-  DocumentSelection selectWord(DocumentPosition position) {
-    return _blockKey.currentState?.selectWord(position) ??
+  DocumentSelection selectWord(
+    DocumentPosition position, {
+    Offset? globalPosition,
+  }) {
+    return _blockKey.currentState
+            ?.selectWord(position, globalPosition: globalPosition) ??
         DocumentSelection(base: position, extent: position);
   }
 

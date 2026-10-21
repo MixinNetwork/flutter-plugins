@@ -3927,7 +3927,7 @@ const value = 42;
       final paragraph = document.blocks.single as ParagraphBlock;
       final builder = MarkdownInlineBuilder(
         theme: theme,
-        recognizers: <TapGestureRecognizer>[],
+        recognizers: MarkdownLinkRecognizers(),
       );
       final runs = builder.buildPretextRuns(theme.bodyStyle, paragraph.inlines);
       final layout = computeMarkdownPretextLayoutFromRuns(

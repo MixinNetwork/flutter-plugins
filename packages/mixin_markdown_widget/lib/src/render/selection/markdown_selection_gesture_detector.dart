@@ -13,7 +13,10 @@ typedef MarkdownHitTestPositionCallback = DocumentPosition? Function(
 typedef MarkdownHitTestExactTextPositionCallback = DocumentPosition? Function(
   Offset globalPosition,
 );
-typedef MarkdownSelectWordCallback = void Function(DocumentPosition position);
+typedef MarkdownSelectWordCallback = void Function(
+  DocumentPosition position, {
+  Offset? globalPosition,
+});
 typedef MarkdownSelectBlockCallback = void Function(int blockIndex);
 typedef MarkdownSelectSelectionUnitCallback = void Function(
   Offset globalPosition,
@@ -188,7 +191,7 @@ class _MarkdownSelectionGestureDetectorState
     }
     if (_consecutiveTapCount == 2) {
       if (exactPosition != null) {
-        widget.selectWordAt(position);
+        widget.selectWordAt(position, globalPosition: event.position);
       } else {
         widget.selectSelectionUnitAt(event.position, position);
       }

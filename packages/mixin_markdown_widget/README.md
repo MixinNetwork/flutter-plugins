@@ -94,4 +94,13 @@ controller.appendChunk('\n\nNew content arrived.');
 controller.commitStream();
 ```
 
+If you receive the full text so far instead of deltas, pass it to `updateData`. It appends only the new suffix when the text extends the current data, falls back to a full parse otherwise, and commits the stream unless `streaming` is true:
+
+```dart
+controller.updateData(fullTextSoFar, streaming: true);
+
+// When stream finishes:
+controller.updateData(finalText);
+```
+
 See the `/example` directory for a fully runnable desktop demo.
