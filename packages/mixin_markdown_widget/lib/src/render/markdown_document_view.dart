@@ -174,7 +174,11 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
         oldWidget.selectable != widget.selectable) {
       _cachedBlockRows.clear();
     }
-    _syncSelectionParticipant(participantChanged: true);
+    // Only notify on document changes: the registrar's refresh rebuilds this
+    // widget, so an unconditional notification never lets frames settle.
+    _syncSelectionParticipant(
+      participantChanged: !identical(oldWidget.document, widget.document),
+    );
   }
 
   @override
