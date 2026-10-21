@@ -38,7 +38,6 @@ class MarkdownBlockBuilder {
     this.codeBlockBuilder,
     this.bulletBuilder,
     this.onTapLink,
-    required this.onRequestContextMenu,
     required Map<String, CachedBlockRow> cachedBlockRows,
     required this.tableLayoutPlanCache,
     required this.codeHighlightCache,
@@ -57,7 +56,6 @@ class MarkdownBlockBuilder {
   final MarkdownCodeBlockBuilder? codeBlockBuilder;
   final MarkdownBulletBuilder? bulletBuilder;
   final MarkdownTapLinkCallback? onTapLink;
-  final void Function(Offset) onRequestContextMenu;
   final MarkdownTableLayoutPlanCache tableLayoutPlanCache;
   final MarkdownCodeHighlightCache codeHighlightCache;
 

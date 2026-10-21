@@ -25,7 +25,8 @@ The public entrypoint is [packages/mixin_markdown_widget/lib/mixin_markdown_widg
 - `src/render/markdown_document_view.dart`: main state orchestrator and coordinator. Connects blocks, selections, gestures, and UI builders together without doing heavy layout math.
 - `src/render/builder/`: contains `markdown_block_builder.dart` and `markdown_inline_builder.dart` which convert `BlockNode` and `InlineNode` respectively into actual visual `Widget`s or `TextSpan`s.
 - `src/render/selection/`: contains `markdown_selectable_leaf.dart` (selectable text leaves, structural slots, and the per-block leaf registry), `markdown_selection_geometry.dart` (the one container algorithm for quotes, details, lists, footnotes, and tables), `markdown_block_keys_registry.dart` (top-level block keys, scroll controllers, viewport keys), `markdown_descriptor_extractor.dart` (rendered text and spans for definition lists, captions, and container text spans), and `markdown_selection_gesture_detector.dart` (drags, auto-scroll).
-- `src/render/shortcuts/`: contains ContextMenu bindings and keyboard action Intents (like `SelectAllMarkdownIntent`).
+- `src/render/shortcuts/`: keyboard action Intents (like `SelectAllMarkdownIntent`) and their bindings.
+- `src/selection/selection_host.dart`: shared by `MarkdownDocumentView` and `MixinSelectionArea`. Owns focus, tap-outside clearing, and the right-click menu (selection on right click, default button items, closing on Escape, scrolling, and clicks).
 - `src/render/markdown_block_widgets.dart`: shared block UI widgets for lists, quotes, tables, code blocks, and other visual shells.
 - `src/render/pretext_text_block.dart`: pretext-backed inline layout and line geometry used by text leaves.
 - `src/selection/selection_controller.dart`: authoritative selection state. Clamping and select-all delegate to `MarkdownPlainTextSerializer`.

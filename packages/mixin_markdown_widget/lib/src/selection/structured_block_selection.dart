@@ -17,6 +17,7 @@ class StructuredBlockSelectionLeaf {
     required this.visibleText,
     required this.exportText,
     required this.segmentStart,
+    required this.inlines,
   });
 
   final PathInBlock path;
@@ -26,6 +27,9 @@ class StructuredBlockSelectionLeaf {
   final String visibleText;
   final String exportText;
   final int segmentStart;
+
+  /// The inlines [visibleText] was flattened from, for text leaves.
+  final List<InlineNode> inlines;
 
   String get renderedText =>
       '$leadingText${_renderPrefixedText(visibleText, firstLinePrefix, continuationPrefix)}';
@@ -73,6 +77,37 @@ class StructuredBlockSelectionLeaf {
     }
     return localOffset.clamp(0, visibleText.length).toInt();
   }
+
+  /// The link containing the character at [localOffset] of [visibleText].
+  LinkInline? linkAt(int localOffset) {
+    if (localOffset < 0 || localOffset >= visibleText.length) {
+      return null;
+    }
+    return _linkContaining(inlines, localOffset);
+  }
+}
+
+LinkInline? _linkContaining(List<InlineNode> inlines, int offset) {
+  final builder = _StructuredBlockSelectionBuilder();
+  var start = 0;
+  for (final inline in inlines) {
+    final end = start + builder._flattenVisibleInlines([inline]).length;
+    if (offset < end) {
+      return switch (inline) {
+        LinkInline() => inline,
+        EmphasisInline(:final children) ||
+        StrongInline(:final children) ||
+        StrikethroughInline(:final children) ||
+        HighlightInline(:final children) ||
+        SubscriptInline(:final children) ||
+        SuperscriptInline(:final children) =>
+          _linkContaining(children, offset - start),
+        _ => null,
+      };
+    }
+    start = end;
+  }
+  return null;
 }
 
 @immutable
@@ -124,6 +159,7 @@ class StructuredBlockSelection {
         visibleText: blueprint.visibleText,
         exportText: blueprint.exportText,
         segmentStart: segmentStart,
+        inlines: blueprint.inlines,
       );
       leaves.add(leaf);
       visibleBuffer.write(leaf.renderedText);
@@ -205,6 +241,24 @@ class StructuredBlockSelection {
       displayedOffset: clampedOffset,
       affinity: affinity,
     );
+  }
+
+  /// The link containing the character after [position], or before it when
+  /// [upstream] (the pointer is over the character before the caret).
+  LinkInline? linkAt(DocumentPosition position, {bool upstream = false}) {
+    final resolved = positionForDisplayedOffset(
+      blockIndex: position.blockIndex,
+      displayedOffset: position.textOffset,
+      affinity: upstream
+          ? StructuredSelectionAffinity.upstream
+          : StructuredSelectionAffinity.downstream,
+    );
+    final leaf = leafForPath(resolved.path);
+    if (leaf == null) {
+      return null;
+    }
+    final localOffset = leaf.localOffsetForDisplayedOffset(resolved.textOffset);
+    return leaf.linkAt(upstream ? localOffset - 1 : localOffset);
   }
 
   DocumentPosition positionForDisplayedOffset({
@@ -379,6 +433,7 @@ class _LeafBlueprint {
     required this.continuationPrefix,
     required this.visibleText,
     required this.exportText,
+    this.inlines = const <InlineNode>[],
   });
 
   final PathInBlock path;
@@ -387,6 +442,7 @@ class _LeafBlueprint {
   final String continuationPrefix;
   final String visibleText;
   final String exportText;
+  final List<InlineNode> inlines;
 
   _LeafBlueprint copyWith({
     String? leadingText,
@@ -398,6 +454,7 @@ class _LeafBlueprint {
       continuationPrefix: continuationPrefix,
       visibleText: visibleText,
       exportText: exportText,
+      inlines: inlines,
     );
   }
 }
@@ -444,6 +501,12 @@ class _StructuredBlockSelectionBuilder {
             continuationPrefix: continuationPrefix,
             visibleText: visibleText,
             exportText: exportText,
+            inlines: switch (block) {
+              HeadingBlock(:final inlines) ||
+              ParagraphBlock(:final inlines) =>
+                inlines,
+              _ => const <InlineNode>[],
+            },
           ),
         ];
       case MarkdownBlockKind.details:
@@ -626,6 +689,7 @@ class _StructuredBlockSelectionBuilder {
             continuationPrefix: continuationPrefix,
             visibleText: visibleText,
             exportText: _flattenExportInlines(row.cells[columnIndex].inlines),
+            inlines: row.cells[columnIndex].inlines,
           ),
         );
       }

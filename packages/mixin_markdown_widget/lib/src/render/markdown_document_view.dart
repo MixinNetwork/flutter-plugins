@@ -6,6 +6,7 @@ import '../debug.dart';
 import '../selection/selection_host.dart';
 import '../selection/selection_controller.dart';
 import '../selection/selection_registrar.dart';
+import '../selection/structured_block_selection.dart';
 import '../widgets/markdown_theme.dart';
 import '../widgets/markdown_types.dart';
 import 'code_syntax_highlighter.dart';
@@ -17,7 +18,6 @@ import 'builder/markdown_inline_builder.dart';
 import 'selection/markdown_descriptor_extractor.dart';
 import 'selection/markdown_selection_gesture_detector.dart';
 import 'selection/markdown_block_keys_registry.dart';
-import 'shortcuts/markdown_shortcuts_scope.dart';
 
 class MarkdownDocumentView extends StatefulWidget {
   const MarkdownDocumentView({
@@ -66,7 +66,6 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
 
   final MarkdownLinkRecognizers _linkRecognizers = MarkdownLinkRecognizers();
   final ScrollController _fallbackScrollController = ScrollController();
-  final ContextMenuController _contextMenuController = ContextMenuController();
   final GlobalKey _scrollableKey = GlobalKey(debugLabel: 'markdown-scrollable');
 
   final MarkdownPlainTextSerializer _plainTextSerializer =
@@ -185,7 +184,6 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       ..removeListener(_handleCodeHighlightCacheChanged)
       ..dispose();
     _fallbackScrollController.dispose();
-    _contextMenuController.remove();
     if (_registeredWithSelectionRegistrar) {
       _selectionRegistrar?.unregisterParticipant(this);
     }
@@ -254,6 +252,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       selectWordAt: _selectWordAt,
       selectBlockAt: _selectBlockAt,
       selectSelectionUnitAt: _selectSelectionUnitAt,
+      linkDestinationAt: _linkDestinationAt,
       autoScrollTargets: _inheritedSelectionAutoScrollTargets,
     );
   }
@@ -277,20 +276,25 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     widget.onTapLink?.call(destination, title, label);
   }
 
-  void _showToolbar(Offset globalPosition) {
-    if (widget.selectionController == null) {
-      return;
+  String? _linkDestinationAt(Offset globalPosition) {
+    final position = _hitTestExactTextPosition(globalPosition);
+    if (position == null) {
+      return null;
     }
-    MarkdownContextMenu.show(
-      context,
-      contextMenuController: _contextMenuController,
-      selectionController: widget.selectionController!,
-      document: widget.document,
-      globalPosition: globalPosition,
-      onCopyPlainText: widget.onCopyPlainText,
-      showCopyAllInContextMenu: widget.showCopyAllInContextMenu,
-      contextMenuBuilder: widget.contextMenuBuilder,
-    );
+    final localBlockIndex = position.blockIndex - _selectionBlockIndexOffset;
+    if (localBlockIndex < 0 ||
+        localBlockIndex >= widget.document.blocks.length) {
+      return null;
+    }
+    final block = widget.document.blocks[localBlockIndex];
+    final upstream = _blockStateFor(block)?.isPointerOnPrecedingCharacter(
+          position.textOffset,
+          globalPosition,
+        ) ??
+        false;
+    return StructuredBlockSelection.forBlock(block)
+        .linkAt(position, upstream: upstream)
+        ?.destination;
   }
 
   MarkdownSelectableBlockHandle? _blockStateFor(BlockNode block) {
@@ -461,7 +465,6 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       codeBlockBuilder: widget.codeBlockBuilder,
       bulletBuilder: widget.bulletBuilder,
       onTapLink: onTapLink,
-      onRequestContextMenu: _showToolbar,
       cachedBlockRows: _cachedBlockRows,
       tableLayoutPlanCache: _tableLayoutPlanCache,
       codeHighlightCache: _codeHighlightCache,
@@ -540,7 +543,9 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
         isSelectable: widget.selectable,
         scrollableKey: _scrollableKey,
         scrollController: scrollController,
-        onRequestToolbar: _showToolbar,
+        contextMenuBuilder: widget.contextMenuBuilder,
+        linkDestinationAt: _linkDestinationAt,
+        showCopyAllInContextMenu: widget.showCopyAllInContextMenu,
         hitTestPosition: _hitTestPosition,
         hitTestExactTextPosition: _hitTestExactTextPosition,
         selectWordAt: _selectWordAt,
@@ -548,7 +553,6 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
         selectSelectionUnitAt: _selectSelectionUnitAt,
         additionalAutoScrollTargets: _autoScrollTargets,
         onCopyPlainText: widget.onCopyPlainText,
-        onTapOutside: _contextMenuController.remove,
         child: scrollable,
       ),
       blockCount: widget.document.blocks.length,

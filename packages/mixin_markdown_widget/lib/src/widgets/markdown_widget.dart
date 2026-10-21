@@ -19,6 +19,8 @@ class MarkdownWidget extends StatefulWidget {
     this.useColumn = false,
     this.selectable = true,
     this.enableCopyFullDocumentShortcut = true,
+    @Deprecated('Filter MarkdownContextMenuDetails.buttonItems in '
+        'contextMenuBuilder instead.')
     this.showCopyAllInContextMenu = true,
     this.selectionController,
     this.padding,
@@ -26,7 +28,7 @@ class MarkdownWidget extends StatefulWidget {
     this.imageBuilder,
     this.codeBlockBuilder,
     this.bulletBuilder,
-    this.contextMenuBuilder,
+    this.contextMenuBuilder = defaultMarkdownContextMenuBuilder,
   }) : assert(
           (data == null) != (controller == null),
           'Provide exactly one of data or controller.',
@@ -41,6 +43,8 @@ class MarkdownWidget extends StatefulWidget {
   final bool useColumn;
   final bool selectable;
   final bool enableCopyFullDocumentShortcut;
+  @Deprecated('Filter MarkdownContextMenuDetails.buttonItems in '
+      'contextMenuBuilder instead.')
   final bool showCopyAllInContextMenu;
   final MarkdownSelectionController? selectionController;
   final EdgeInsetsGeometry? padding;
@@ -48,6 +52,8 @@ class MarkdownWidget extends StatefulWidget {
   final MarkdownImageBuilder? imageBuilder;
   final MarkdownCodeBlockBuilder? codeBlockBuilder;
   final MarkdownBulletBuilder? bulletBuilder;
+
+  /// Builds the right-click menu; null shows none.
   final MarkdownContextMenuBuilder? contextMenuBuilder;
 
   @override
@@ -148,6 +154,7 @@ class _MarkdownWidgetState extends State<MarkdownWidget> {
                   },
                   enableCopyFullDocumentShortcut:
                       widget.enableCopyFullDocumentShortcut,
+                  // ignore: deprecated_member_use_from_same_package
                   showCopyAllInContextMenu: widget.showCopyAllInContextMenu,
                   onTapLink: widget.onTapLink,
                   imageBuilder: widget.imageBuilder,
