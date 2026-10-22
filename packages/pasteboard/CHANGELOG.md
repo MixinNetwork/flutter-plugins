@@ -1,6 +1,11 @@
-## Unreleased
+## 0.6.0
 
-* Migrate Android to built-in Kotlin and require Flutter 3.44 / Dart 3.12.
+- Android: Migrate to built-in Kotlin to resolve Flutter's Kotlin Gradle Plugin migration warning. ([#536](https://github.com/MixinNetwork/flutter-plugins/pull/536); thanks [bsutton](https://github.com/bsutton))
+- Web: Handle asynchronous errors when reading clipboard HTML and images so failed reads return `null`. ([#493](https://github.com/MixinNetwork/flutter-plugins/pull/493); thanks [loucass](https://github.com/loucass))
+
+### Breaking changes
+
+- Require Flutter 3.44 and Dart 3.12 or later. Upgrade your Flutter SDK before updating to this release.
 
 ## 0.5.0
 
