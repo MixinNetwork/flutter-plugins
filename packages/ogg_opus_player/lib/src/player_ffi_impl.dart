@@ -36,8 +36,10 @@ class OggOpusPlayerFfiImpl extends OggOpusPlayer {
       : _port = ReceivePort('OggOpusPlayer: #$_path'),
         super.create() {
     _initializeDartApi();
+    final path = _path.toNativeUtf8();
     _playerHandle = _bindings.ogg_opus_player_create(
-        _path.toNativeUtf8().cast(), _port.sendPort.nativePort);
+        path.cast(), _port.sendPort.nativePort);
+    malloc.free(path);
     _portSubscription = _port.listen((message) {
       if (message is int) {
         // 0: play finished
@@ -123,8 +125,10 @@ class OggOpusRecorderFfiImpl extends OggOpusRecorder {
       : _port = ReceivePort('OggOpusRecorderFfiImpl: $_path'),
         super.create() {
     _initializeDartApi();
+    final path = _path.toNativeUtf8();
     _recorderHandle = _bindings.ogg_opus_recorder_create(
-        _path.toNativeUtf8().cast(), _port.sendPort.nativePort);
+        path.cast(), _port.sendPort.nativePort);
+    malloc.free(path);
   }
 
   @override
