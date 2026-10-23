@@ -1,5 +1,6 @@
+import 'dart:io';
+
 import 'package:data_detector/data_detector.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -10,5 +11,13 @@ void main() {
     for (final result in results) {
       expect(result.range.textInside(str), "https://mixin.one");
     }
-  }, skip: defaultTargetPlatform != TargetPlatform.macOS);
+  }, skip: !Platform.isMacOS);
+
+  test("date", () {
+    final detector = DataDetector(NSTextCheckingType.NSTextCheckingTypeDate);
+    final results = detector.matchesInString("on 2024-01-02 10:00");
+    expect(results, isNotEmpty);
+    expect(results.first.date, isNotNull);
+    expect(results.first.duration, Duration.zero);
+  }, skip: !Platform.isMacOS);
 }
