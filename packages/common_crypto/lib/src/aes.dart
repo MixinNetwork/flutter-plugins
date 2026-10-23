@@ -76,8 +76,10 @@ class AesCryptor {
       cryptorRef,
     );
     malloc.free(keyPointer);
+    malloc.free(ivPointer);
 
     if (status != kCCSuccess) {
+      malloc.free(cryptorRef);
       throw Exception('CCCryptorCreate failed: $status');
     }
     _cryptorRef = cryptorRef.value;
