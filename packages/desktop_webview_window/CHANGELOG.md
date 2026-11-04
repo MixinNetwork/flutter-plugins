@@ -1,3 +1,8 @@
+## 0.4.1
+
+- Add `addJavaScriptMessageHandler`, whose `JavaScriptMessage` carries the page's `data`, `origin` and `url`. `url` is the sending page's current URL, including `history.pushState` changes, so handlers no longer need `navigationState.url`, which may lag behind. It is null unless it belongs to `origin`.
+- Add `targetOrigin` to `postMessage`. As with `window.postMessage`, the receiving page drops the message before any listener runs unless its own origin matches, so a reply never reaches a page the window navigated to in the meantime. Page scripts cannot read a targeted message before the check on any platform.
+
 ## 0.4.0
 
 Browser windows are now fully native, and one browser API works the same way on macOS, Windows and Linux. See [Migrating to 0.4.0](https://github.com/MixinNetwork/flutter-plugins/tree/main/packages/desktop_webview_window#migrating-to-040).
