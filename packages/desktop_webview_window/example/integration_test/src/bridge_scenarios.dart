@@ -132,6 +132,66 @@ void registerBridgeTests() {
     });
   });
 
+  testWidgets('message handlers report the sending document URL',
+      (tester) async {
+    await runScenario(tester, () async {
+      final view = await create();
+      final received = StreamController<JavaScriptMessage>();
+      final messages = StreamIterator(received.stream);
+      view.addJavaScriptMessageHandler('ping', received.add);
+      await view.launch(url('/sender/page?x=1'));
+      await _waitFor(view, 'location.pathname', '/sender/page');
+      await _waitFor(view, 'typeof window.desktopWebview', 'object');
+      Future<JavaScriptMessage> next() async {
+        expect(await messages.moveNext().timeout(const Duration(seconds: 10)),
+            isTrue);
+        return messages.current;
+      }
+
+      await view
+          .evaluateJavaScript("window.desktopWebview.postMessage('ping', 1)");
+      var message = await next();
+      expect(message.origin, 'http://127.0.0.1:${server.port}');
+      expect(message.url, Uri.parse(url('/sender/page?x=1')));
+
+      // Same-document navigations change the URL of the sending document.
+      await view.evaluateJavaScript('''
+        history.pushState(null, '', '/sender/pushed?y=2');
+        window.desktopWebview.postMessage('ping', 2);
+      ''');
+      message = await next();
+      expect(message.data, 2);
+      expect(message.url, Uri.parse(url('/sender/pushed?y=2')));
+      await messages.cancel();
+    });
+  });
+
+  testWidgets('a targeted message reaches only a document of that origin',
+      (tester) async {
+    await runScenario(tester, () async {
+      final view = await create();
+      await view.launch(url('/target'));
+      await _waitFor(view, 'location.pathname', '/target');
+      await _waitFor(view, 'typeof window.desktopWebview', 'object');
+      await view.evaluateJavaScript('''
+        window.got = [];
+        window.raw = [];
+        window.desktopWebview.addEventListener('reply', d => window.got.push(d));
+        if (window.chrome && chrome.webview) {
+          chrome.webview.addEventListener('message', e => window.raw.push(e.data));
+        }
+      ''');
+      await view.postMessage('reply', 'other',
+          targetOrigin: 'http://127.0.0.1:${frameServer.port}');
+      await view.postMessage('reply', 'mine', targetOrigin: url('/any/path'));
+      await _waitFor(view, 'window.got.join()', 'mine');
+      // Windows: page scripts never see a targeted message on chrome.webview.
+      expect(await view.evaluateJavaScript('window.raw.length'), 0);
+      await view.postMessage('reply', 'any');
+      await _waitFor(view, 'window.got.join()', 'mine,any');
+    });
+  });
+
   testWidgets('only the top-level document reaches JavaScript handlers',
       (tester) async {
     await runScenario(tester, () async {

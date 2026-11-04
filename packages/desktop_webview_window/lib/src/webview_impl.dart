@@ -26,7 +26,7 @@ class WebviewImpl extends Webview {
   /// Prefix of messages from this browser's JavaScript bridge.
   final String bridgeToken;
 
-  final Map<String, JavaScriptMessageHandler> _javaScriptHandlers = {};
+  final Map<String, JavaScriptMessageListener> _javaScriptHandlers = {};
 
   bool _closed = false;
   bool _closing = false;
@@ -101,8 +101,14 @@ class WebviewImpl extends Webview {
     if (_closed) return;
     final message = decodeJavaScriptMessage(raw, bridgeToken);
     if (message == null) return;
-    _javaScriptHandlers[message.name]
-        ?.call(message.data, javaScriptMessageOrigin(source));
+    final handler = _javaScriptHandlers[message.name];
+    if (handler == null) return;
+    final origin = javaScriptMessageOrigin(source);
+    handler(JavaScriptMessage(
+      data: message.data,
+      origin: origin,
+      url: javaScriptMessageUrl(message.url, origin),
+    ));
   }
 
   String onPrompt(String prompt, String defaultText) =>
@@ -151,6 +157,13 @@ class WebviewImpl extends Webview {
 
   @override
   void addJavaScriptHandler(String name, JavaScriptMessageHandler handler) {
+    addJavaScriptMessageHandler(
+        name, (message) => handler(message.data, message.origin));
+  }
+
+  @override
+  void addJavaScriptMessageHandler(
+      String name, JavaScriptMessageListener handler) {
     if (_closed) throw StateError('Browser $id has been closed');
     _javaScriptHandlers[name] = handler;
   }
@@ -161,11 +174,15 @@ class WebviewImpl extends Webview {
   }
 
   @override
-  Future<void> postMessage(String name, Object? data) {
-    final message = encodeJavaScriptMessage(name, data);
+  Future<void> postMessage(String name, Object? data, {String? targetOrigin}) {
+    final target = javaScriptTargetOrigin(targetOrigin);
+    final message = encodeJavaScriptMessage(name, data, targetOrigin: target);
     return _invoke('postJavaScriptMessage', {
       'message': message,
       'script': javaScriptDispatchScript(message),
+      // Windows posts other messages as web messages, which page scripts can
+      // read from chrome.webview before the bridge checks the target.
+      'targeted': target != null,
     });
   }
 
