@@ -128,10 +128,13 @@ void UnregisterWindowClass(LPCWSTR class_name) {
 std::string ConvertLPCWSTRToString(LPCWSTR lpcwszStr) {
   int strLength = WideCharToMultiByte(CP_UTF8, 0, lpcwszStr, -1, nullptr, 0,
                                       nullptr, nullptr);
+  if (strLength <= 1) return std::string();
   std::string str(strLength, 0);
 
   WideCharToMultiByte(CP_UTF8, 0, lpcwszStr, -1, &str[0], strLength, nullptr,
                       nullptr);
+  // The length of a null-terminated input includes the terminator.
+  str.resize(strLength - 1);
   return str;
 }
 
