@@ -40,8 +40,8 @@ public class DesktopKeepScreenOnPlugin: NSObject, FlutterPlugin {
     case "setPreventSleep":
       let arguments = call.arguments as! [String: Any]
       let preventSleep = arguments["preventSleep"] as! Bool
-      if preventSleep && assertionID == nil {
-        if !requiredPreventSleep() {
+      if preventSleep {
+        if assertionID == nil && !requiredPreventSleep() {
           result(FlutterError(code: "failed", message: "Failed to prevent sleep", details: nil))
           return
         }
