@@ -1,3 +1,8 @@
+## 0.4.2
+
+- Linux: Fix `getAllCookies` never completing when called before a page has loaded. It now returns an empty list. ([#555](https://github.com/MixinNetwork/flutter-plugins/pull/555))
+- Windows: Fix `getAllCookies` returning `name`, `value`, `domain` and `path` with a trailing NUL character, which made comparisons such as `cookie.name == 'session'` fail. ([#555](https://github.com/MixinNetwork/flutter-plugins/pull/555))
+
 ## 0.4.1
 
 - Add `addJavaScriptMessageHandler`, whose `JavaScriptMessage` carries the page's `data`, `origin` and `url`. `url` is the sending page's current URL, including `history.pushState` changes, so handlers no longer need `navigationState.url`, which may lag behind. It is null unless it belongs to `origin`.
