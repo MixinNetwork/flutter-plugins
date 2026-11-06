@@ -25,6 +25,14 @@ void registerRegressionTests() {
   setUp(() async {
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     server.listen((request) async {
+      if (request.uri.path == '/cookies') {
+        request.response.cookies.addAll([
+          Cookie('dww_session', '1')..path = '/',
+          Cookie('dww_persistent', '1')
+            ..path = '/'
+            ..maxAge = 3600,
+        ]);
+      }
       request.response.headers.contentType = ContentType.html;
       request.response.write('''<!doctype html>
 <title>Regression page</title>
@@ -201,6 +209,32 @@ void registerRegressionTests() {
       }
     });
   }, skip: !Platform.isWindows);
+
+  testWidgets('getAllCookies works before and after a page loads (#554)',
+      (tester) async {
+    await run(tester, () async {
+      final view = await create();
+      // Linux has no page URI to query before the first load.
+      await view.getAllCookies().timeout(const Duration(seconds: 10));
+
+      await view.launch(url('/cookies'));
+      await loaded(view);
+      WebviewCookie? session;
+      WebviewCookie? persistent;
+      await _until(() async {
+        final cookies = await view.getAllCookies();
+        session = cookies.where((c) => c.name == 'dww_session').firstOrNull;
+        persistent =
+            cookies.where((c) => c.name == 'dww_persistent').firstOrNull;
+        return session != null && persistent != null;
+      }, 'the page cookies were reported');
+
+      expect(session!.sessionOnly, isTrue);
+      expect(session!.expires, isNull);
+      expect(persistent!.sessionOnly, isFalse);
+      expect(persistent!.expires, isNotNull);
+    });
+  });
 
   // Opt-in measurement: a real ten-second playlist, without a flaky CI limit.
   testWidgets('playlist memory samples after warmup (#310)', (tester) async {
