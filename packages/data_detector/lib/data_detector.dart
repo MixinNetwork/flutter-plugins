@@ -39,11 +39,11 @@ class TextCheckingResult {
     if (timestamp == null) {
       return null;
     }
-    return DateTime.fromMicrosecondsSinceEpoch((timestamp * 1e6) as int);
+    return DateTime.fromMicrosecondsSinceEpoch((timestamp * 1e6).round());
   }
 
   Duration get duration =>
-      Duration(microseconds: (_inner.duration * 1e6) as int);
+      Duration(microseconds: (_inner.duration * 1e6).round());
 
   Uri? get url {
     final url = _inner.URL?.absoluteString;
