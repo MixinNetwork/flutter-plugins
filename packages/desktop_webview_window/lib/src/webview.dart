@@ -1,106 +1,231 @@
+import 'dart:async';
+
 import 'package:desktop_webview_window/src/cookie.dart';
 import 'package:flutter/foundation.dart';
 
-/// Handle custom message from JavaScript in your app.
-typedef JavaScriptMessageHandler = void Function(String name, dynamic body);
+/// Receives `window.desktopWebview.postMessage(name, data)` from the
+/// top-level document. [data] is the JSON-decoded value.
+///
+/// [origin] is the origin of the document that sent the message, serialized
+/// as `scheme://host[:port]` (for example `https://example.com`), `file://`
+/// for local files, or `null` for opaque origins. The bridge is available to
+/// every page the browser navigates to, so check [origin] before acting on a
+/// message that needs a trusted page. Messages from iframes are dropped.
+typedef JavaScriptMessageHandler = void Function(Object? data, String origin);
+
+/// A message from `window.desktopWebview.postMessage(name, data)` in the
+/// top-level document.
+@immutable
+class JavaScriptMessage {
+  const JavaScriptMessage({required this.data, required this.origin, this.url});
+
+  /// The JSON-decoded value.
+  final Object? data;
+
+  /// The origin of the sending document, as passed to
+  /// [JavaScriptMessageHandler].
+  final String origin;
+
+  /// The sending document's `location.href` when it sent the message,
+  /// including changes made with `history.pushState`. The page reports it, so
+  /// it is only kept when it belongs to [origin], which native code reports.
+  /// Null unless the document is an HTTP(S) or file page of [origin].
+  final Uri? url;
+}
+
+/// Receives a [JavaScriptMessage]. See [Webview.addJavaScriptMessageHandler].
+typedef JavaScriptMessageListener = void Function(JavaScriptMessage message);
 
 typedef PromptHandler = String Function(String prompt, String defaultText);
 
-typedef OnHistoryChangedCallback = void Function(
-    bool canGoBack, bool canGoForward);
-
-/// Callback when WebView start to load a URL.
-/// [url] is the URL string.
+/// Decides whether the browser may navigate to [url]. Return false to cancel.
+/// The navigation waits for the callback, so it must answer synchronously; a
+/// callback that throws allows the navigation. Schemes the WebView cannot
+/// load, such as `mixin:`, reach the callback too; handle them and return
+/// false.
 typedef OnUrlRequestCallback = bool Function(String url);
 
-/// Callback when WebView receives a web message
-/// [message] constains the webmessage
-typedef OnWebMessageReceivedCallback = void Function(String message);
+/// Current browser navigation state, the same state native composers receive.
+@immutable
+class WebviewNavigationState {
+  const WebviewNavigationState({
+    this.canGoBack = false,
+    this.canGoForward = false,
+    this.isLoading = false,
+    this.url,
+    this.title,
+  });
 
+  final bool canGoBack;
+  final bool canGoForward;
+  final bool isLoading;
+
+  /// The URL of the current page.
+  final String? url;
+
+  /// The document title of the current page.
+  final String? title;
+
+  @override
+  bool operator ==(Object other) =>
+      other is WebviewNavigationState &&
+      canGoBack == other.canGoBack &&
+      canGoForward == other.canGoForward &&
+      isLoading == other.isLoading &&
+      url == other.url &&
+      title == other.title;
+
+  @override
+  int get hashCode =>
+      Object.hash(canGoBack, canGoForward, isLoading, url, title);
+}
+
+/// Why a top-level page could not be loaded.
+enum WebviewLoadErrorKind {
+  /// The host name could not be resolved.
+  hostLookup,
+
+  /// The connection could not be established, or it was refused, reset or
+  /// lost. Also used when the device is offline.
+  connection,
+
+  /// The connection timed out.
+  timeout,
+
+  /// The TLS connection failed, for example because of an untrusted, expired
+  /// or mismatched certificate.
+  certificate,
+
+  /// Any other failure. See [WebviewLoadError.description].
+  other,
+}
+
+/// A failed top-level navigation. Failures of subresources and iframes are
+/// not reported, nor are HTTP error responses, which load the server's page.
+@immutable
+class WebviewLoadError {
+  const WebviewLoadError({
+    required this.url,
+    required this.kind,
+    required this.description,
+  });
+
+  /// The URL that failed to load.
+  final String url;
+
+  final WebviewLoadErrorKind kind;
+
+  /// The platform's description, suitable for logs. Its wording and
+  /// language differ between platforms.
+  final String description;
+
+  @override
+  bool operator ==(Object other) =>
+      other is WebviewLoadError &&
+      url == other.url &&
+      kind == other.kind &&
+      description == other.description;
+
+  @override
+  int get hashCode => Object.hash(url, kind, description);
+
+  @override
+  String toString() => 'WebviewLoadError($kind, $url, $description)';
+}
+
+/// A browser window. Operations complete when native code has applied them and
+/// fail with a [PlatformException] when it reports an error. Operations a
+/// platform does not support throw [UnsupportedError].
 abstract class Webview {
+  /// Process-wide browser ID. Distinct from any Flutter view ID.
+  int get id;
+
+  /// Completes once the native window has closed.
   Future<void> get onClose;
 
-  ///  true if the webview is currently loading a page.
-  ValueListenable<bool> get isNavigating;
+  ValueListenable<WebviewNavigationState> get navigationState;
 
-  /// Install a message handler that you can call from your Javascript code.
+  /// Reports top-level navigations that failed to load, such as an unknown
+  /// host or a refused connection. Cancelled navigations, navigations
+  /// declined by [setOnUrlRequestCallback] and downloads are not failures.
+  /// The stream closes with the browser.
+  Stream<WebviewLoadError> get onLoadError;
+
+  /// Native window pointer: `HWND` on Windows, `NSWindow*` on macOS and
+  /// `GtkWindow*` on Linux. Returns 0 once the browser has closed.
   ///
-  /// available: macOS (10.10+)
-  void registerJavaScriptMessageHandler(
-    String name,
-    JavaScriptMessageHandler handler,
-  );
+  /// The window is owned by this plugin. Other libraries may borrow it to move,
+  /// show, hide or focus the window, but must not destroy or retain it beyond
+  /// [onClose], and must not replace its delegate or window procedure.
+  int get nativeWindowHandle;
 
-  /// available: macOS
-  void unregisterJavaScriptMessageHandler(String name);
+  /// Handles `window.desktopWebview.postMessage(name, data)` from the page.
+  /// Replaces an existing handler with the same [name].
+  void addJavaScriptHandler(String name, JavaScriptMessageHandler handler);
 
-  /// available: macOS
+  /// Like [addJavaScriptHandler], and also reports the sending document's
+  /// URL in [JavaScriptMessage.url]. Handlers added with either method share
+  /// one set of names: adding one replaces the other.
+  void addJavaScriptMessageHandler(
+      String name, JavaScriptMessageListener handler);
+
+  /// Removes the handler added for [name] by [addJavaScriptHandler] or
+  /// [addJavaScriptMessageHandler].
+  void removeJavaScriptHandler(String name);
+
+  /// Delivers [data] to listeners added with
+  /// `window.desktopWebview.addEventListener(name, listener)`.
+  /// [data] must be JSON-encodable.
+  ///
+  /// Like `window.postMessage`, [targetOrigin] limits delivery to a document
+  /// of that origin, checked by the receiving document itself. Pass the
+  /// [JavaScriptMessage.origin] of a request to answer only the page that
+  /// sent it: if the window has navigated to another origin in the meantime,
+  /// the reply is dropped. A URL stands for its origin and `*` or null
+  /// delivers to any document. Throws [ArgumentError] for a target no
+  /// document can match, such as `null` or `about:blank`.
+  Future<void> postMessage(String name, Object? data, {String? targetOrigin});
+
+  /// Answers JavaScript `prompt()`. macOS only.
   void setPromptHandler(PromptHandler? handler);
 
-  /// Navigates to the given URL.
-  void launch(String url, {bool triggerOnUrlRequestEvent = true});
+  /// Navigates to the given URL. With [triggerOnUrlRequestEvent] false, this
+  /// navigation bypasses the [setOnUrlRequestCallback] decision.
+  Future<void> launch(String url, {bool triggerOnUrlRequestEvent = true});
 
-  /// change webview theme.
-  ///
-  /// available only: macOS (Brightness.dark only 10.14+)
-  void setBrightness(Brightness? brightness);
+  /// Changes native window appearance, including the default toolbar, on
+  /// macOS and Windows. Pass null to restore the platform default. Web content
+  /// sees the same preference through `prefers-color-scheme`; the page decides
+  /// which colors to render. Windows applies this to the individual WebView,
+  /// without changing other windows sharing its profile.
+  Future<void> setBrightness(Brightness? brightness);
 
-  void addScriptToExecuteOnDocumentCreated(String javaScript);
+  Future<void> addScriptToExecuteOnDocumentCreated(String javaScript);
 
   /// Append a string to the webview's user-agent.
   Future<void> setApplicationNameForUserAgent(String applicationName);
 
-  /// Navigate to the previous page in the history.
   Future<void> back();
 
-  /// Navigate to the next page in the history.
   Future<void> forward();
 
-  /// Show or hide webview window
-  Future<void> setWebviewWindowVisibility(bool visible);
-
-  /// Move and Resize the webview window
-  Future<void> moveWebviewWindow(int left, int top, int width, int height);
-
-  /// Activates the webview window (giving it the focus)
-  Future<void> bringToForeground({bool maximized = false});
-
-  /// get position, extents and maximization info of the webview window
-  Future<Map<dynamic, dynamic>?> getPositionalParameters();
-
-  /// Reload the current page.
   Future<void> reload();
 
   /// Stop all navigations and pending resource fetches.
   Future<void> stop();
 
-  /// Opens the Browser DevTools in a separate window
+  /// Opens the browser developer tools. Windows and Linux.
   Future<void> openDevToolsWindow();
 
-  /// Register a callback that will be invoked when the webview history changes.
-  void setOnHistoryChangedCallback(OnHistoryChangedCallback? callback);
+  /// Installs the navigation decision for this browser. Top-level navigations
+  /// wait for Dart only while a callback is installed.
+  Future<void> setOnUrlRequestCallback(OnUrlRequestCallback? callback);
 
-  void setOnUrlRequestCallback(OnUrlRequestCallback? callback);
+  /// Requests the window to close. [onClose] completes when it has closed.
+  Future<void> close();
 
-  void addOnWebMessageReceivedCallback(OnWebMessageReceivedCallback callback);
-
-  void removeOnWebMessageReceivedCallback(
-    OnWebMessageReceivedCallback callback,
-  );
-
-  void removeAllWebMessageReceivedCallback();
-
-  /// Close the web view window.
-  void close();
-
-  /// evaluate JavaScript in the web view.
-  Future<String?> evaluateJavaScript(String javaScript);
-
-  /// post a web message as String to the top level document in this WebView
-  Future<void> postWebMessageAsString(String webMessage);
-
-  /// post a web message as JSON to the top level document in this WebView
-  Future<void> postWebMessageAsJson(String webMessage);
+  /// Evaluates [javaScript] and returns its JSON-compatible result.
+  Future<Object?> evaluateJavaScript(String javaScript);
 
   Future<List<WebviewCookie>> getAllCookies();
 }

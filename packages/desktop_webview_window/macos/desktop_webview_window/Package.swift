@@ -6,7 +6,7 @@ import PackageDescription
 let package = Package(
     name: "desktop_webview_window",
     platforms: [
-        .macOS("10.13")
+        .macOS("10.15")
     ],
     products: [
         .library(name: "desktop-webview-window", targets: ["desktop_webview_window"])
@@ -17,12 +17,14 @@ let package = Package(
     targets: [
         .target(
             name: "desktop_webview_window",
-            dependencies: [
+            dependencies: ["desktop_webview_window_composer",
                 .product(name: "FlutterFramework", package: "FlutterFramework")
-            ],
-            resources: [
-                .process("WebViewLayoutController.xib"),
             ]
+        ),
+        .target(
+            name: "desktop_webview_window_composer",
+            publicHeadersPath: "include"
         )
-    ]
+    ],
+    cxxLanguageStandard: .cxx17
 )

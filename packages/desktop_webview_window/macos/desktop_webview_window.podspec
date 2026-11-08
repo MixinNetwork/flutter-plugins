@@ -13,10 +13,15 @@ A new flutter plugin project.
   s.license          = { :file => '../LICENSE' }
   s.author           = { 'Your Company' => 'email@example.com' }
   s.source           = { :path => '.' }
-  s.source_files     = 'desktop_webview_window/Sources/desktop_webview_window/**/*.{swift,xib}'
+  # Forwarders under desktop_webview_window_composer include the shared runtime.
+  s.source_files     = 'desktop_webview_window/Sources/**/*.{h,cc,swift}'
   s.dependency 'FlutterMacOS'
 
-  s.platform = :osx, '10.13'
-  s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES' }
+  s.platform = :osx, '10.15'
+  s.pod_target_xcconfig = {
+    'DEFINES_MODULE' => 'YES',
+    'CLANG_CXX_LANGUAGE_STANDARD' => 'c++17'
+  }
+  s.libraries = 'c++'
   s.swift_version = '5.0'
 end

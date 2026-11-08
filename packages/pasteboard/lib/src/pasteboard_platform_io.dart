@@ -70,8 +70,9 @@ class PasteboardPlatformIO implements PasteboardPlatform {
     } else if (Platform.isWindows) {
       final file = await File(_getTempFileName()).create();
       file.writeAsBytesSync(image);
-      await _channel
-          .invokeMethod<Object>('writeImage', {'fileName': file.path});
+      await _channel.invokeMethod<Object>('writeImage', {
+        'fileName': file.path,
+      });
       file.delete();
     }
   }

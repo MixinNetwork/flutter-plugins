@@ -460,14 +460,14 @@ This content was appended through `MarkdownController.appendChunk`.
                                 content: Text('Link tapped: $destination')),
                           );
                         },
-                        contextMenuBuilder:
-                            (context, controller, buttonItems, anchors) {
+                        contextMenuBuilder: (context, details) {
                           return AdaptiveTextSelectionToolbar.buttonItems(
-                            anchors: anchors,
+                            anchors: details.anchors,
                             buttonItems: [
-                              ...buttonItems,
+                              ...details.buttonItems,
                               ContextMenuButtonItem(
                                 onPressed: () {
+                                  details.hide();
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     const SnackBar(
                                       content: Text('Custom menu action!'),
