@@ -32,7 +32,7 @@ if (builtInKotlin && project.hasProperty('android.builtInKotlin')) {
 }
 
 if (!builtInKotlin) {
-    apply plugin: 'kotlin-android'
+    project.pluginManager.apply('kotlin-android')
 }
 
 rootProject.allprojects {

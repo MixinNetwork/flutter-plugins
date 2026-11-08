@@ -8,7 +8,6 @@ import '../core/document.dart';
 import '../render/pretext_text_block.dart';
 import '../render/selectable_block.dart';
 import '../render/selection/markdown_selection_gesture_detector.dart';
-import '../render/shortcuts/markdown_shortcuts_scope.dart';
 import '../widgets/markdown_theme.dart';
 import '../widgets/markdown_types.dart';
 import 'selection_controller.dart';
@@ -46,8 +45,10 @@ class MixinSelectionArea extends StatefulWidget {
     this.controller,
     this.scrollController,
     this.selectionColor,
-    this.contextMenuBuilder,
+    this.contextMenuBuilder = defaultMarkdownContextMenuBuilder,
     this.enableCopyFullDocumentShortcut = true,
+    @Deprecated('Filter MarkdownContextMenuDetails.buttonItems in '
+        'contextMenuBuilder instead.')
     this.showCopyAllInContextMenu = true,
   });
 
@@ -55,8 +56,12 @@ class MixinSelectionArea extends StatefulWidget {
   final MarkdownSelectionController? controller;
   final ScrollController? scrollController;
   final Color? selectionColor;
+
+  /// Builds the right-click menu; null shows none.
   final MarkdownContextMenuBuilder? contextMenuBuilder;
   final bool enableCopyFullDocumentShortcut;
+  @Deprecated('Filter MarkdownContextMenuDetails.buttonItems in '
+      'contextMenuBuilder instead.')
   final bool showCopyAllInContextMenu;
 
   @override
@@ -66,7 +71,6 @@ class MixinSelectionArea extends StatefulWidget {
 class _MixinSelectionAreaState extends State<MixinSelectionArea> {
   final MarkdownPlainTextSerializer _plainTextSerializer =
       const MarkdownPlainTextSerializer();
-  final ContextMenuController _contextMenuController = ContextMenuController();
   final GlobalKey _selectionAreaKey =
       GlobalKey(debugLabel: 'mixin-selection-area');
   final ScrollController _fallbackScrollController = ScrollController();
@@ -106,7 +110,6 @@ class _MixinSelectionAreaState extends State<MixinSelectionArea> {
 
   @override
   void dispose() {
-    _contextMenuController.remove();
     _fallbackScrollController.dispose();
     _fallbackController.dispose();
     super.dispose();
@@ -210,19 +213,14 @@ class _MixinSelectionAreaState extends State<MixinSelectionArea> {
         .compareTo(_registrationOrder[b.owner] ?? 0);
   }
 
-  void _showToolbar(Offset globalPosition) {
-    MarkdownContextMenu.show(
-      context,
-      contextMenuController: _contextMenuController,
-      selectionController: _controller,
-      document: _document,
-      globalPosition: globalPosition,
-      onCopyPlainText: widget.enableCopyFullDocumentShortcut
-          ? _copyFullDocumentPlainTextToClipboard
-          : null,
-      showCopyAllInContextMenu: widget.showCopyAllInContextMenu,
-      contextMenuBuilder: widget.contextMenuBuilder,
-    );
+  String? _linkDestinationAt(Offset globalPosition) {
+    for (final participant in _orderedParticipants) {
+      final destination = participant.linkDestinationAt?.call(globalPosition);
+      if (destination != null) {
+        return destination;
+      }
+    }
+    return null;
   }
 
   void _copyFullDocumentPlainTextToClipboard() {
@@ -281,7 +279,7 @@ class _MixinSelectionAreaState extends State<MixinSelectionArea> {
     return null;
   }
 
-  void _selectWordAt(DocumentPosition position) {
+  void _selectWordAt(DocumentPosition position, {Offset? globalPosition}) {
     final participant = _participantForBlockIndex(position.blockIndex);
     if (participant == null) {
       _controller.setSelection(
@@ -289,7 +287,7 @@ class _MixinSelectionAreaState extends State<MixinSelectionArea> {
       );
       return;
     }
-    participant.selectWordAt(position);
+    participant.selectWordAt(position, globalPosition: globalPosition);
   }
 
   void _selectBlockAt(int blockIndex) {
@@ -362,14 +360,16 @@ class _MixinSelectionAreaState extends State<MixinSelectionArea> {
                 : null,
             scrollableKey: _selectionAreaKey,
             scrollController: _scrollController,
-            onRequestToolbar: _showToolbar,
+            contextMenuBuilder: widget.contextMenuBuilder,
+            linkDestinationAt: _linkDestinationAt,
+            // ignore: deprecated_member_use_from_same_package
+            showCopyAllInContextMenu: widget.showCopyAllInContextMenu,
             hitTestPosition: _hitTestPosition,
             hitTestExactTextPosition: _hitTestExactTextPosition,
             selectWordAt: _selectWordAt,
             selectBlockAt: _selectBlockAt,
             selectSelectionUnitAt: _selectSelectionUnitAt,
             additionalAutoScrollTargets: _autoScrollTargets,
-            onTapOutside: _contextMenuController.remove,
             child: KeyedSubtree(
               key: _selectionAreaKey,
               child: scopedChild,
@@ -492,8 +492,10 @@ class _MixinSelectableState extends State<MixinSelectable> {
             : hitTestGlobal(globalPosition);
       },
       hitTestExactTextPosition: hitTestTextGlobal,
-      selectWordAt: (position) {
-        _registrar?.controller.setSelection(selectWord(position));
+      selectWordAt: (position, {globalPosition}) {
+        _registrar?.controller.setSelection(
+          selectWord(position, globalPosition: globalPosition),
+        );
       },
       selectBlockAt: (blockIndex) {
         _registrar?.controller.setSelection(selectWholeBlock());
@@ -558,8 +560,12 @@ class _MixinSelectableState extends State<MixinSelectable> {
         );
   }
 
-  DocumentSelection selectWord(DocumentPosition position) {
-    return _blockKey.currentState?.selectWord(position) ??
+  DocumentSelection selectWord(
+    DocumentPosition position, {
+    Offset? globalPosition,
+  }) {
+    return _blockKey.currentState
+            ?.selectWord(position, globalPosition: globalPosition) ??
         DocumentSelection(base: position, extent: position);
   }
 

@@ -7,8 +7,9 @@ import 'pasteboard_platform.dart';
 
 Future<String?> _readBlobAsText(Blob blob) async {
   final FileReader reader = FileReader();
-  final future =
-      reader.onLoadEnd.first.then((ProgressEvent event) => reader.result);
+  final future = reader.onLoadEnd.first.then(
+    (ProgressEvent event) => reader.result,
+  );
 
   reader.readAsText(blob);
 
@@ -78,9 +79,11 @@ class PasteboardPlatformWeb implements PasteboardPlatform {
     }
     try {
       final blob = Blob([image.toJS].toJS, BlobPropertyBag(type: 'image/png'));
-      window.navigator.clipboard.write([
-        ClipboardItem({'image/png': blob}.jsify()! as JSObject)
-      ].toJS);
+      window.navigator.clipboard.write(
+        [
+          ClipboardItem({'image/png': blob}.jsify()! as JSObject),
+        ].toJS,
+      );
     } catch (e) {
       debugPrint('Error writing image to clipboard: $e');
       return;

@@ -61,6 +61,41 @@ MarkdownWidget(
 )
 ```
 
+### Right-Click Menu
+
+Right clicking keeps a selection under the pointer. Elsewhere, macOS and iOS
+select the word under the pointer and other platforms clear the selection. The
+default menu shows Copy when text is selected, Copy link over a link, Select
+all, and Copy all. It closes on Escape, scrolling, or any click.
+
+`contextMenuBuilder` replaces the menu. `details.buttonItems` holds the default
+items, which close the menu when pressed; call `details.hide` from your own.
+Pass `null` to show no menu.
+
+```dart
+MarkdownWidget(
+  data: data,
+  contextMenuBuilder: (context, details) {
+    return AdaptiveTextSelectionToolbar.buttonItems(
+      anchors: details.anchors,
+      buttonItems: [
+        ...details.buttonItems,
+        if (details.linkDestination case final url?)
+          ContextMenuButtonItem(
+            label: 'Open Link',
+            onPressed: () {
+              details.hide();
+              openUrl(url);
+            },
+          ),
+      ],
+    );
+  },
+)
+```
+
+`MixinSelectionArea` takes the same `contextMenuBuilder`.
+
 ### Generic Selection Area
 
 `MixinSelectionArea` can wrap non-Markdown widget trees. Text-like children opt in
@@ -92,6 +127,15 @@ controller.appendChunk('\n\nNew content arrived.');
 
 // When stream finishes:
 controller.commitStream();
+```
+
+If you receive the full text so far instead of deltas, pass it to `updateData`. It appends only the new suffix when the text extends the current data, falls back to a full parse otherwise, and commits the stream unless `streaming` is true:
+
+```dart
+controller.updateData(fullTextSoFar, streaming: true);
+
+// When stream finishes:
+controller.updateData(finalText);
 ```
 
 See the `/example` directory for a fully runnable desktop demo.

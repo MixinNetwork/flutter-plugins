@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.2
+
+- Android: Fix `OggOpusRecorder` failing to start with `java.util.HashMap cannot be cast to java.lang.String`. ([#553](https://github.com/MixinNetwork/flutter-plugins/pull/553); thanks [JinkeJ](https://github.com/JinkeJ))
+- Windows, Linux: Fix a memory leak of the file path each time an `OggOpusPlayer` or `OggOpusRecorder` is created. ([#530](https://github.com/MixinNetwork/flutter-plugins/pull/530))
+
 ## 0.8.1
 
 * [iOS/macOS] add Swift Package Manager support [#496](https://github.com/MixinNetwork/flutter-plugins/pull/496).

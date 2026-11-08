@@ -1,4 +1,3 @@
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../clipboard/plain_text_serializer.dart';
@@ -7,17 +6,18 @@ import '../debug.dart';
 import '../selection/selection_host.dart';
 import '../selection/selection_controller.dart';
 import '../selection/selection_registrar.dart';
+import '../selection/structured_block_selection.dart';
 import '../widgets/markdown_theme.dart';
 import '../widgets/markdown_types.dart';
 import 'code_syntax_highlighter.dart';
 import 'markdown_block_widgets.dart';
+import 'selectable_block.dart';
 
 import 'builder/markdown_block_builder.dart';
 import 'builder/markdown_inline_builder.dart';
 import 'selection/markdown_descriptor_extractor.dart';
 import 'selection/markdown_selection_gesture_detector.dart';
-import 'selection/markdown_selection_resolver.dart';
-import 'shortcuts/markdown_shortcuts_scope.dart';
+import 'selection/markdown_block_keys_registry.dart';
 
 class MarkdownDocumentView extends StatefulWidget {
   const MarkdownDocumentView({
@@ -64,9 +64,8 @@ class MarkdownDocumentView extends StatefulWidget {
 class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
   static const double _slowBuildLogThresholdMs = 8;
 
-  final List<TapGestureRecognizer> _recognizers = <TapGestureRecognizer>[];
+  final MarkdownLinkRecognizers _linkRecognizers = MarkdownLinkRecognizers();
   final ScrollController _fallbackScrollController = ScrollController();
-  final ContextMenuController _contextMenuController = ContextMenuController();
   final GlobalKey _scrollableKey = GlobalKey(debugLabel: 'markdown-scrollable');
 
   final MarkdownPlainTextSerializer _plainTextSerializer =
@@ -162,24 +161,33 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     _descriptorCache.cleanup(validIds);
     _tableLayoutPlanCache.cleanup(validIds);
     _codeHighlightCache.cleanup(validIds);
+    _linkRecognizers.disposeRemovedLinks(
+      oldWidget.document.blocks,
+      widget.document.blocks,
+    );
 
+    // Rows call onTapLink through _handleTapLink, so a new callback only
+    // matters to them when it turns links on or off.
     if (oldWidget.theme != widget.theme ||
-        oldWidget.onTapLink != widget.onTapLink ||
+        (oldWidget.onTapLink == null) != (widget.onTapLink == null) ||
         oldWidget.imageBuilder != widget.imageBuilder ||
         oldWidget.selectable != widget.selectable) {
       _cachedBlockRows.clear();
     }
-    _syncSelectionParticipant(participantChanged: true);
+    // Only notify on document changes: the registrar's refresh rebuilds this
+    // widget, so an unconditional notification never lets frames settle.
+    _syncSelectionParticipant(
+      participantChanged: !identical(oldWidget.document, widget.document),
+    );
   }
 
   @override
   void dispose() {
-    _disposeRecognizers();
+    _linkRecognizers.dispose();
     _codeHighlightCache
       ..removeListener(_handleCodeHighlightCacheChanged)
       ..dispose();
     _fallbackScrollController.dispose();
-    _contextMenuController.remove();
     if (_registeredWithSelectionRegistrar) {
       _selectionRegistrar?.unregisterParticipant(this);
     }
@@ -248,6 +256,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       selectWordAt: _selectWordAt,
       selectBlockAt: _selectBlockAt,
       selectSelectionUnitAt: _selectSelectionUnitAt,
+      linkDestinationAt: _linkDestinationAt,
       autoScrollTargets: _inheritedSelectionAutoScrollTargets,
     );
   }
@@ -267,49 +276,52 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     setState(() {});
   }
 
-  void _disposeRecognizers() {
-    for (final recognizer in _recognizers) {
-      recognizer.dispose();
-    }
-    _recognizers.clear();
+  void _handleTapLink(String destination, String? title, String label) {
+    widget.onTapLink?.call(destination, title, label);
   }
 
-  void _showToolbar(Offset globalPosition) {
-    if (widget.selectionController == null) {
-      return;
+  String? _linkDestinationAt(Offset globalPosition) {
+    final position = _hitTestExactTextPosition(globalPosition);
+    if (position == null) {
+      return null;
     }
-    MarkdownContextMenu.show(
-      context,
-      contextMenuController: _contextMenuController,
-      selectionController: widget.selectionController!,
-      document: widget.document,
-      globalPosition: globalPosition,
-      onCopyPlainText: widget.onCopyPlainText,
-      showCopyAllInContextMenu: widget.showCopyAllInContextMenu,
-      contextMenuBuilder: widget.contextMenuBuilder,
-    );
+    final localBlockIndex = position.blockIndex - _selectionBlockIndexOffset;
+    if (localBlockIndex < 0 ||
+        localBlockIndex >= widget.document.blocks.length) {
+      return null;
+    }
+    final block = widget.document.blocks[localBlockIndex];
+    final upstream = _blockStateFor(block)?.isPointerOnPrecedingCharacter(
+          position.textOffset,
+          globalPosition,
+        ) ??
+        false;
+    return StructuredBlockSelection.forBlock(block)
+        .linkAt(position, upstream: upstream)
+        ?.destination;
+  }
+
+  MarkdownSelectableBlockHandle? _blockStateFor(BlockNode block) {
+    final Object? state = _keysRegistry.blockKeys[block.id]?.currentState;
+    return state is MarkdownSelectableBlockHandle ? state : null;
   }
 
   DocumentPosition? _hitTestPosition(Offset globalPosition,
       {required bool clamp}) {
     for (final block in widget.document.blocks) {
-      // Depending on imports / architecture, blockKeys might store State directly
-      final blockState =
-          _keysRegistry.blockKeys[block.id]?.currentState as dynamic;
-      final hit = blockState?.hitTestGlobal(globalPosition);
+      final hit = _blockStateFor(block)?.hitTestGlobal(globalPosition);
       if (hit != null) {
-        return hit as DocumentPosition;
+        return hit;
       }
     }
     if (!clamp) {
       return null;
     }
 
-    dynamic nearestState;
+    MarkdownSelectableBlockHandle? nearestState;
     double bestDistance = double.infinity;
     for (final block in widget.document.blocks) {
-      final blockState =
-          _keysRegistry.blockKeys[block.id]?.currentState as dynamic;
+      final blockState = _blockStateFor(block);
       final rect = blockState?.globalRect;
       if (blockState == null || rect == null) {
         continue;
@@ -330,23 +342,20 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
         nearestState = blockState;
       }
     }
-    return nearestState?.boundaryPositionForGlobal(globalPosition)
-        as DocumentPosition?;
+    return nearestState?.boundaryPositionForGlobal(globalPosition);
   }
 
   DocumentPosition? _hitTestExactTextPosition(Offset globalPosition) {
     for (final block in widget.document.blocks) {
-      final blockState =
-          _keysRegistry.blockKeys[block.id]?.currentState as dynamic;
-      final hit = blockState?.hitTestTextGlobal(globalPosition);
+      final hit = _blockStateFor(block)?.hitTestTextGlobal(globalPosition);
       if (hit != null) {
-        return hit as DocumentPosition;
+        return hit;
       }
     }
     return null;
   }
 
-  void _selectWordAt(DocumentPosition position) {
+  void _selectWordAt(DocumentPosition position, {Offset? globalPosition}) {
     final selectionController = widget.selectionController;
     if (selectionController == null) {
       return;
@@ -358,7 +367,9 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       );
       return;
     }
-    selectionController.setSelection(blockState.selectWord(position));
+    selectionController.setSelection(
+      blockState.selectWord(position, globalPosition: globalPosition),
+    );
   }
 
   void _selectBlockAt(int blockIndex) {
@@ -394,14 +405,13 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     );
   }
 
-  dynamic _blockStateForIndex(int blockIndex) {
+  MarkdownSelectableBlockHandle? _blockStateForIndex(int blockIndex) {
     final localBlockIndex = blockIndex - _selectionBlockIndexOffset;
     if (localBlockIndex < 0 ||
         localBlockIndex >= widget.document.blocks.length) {
       return null;
     }
-    final block = widget.document.blocks[localBlockIndex];
-    return _keysRegistry.blockKeys[block.id]?.currentState as dynamic;
+    return _blockStateFor(widget.document.blocks[localBlockIndex]);
   }
 
   Widget _finishBuildWithLog(
@@ -429,12 +439,12 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
   @override
   Widget build(BuildContext context) {
     final buildStopwatch = Stopwatch()..start();
-    _disposeRecognizers();
+    final onTapLink = widget.onTapLink == null ? null : _handleTapLink;
 
     final inlineBuilder = MarkdownInlineBuilder(
       theme: widget.theme,
-      recognizers: _recognizers,
-      onTapLink: widget.onTapLink,
+      recognizers: _linkRecognizers,
+      onTapLink: onTapLink,
     );
 
     final descriptorExtractor = MarkdownDescriptorExtractor(
@@ -445,13 +455,6 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       cache: _descriptorCache,
     );
 
-    final selectionResolver = MarkdownSelectionResolver(
-      theme: widget.theme,
-      extractor: descriptorExtractor,
-      keysRegistry: _keysRegistry,
-      codeSyntaxHighlighter: _codeSyntaxHighlighter,
-    );
-
     _blockBuilder = MarkdownBlockBuilder(
       theme: widget.theme,
       selectionController: widget.selectionController,
@@ -459,15 +462,13 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       isSelectable: widget.selectable,
       keysRegistry: _keysRegistry,
       descriptorExtractor: descriptorExtractor,
-      selectionResolver: selectionResolver,
       inlineBuilder: inlineBuilder,
       codeSyntaxHighlighter: _codeSyntaxHighlighter,
       plainTextSerializer: _plainTextSerializer,
       imageBuilder: widget.imageBuilder,
       codeBlockBuilder: widget.codeBlockBuilder,
       bulletBuilder: widget.bulletBuilder,
-      onTapLink: widget.onTapLink,
-      onRequestContextMenu: _showToolbar,
+      onTapLink: onTapLink,
       cachedBlockRows: _cachedBlockRows,
       tableLayoutPlanCache: _tableLayoutPlanCache,
       codeHighlightCache: _codeHighlightCache,
@@ -546,7 +547,9 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
         isSelectable: widget.selectable,
         scrollableKey: _scrollableKey,
         scrollController: scrollController,
-        onRequestToolbar: _showToolbar,
+        contextMenuBuilder: widget.contextMenuBuilder,
+        linkDestinationAt: _linkDestinationAt,
+        showCopyAllInContextMenu: widget.showCopyAllInContextMenu,
         hitTestPosition: _hitTestPosition,
         hitTestExactTextPosition: _hitTestExactTextPosition,
         selectWordAt: _selectWordAt,
@@ -554,7 +557,6 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
         selectSelectionUnitAt: _selectSelectionUnitAt,
         additionalAutoScrollTargets: _autoScrollTargets,
         onCopyPlainText: widget.onCopyPlainText,
-        onTapOutside: _contextMenuController.remove,
         child: scrollable,
       ),
       blockCount: widget.document.blocks.length,

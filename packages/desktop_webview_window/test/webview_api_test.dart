@@ -116,6 +116,53 @@ void main() {
     ]);
   });
 
+  test('message handlers also receive the sending document URL', () async {
+    final webview = await create();
+    final token = (webview as WebviewImpl).bridgeToken;
+    final received = <JavaScriptMessage>[];
+    webview.addJavaScriptMessageHandler('sign', received.add);
+    Future<void> send(String? source, String? url) =>
+        sendBrowserEvent('onJavaScriptMessage', {
+          'id': webview.id,
+          'message':
+              token + jsonEncode({'name': 'sign', 'data': 1, 'url': url}),
+          'source': source,
+        });
+    // Windows and Linux report a URL, macOS only the origin.
+    await send('https://example.com/app/', 'https://example.com/app/pay?id=1');
+    await send('https://example.com', 'https://example.com/pushed#top');
+    // The page cannot claim a URL outside the origin native code reports.
+    await send('https://example.com', 'https://other.example/');
+    // Sandboxed pages have an opaque origin on macOS.
+    await send('://', 'https://example.com/sandboxed');
+    await send('https://example.com/', null);
+    await send(null, 'https://example.com/');
+    expect([
+      for (final m in received) (m.data, m.origin, m.url?.toString())
+    ], [
+      (1, 'https://example.com', 'https://example.com/app/pay?id=1'),
+      (1, 'https://example.com', 'https://example.com/pushed#top'),
+      (1, 'https://example.com', null),
+      (1, 'null', null),
+      (1, 'https://example.com', null),
+      (1, 'null', null),
+    ]);
+
+    // Both handler kinds share names.
+    final legacy = <Object?>[];
+    webview.addJavaScriptHandler('sign', (data, origin) => legacy.add(origin));
+    await send('file:///tmp/index.html', 'file:///tmp/index.html');
+    expect(received, hasLength(6));
+    expect(legacy, ['file://']);
+    webview.addJavaScriptMessageHandler('sign', received.add);
+    await send('file:///tmp/index.html', 'file:///tmp/index.html');
+    expect(received.last.url, Uri.parse('file:///tmp/index.html'));
+    webview.removeJavaScriptHandler('sign');
+    await send('file:///tmp/index.html', 'file:///tmp/index.html');
+    expect(received, hasLength(7));
+    expect(legacy, hasLength(1));
+  });
+
   test('message origins are serialized like the web platform', () {
     expect(javaScriptMessageOrigin('https://Example.com:443/a'),
         'https://example.com');
@@ -178,6 +225,51 @@ void main() {
       'data': {'dark': true}
     });
     expect(arguments['script'], contains(jsonEncode(message)));
+  });
+
+  test('postMessage carries a normalized target origin', () async {
+    final webview = await create();
+    Map<Object?, Object?> sent() => calls.last.arguments as Map;
+
+    await webview.postMessage('theme', 1);
+    expect(sent()['targeted'], isFalse);
+    expect(jsonDecode(sent()['message'] as String),
+        isNot(contains('targetOrigin')));
+
+    await webview.postMessage('theme', 1, targetOrigin: '*');
+    expect(sent()['targeted'], isFalse);
+
+    await webview.postMessage('reply', {'sig': 'x'},
+        targetOrigin: 'https://Example.com:443/app?x=1');
+    final message = sent()['message'] as String;
+    expect(sent()['targeted'], isTrue);
+    expect(jsonDecode(message), {
+      'name': 'reply',
+      'data': {'sig': 'x'},
+      'targetOrigin': 'https://example.com',
+    });
+    expect(sent()['script'], javaScriptDispatchScript(message));
+
+    await webview.postMessage('reply', 1, targetOrigin: 'file:///tmp/a.html');
+    expect(jsonDecode(sent()['message'] as String)['targetOrigin'], 'file://');
+
+    final count = calls.length;
+    for (final target in ['null', 'about:blank', 'data:text/html,x', '']) {
+      expect(() => webview.postMessage('reply', 1, targetOrigin: target),
+          throwsArgumentError,
+          reason: target);
+    }
+    expect(calls, hasLength(count));
+  });
+
+  test('the bridge checks the target origin before any listener', () {
+    final source = javaScriptBridgeSource('t');
+    final check = source.indexOf("hasOwn(message, 'targetOrigin')");
+    expect(check, isNot(-1));
+    expect(check, lessThan(source.indexOf('listener(message.data)')));
+    // Captured before page scripts can replace them.
+    expect(source, contains('const parse = JSON.parse;'));
+    expect(source, isNot(contains('JSON.parse(raw)')));
   });
 
   test('evaluateJavaScript returns the decoded value', () async {

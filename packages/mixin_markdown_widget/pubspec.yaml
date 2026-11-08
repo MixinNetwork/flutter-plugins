@@ -1,7 +1,7 @@
 name: mixin_markdown_widget
 resolution: workspace
 description: A desktop-first Flutter Markdown reader widget with theming and streaming-friendly controller APIs.
-version: 0.3.3
+version: 0.4.0
 homepage: https://github.com/MixinNetwork/flutter-plugins/tree/main/packages/mixin_markdown_widget
 
 environment:
@@ -16,6 +16,7 @@ dependencies:
   pretext: ^0.1.0
   re_highlight: ^0.0.3
   flutter_math_fork: ^0.7.4
+  word_segmenter: ^0.1.0
 
 dev_dependencies:
   flutter_test:

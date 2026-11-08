@@ -21,7 +21,6 @@ namespace {
 class OggOpusReader {
 
  private:
-  const char *file_path_;
   OggOpusFile *opus_file_;
 
   bool ended_ = false;
@@ -38,7 +37,7 @@ class OggOpusReader {
 
 };
 
-OggOpusReader::OggOpusReader(const char *file_path) : file_path_(file_path), opus_file_(nullptr) {
+OggOpusReader::OggOpusReader(const char *file_path) : opus_file_(nullptr) {
   int result;
   auto opus_file = op_open_file(file_path, &result);
   if (result == 0 && opus_file) {
