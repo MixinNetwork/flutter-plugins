@@ -266,6 +266,17 @@ void WebviewWindowPlugin::HandleMethodCall(
     }
     web_view->ExecuteJavaScript(utf8_to_wide(*script), std::move(result));
   } else if (method == "postJavaScriptMessage") {
+    // Page scripts can read web messages from chrome.webview, so a message
+    // with a target origin is dispatched by script and checked by the bridge.
+    if (Bool(arguments, "targeted", false)) {
+      const auto* script = String(arguments, "script");
+      if (!script) {
+        result->Error("invalid_argument", "script is required");
+        return;
+      }
+      web_view->ExecuteJavaScript(utf8_to_wide(*script), std::move(result));
+      return;
+    }
     const auto* message = String(arguments, "message");
     if (!message) {
       result->Error("invalid_argument", "message is required");

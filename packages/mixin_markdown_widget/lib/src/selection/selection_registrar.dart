@@ -14,8 +14,9 @@ typedef MixinSelectionParticipantExactHitTest = DocumentPosition? Function(
 );
 
 typedef MixinSelectionParticipantSelectWord = void Function(
-  DocumentPosition position,
-);
+  DocumentPosition position, {
+  Offset? globalPosition,
+});
 
 typedef MixinSelectionParticipantSelectBlock = void Function(
   int blockIndex,
@@ -36,6 +37,7 @@ class MixinSelectionParticipant {
     required this.selectWordAt,
     required this.selectBlockAt,
     required this.selectSelectionUnitAt,
+    this.linkDestinationAt,
     this.autoScrollTargets,
   });
 
@@ -47,6 +49,7 @@ class MixinSelectionParticipant {
   final MixinSelectionParticipantSelectWord selectWordAt;
   final MixinSelectionParticipantSelectBlock selectBlockAt;
   final MixinSelectionParticipantSelectUnit selectSelectionUnitAt;
+  final String? Function(Offset globalPosition)? linkDestinationAt;
   final Iterable<MarkdownSelectionAutoScrollTarget> Function()?
       autoScrollTargets;
 }

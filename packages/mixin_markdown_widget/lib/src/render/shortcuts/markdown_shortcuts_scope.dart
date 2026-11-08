@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 
 import '../../core/document.dart';
 import '../../selection/selection_controller.dart';
-import '../../widgets/markdown_types.dart';
 
 class CopyFullDocumentPlainTextIntent extends Intent {
   const CopyFullDocumentPlainTextIntent();
@@ -106,74 +105,6 @@ class MarkdownShortcutsScope extends StatelessWidget {
         shortcuts: shortcuts,
         child: child,
       ),
-    );
-  }
-}
-
-class MarkdownContextMenu {
-  static void show(
-    BuildContext context, {
-    required ContextMenuController contextMenuController,
-    required MarkdownSelectionController selectionController,
-    required MarkdownDocument document,
-    required Offset globalPosition,
-    VoidCallback? onCopyPlainText,
-    bool showCopyAllInContextMenu = true,
-    MarkdownContextMenuBuilder? contextMenuBuilder,
-  }) {
-    final buttonItems = <ContextMenuButtonItem>[
-      ContextMenuButtonItem(
-        onPressed: () {
-          contextMenuController.remove();
-          selectionController.copySelectionToClipboard();
-        },
-        type: ContextMenuButtonType.copy,
-      ),
-      ContextMenuButtonItem(
-        onPressed: () {
-          contextMenuController.remove();
-          selectionController.selectAll(document);
-        },
-        type: ContextMenuButtonType.selectAll,
-      ),
-      if (onCopyPlainText != null && showCopyAllInContextMenu)
-        ContextMenuButtonItem(
-          onPressed: () {
-            contextMenuController.remove();
-            onCopyPlainText.call();
-          },
-          label: 'Copy all',
-        ),
-      if (selectionController.hasSelection)
-        ContextMenuButtonItem(
-          onPressed: () {
-            contextMenuController.remove();
-            selectionController.clear();
-          },
-          label: 'Clear selection',
-        ),
-    ];
-
-    final anchors = TextSelectionToolbarAnchors(
-      primaryAnchor: globalPosition,
-    );
-
-    contextMenuController.show(
-      context: context,
-      contextMenuBuilder: (context) {
-        if (contextMenuBuilder != null) {
-          return contextMenuBuilder(
-            context,
-            selectionController,
-            buttonItems,
-            anchors,
-          );
-        }
-        return AdaptiveTextSelectionToolbar.buttonItems(
-          anchors: anchors,
-          buttonItems: buttonItems,
-        );
-      },
     );
   }
 }

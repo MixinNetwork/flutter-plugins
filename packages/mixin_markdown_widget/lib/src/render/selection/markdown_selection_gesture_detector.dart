@@ -13,7 +13,10 @@ typedef MarkdownHitTestPositionCallback = DocumentPosition? Function(
 typedef MarkdownHitTestExactTextPositionCallback = DocumentPosition? Function(
   Offset globalPosition,
 );
-typedef MarkdownSelectWordCallback = void Function(DocumentPosition position);
+typedef MarkdownSelectWordCallback = void Function(
+  DocumentPosition position, {
+  Offset? globalPosition,
+});
 typedef MarkdownSelectBlockCallback = void Function(int blockIndex);
 typedef MarkdownSelectSelectionUnitCallback = void Function(
   Offset globalPosition,
@@ -42,7 +45,7 @@ class MarkdownSelectionGestureDetector extends StatefulWidget {
     required this.isSelectable,
     required this.scrollableKey,
     required this.scrollController,
-    required this.onRequestToolbar,
+    required this.onSecondaryPointerDown,
     required this.hitTestPosition,
     required this.hitTestExactTextPosition,
     required this.selectWordAt,
@@ -57,7 +60,7 @@ class MarkdownSelectionGestureDetector extends StatefulWidget {
   final bool isSelectable;
   final GlobalKey scrollableKey;
   final ScrollController scrollController;
-  final void Function(Offset) onRequestToolbar;
+  final void Function(Offset globalPosition) onSecondaryPointerDown;
   final MarkdownHitTestPositionCallback hitTestPosition;
   final MarkdownHitTestExactTextPositionCallback hitTestExactTextPosition;
   final MarkdownSelectWordCallback selectWordAt;
@@ -160,7 +163,7 @@ class _MarkdownSelectionGestureDetectorState
     }
 
     if ((event.buttons & kSecondaryMouseButton) != 0) {
-      widget.onRequestToolbar(event.position);
+      widget.onSecondaryPointerDown(event.position);
       return;
     }
 
@@ -188,7 +191,7 @@ class _MarkdownSelectionGestureDetectorState
     }
     if (_consecutiveTapCount == 2) {
       if (exactPosition != null) {
-        widget.selectWordAt(position);
+        widget.selectWordAt(position, globalPosition: event.position);
       } else {
         widget.selectSelectionUnitAt(event.position, position);
       }

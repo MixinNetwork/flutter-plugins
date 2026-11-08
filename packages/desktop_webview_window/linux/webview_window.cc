@@ -609,11 +609,18 @@ void WebviewWindow::GetAllCookies(FlMethodCall *call) {
     RespondError(call, "browser_closed", "The browser has closed");
     return;
   }
+  // WebKit never calls back for a null URI, which is what a view reports until
+  // its first load, so the Dart future would never complete.
+  const gchar *uri = webkit_web_view_get_uri(WEBKIT_WEB_VIEW(webview_));
+  if (uri == nullptr) {
+    g_autoptr(FlValue) list = fl_value_new_list();
+    fl_method_call_respond_success(call, list, nullptr);
+    return;
+  }
   auto *manager = webkit_web_context_get_cookie_manager(
       webkit_web_view_get_context(WEBKIT_WEB_VIEW(webview_)));
   webkit_cookie_manager_get_cookies(
-      manager, webkit_web_view_get_uri(WEBKIT_WEB_VIEW(webview_)),
-      javascript_cancellable_,
+      manager, uri, javascript_cancellable_,
       [](GObject *object, GAsyncResult *res, gpointer user_data) {
         g_autoptr(FlMethodCall) call = FL_METHOD_CALL(user_data);
         g_autoptr(GError) error = nullptr;

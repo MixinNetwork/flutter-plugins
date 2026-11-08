@@ -49,6 +49,10 @@ class MarkdownDocumentParser {
     );
   }
 
+  @Deprecated(
+    'This ignores previousDocument and parses the whole source. Use parse, '
+    'or MarkdownController.appendChunk / updateData for incremental parsing.',
+  )
   MarkdownDocument parseAppending(
     String source, {
     required MarkdownDocument previousDocument,
@@ -167,6 +171,9 @@ class MarkdownDocumentParser {
       version: version,
       sourceOffset: sourceOffset,
       initialKindCounts: initialKindCounts,
+      reusableIds: parseAppendedChunkAsNewBlocks
+          ? null
+          : _reusableIdsOf(previousDocument.blocks.last),
     );
 
     final document = MarkdownDocument(
@@ -237,6 +244,7 @@ class MarkdownDocumentParser {
     required int version,
     required int sourceOffset,
     required Map<MarkdownBlockKind, int> initialKindCounts,
+    Map<String, String>? reusableIds,
   }) {
     final timing = onTiming == null ? null : _MarkdownParserTimingBuilder();
     final totalStopwatch = timing == null ? null : (Stopwatch()..start());
@@ -254,6 +262,7 @@ class MarkdownDocumentParser {
     );
     final builder = _MarkdownAstBuilder(
       initialKindCounts: initialKindCounts,
+      reusableIds: reusableIds,
       timing: timing,
     );
     var blocks = _measure(
@@ -389,11 +398,35 @@ class MarkdownDocumentParser {
     BlockNode block,
     Map<MarkdownBlockKind, int> counts,
   ) {
-    counts[block.kind] = (counts[block.kind] ?? 0) + 1;
+    _visitBlockTree(block, (node) {
+      counts[node.kind] = (counts[node.kind] ?? 0) + 1;
+    });
+  }
+
+  /// The ids of [block] and its nested blocks by their `kind-count` part, so a
+  /// reparse of the same growing tail keeps its ids instead of churning the
+  /// content hash on every appended chunk. Images are left out: their error
+  /// state is keyed by id and must not follow a changed url.
+  Map<String, String> _reusableIdsOf(BlockNode block) {
+    final ids = <String, String>{};
+    _visitBlockTree(block, (node) {
+      if (node.kind == MarkdownBlockKind.image) {
+        return;
+      }
+      final hashStart = node.id.lastIndexOf('-');
+      if (hashStart > 0) {
+        ids[node.id.substring(0, hashStart)] = node.id;
+      }
+    });
+    return ids;
+  }
+
+  void _visitBlockTree(BlockNode block, void Function(BlockNode block) visit) {
+    visit(block);
 
     if (block is QuoteBlock) {
       for (final child in block.children) {
-        _countBlockKindsInBlock(child, counts);
+        _visitBlockTree(child, visit);
       }
       return;
     }
@@ -401,7 +434,7 @@ class MarkdownDocumentParser {
     if (block is ListBlock) {
       for (final item in block.items) {
         for (final child in item.children) {
-          _countBlockKindsInBlock(child, counts);
+          _visitBlockTree(child, visit);
         }
       }
       return;
@@ -410,7 +443,7 @@ class MarkdownDocumentParser {
     if (block is FootnoteListBlock) {
       for (final item in block.items) {
         for (final child in item.children) {
-          _countBlockKindsInBlock(child, counts);
+          _visitBlockTree(child, visit);
         }
       }
       return;
@@ -418,7 +451,7 @@ class MarkdownDocumentParser {
 
     if (block is DetailsBlock) {
       for (final child in block.children) {
-        _countBlockKindsInBlock(child, counts);
+        _visitBlockTree(child, visit);
       }
       return;
     }
@@ -427,7 +460,7 @@ class MarkdownDocumentParser {
       for (final item in block.items) {
         for (final definition in item.definitions) {
           for (final child in definition) {
-            _countBlockKindsInBlock(child, counts);
+            _visitBlockTree(child, visit);
           }
         }
       }
@@ -1135,14 +1168,21 @@ class _MarkdownParserTimingBuilder {
 class _MarkdownAstBuilder {
   _MarkdownAstBuilder({
     Map<MarkdownBlockKind, int>? initialKindCounts,
+    Map<String, String>? reusableIds,
     _MarkdownParserTimingBuilder? timing,
   })  : _timing = timing,
+        _reusableIds = reusableIds,
         _kindCounters = <MarkdownBlockKind, int>{
           ...?initialKindCounts,
         };
 
   final Map<MarkdownBlockKind, int> _kindCounters;
   final _MarkdownParserTimingBuilder? _timing;
+
+  /// Ids of the previous tail block, which the first top-level block of an
+  /// append reparse takes over. See [MarkdownDocumentParser._reusableIdsOf].
+  Map<String, String>? _reusableIds;
+  int _blockDepth = 0;
 
   Map<MarkdownBlockKind, int> get kindCounts =>
       Map<MarkdownBlockKind, int>.unmodifiable(_kindCounters);
@@ -1154,9 +1194,14 @@ class _MarkdownAstBuilder {
         blocks.addAll(buildBlocks(node.children ?? const <md.Node>[]));
         continue;
       }
+      _blockDepth += 1;
       final block = _buildBlock(node);
+      _blockDepth -= 1;
       if (block != null) {
         blocks.add(block);
+        if (_blockDepth == 0) {
+          _reusableIds = null;
+        }
       }
     }
     return blocks;
@@ -1973,7 +2018,8 @@ class _MarkdownAstBuilder {
       () {
         final nextCount = (_kindCounters[kind] ?? 0) + 1;
         _kindCounters[kind] = nextCount;
-        return '${kind.name}-$nextCount-${_stableHash(signature)}';
+        final prefix = '${kind.name}-$nextCount';
+        return _reusableIds?[prefix] ?? '$prefix-${_stableHash(signature)}';
       },
     );
   }
