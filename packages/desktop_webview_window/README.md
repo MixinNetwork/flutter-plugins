@@ -160,6 +160,34 @@ as `scheme://host[:port]`, `file://` for local files or `null` for opaque
 origins; check it before a handler acts on behalf of a trusted page. Messages
 from iframes never reach handlers.
 
+When a handler also needs the sending page's path, use
+`addJavaScriptMessageHandler`. Its `JavaScriptMessage` carries `data`, `origin`
+and `url`, the sending document's `location.href` at the time it sent the
+message, including `history.pushState` changes. Unlike `navigationState.url`, it
+cannot lag behind the page. The page reports `url`, so it is kept only within
+`origin`, which the WebView reports; it is null unless the page is an HTTP(S)
+or file page of `origin`. Handlers added with either method share names, and
+`removeJavaScriptHandler` removes both kinds.
+
+Pass `targetOrigin` to `postMessage` to answer only the page that asked, as with
+`window.postMessage`. The receiving document compares its own origin with the
+target before any listener runs, so a reply is dropped if the window has
+navigated to another origin in the meantime:
+
+```dart
+webview.addJavaScriptMessageHandler('sign', (message) async {
+  if (message.origin != 'https://app.example.com') return;
+  if (message.url?.path.startsWith('/pay/') != true) return;
+  final signature = await sign(message.data);
+  await webview.postMessage('signed', signature, targetOrigin: message.origin);
+});
+```
+
+A URL target stands for its origin; `*` or no target delivers to any document.
+Targets no document can match, such as `null`, throw an `ArgumentError`. The
+check compares origins only: another page of the same origin can still receive
+the reply.
+
 `evaluateJavaScript` returns the decoded result (`Map`, `List`, `String`, `num`,
 `bool` or `null`). `addScriptToExecuteOnDocumentCreated` runs a script in every
 new document before the page's own scripts.

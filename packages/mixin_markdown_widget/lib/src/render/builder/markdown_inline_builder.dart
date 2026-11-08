@@ -7,6 +7,115 @@ import '../../widgets/markdown_theme.dart';
 import '../../widgets/markdown_types.dart';
 import '../pretext_text_block.dart';
 
+/// The tap recognizers of the links of a document.
+///
+/// A link keeps one recognizer while its [LinkInline] stays in the document,
+/// so block rows and descriptors cached across builds never hold a disposed
+/// recognizer.
+class MarkdownLinkRecognizers {
+  final Map<LinkInline, TapGestureRecognizer> _recognizers =
+      Map<LinkInline, TapGestureRecognizer>.identity();
+
+  int get length => _recognizers.length;
+
+  TapGestureRecognizer recognizerFor(LinkInline link, VoidCallback onTap) {
+    return _recognizers.putIfAbsent(
+      link,
+      () => TapGestureRecognizer()..onTap = onTap,
+    );
+  }
+
+  /// Disposes the recognizers of the links that the blocks of [previous] had
+  /// and the blocks of [current] no longer have.
+  void disposeRemovedLinks(List<BlockNode> previous, List<BlockNode> current) {
+    if (_recognizers.isEmpty || identical(previous, current)) {
+      return;
+    }
+    final currentBlocks = Set<BlockNode>.identity()..addAll(current);
+    final removed = Set<LinkInline>.identity();
+    for (final block in previous) {
+      if (!currentBlocks.contains(block)) {
+        _collectLinks(block, removed);
+      }
+    }
+    if (removed.isEmpty) {
+      return;
+    }
+    // A reparsed block can share link nodes with the block it replaces.
+    final previousBlocks = Set<BlockNode>.identity()..addAll(previous);
+    final kept = Set<LinkInline>.identity();
+    for (final block in current) {
+      if (!previousBlocks.contains(block)) {
+        _collectLinks(block, kept);
+      }
+    }
+    for (final link in removed) {
+      if (!kept.contains(link)) {
+        _recognizers.remove(link)?.dispose();
+      }
+    }
+  }
+
+  void dispose() {
+    for (final recognizer in _recognizers.values) {
+      recognizer.dispose();
+    }
+    _recognizers.clear();
+  }
+
+  static void _collectLinks(BlockNode block, Set<LinkInline> links) {
+    void visitInlines(List<InlineNode> inlines) {
+      for (final inline in inlines) {
+        switch (inline) {
+          case LinkInline(:final children):
+            links.add(inline);
+            visitInlines(children);
+          case EmphasisInline(:final children) ||
+                StrongInline(:final children) ||
+                StrikethroughInline(:final children) ||
+                HighlightInline(:final children) ||
+                SubscriptInline(:final children) ||
+                SuperscriptInline(:final children):
+            visitInlines(children);
+          default:
+        }
+      }
+    }
+
+    void visitBlock(BlockNode block) {
+      switch (block) {
+        case HeadingBlock(:final inlines) || ParagraphBlock(:final inlines):
+          visitInlines(inlines);
+        case QuoteBlock(:final children):
+          children.forEach(visitBlock);
+        case DetailsBlock(:final summary, :final children):
+          visitInlines(summary);
+          children.forEach(visitBlock);
+        case ListBlock(:final items) || FootnoteListBlock(:final items):
+          for (final item in items) {
+            item.children.forEach(visitBlock);
+          }
+        case DefinitionListBlock(:final items):
+          for (final item in items) {
+            visitInlines(item.term);
+            for (final definition in item.definitions) {
+              definition.forEach(visitBlock);
+            }
+          }
+        case TableBlock(:final rows):
+          for (final row in rows) {
+            for (final cell in row.cells) {
+              visitInlines(cell.inlines);
+            }
+          }
+        default:
+      }
+    }
+
+    visitBlock(block);
+  }
+}
+
 class MarkdownInlineBuilder {
   MarkdownInlineBuilder({
     required this.theme,
@@ -15,7 +124,7 @@ class MarkdownInlineBuilder {
   });
 
   final MarkdownThemeData theme;
-  final List<TapGestureRecognizer> recognizers;
+  final MarkdownLinkRecognizers recognizers;
   final MarkdownTapLinkCallback? onTapLink;
 
   List<MarkdownPretextInlineRun> buildPretextRuns(
@@ -110,7 +219,7 @@ class MarkdownInlineBuilder {
         final label = flattenInlineText(link.children);
         final recognizer = onTapLink == null
             ? null
-            : _registerLink(() {
+            : recognizers.recognizerFor(link, () {
                 onTapLink!(link.destination, link.title, label);
               });
         final style = _linkTextStyle(baseStyle, linkStyle);
@@ -298,7 +407,7 @@ class MarkdownInlineBuilder {
         final label = flattenInlineText(link.children);
         final recognizer = onTapLink == null
             ? null
-            : _registerLink(() {
+            : recognizers.recognizerFor(link, () {
                 onTapLink!(link.destination, link.title, label);
               });
         final style = _linkTextStyle(baseStyle, linkStyle);
@@ -398,12 +507,6 @@ class MarkdownInlineBuilder {
       return baseFontSize ?? inlineFontSize;
     }
     return inlineFontSize * baseFontSize / bodyFontSize;
-  }
-
-  TapGestureRecognizer _registerLink(VoidCallback onTap) {
-    final recognizer = TapGestureRecognizer()..onTap = onTap;
-    recognizers.add(recognizer);
-    return recognizer;
   }
 
   TextStyle highlightStyle(TextStyle baseStyle) {

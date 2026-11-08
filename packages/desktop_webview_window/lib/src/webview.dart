@@ -13,6 +13,29 @@ import 'package:flutter/foundation.dart';
 /// message that needs a trusted page. Messages from iframes are dropped.
 typedef JavaScriptMessageHandler = void Function(Object? data, String origin);
 
+/// A message from `window.desktopWebview.postMessage(name, data)` in the
+/// top-level document.
+@immutable
+class JavaScriptMessage {
+  const JavaScriptMessage({required this.data, required this.origin, this.url});
+
+  /// The JSON-decoded value.
+  final Object? data;
+
+  /// The origin of the sending document, as passed to
+  /// [JavaScriptMessageHandler].
+  final String origin;
+
+  /// The sending document's `location.href` when it sent the message,
+  /// including changes made with `history.pushState`. The page reports it, so
+  /// it is only kept when it belongs to [origin], which native code reports.
+  /// Null unless the document is an HTTP(S) or file page of [origin].
+  final Uri? url;
+}
+
+/// Receives a [JavaScriptMessage]. See [Webview.addJavaScriptMessageHandler].
+typedef JavaScriptMessageListener = void Function(JavaScriptMessage message);
+
 typedef PromptHandler = String Function(String prompt, String defaultText);
 
 /// Decides whether the browser may navigate to [url]. Return false to cancel.
@@ -140,12 +163,28 @@ abstract class Webview {
   /// Replaces an existing handler with the same [name].
   void addJavaScriptHandler(String name, JavaScriptMessageHandler handler);
 
+  /// Like [addJavaScriptHandler], and also reports the sending document's
+  /// URL in [JavaScriptMessage.url]. Handlers added with either method share
+  /// one set of names: adding one replaces the other.
+  void addJavaScriptMessageHandler(
+      String name, JavaScriptMessageListener handler);
+
+  /// Removes the handler added for [name] by [addJavaScriptHandler] or
+  /// [addJavaScriptMessageHandler].
   void removeJavaScriptHandler(String name);
 
   /// Delivers [data] to listeners added with
   /// `window.desktopWebview.addEventListener(name, listener)`.
   /// [data] must be JSON-encodable.
-  Future<void> postMessage(String name, Object? data);
+  ///
+  /// Like `window.postMessage`, [targetOrigin] limits delivery to a document
+  /// of that origin, checked by the receiving document itself. Pass the
+  /// [JavaScriptMessage.origin] of a request to answer only the page that
+  /// sent it: if the window has navigated to another origin in the meantime,
+  /// the reply is dropped. A URL stands for its origin and `*` or null
+  /// delivers to any document. Throws [ArgumentError] for a target no
+  /// document can match, such as `null` or `about:blank`.
+  Future<void> postMessage(String name, Object? data, {String? targetOrigin});
 
   /// Answers JavaScript `prompt()`. macOS only.
   void setPromptHandler(PromptHandler? handler);

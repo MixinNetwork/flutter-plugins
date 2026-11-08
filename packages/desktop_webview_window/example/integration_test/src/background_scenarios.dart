@@ -278,22 +278,17 @@ void _registerLinuxBackgroundTests() {
         expect((await visiblePixel()).first, lessThan(0.3));
         releaseCss.complete();
         await imageRequested.future.timeout(const Duration(seconds: 20));
-        // WebKit has painted content while HTML parsing and window.load are
-        // both pending. The GTK container must show that content too.
-        await _until(() async {
-          final pixel = (await _native.invokeListMethod<double>(
-              'webviewPixel', {'handle': browser.nativeWindowHandle}))!;
-          return pixel[0] > 0.9 && pixel[1] < 0.1;
-        });
-        await _until(() async =>
-            await browser.evaluateJavaScript(
-                'performance.getEntriesByType("paint").some('
-                'entry => entry.name === "first-contentful-paint")') ==
-            true);
+        // Check the GTK container before requesting any offscreen WebKit
+        // snapshot: page pixels alone do not prove that the window shows them.
         await _until(() async {
           final pixel = await visiblePixel();
           return pixel[0] > 0.9 && pixel[1] < 0.1;
         });
+        expect(
+            await browser.evaluateJavaScript(
+                'performance.getEntriesByType("paint").some('
+                'entry => entry.name === "first-contentful-paint")'),
+            true);
         expect(
             await browser.evaluateJavaScript('document.readyState'), 'loading');
         expect(browser.navigationState.value.isLoading, isTrue);

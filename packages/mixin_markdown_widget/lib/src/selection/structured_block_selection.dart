@@ -17,6 +17,7 @@ class StructuredBlockSelectionLeaf {
     required this.visibleText,
     required this.exportText,
     required this.segmentStart,
+    required this.inlines,
   });
 
   final PathInBlock path;
@@ -26,6 +27,9 @@ class StructuredBlockSelectionLeaf {
   final String visibleText;
   final String exportText;
   final int segmentStart;
+
+  /// The inlines [visibleText] was flattened from, for text leaves.
+  final List<InlineNode> inlines;
 
   String get renderedText =>
       '$leadingText${_renderPrefixedText(visibleText, firstLinePrefix, continuationPrefix)}';
@@ -73,23 +77,65 @@ class StructuredBlockSelectionLeaf {
     }
     return localOffset.clamp(0, visibleText.length).toInt();
   }
+
+  /// The link containing the character at [localOffset] of [visibleText].
+  LinkInline? linkAt(int localOffset) {
+    if (localOffset < 0 || localOffset >= visibleText.length) {
+      return null;
+    }
+    return _linkContaining(inlines, localOffset);
+  }
+}
+
+LinkInline? _linkContaining(List<InlineNode> inlines, int offset) {
+  final builder = _StructuredBlockSelectionBuilder();
+  var start = 0;
+  for (final inline in inlines) {
+    final end = start + builder._flattenVisibleInlines([inline]).length;
+    if (offset < end) {
+      return switch (inline) {
+        LinkInline() => inline,
+        EmphasisInline(:final children) ||
+        StrongInline(:final children) ||
+        StrikethroughInline(:final children) ||
+        HighlightInline(:final children) ||
+        SubscriptInline(:final children) ||
+        SuperscriptInline(:final children) =>
+          _linkContaining(children, offset - start),
+        _ => null,
+      };
+    }
+    start = end;
+  }
+  return null;
 }
 
 @immutable
 class StructuredBlockSelection {
-  const StructuredBlockSelection._({
+  StructuredBlockSelection._({
     required this.plainText,
     required this.serializedText,
     required this.leaves,
   });
 
+  // Blocks are immutable, so the selection index of a block is computed once
+  // and shared by the renderer, the controller, and the serializer.
+  static final Expando<StructuredBlockSelection> _cache =
+      Expando<StructuredBlockSelection>('StructuredBlockSelection');
+  static final Expando<String> _serializedBlockTextCache =
+      Expando<String>('serializedBlockText');
+
   factory StructuredBlockSelection.forBlock(BlockNode block) {
-    return StructuredBlockSelection._fromBlueprints(
+    return _cache[block] ??= StructuredBlockSelection._fromBlueprints(
       _StructuredBlockSelectionBuilder().build(block),
     );
   }
 
   static String serializeBlockText(BlockNode block) {
+    return _serializedBlockTextCache[block] ??= _serializeBlockText(block);
+  }
+
+  static String _serializeBlockText(BlockNode block) {
     final structure = StructuredBlockSelection.forBlock(block);
     if (!structure.isEmpty) {
       return structure.serializedText;
@@ -97,7 +143,7 @@ class StructuredBlockSelection {
     return _StructuredBlockSelectionBuilder().exportBlockText(block);
   }
 
-  factory StructuredBlockSelection._fromBlueprints(
+  static StructuredBlockSelection _fromBlueprints(
     List<_LeafBlueprint> blueprints,
   ) {
     final leaves = <StructuredBlockSelectionLeaf>[];
@@ -113,6 +159,7 @@ class StructuredBlockSelection {
         visibleText: blueprint.visibleText,
         exportText: blueprint.exportText,
         segmentStart: segmentStart,
+        inlines: blueprint.inlines,
       );
       leaves.add(leaf);
       visibleBuffer.write(leaf.renderedText);
@@ -130,15 +177,15 @@ class StructuredBlockSelection {
   final String serializedText;
   final List<StructuredBlockSelectionLeaf> leaves;
 
+  late final Map<PathInBlock, StructuredBlockSelectionLeaf> _leavesByPath =
+      <PathInBlock, StructuredBlockSelectionLeaf>{
+    for (final leaf in leaves) leaf.path: leaf,
+  };
+
   bool get isEmpty => leaves.isEmpty;
 
   StructuredBlockSelectionLeaf? leafForPath(PathInBlock path) {
-    for (final leaf in leaves) {
-      if (leaf.path == path) {
-        return leaf;
-      }
-    }
-    return null;
+    return _leavesByPath[path];
   }
 
   DocumentPosition startPosition({required int blockIndex}) {
@@ -194,6 +241,24 @@ class StructuredBlockSelection {
       displayedOffset: clampedOffset,
       affinity: affinity,
     );
+  }
+
+  /// The link containing the character after [position], or before it when
+  /// [upstream] (the pointer is over the character before the caret).
+  LinkInline? linkAt(DocumentPosition position, {bool upstream = false}) {
+    final resolved = positionForDisplayedOffset(
+      blockIndex: position.blockIndex,
+      displayedOffset: position.textOffset,
+      affinity: upstream
+          ? StructuredSelectionAffinity.upstream
+          : StructuredSelectionAffinity.downstream,
+    );
+    final leaf = leafForPath(resolved.path);
+    if (leaf == null) {
+      return null;
+    }
+    final localOffset = leaf.localOffsetForDisplayedOffset(resolved.textOffset);
+    return leaf.linkAt(upstream ? localOffset - 1 : localOffset);
   }
 
   DocumentPosition positionForDisplayedOffset({
@@ -262,7 +327,8 @@ class StructuredBlockSelection {
   DocumentRange? wordRangeForPosition({
     required int blockIndex,
     required DocumentPosition position,
-    required bool Function(String character) isWordCharacter,
+    required ({int start, int end}) Function(String text, int offset)
+        wordRangeAt,
   }) {
     final leaf = leafForPath(position.path) ??
         _leafContainingOffset(position.textOffset);
@@ -270,23 +336,18 @@ class StructuredBlockSelection {
       return null;
     }
 
+    final text = leaf.visibleText;
     var localOffset = leaf.localOffsetForDisplayedOffset(position.textOffset);
-    if (localOffset > 0 &&
-        localOffset == leaf.visibleText.length &&
-        !isWordCharacter(leaf.visibleText[localOffset - 1])) {
-      localOffset -= 1;
+    if (localOffset > 0 && localOffset == text.length) {
+      final trailing = wordRangeAt(text, localOffset);
+      if (trailing.start == trailing.end) {
+        localOffset -= 1;
+      }
     }
 
-    var start = localOffset.clamp(0, leaf.visibleText.length).toInt();
-    var end = start;
-
-    while (start > 0 && isWordCharacter(leaf.visibleText[start - 1])) {
-      start -= 1;
-    }
-    while (end < leaf.visibleText.length &&
-        isWordCharacter(leaf.visibleText[end])) {
-      end += 1;
-    }
+    final word = wordRangeAt(text, localOffset.clamp(0, text.length).toInt());
+    var start = word.start;
+    var end = word.end;
 
     if (start == end && leaf.visibleText.isNotEmpty) {
       if (end < leaf.visibleText.length) {
@@ -372,6 +433,7 @@ class _LeafBlueprint {
     required this.continuationPrefix,
     required this.visibleText,
     required this.exportText,
+    this.inlines = const <InlineNode>[],
   });
 
   final PathInBlock path;
@@ -380,6 +442,7 @@ class _LeafBlueprint {
   final String continuationPrefix;
   final String visibleText;
   final String exportText;
+  final List<InlineNode> inlines;
 
   _LeafBlueprint copyWith({
     String? leadingText,
@@ -391,6 +454,7 @@ class _LeafBlueprint {
       continuationPrefix: continuationPrefix,
       visibleText: visibleText,
       exportText: exportText,
+      inlines: inlines,
     );
   }
 }
@@ -437,6 +501,12 @@ class _StructuredBlockSelectionBuilder {
             continuationPrefix: continuationPrefix,
             visibleText: visibleText,
             exportText: exportText,
+            inlines: switch (block) {
+              HeadingBlock(:final inlines) ||
+              ParagraphBlock(:final inlines) =>
+                inlines,
+              _ => const <InlineNode>[],
+            },
           ),
         ];
       case MarkdownBlockKind.details:
@@ -619,6 +689,7 @@ class _StructuredBlockSelectionBuilder {
             continuationPrefix: continuationPrefix,
             visibleText: visibleText,
             exportText: _flattenExportInlines(row.cells[columnIndex].inlines),
+            inlines: row.cells[columnIndex].inlines,
           ),
         );
       }
