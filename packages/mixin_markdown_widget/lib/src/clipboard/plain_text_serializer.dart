@@ -2,6 +2,13 @@ import 'copy_serializer.dart';
 import '../core/document.dart';
 import '../selection/structured_block_selection.dart';
 
+/// Serializes markdown documents and selections as plain text.
+///
+/// This is also the single source for selection bounds: the selection
+/// controller clamps and selects all through [clampSelection] and
+/// [createFullDocumentSelection], so a subclass changes both copy output and
+/// selection bounds consistently. Block text comes from the cached
+/// [StructuredBlockSelection] of each block.
 class MarkdownPlainTextSerializer extends MarkdownCopySerializer {
   const MarkdownPlainTextSerializer();
 
@@ -12,8 +19,8 @@ class MarkdownPlainTextSerializer extends MarkdownCopySerializer {
   @override
   String serialize(MarkdownDocument document) {
     final sections = <String>[];
-    for (final indexedBlock in _indexBlocks(document)) {
-      final section = indexedBlock.text.trimRight();
+    for (var index = 0; index < document.blocks.length; index++) {
+      final section = _indexedBlockAt(document, index).text.trimRight();
       if (section.isNotEmpty) {
         sections.add(section);
       }
@@ -22,12 +29,11 @@ class MarkdownPlainTextSerializer extends MarkdownCopySerializer {
   }
 
   DocumentSelection? createFullDocumentSelection(MarkdownDocument document) {
-    final indexedBlocks = _indexBlocks(document);
-    if (indexedBlocks.isEmpty) {
+    final bounds = _boundsOf(document);
+    if (bounds == null) {
       return null;
     }
-    final first = indexedBlocks.first;
-    final last = indexedBlocks.last;
+    final (first, last) = bounds;
     return DocumentSelection(
       base: DocumentPosition(
         blockIndex: first.blockIndex,
@@ -41,7 +47,7 @@ class MarkdownPlainTextSerializer extends MarkdownCopySerializer {
         path: last.structure == null
             ? const PathInBlock(<int>[0])
             : last.structure!.endPosition(blockIndex: last.blockIndex).path,
-        textOffset: last.structure?.plainText.length ?? last.text.length,
+        textOffset: last.visibleTextLength,
       ),
     );
   }
@@ -50,13 +56,13 @@ class MarkdownPlainTextSerializer extends MarkdownCopySerializer {
     MarkdownDocument document,
     DocumentSelection selection,
   ) {
-    final indexedBlocks = _indexBlocks(document);
-    if (indexedBlocks.isEmpty) {
+    final bounds = _boundsOf(document);
+    if (bounds == null) {
       return null;
     }
     return DocumentSelection(
-      base: _clampPosition(indexedBlocks, selection.base),
-      extent: _clampPosition(indexedBlocks, selection.extent),
+      base: _clampPosition(document, bounds, selection.base),
+      extent: _clampPosition(document, bounds, selection.extent),
     );
   }
 
@@ -68,40 +74,34 @@ class MarkdownPlainTextSerializer extends MarkdownCopySerializer {
   }
 
   String serializeRange(MarkdownDocument document, DocumentRange range) {
-    final indexedBlocks = _indexBlocks(document);
-    if (indexedBlocks.isEmpty) {
+    final bounds = _boundsOf(document);
+    if (bounds == null) {
       return '';
     }
-    final start = _clampPosition(indexedBlocks, range.start);
-    final end = _clampPosition(indexedBlocks, range.end);
+    final start = _clampPosition(document, bounds, range.start);
+    final end = _clampPosition(document, bounds, range.end);
     final normalizedRange = start.compareTo(end) <= 0
         ? DocumentRange(start: start, end: end)
         : DocumentRange(start: end, end: start);
 
     final sections = <String>[];
-    for (final indexedBlock in indexedBlocks) {
-      if (indexedBlock.blockIndex < normalizedRange.start.blockIndex ||
-          indexedBlock.blockIndex > normalizedRange.end.blockIndex) {
+    for (var blockIndex = normalizedRange.start.blockIndex;
+        blockIndex <= normalizedRange.end.blockIndex;
+        blockIndex++) {
+      final indexedBlock = _indexedBlockAt(document, blockIndex);
+      if (indexedBlock.text.isEmpty) {
         continue;
       }
-      final blockStart =
-          indexedBlock.blockIndex == normalizedRange.start.blockIndex
-              ? normalizedRange.start.textOffset
-              : 0;
-      final structure = indexedBlock.structure;
-      final blockEnd = indexedBlock.blockIndex == normalizedRange.end.blockIndex
+      final blockStart = blockIndex == normalizedRange.start.blockIndex
+          ? normalizedRange.start.textOffset
+          : 0;
+      final blockEnd = blockIndex == normalizedRange.end.blockIndex
           ? normalizedRange.end.textOffset
           : indexedBlock.visibleTextLength;
+      final structure = indexedBlock.structure;
       final section = structure != null
-          ? structure.serializeDisplayedRange(
-              start: blockStart,
-              end: blockEnd,
-            )
-          : _sliceBlock(
-              indexedBlock,
-              start: blockStart,
-              end: blockEnd,
-            );
+          ? structure.serializeDisplayedRange(start: blockStart, end: blockEnd)
+          : _sliceBlock(indexedBlock, start: blockStart, end: blockEnd);
       if (section.isNotEmpty) {
         sections.add(section);
       }
@@ -109,44 +109,58 @@ class MarkdownPlainTextSerializer extends MarkdownCopySerializer {
     return sections.join('\n\n');
   }
 
-  List<_IndexedPlainTextBlock> _indexBlocks(MarkdownDocument document) {
-    return <_IndexedPlainTextBlock>[
-      for (var index = 0; index < document.blocks.length; index++)
-        _indexedBlockFor(document.blocks[index], index),
-    ].where((block) => block.text.isNotEmpty).toList(growable: false);
-  }
-
-  _IndexedPlainTextBlock _indexedBlockFor(BlockNode block, int blockIndex) {
+  _IndexedPlainTextBlock _indexedBlockAt(
+    MarkdownDocument document,
+    int blockIndex,
+  ) {
+    final block = document.blocks[blockIndex];
     final structure = StructuredBlockSelection.forBlock(block);
-    if (!structure.isEmpty) {
-      return _IndexedPlainTextBlock(
-        blockIndex: blockIndex,
-        text: structure.serializedText,
-        structure: structure,
-      );
-    }
     return _IndexedPlainTextBlock(
       blockIndex: blockIndex,
       text: StructuredBlockSelection.serializeBlockText(block),
-      structure: null,
+      structure: structure.isEmpty ? null : structure,
     );
   }
 
+  /// The first and last blocks that have text, or null when none has.
+  (_IndexedPlainTextBlock, _IndexedPlainTextBlock)? _boundsOf(
+    MarkdownDocument document,
+  ) {
+    _IndexedPlainTextBlock? first;
+    for (var index = 0; index < document.blocks.length; index++) {
+      final block = _indexedBlockAt(document, index);
+      if (block.text.isNotEmpty) {
+        first = block;
+        break;
+      }
+    }
+    if (first == null) {
+      return null;
+    }
+    for (var index = document.blocks.length - 1;
+        index > first.blockIndex;
+        index--) {
+      final block = _indexedBlockAt(document, index);
+      if (block.text.isNotEmpty) {
+        return (first, block);
+      }
+    }
+    return (first, first);
+  }
+
   DocumentPosition _clampPosition(
-    List<_IndexedPlainTextBlock> indexedBlocks,
+    MarkdownDocument document,
+    (_IndexedPlainTextBlock, _IndexedPlainTextBlock) bounds,
     DocumentPosition position,
   ) {
-    final minBlockIndex = indexedBlocks.first.blockIndex;
-    final maxBlockIndex = indexedBlocks.last.blockIndex;
-    final targetBlockIndex = position.blockIndex < minBlockIndex
-        ? minBlockIndex
-        : position.blockIndex > maxBlockIndex
-            ? maxBlockIndex
+    final (first, last) = bounds;
+    final targetBlockIndex = position.blockIndex < first.blockIndex
+        ? first.blockIndex
+        : position.blockIndex > last.blockIndex
+            ? last.blockIndex
             : position.blockIndex;
-    final block = indexedBlocks.firstWhere(
-      (item) => item.blockIndex == targetBlockIndex,
-      orElse: () => indexedBlocks.last,
-    );
+    final candidate = _indexedBlockAt(document, targetBlockIndex);
+    final block = candidate.text.isEmpty ? last : candidate;
     final targetOffset = position.textOffset < 0
         ? 0
         : position.textOffset > block.visibleTextLength

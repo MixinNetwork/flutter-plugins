@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import '../core/document.dart';
 import '../widgets/markdown_theme.dart';
 import '../widgets/markdown_types.dart';
+import 'selection/markdown_selectable_leaf.dart';
 
 double markdownListMarkerWidth(ListBlock block, int index) {
   final item = block.items[index];
@@ -35,11 +36,20 @@ typedef MarkdownInlineTextWidgetBuilder = Widget Function(
   TextStyle style,
   List<InlineNode> inlines,
   TextAlign textAlign, {
-  GlobalKey? directTextKey,
+  required int rowIndex,
+  required int columnIndex,
   bool alignInlineMathToBaseline,
   TextStyle? inlineCodeStyle,
   TextStyle? linkStyle,
 });
+
+/// Wraps the row ([MarkdownSelectionSlotRole.listRow]) or the content
+/// ([MarkdownSelectionSlotRole.listContent]) of list item [index].
+typedef MarkdownListItemSlotBuilder = Widget Function(
+  int index,
+  MarkdownSelectionSlotRole role,
+  Widget child,
+);
 
 typedef MarkdownTableWidgetBuilder = Widget Function(
   Map<int, TableColumnWidth>? columnWidths,
@@ -428,8 +438,7 @@ class MarkdownListBlockView extends StatelessWidget {
     required this.theme,
     required this.block,
     required this.itemBuilder,
-    this.itemRowKeyBuilder,
-    this.itemContentKeyBuilder,
+    this.itemSlotBuilder,
     this.markerStyle,
     this.bulletBuilder,
   });
@@ -437,8 +446,7 @@ class MarkdownListBlockView extends StatelessWidget {
   final MarkdownThemeData theme;
   final ListBlock block;
   final Widget Function(int index, ListItemNode item) itemBuilder;
-  final Key? Function(int index)? itemRowKeyBuilder;
-  final Key? Function(int index)? itemContentKeyBuilder;
+  final MarkdownListItemSlotBuilder? itemSlotBuilder;
   final TextStyle? markerStyle;
   final MarkdownBulletBuilder? bulletBuilder;
 
@@ -452,9 +460,13 @@ class MarkdownListBlockView extends StatelessWidget {
             builder: (context) {
               final markerWidth = markdownListMarkerWidth(block, index);
               final markerGap = markdownListMarkerGap(block, index);
-              return KeyedSubtree(
-                key: itemRowKeyBuilder?.call(index),
-                child: Padding(
+              Widget slot(MarkdownSelectionSlotRole role, Widget child) {
+                return itemSlotBuilder?.call(index, role, child) ?? child;
+              }
+
+              return slot(
+                MarkdownSelectionSlotRole.listRow,
+                Padding(
                   padding: EdgeInsets.only(
                     bottom: index == block.items.length - 1
                         ? 0
@@ -472,9 +484,9 @@ class MarkdownListBlockView extends StatelessWidget {
                       ),
                       SizedBox(width: markerGap),
                       Expanded(
-                        child: KeyedSubtree(
-                          key: itemContentKeyBuilder?.call(index),
-                          child: itemBuilder(index, block.items[index]),
+                        child: slot(
+                          MarkdownSelectionSlotRole.listContent,
+                          itemBuilder(index, block.items[index]),
                         ),
                       ),
                     ],
@@ -535,7 +547,6 @@ class MarkdownCodeBlockView extends StatelessWidget {
     required this.codeSpan,
     required this.onCopyCode,
     required this.scrollController,
-    this.directTextKey,
     this.viewportKey,
   });
 
@@ -543,7 +554,6 @@ class MarkdownCodeBlockView extends StatelessWidget {
   final InlineSpan codeSpan;
   final VoidCallback onCopyCode;
   final ScrollController scrollController;
-  final GlobalKey? directTextKey;
   final GlobalKey? viewportKey;
 
   @override
@@ -575,7 +585,6 @@ class MarkdownCodeBlockView extends StatelessWidget {
                     controller: scrollController,
                     scrollDirection: Axis.horizontal,
                     child: Text.rich(
-                      key: directTextKey,
                       codeSpan,
                       style: theme.codeBlockStyle,
                       softWrap: false,
@@ -621,8 +630,6 @@ class MarkdownTableBlockView extends StatelessWidget {
     this.tableHeaderStyle,
     this.inlineCodeStyle,
     this.linkStyle,
-    this.cellKeyBuilder,
-    this.cellTextKeyBuilder,
     this.scrollController,
     this.viewportKey,
   });
@@ -635,8 +642,6 @@ class MarkdownTableBlockView extends StatelessWidget {
   final TextStyle? tableHeaderStyle;
   final TextStyle? inlineCodeStyle;
   final TextStyle? linkStyle;
-  final Key? Function(int rowIndex, int columnIndex)? cellKeyBuilder;
-  final GlobalKey? Function(int rowIndex, int columnIndex)? cellTextKeyBuilder;
   final ScrollController? scrollController;
   final GlobalKey? viewportKey;
 
@@ -682,7 +687,6 @@ class MarkdownTableBlockView extends StatelessWidget {
                     alignment: index < block.alignments.length
                         ? block.alignments[index]
                         : MarkdownTableColumnAlignment.none,
-                    directTextKey: cellTextKeyBuilder?.call(rowIndex, index),
                   ),
               ],
             ),
@@ -697,7 +701,6 @@ class MarkdownTableBlockView extends StatelessWidget {
     required int rowIndex,
     required int cellIndex,
     required MarkdownTableColumnAlignment alignment,
-    GlobalKey? directTextKey,
   }) {
     final cell = cellIndex < row.cells.length
         ? row.cells[cellIndex]
@@ -705,7 +708,7 @@ class MarkdownTableBlockView extends StatelessWidget {
     final textStyle = row.isHeader
         ? tableHeaderStyle ?? theme.tableHeaderStyle
         : bodyStyle ?? theme.bodyStyle;
-    Widget child = Padding(
+    return Padding(
       padding: theme.tableCellPadding.resolve(Directionality.of(context)),
       child: Align(
         alignment: _alignmentFor(alignment),
@@ -714,20 +717,14 @@ class MarkdownTableBlockView extends StatelessWidget {
           textStyle,
           cell.inlines,
           _textAlignFor(alignment),
-          directTextKey: directTextKey,
+          rowIndex: rowIndex,
+          columnIndex: cellIndex,
           alignInlineMathToBaseline: false,
           inlineCodeStyle: inlineCodeStyle,
           linkStyle: linkStyle,
         ),
       ),
     );
-    if (cellKeyBuilder != null) {
-      child = KeyedSubtree(
-        key: cellKeyBuilder!(rowIndex, cellIndex),
-        child: child,
-      );
-    }
-    return child;
   }
 
   Alignment _alignmentFor(MarkdownTableColumnAlignment alignment) {

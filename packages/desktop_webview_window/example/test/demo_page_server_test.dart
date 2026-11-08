@@ -14,8 +14,7 @@ void main() {
       final html = await response.transform(utf8.decoder).join();
       expect(html, contains('Browser 7'));
       expect(html, contains('/next?id=7'));
-      expect(html, contains('window.chrome.webview.postMessage'));
-      expect(html, contains('window.webkit.messageHandlers.demo.postMessage'));
+      expect(html, contains("window.desktopWebview.postMessage('demo'"));
       expect(html, contains('demo_window_7=hello'));
     } finally {
       client.close(force: true);

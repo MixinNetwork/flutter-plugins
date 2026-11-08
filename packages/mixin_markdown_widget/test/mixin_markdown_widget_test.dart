@@ -3927,7 +3927,7 @@ const value = 42;
       final paragraph = document.blocks.single as ParagraphBlock;
       final builder = MarkdownInlineBuilder(
         theme: theme,
-        recognizers: <TapGestureRecognizer>[],
+        recognizers: MarkdownLinkRecognizers(),
       );
       final runs = builder.buildPretextRuns(theme.bodyStyle, paragraph.inlines);
       final layout = computeMarkdownPretextLayoutFromRuns(
@@ -7876,6 +7876,36 @@ Tables support varying alignments, complex cell contents, and inline styles.
       blockRange,
     );
     expect(selectionRects, isNotEmpty);
+  });
+
+  testWidgets('MixinSelectionArea with MarkdownWidget settles', (tester) async {
+    final selectionController = MarkdownSelectionController();
+    addTearDown(selectionController.dispose);
+
+    Widget buildApp(String data) {
+      return MaterialApp(
+        home: Scaffold(
+          body: MixinSelectionArea(
+            controller: selectionController,
+            child: MarkdownWidget(data: data, useColumn: true),
+          ),
+        ),
+      );
+    }
+
+    await tester.pumpWidget(buildApp('Hello brave world'));
+    await tester.pumpAndSettle();
+
+    expect(tester.binding.hasScheduledFrame, isFalse);
+    selectionController.selectAll();
+    expect(selectionController.selectedPlainText, 'Hello brave world');
+
+    await tester.pumpWidget(buildApp('Hello new world'));
+    await tester.pumpAndSettle();
+
+    expect(tester.binding.hasScheduledFrame, isFalse);
+    selectionController.selectAll();
+    expect(selectionController.selectedPlainText, 'Hello new world');
   });
 
   testWidgets('MixinSelectionArea exposes public selectable widgets',
