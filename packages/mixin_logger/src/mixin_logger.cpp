@@ -158,12 +158,11 @@ namespace mixin_logger {
         }
 
         ~LoggerContext() {
-            if (file_ != nullptr) {
-                file_->close();
-            }
+            delete file_;
         }
 
         void SetFileLeading(const std::string &file_leading) {
+            std::lock_guard<std::mutex> lock(mutex_);
             file_leading_ = file_leading;
         }
 
@@ -184,7 +183,7 @@ namespace mixin_logger {
             file_size_ += int64_t(write);
 
             if (file_size_ >= max_file_size_) {
-                file_->close();
+                delete file_;
                 file_ = nullptr;
                 file_size_ = 0;
             }
