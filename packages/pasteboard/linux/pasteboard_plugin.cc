@@ -28,9 +28,9 @@ static void gtk_clipboard_request_uris_callback(
   g_autoptr(FlValue) result = fl_value_new_list();
   for (auto uri = uris; uri != nullptr && *uri != nullptr; uri++) {
     g_autoptr(GFile) file = g_file_new_for_uri(*uri);
-    auto *file_path = g_file_get_path(file);
+    g_autofree gchar *file_path = g_file_get_path(file);
     if (file_path) {
-      fl_value_append(result, fl_value_new_string(file_path));
+      fl_value_append_take(result, fl_value_new_string(file_path));
     }
   }
   fl_method_call_respond_success(method_call, result, nullptr);
@@ -70,8 +70,7 @@ static void gtk_clipboard_get_file_uri(GtkClipboard *clipboard,
 
 static void gtk_clipboard_clear(GtkClipboard *clipboard,
                                 gpointer user_data_or_owner) {
-  auto **uris = reinterpret_cast<gchar **>(user_data_or_owner);
-  delete[] uris;
+  g_strfreev(reinterpret_cast<gchar **>(user_data_or_owner));
 }
 
 static void clipboard_request_image_callback(
@@ -85,9 +84,9 @@ static void clipboard_request_image_callback(
     return;
   }
 
-  gchar *buffer = nullptr;
+  g_autofree gchar *buffer = nullptr;
   gsize buffer_size = 0;
-  GError *error = nullptr;
+  g_autoptr(GError) error = nullptr;
 
   gdk_pixbuf_save_to_buffer(pixbuf, &buffer, &buffer_size, "png", &error, nullptr);
   if (error) {
@@ -100,9 +99,9 @@ static void clipboard_request_image_callback(
     return;
   }
 
-  fl_method_call_respond_success(method_call,
-                                 fl_value_new_uint8_list(reinterpret_cast<const uint8_t *>(buffer), buffer_size),
-                                 nullptr);
+  g_autoptr(FlValue) result =
+      fl_value_new_uint8_list(reinterpret_cast<const uint8_t *>(buffer), buffer_size);
+  fl_method_call_respond_success(method_call, result, nullptr);
 
 }
 
@@ -120,7 +119,7 @@ static void pasteboard_plugin_handle_method_call(
     auto args = fl_method_call_get_args(method_call);
     auto size = fl_value_get_length(args);
 
-    auto **paths = new gchar *[size + 1];
+    auto **paths = g_new(gchar *, size + 1);
     paths[size] = nullptr;
     for (unsigned int i = 0; i < size; ++i) {
       auto path = fl_value_get_string(fl_value_get_list_value(args, i));
