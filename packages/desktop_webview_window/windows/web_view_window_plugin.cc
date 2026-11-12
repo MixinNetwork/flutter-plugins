@@ -67,9 +67,13 @@ WebviewWindowPlugin::WebviewWindowPlugin(flutter::BinaryMessenger* messenger)
 }
 
 WebviewWindowPlugin::~WebviewWindowPlugin() {
-  channel_->SetMethodCallHandler(nullptr);
+  // The handler is deliberately left registered. A plugin is destroyed while
+  // its engine shuts down, and ~FlutterWindowsEngine detaches the messenger
+  // from the engine before it runs the registrar's destruction callback, so
+  // clearing the handler here dereferences a null engine and crashes the app
+  // on exit. An engine that is shutting down dispatches nothing more to it.
   lifetime_.reset();
-  // Close windows while the engine is still alive.
+  // Close the windows before the channel they were emitting on goes away.
   auto windows = std::move(windows_);
   for (const auto& entry : windows) {
     entry.second->Close();
