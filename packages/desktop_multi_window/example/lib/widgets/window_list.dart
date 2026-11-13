@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:desktop_multi_window/desktop_multi_window.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_multi_window_example/extensions/window_controller.dart';
 import 'package:mixin_logger/mixin_logger.dart';
 

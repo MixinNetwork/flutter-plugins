@@ -85,9 +85,11 @@ class MarkdownPlainTextSerializer extends MarkdownCopySerializer {
         : DocumentRange(start: end, end: start);
 
     final sections = <String>[];
-    for (var blockIndex = normalizedRange.start.blockIndex;
-        blockIndex <= normalizedRange.end.blockIndex;
-        blockIndex++) {
+    for (
+      var blockIndex = normalizedRange.start.blockIndex;
+      blockIndex <= normalizedRange.end.blockIndex;
+      blockIndex++
+    ) {
       final indexedBlock = _indexedBlockAt(document, blockIndex);
       if (indexedBlock.text.isEmpty) {
         continue;
@@ -137,9 +139,11 @@ class MarkdownPlainTextSerializer extends MarkdownCopySerializer {
     if (first == null) {
       return null;
     }
-    for (var index = document.blocks.length - 1;
-        index > first.blockIndex;
-        index--) {
+    for (
+      var index = document.blocks.length - 1;
+      index > first.blockIndex;
+      index--
+    ) {
       final block = _indexedBlockAt(document, index);
       if (block.text.isNotEmpty) {
         return (first, block);
@@ -157,15 +161,15 @@ class MarkdownPlainTextSerializer extends MarkdownCopySerializer {
     final targetBlockIndex = position.blockIndex < first.blockIndex
         ? first.blockIndex
         : position.blockIndex > last.blockIndex
-            ? last.blockIndex
-            : position.blockIndex;
+        ? last.blockIndex
+        : position.blockIndex;
     final candidate = _indexedBlockAt(document, targetBlockIndex);
     final block = candidate.text.isEmpty ? last : candidate;
     final targetOffset = position.textOffset < 0
         ? 0
         : position.textOffset > block.visibleTextLength
-            ? block.visibleTextLength
-            : position.textOffset;
+        ? block.visibleTextLength
+        : position.textOffset;
     final structure = block.structure;
     if (structure != null) {
       return structure.normalizePosition(
@@ -195,13 +199,13 @@ class MarkdownPlainTextSerializer extends MarkdownCopySerializer {
     final lower = start < 0
         ? 0
         : start > block.text.length
-            ? block.text.length
-            : start;
+        ? block.text.length
+        : start;
     final upper = end < 0
         ? 0
         : end > block.text.length
-            ? block.text.length
-            : end;
+        ? block.text.length
+        : end;
     if (lower >= upper) {
       return '';
     }

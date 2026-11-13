@@ -4,7 +4,7 @@ library;
 import 'dart:async';
 import 'dart:js';
 
-import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:js/js.dart';
 
 @JS()

@@ -130,7 +130,8 @@ class MarkdownDocumentParser {
 
     // A hidden trailing comment may still be open across a blank line.
     // Reparse its owning source tail before treating appended text as visible.
-    final parseAppendedChunkAsNewBlocks = hasBlankLineBoundary &&
+    final parseAppendedChunkAsNewBlocks =
+        hasBlankLineBoundary &&
         !previousTailLines.any(
           MarkdownHtmlCommentBlockSyntax.openingPattern.hasMatch,
         ) &&
@@ -161,8 +162,9 @@ class MarkdownDocumentParser {
       return parseLines(sourceLines, version: version);
     }
 
-    final sourceOffset =
-        parseAppendedChunkAsNewBlocks ? previousSourceLength : lastRange.start;
+    final sourceOffset = parseAppendedChunkAsNewBlocks
+        ? previousSourceLength
+        : lastRange.start;
     final tailLines = parseAppendedChunkAsNewBlocks
         ? appendedLines
         : _appendLines(previousTailLines, appendedLines);
@@ -210,10 +212,11 @@ class MarkdownDocumentParser {
     final tailBlocks = tailDocument.blocks;
     final tailFootnotes =
         tailBlocks.isNotEmpty && tailBlocks.last is FootnoteListBlock
-            ? tailBlocks.last as FootnoteListBlock
-            : null;
-    final tailContentLength =
-        tailFootnotes == null ? tailBlocks.length : tailBlocks.length - 1;
+        ? tailBlocks.last as FootnoteListBlock
+        : null;
+    final tailContentLength = tailFootnotes == null
+        ? tailBlocks.length
+        : tailBlocks.length - 1;
     final mergedFootnotes = tailFootnotes == null
         ? previousFootnotes
         : _mergeFootnoteLists(previousFootnotes, tailFootnotes);
@@ -273,12 +276,10 @@ class MarkdownDocumentParser {
     final ranges = _measure(
       timing,
       (elapsed) => timing!.scanRangesMicros += elapsed,
-      () => _scanTopLevelBlockRanges(
-        lines,
-        sourceOffset: sourceOffset,
-      ),
+      () => _scanTopLevelBlockRanges(lines, sourceOffset: sourceOffset),
     );
-    final blockRanges = ranges.length == blocks.length + 1 &&
+    final blockRanges =
+        ranges.length == blocks.length + 1 &&
             (blocks.isEmpty || blocks.last is! FootnoteListBlock)
         ? ranges.take(blocks.length).toList(growable: false)
         : ranges;
@@ -607,7 +608,8 @@ class MarkdownDocumentParser {
   }) {
     final appendedStartsWithNewline =
         appendedLines.length > 1 && appendedLines.first.isEmpty;
-    final appendedStartsWithBlankLine = appendedLines.length > 2 &&
+    final appendedStartsWithBlankLine =
+        appendedLines.length > 2 &&
         appendedLines[0].isEmpty &&
         appendedLines[1].isEmpty;
     if (previousSourceEndsWithBlankLine || appendedStartsWithBlankLine) {
@@ -661,8 +663,9 @@ class MarkdownDocumentParser {
         continue;
       }
 
-      if (MarkdownHtmlCommentBlockSyntax.openingPattern
-          .hasMatch(lines[index])) {
+      if (MarkdownHtmlCommentBlockSyntax.openingPattern.hasMatch(
+        lines[index],
+      )) {
         hiddenStart ??= index;
         while (index < lines.length) {
           final closed = lines[index].contains('-->');
@@ -911,7 +914,8 @@ class MarkdownDocumentParser {
     final marker = fence[0];
     final minimumLength = fence.length;
     final pattern = RegExp(
-      '^\\s{0,3}${RegExp.escape(marker)}{$minimumLength,}\\s*' r'$',
+      '^\\s{0,3}${RegExp.escape(marker)}{$minimumLength,}\\s*'
+      r'$',
     );
     return pattern.hasMatch(line);
   }
@@ -989,11 +993,7 @@ class MarkdownDocumentParser {
     return indent;
   }
 
-  int _lineEndOffset(
-    List<String> lines,
-    List<int> lineStarts,
-    int lineIndex,
-  ) {
+  int _lineEndOffset(List<String> lines, List<int> lineStarts, int lineIndex) {
     final contentEnd = lineStarts[lineIndex] + lines[lineIndex].length;
     if (lineIndex < lines.length - 1) {
       return contentEnd + 1;
@@ -1003,16 +1003,20 @@ class MarkdownDocumentParser {
 
   static final RegExp _fenceStartPattern = RegExp(r'^\s{0,3}([`~]{3,}).*$');
   static final RegExp _atxHeadingPattern = RegExp(r'^\s{0,3}#{1,6}(?:\s+|$)');
-  static final RegExp _setextUnderlinePattern =
-      RegExp(r'^\s{0,3}(?:=+|-+)\s*$');
+  static final RegExp _setextUnderlinePattern = RegExp(
+    r'^\s{0,3}(?:=+|-+)\s*$',
+  );
   static final RegExp _blockquotePattern = RegExp(r'^\s{0,3}>\s?.*$');
-  static final RegExp _listMarkerPattern =
-      RegExp(r'^\s{0,3}(?:[-+*]|\d+[.)])\s+');
+  static final RegExp _listMarkerPattern = RegExp(
+    r'^\s{0,3}(?:[-+*]|\d+[.)])\s+',
+  );
   static final RegExp _definitionMarkerPattern = RegExp(r'^\s{0,3}:\s?.*$');
-  static final RegExp _footnoteDefinitionPattern =
-      RegExp(r'^\s{0,3}\[\^[^\]]+\]:');
-  static final RegExp _definitionContinuationPattern =
-      RegExp(r'^(?: {2,}|\t).*$');
+  static final RegExp _footnoteDefinitionPattern = RegExp(
+    r'^\s{0,3}\[\^[^\]]+\]:',
+  );
+  static final RegExp _definitionContinuationPattern = RegExp(
+    r'^(?: {2,}|\t).*$',
+  );
   static final RegExp _tableSeparatorPattern = RegExp(
     r'^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*:?-{3,}:?\s*\|?\s*$',
   );
@@ -1101,18 +1105,16 @@ class _SegmentedBlockList extends ListBase<BlockNode> {
     throw UnsupportedError('Cannot modify segmented block list contents.');
   }
 
-  void _appendPrefixSegments(
-    List<_BlockSegment> output,
-    int prefixLength,
-  ) {
+  void _appendPrefixSegments(List<_BlockSegment> output, int prefixLength) {
     var remaining = prefixLength;
     var globalStart = 0;
     for (final segment in _segments) {
       if (remaining <= 0) {
         break;
       }
-      final segmentLength =
-          remaining < segment.length ? remaining : segment.length;
+      final segmentLength = remaining < segment.length
+          ? remaining
+          : segment.length;
       output.add(
         _BlockSegment(
           globalStart: globalStart,
@@ -1168,13 +1170,9 @@ class _MarkdownParserTimingBuilder {
 class _MarkdownAstBuilder {
   _MarkdownAstBuilder({
     Map<MarkdownBlockKind, int>? initialKindCounts,
-    Map<String, String>? reusableIds,
-    _MarkdownParserTimingBuilder? timing,
-  })  : _timing = timing,
-        _reusableIds = reusableIds,
-        _kindCounters = <MarkdownBlockKind, int>{
-          ...?initialKindCounts,
-        };
+    this._reusableIds,
+    this._timing,
+  }) : _kindCounters = <MarkdownBlockKind, int>{...?initialKindCounts};
 
   final Map<MarkdownBlockKind, int> _kindCounters;
   final _MarkdownParserTimingBuilder? _timing;
@@ -1249,7 +1247,8 @@ class _MarkdownAstBuilder {
         return QuoteBlock(
           id: _nextId(MarkdownBlockKind.quote, node.textContent),
           children: List<BlockNode>.unmodifiable(
-              buildBlocks(node.children ?? const <md.Node>[])),
+            buildBlocks(node.children ?? const <md.Node>[]),
+          ),
         );
       case 'ul':
         return ListBlock(
@@ -1289,8 +1288,10 @@ class _MarkdownAstBuilder {
         return _buildTable(node);
       case 'img':
         return ImageBlock(
-          id: _nextId(MarkdownBlockKind.image,
-              node.attributes['src'] ?? node.attributes['alt'] ?? ''),
+          id: _nextId(
+            MarkdownBlockKind.image,
+            node.attributes['src'] ?? node.attributes['alt'] ?? '',
+          ),
           url: node.attributes['src'] ?? '',
           alt: node.attributes['alt'],
           title: node.attributes['title'],
@@ -1453,8 +1454,10 @@ class _MarkdownAstBuilder {
           _isCheckboxInput(paragraphChildren.first)) {
         final paragraph = md.Element('p', paragraphChildren.skip(1).toList())
           ..attributes.addAll(first.attributes);
-        return List<md.Node>.unmodifiable(
-            <md.Node>[paragraph, ...nodes.skip(1)]);
+        return List<md.Node>.unmodifiable(<md.Node>[
+          paragraph,
+          ...nodes.skip(1),
+        ]);
       }
     }
 
@@ -1479,7 +1482,8 @@ class _MarkdownAstBuilder {
           break;
         }
         terms.add(
-            List<InlineNode>.unmodifiable(_buildInlines(termNode.children)));
+          List<InlineNode>.unmodifiable(_buildInlines(termNode.children)),
+        );
         index += 1;
       }
 
@@ -1544,8 +1548,9 @@ class _MarkdownAstBuilder {
     for (final child in node.children ?? const <md.Node>[]) {
       if (child is md.Element && child.tag == 'summary') {
         if (summary.isEmpty) {
-          summary =
-              List<InlineNode>.unmodifiable(_buildInlines(child.children));
+          summary = List<InlineNode>.unmodifiable(
+            _buildInlines(child.children),
+          );
         }
         continue;
       }
@@ -1572,12 +1577,13 @@ class _MarkdownAstBuilder {
             orElse: () => node,
           )
         : node;
-    final languageClass =
-        codeElement is md.Element ? codeElement.attributes['class'] : null;
+    final languageClass = codeElement is md.Element
+        ? codeElement.attributes['class']
+        : null;
     final language =
         languageClass != null && languageClass.startsWith('language-')
-            ? languageClass.substring('language-'.length)
-            : null;
+        ? languageClass.substring('language-'.length)
+        : null;
     return CodeBlock(
       id: _nextId(MarkdownBlockKind.codeBlock, node.textContent),
       code: _normalizeCodeBlockText(
@@ -1677,14 +1683,21 @@ class _MarkdownAstBuilder {
         if (alignments.length < cells.length + 1) {
           alignments.add(_parseAlignment(child.attributes['align']));
         }
-        cells.add(TableCellNode(
-            inlines:
-                List<InlineNode>.unmodifiable(_buildInlines(child.children))));
+        cells.add(
+          TableCellNode(
+            inlines: List<InlineNode>.unmodifiable(
+              _buildInlines(child.children),
+            ),
+          ),
+        );
       }
       if (cells.isNotEmpty) {
-        rows.add(TableRowNode(
+        rows.add(
+          TableRowNode(
             cells: List<TableCellNode>.unmodifiable(cells),
-            isHeader: headerSection));
+            isHeader: headerSection,
+          ),
+        );
       }
     }
 
@@ -1729,44 +1742,69 @@ class _MarkdownAstBuilder {
       switch (node.tag) {
         case 'i':
         case 'em':
-          inlines.add(EmphasisInline(
-              children:
-                  List<InlineNode>.unmodifiable(_buildInlines(node.children))));
+          inlines.add(
+            EmphasisInline(
+              children: List<InlineNode>.unmodifiable(
+                _buildInlines(node.children),
+              ),
+            ),
+          );
           break;
         case 'b':
         case 'strong':
-          inlines.add(StrongInline(
-              children:
-                  List<InlineNode>.unmodifiable(_buildInlines(node.children))));
+          inlines.add(
+            StrongInline(
+              children: List<InlineNode>.unmodifiable(
+                _buildInlines(node.children),
+              ),
+            ),
+          );
           break;
         case 's':
         case 'del':
-          inlines.add(StrikethroughInline(
-              children:
-                  List<InlineNode>.unmodifiable(_buildInlines(node.children))));
+          inlines.add(
+            StrikethroughInline(
+              children: List<InlineNode>.unmodifiable(
+                _buildInlines(node.children),
+              ),
+            ),
+          );
           break;
         case 'mark':
-          inlines.add(HighlightInline(
-              children:
-                  List<InlineNode>.unmodifiable(_buildInlines(node.children))));
+          inlines.add(
+            HighlightInline(
+              children: List<InlineNode>.unmodifiable(
+                _buildInlines(node.children),
+              ),
+            ),
+          );
           break;
         case 'sub':
-          inlines.add(SubscriptInline(
-              children:
-                  List<InlineNode>.unmodifiable(_buildInlines(node.children))));
+          inlines.add(
+            SubscriptInline(
+              children: List<InlineNode>.unmodifiable(
+                _buildInlines(node.children),
+              ),
+            ),
+          );
           break;
         case 'sup':
-          inlines.add(SuperscriptInline(
-              children:
-                  List<InlineNode>.unmodifiable(_buildInlines(node.children))));
+          inlines.add(
+            SuperscriptInline(
+              children: List<InlineNode>.unmodifiable(
+                _buildInlines(node.children),
+              ),
+            ),
+          );
           break;
         case 'a':
           inlines.add(
             LinkInline(
               destination: node.attributes['href'] ?? '',
               title: node.attributes['title'],
-              children:
-                  List<InlineNode>.unmodifiable(_buildInlines(node.children)),
+              children: List<InlineNode>.unmodifiable(
+                _buildInlines(node.children),
+              ),
             ),
           );
           break;
@@ -1786,8 +1824,12 @@ class _MarkdownAstBuilder {
           inlines.add(const HardBreakInline());
           break;
         case 'img':
-          inlines.add(InlineImage(
-              url: node.attributes['src'] ?? '', alt: node.attributes['alt']));
+          inlines.add(
+            InlineImage(
+              url: node.attributes['src'] ?? '',
+              alt: node.attributes['alt'],
+            ),
+          );
           break;
         default:
           final children = _buildInlines(node.children);
@@ -2013,15 +2055,12 @@ class _MarkdownAstBuilder {
   }
 
   String _nextId(MarkdownBlockKind kind, String signature) {
-    return _measure(
-      (elapsed) => _timing!.nextIdMicros += elapsed,
-      () {
-        final nextCount = (_kindCounters[kind] ?? 0) + 1;
-        _kindCounters[kind] = nextCount;
-        final prefix = '${kind.name}-$nextCount';
-        return _reusableIds?[prefix] ?? '$prefix-${_stableHash(signature)}';
-      },
-    );
+    return _measure((elapsed) => _timing!.nextIdMicros += elapsed, () {
+      final nextCount = (_kindCounters[kind] ?? 0) + 1;
+      _kindCounters[kind] = nextCount;
+      final prefix = '${kind.name}-$nextCount';
+      return _reusableIds?[prefix] ?? '$prefix-${_stableHash(signature)}';
+    });
   }
 
   int _stableHash(String value) {
@@ -2034,10 +2073,7 @@ class _MarkdownAstBuilder {
     return hash;
   }
 
-  T _measure<T>(
-    void Function(int elapsedMicros) record,
-    T Function() run,
-  ) {
+  T _measure<T>(void Function(int elapsedMicros) record, T Function() run) {
     if (_timing == null) {
       return run();
     }

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:mixin_markdown_widget/src/render/markdown_block_widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
@@ -46,8 +46,10 @@ void main() {
     expect(quote.children.whereType<TableBlock>(), hasLength(1));
     final details = quote.children.whereType<DetailsBlock>().single;
     expect(details.initiallyExpanded, isFalse);
-    expect((details.children.first as ParagraphBlock).inlines.single,
-        isA<HardBreakInline>());
+    expect(
+      (details.children.first as ParagraphBlock).inlines.single,
+      isA<HardBreakInline>(),
+    );
     expect(details.children.whereType<ListBlock>().single.items, hasLength(2));
   });
 
@@ -58,7 +60,9 @@ void main() {
     final two = controller.document.blocks.last;
     expect(two.sourceRange, isNotNull);
     expect(
-        source.substring(two.sourceRange!.start, two.sourceRange!.end), 'Two');
+      source.substring(two.sourceRange!.start, two.sourceRange!.end),
+      'Two',
+    );
     controller.appendChunk(' more');
     expect(controller.plainText, 'One\n\nTwo more');
 
@@ -76,18 +80,22 @@ void main() {
     addTearDown(controller.dispose);
     for (var end = 1; end <= reviewFixture.length; end += 1) {
       controller.appendChunk(reviewFixture.substring(end - 1, end));
-      final reference =
-          MarkdownController(data: reviewFixture.substring(0, end));
+      final reference = MarkdownController(
+        data: reviewFixture.substring(0, end),
+      );
       expect(controller.plainText, reference.plainText, reason: 'offset $end');
       reference.dispose();
     }
   });
 
-  testWidgets('GitHub review table and details render without HTML source',
-      (tester) async {
-    await tester.pumpWidget(const MaterialApp(
-      home: Scaffold(body: MarkdownWidget(data: reviewFixture)),
-    ));
+  testWidgets('GitHub review table and details render without HTML source', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(body: MarkdownWidget(data: reviewFixture)),
+      ),
+    );
     expect(find.textContaining('<!--'), findsNothing);
     expect(find.textContaining('<relative-time'), findsNothing);
     expect(find.textContaining('<br'), findsNothing);
@@ -102,8 +110,10 @@ void main() {
 
   test('GitHub time elements preserve fallback content in inline contexts', () {
     for (final tag in ['relative-time', 'local-time', 'time']) {
-      expect(plainText('Updated <$tag datetime="2030-01-02">**Jan 2**</$tag>.'),
-          'Updated Jan 2.');
+      expect(
+        plainText('Updated <$tag datetime="2030-01-02">**Jan 2**</$tag>.'),
+        'Updated Jan 2.',
+      );
     }
   });
 
@@ -118,8 +128,10 @@ void main() {
 
   test('GitHub HTML examples in code and escaped text stay literal', () {
     expect(plainText('`<!-- visible -->`'), '<!-- visible -->');
-    expect(plainText('```html\n<!-- visible -->\n<br/>\n```'),
-        contains('<!-- visible -->\n<br/>'));
+    expect(
+      plainText('```html\n<!-- visible -->\n<br/>\n```'),
+      contains('<!-- visible -->\n<br/>'),
+    );
     expect(plainText(r'\<!-- visible -->'), '<!-- visible -->');
     expect(plainText('&lt;!-- visible --&gt;'), '<!-- visible -->');
   });
@@ -128,12 +140,16 @@ void main() {
     for (final tag in ['<br>', '<br/>', '<br />', '<BR/>']) {
       expect(plainText('Before${tag}After'), 'Before\nAfter');
       final document = const MarkdownDocumentParser().parse('$tag\n\nAfter');
-      expect((document.blocks.first as ParagraphBlock).inlines.single,
-          isA<HardBreakInline>());
       expect(
-          plainText(
-              '<details><summary>More</summary>\n$tag\n\nAfter\n</details>'),
-          isNot(contains('<br')));
+        (document.blocks.first as ParagraphBlock).inlines.single,
+        isA<HardBreakInline>(),
+      );
+      expect(
+        plainText(
+          '<details><summary>More</summary>\n$tag\n\nAfter\n</details>',
+        ),
+        isNot(contains('<br')),
+      );
     }
   });
 }

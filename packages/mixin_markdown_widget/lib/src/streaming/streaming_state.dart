@@ -7,25 +7,23 @@ class StreamingMarkdownState {
   const StreamingMarkdownState({
     required this.committedBlocks,
     required this.draftBlock,
-    required String buffer,
+    required this._buffer,
     required this.version,
-  })  : _buffer = buffer,
-        _bufferProvider = null;
+  }) : _bufferProvider = null;
 
   const StreamingMarkdownState.lazyBuffer({
     required this.committedBlocks,
     required this.draftBlock,
-    required String Function() bufferProvider,
+    required String Function() this._bufferProvider,
     required this.version,
-  })  : _buffer = '',
-        _bufferProvider = bufferProvider;
+  }) : _buffer = '';
 
   const StreamingMarkdownState.empty()
-      : committedBlocks = const <BlockNode>[],
-        draftBlock = null,
-        _buffer = '',
-        _bufferProvider = null,
-        version = 0;
+    : committedBlocks = const <BlockNode>[],
+      draftBlock = null,
+      _buffer = '',
+      _bufferProvider = null,
+      version = 0;
 
   final List<BlockNode> committedBlocks;
   final BlockNode? draftBlock;

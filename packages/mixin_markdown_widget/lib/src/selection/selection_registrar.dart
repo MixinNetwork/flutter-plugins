@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 
 import '../core/document.dart';
 import '../render/selection/markdown_selection_gesture_detector.dart';
@@ -18,9 +18,7 @@ typedef MixinSelectionParticipantSelectWord = void Function(
   Offset? globalPosition,
 });
 
-typedef MixinSelectionParticipantSelectBlock = void Function(
-  int blockIndex,
-);
+typedef MixinSelectionParticipantSelectBlock = void Function(int blockIndex);
 
 typedef MixinSelectionParticipantSelectUnit = void Function(
   Offset globalPosition,
@@ -51,7 +49,7 @@ class MixinSelectionParticipant {
   final MixinSelectionParticipantSelectUnit selectSelectionUnitAt;
   final String? Function(Offset globalPosition)? linkDestinationAt;
   final Iterable<MarkdownSelectionAutoScrollTarget> Function()?
-      autoScrollTargets;
+  autoScrollTargets;
 }
 
 class MixinSelectionRegistrar extends InheritedWidget {
@@ -75,7 +73,7 @@ class MixinSelectionRegistrar extends InheritedWidget {
   final int documentVersion;
   final DocumentSelection? selection;
   final void Function(MixinSelectionParticipant participant)
-      registerParticipant;
+  registerParticipant;
   final void Function(Object owner) unregisterParticipant;
   final void Function(Object owner) participantChanged;
   final int? Function(Object owner) blockIndexOffsetOf;

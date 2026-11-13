@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter/services.dart';
 
 import '../core/document.dart';
@@ -45,7 +45,7 @@ class MarkdownSelectionHost extends StatefulWidget {
   final bool showCopyAllInContextMenu;
   final VoidCallback? onCopyPlainText;
   final Iterable<MarkdownSelectionAutoScrollTarget> Function()?
-      additionalAutoScrollTargets;
+  additionalAutoScrollTargets;
   final bool isSelectable;
 
   @override
@@ -53,8 +53,9 @@ class MarkdownSelectionHost extends StatefulWidget {
 }
 
 class _MarkdownSelectionHostState extends State<MarkdownSelectionHost> {
-  final FocusNode _selectionFocusNode =
-      FocusNode(debugLabel: 'mixin_markdown_widget.selection');
+  final FocusNode _selectionFocusNode = FocusNode(
+    debugLabel: 'mixin_markdown_widget.selection',
+  );
   final ContextMenuController _contextMenuController = ContextMenuController();
   ScrollPosition? _ancestorScrollPosition;
 
@@ -109,10 +110,8 @@ class _MarkdownSelectionHostState extends State<MarkdownSelectionHost> {
     _contextMenuController.show(
       context: context,
       // Clicks on the menu are not outside the selection.
-      contextMenuBuilder: (context) => TapRegion(
-        groupId: this,
-        child: builder(context, details),
-      ),
+      contextMenuBuilder: (context) =>
+          TapRegion(groupId: this, child: builder(context, details)),
     );
   }
 
@@ -158,9 +157,9 @@ class _MarkdownSelectionHostState extends State<MarkdownSelectionHost> {
     final range = selectionController.normalizedRange;
     final onCopyPlainText = widget.onCopyPlainText;
     VoidCallback hideAnd(VoidCallback action) => () {
-          _hideContextMenu();
-          action();
-        };
+      _hideContextMenu();
+      action();
+    };
     return <ContextMenuButtonItem>[
       if (range != null && range.start != range.end)
         ContextMenuButtonItem(
@@ -176,8 +175,9 @@ class _MarkdownSelectionHostState extends State<MarkdownSelectionHost> {
         ),
       ContextMenuButtonItem(
         type: ContextMenuButtonType.selectAll,
-        onPressed:
-            hideAnd(() => selectionController.selectAll(widget.document)),
+        onPressed: hideAnd(
+          () => selectionController.selectAll(widget.document),
+        ),
       ),
       if (onCopyPlainText != null && widget.showCopyAllInContextMenu)
         ContextMenuButtonItem(

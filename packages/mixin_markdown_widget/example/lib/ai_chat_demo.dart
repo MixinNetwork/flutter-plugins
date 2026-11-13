@@ -1,6 +1,6 @@
 import 'dart:math';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
 
 class AIChatDemoPage extends StatefulWidget {
@@ -26,15 +26,14 @@ class _AIChatDemoPageState extends State<AIChatDemoPage> {
     final random = Random();
     // Pre-populate 20 messages (20 pairs) from the rich 5 presets.
     for (var i = 0; i < 20; i++) {
-      _messages.add(ChatMessage.static(
-        text: 'Detailed Inquiry regarding technical specification #${i + 1}',
-        isUser: true,
-      ));
+      _messages.add(
+        ChatMessage.static(
+          text: 'Detailed Inquiry regarding technical specification #${i + 1}',
+          isUser: true,
+        ),
+      );
       final markdown = _presetMarkdown[random.nextInt(_presetMarkdown.length)];
-      _messages.add(ChatMessage.static(
-        text: markdown,
-        isUser: false,
-      ));
+      _messages.add(ChatMessage.static(text: markdown, isUser: false));
     }
   }
 
@@ -361,17 +360,14 @@ Additionally, we support `<kbd>Ctrl</kbd> + <kbd>C</kbd>` and `<u>underlined</u>
 [^2]: This is the second footnote, testing multiple reference points.
 
 **End of Stress Test.**
-'''
+''',
   ];
 
   void _handleSubmitted(String text) {
     if (text.trim().isEmpty) return;
     _textController.clear();
     setState(() {
-      _messages.add(ChatMessage.static(
-        text: text,
-        isUser: true,
-      ));
+      _messages.add(ChatMessage.static(text: text, isUser: true));
       _isTyping = true;
     });
     _scrollToBottom();
@@ -424,10 +420,7 @@ Additionally, we support `<kbd>Ctrl</kbd> + <kbd>C</kbd>` and `<u>underlined</u>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Advanced AI Chat Demo'),
-        elevation: 1,
-      ),
+      appBar: AppBar(title: const Text('Advanced AI Chat Demo'), elevation: 1),
       body: Column(
         children: [
           Expanded(
@@ -443,9 +436,13 @@ Additionally, we support `<kbd>Ctrl</kbd> + <kbd>C</kbd>` and `<u>underlined</u>
           if (_isTyping)
             const Padding(
               padding: EdgeInsets.all(8.0),
-              child: Text('AI is processing massive data...',
-                  style: TextStyle(
-                      fontStyle: FontStyle.italic, color: Colors.grey)),
+              child: Text(
+                'AI is processing massive data...',
+                style: TextStyle(
+                  fontStyle: FontStyle.italic,
+                  color: Colors.grey,
+                ),
+              ),
             ),
           const Divider(height: 1),
           Container(
@@ -463,8 +460,10 @@ Additionally, we support `<kbd>Ctrl</kbd> + <kbd>C</kbd>` and `<u>underlined</u>
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.all(Radius.circular(20)),
                       ),
-                      contentPadding:
-                          EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
                     ),
                   ),
                 ),
@@ -485,12 +484,12 @@ class ChatMessage {
   /// Creates a message whose full text is known up front (user messages and
   /// pre-populated AI messages).
   ChatMessage.static({required this.text, required this.isUser})
-      : markdownController = null;
+    : markdownController = null;
 
   /// Creates an AI message that will be populated incrementally via a stream.
   ChatMessage.streaming({required this.isUser})
-      : text = '',
-        markdownController = MarkdownController();
+    : text = '',
+      markdownController = MarkdownController();
 
   final String text;
   final bool isUser;
@@ -555,14 +554,12 @@ class _MessageTileState extends State<_MessageTile> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12.0),
       child: Row(
-        mainAxisAlignment:
-            isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment: isUser
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (!isUser)
-            const CircleAvatar(
-              child: Icon(Icons.terminal_rounded),
-            ),
+          if (!isUser) const CircleAvatar(child: Icon(Icons.terminal_rounded)),
           if (!isUser) const SizedBox(width: 12),
           Flexible(
             child: Container(
@@ -586,16 +583,17 @@ class _MessageTileState extends State<_MessageTile> {
                 ],
               ),
               child: isUser
-                  ? Text(widget.message.text,
-                      style: const TextStyle(fontWeight: FontWeight.w500))
+                  ? Text(
+                      widget.message.text,
+                      style: const TextStyle(fontWeight: FontWeight.w500),
+                    )
                   : MarkdownWidget(
                       controller:
                           widget.message.markdownController ?? _controller,
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
-                      theme: MarkdownThemeData.fallback(context).copyWith(
-                        maxContentWidth: double.infinity,
-                      ),
+                      theme: MarkdownThemeData.fallback(context)
+                          .copyWith(maxContentWidth: double.infinity),
                     ),
             ),
           ),

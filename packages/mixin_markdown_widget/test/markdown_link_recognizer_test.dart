@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
 import 'package:mixin_markdown_widget/src/render/pretext_text_block.dart';
@@ -112,8 +112,9 @@ void main() {
     expect(disposed.contains(recognizer), isTrue);
   });
 
-  testWidgets('a new onTapLink closure keeps cached rows and is called',
-      (tester) async {
+  testWidgets('a new onTapLink closure keeps cached rows and is called', (
+    tester,
+  ) async {
     final taps = <String>[];
     var generation = 0;
     late StateSetter setState;
@@ -150,8 +151,9 @@ void main() {
     expect(taps, <String>['3:https://example.com']);
   });
 
-  testWidgets('removing onTapLink rebuilds rows without link recognizers',
-      (tester) async {
+  testWidgets('removing onTapLink rebuilds rows without link recognizers', (
+    tester,
+  ) async {
     MarkdownTapLinkCallback? onTapLink = (destination, title, label) {};
     late StateSetter setState;
     await tester.pumpWidget(

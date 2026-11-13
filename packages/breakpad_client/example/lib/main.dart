@@ -1,7 +1,7 @@
 import 'dart:ffi';
 
 import 'package:breakpad_client/breakpad_client.dart' as breakpad_client;
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 void main() {
   breakpad_client.setLogger((log) {

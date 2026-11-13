@@ -1,20 +1,16 @@
 import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 class MarkdownTheme extends InheritedTheme {
-  const MarkdownTheme({
-    super.key,
-    required this.data,
-    required super.child,
-  });
+  const MarkdownTheme({super.key, required this.data, required super.child});
 
   final MarkdownThemeData data;
 
   static MarkdownThemeData of(BuildContext context) {
-    final inheritedTheme =
-        context.dependOnInheritedWidgetOfExactType<MarkdownTheme>();
+    final inheritedTheme = context
+        .dependOnInheritedWidgetOfExactType<MarkdownTheme>();
     if (inheritedTheme != null) {
       return inheritedTheme.data;
     }
@@ -34,15 +30,9 @@ class MarkdownTheme extends InheritedTheme {
   }
 }
 
-enum MarkdownThemeForeground {
-  light,
-  dark,
-}
+enum MarkdownThemeForeground { light, dark }
 
-enum MarkdownThemeDensity {
-  comfortable,
-  tight,
-}
+enum MarkdownThemeDensity { comfortable, tight }
 
 @immutable
 class _MarkdownThemePalette {
@@ -141,10 +131,7 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
     BuildContext context, {
     double maxContentWidth = 920,
   }) {
-    return MarkdownThemeData.themed(
-      context,
-      maxContentWidth: maxContentWidth,
-    );
+    return MarkdownThemeData.themed(context, maxContentWidth: maxContentWidth);
   }
 
   factory MarkdownThemeData.tight(
@@ -188,8 +175,9 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
     );
     return switch (density) {
       MarkdownThemeDensity.comfortable => comfortableTheme,
-      MarkdownThemeDensity.tight =>
-        MarkdownThemeData._applyTightDensity(comfortableTheme),
+      MarkdownThemeDensity.tight => MarkdownThemeData._applyTightDensity(
+        comfortableTheme,
+      ),
     };
   }
 
@@ -208,7 +196,7 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
     final colorScheme = theme.colorScheme;
     final borderColor =
         Color.lerp(colorScheme.outline, colorScheme.onSurface, 0.24) ??
-            colorScheme.outline;
+        colorScheme.outline;
     return _MarkdownThemeScheme(
       colorScheme: colorScheme,
       palette: _MarkdownThemePalette(
@@ -257,7 +245,8 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
     const secondaryForeground = Color(0xFFB7C4D3);
     const headingForeground = Color(0xFFF8FBFF);
     const linkForeground = Color(0xFF7CCBFF);
-    final borderColor = Color.lerp(colorScheme.outline, foreground, 0.12) ??
+    final borderColor =
+        Color.lerp(colorScheme.outline, foreground, 0.12) ??
         colorScheme.outline;
     return _MarkdownThemeScheme(
       colorScheme: colorScheme,
@@ -326,11 +315,15 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
       listItemSpacing: 3,
       maxContentWidth: maxContentWidth,
       quotePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      inlineCodePadding:
-          const EdgeInsets.symmetric(horizontal: 5, vertical: 0.5),
+      inlineCodePadding: const EdgeInsets.symmetric(
+        horizontal: 5,
+        vertical: 0.5,
+      ),
       codeBlockPadding: const EdgeInsets.all(16),
-      tableCellPadding:
-          const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      tableCellPadding: const EdgeInsets.symmetric(
+        horizontal: 12,
+        vertical: 10,
+      ),
       inlineCodeBorderRadius: BorderRadius.circular(6),
       codeBlockBorderRadius: BorderRadius.circular(4),
       imageBorderRadius: BorderRadius.circular(6),
@@ -354,7 +347,8 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
         fontWeight: FontWeight.w700,
         color: palette.headingForeground,
       ),
-      heading1Style: textTheme.displaySmall?.copyWith(
+      heading1Style:
+          textTheme.displaySmall?.copyWith(
             fontWeight: FontWeight.w700,
             color: palette.headingForeground,
           ) ??
@@ -363,7 +357,8 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
             fontWeight: FontWeight.w700,
             color: palette.headingForeground,
           ),
-      heading2Style: textTheme.headlineMedium?.copyWith(
+      heading2Style:
+          textTheme.headlineMedium?.copyWith(
             fontWeight: FontWeight.w700,
             color: palette.headingForeground,
           ) ??
@@ -372,7 +367,8 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
             fontWeight: FontWeight.w700,
             color: palette.headingForeground,
           ),
-      heading3Style: textTheme.headlineSmall?.copyWith(
+      heading3Style:
+          textTheme.headlineSmall?.copyWith(
             fontWeight: FontWeight.w700,
             color: palette.headingForeground,
           ) ??
@@ -381,7 +377,8 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
             fontWeight: FontWeight.w700,
             color: palette.headingForeground,
           ),
-      heading4Style: textTheme.titleLarge?.copyWith(
+      heading4Style:
+          textTheme.titleLarge?.copyWith(
             fontWeight: FontWeight.w700,
             color: palette.headingForeground,
           ) ??
@@ -390,7 +387,8 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
             fontWeight: FontWeight.w700,
             color: palette.headingForeground,
           ),
-      heading5Style: textTheme.titleMedium?.copyWith(
+      heading5Style:
+          textTheme.titleMedium?.copyWith(
             fontWeight: FontWeight.w700,
             color: palette.headingForeground,
           ) ??
@@ -399,7 +397,8 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
             fontWeight: FontWeight.w700,
             color: palette.headingForeground,
           ),
-      heading6Style: textTheme.titleSmall?.copyWith(
+      heading6Style:
+          textTheme.titleSmall?.copyWith(
             fontWeight: FontWeight.w700,
             color: palette.headingForeground,
           ) ??
@@ -434,8 +433,10 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
       blockSpacing: 9,
       listItemSpacing: 1.5,
       quotePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-      inlineCodePadding:
-          const EdgeInsets.symmetric(horizontal: 4, vertical: 0.5),
+      inlineCodePadding: const EdgeInsets.symmetric(
+        horizontal: 4,
+        vertical: 0.5,
+      ),
       codeBlockPadding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
       tableCellPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       inlineCodeBorderRadius: BorderRadius.circular(5),
@@ -448,18 +449,30 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
       inlineCodeStyle: baseTheme.inlineCodeStyle.copyWith(fontSize: codeSize),
       codeBlockStyle: baseTheme.codeBlockStyle.copyWith(fontSize: codeSize),
       tableHeaderStyle: baseTheme.tableHeaderStyle.copyWith(fontSize: bodySize),
-      heading1Style:
-          baseTheme.heading1Style.copyWith(fontSize: 30, height: 1.2),
-      heading2Style:
-          baseTheme.heading2Style.copyWith(fontSize: 25, height: 1.22),
-      heading3Style:
-          baseTheme.heading3Style.copyWith(fontSize: 21, height: 1.24),
-      heading4Style:
-          baseTheme.heading4Style.copyWith(fontSize: 18.5, height: 1.26),
-      heading5Style:
-          baseTheme.heading5Style.copyWith(fontSize: 17, height: 1.28),
-      heading6Style:
-          baseTheme.heading6Style.copyWith(fontSize: 16, height: 1.3),
+      heading1Style: baseTheme.heading1Style.copyWith(
+        fontSize: 30,
+        height: 1.2,
+      ),
+      heading2Style: baseTheme.heading2Style.copyWith(
+        fontSize: 25,
+        height: 1.22,
+      ),
+      heading3Style: baseTheme.heading3Style.copyWith(
+        fontSize: 21,
+        height: 1.24,
+      ),
+      heading4Style: baseTheme.heading4Style.copyWith(
+        fontSize: 18.5,
+        height: 1.26,
+      ),
+      heading5Style: baseTheme.heading5Style.copyWith(
+        fontSize: 17,
+        height: 1.28,
+      ),
+      heading6Style: baseTheme.heading6Style.copyWith(
+        fontSize: 16,
+        height: 1.3,
+      ),
     );
   }
 
@@ -621,7 +634,8 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
           tableRowBackgroundColor ?? this.tableRowBackgroundColor,
       selectionColor: selectionColor ?? this.selectionColor,
       quoteBorderWidth: quoteBorderWidth ?? this.quoteBorderWidth,
-      imagePlaceholderBackgroundColor: imagePlaceholderBackgroundColor ??
+      imagePlaceholderBackgroundColor:
+          imagePlaceholderBackgroundColor ??
           this.imagePlaceholderBackgroundColor,
       showHeading1Divider: showHeading1Divider ?? this.showHeading1Divider,
       showHeading2Divider: showHeading2Divider ?? this.showHeading2Divider,
@@ -639,62 +653,60 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
       padding: EdgeInsetsGeometry.lerp(padding, other.padding, t) ?? padding,
       blockSpacing:
           lerpDouble(blockSpacing, other.blockSpacing, t) ?? blockSpacing,
-      listItemSpacing: lerpDouble(listItemSpacing, other.listItemSpacing, t) ??
+      listItemSpacing:
+          lerpDouble(listItemSpacing, other.listItemSpacing, t) ??
           listItemSpacing,
-      maxContentWidth: lerpDouble(maxContentWidth, other.maxContentWidth, t) ??
+      maxContentWidth:
+          lerpDouble(maxContentWidth, other.maxContentWidth, t) ??
           maxContentWidth,
       quotePadding:
           EdgeInsetsGeometry.lerp(quotePadding, other.quotePadding, t) ??
-              quotePadding,
+          quotePadding,
       inlineCodePadding:
           EdgeInsets.lerp(inlineCodePadding, other.inlineCodePadding, t) ??
-              inlineCodePadding,
-      codeBlockPadding: EdgeInsetsGeometry.lerp(
+          inlineCodePadding,
+      codeBlockPadding:
+          EdgeInsetsGeometry.lerp(
             codeBlockPadding,
             other.codeBlockPadding,
             t,
           ) ??
           codeBlockPadding,
-      tableCellPadding: EdgeInsetsGeometry.lerp(
+      tableCellPadding:
+          EdgeInsetsGeometry.lerp(
             tableCellPadding,
             other.tableCellPadding,
             t,
           ) ??
           tableCellPadding,
-      inlineCodeBorderRadius: BorderRadius.lerp(
+      inlineCodeBorderRadius:
+          BorderRadius.lerp(
             inlineCodeBorderRadius,
             other.inlineCodeBorderRadius,
             t,
           ) ??
           inlineCodeBorderRadius,
-      codeBlockBorderRadius: BorderRadius.lerp(
+      codeBlockBorderRadius:
+          BorderRadius.lerp(
             codeBlockBorderRadius,
             other.codeBlockBorderRadius,
             t,
           ) ??
           codeBlockBorderRadius,
-      imageBorderRadius: BorderRadius.lerp(
-            imageBorderRadius,
-            other.imageBorderRadius,
-            t,
-          ) ??
+      imageBorderRadius:
+          BorderRadius.lerp(imageBorderRadius, other.imageBorderRadius, t) ??
           imageBorderRadius,
-      quoteBorderRadius: BorderRadius.lerp(
-            quoteBorderRadius,
-            other.quoteBorderRadius,
-            t,
-          ) ??
+      quoteBorderRadius:
+          BorderRadius.lerp(quoteBorderRadius, other.quoteBorderRadius, t) ??
           quoteBorderRadius,
-      tableBorderRadius: BorderRadius.lerp(
-            tableBorderRadius,
-            other.tableBorderRadius,
-            t,
-          ) ??
+      tableBorderRadius:
+          BorderRadius.lerp(tableBorderRadius, other.tableBorderRadius, t) ??
           tableBorderRadius,
       imageCaptionSpacing:
           lerpDouble(imageCaptionSpacing, other.imageCaptionSpacing, t) ??
-              imageCaptionSpacing,
-      codeBlockToolbarPadding: EdgeInsetsGeometry.lerp(
+          imageCaptionSpacing,
+      codeBlockToolbarPadding:
+          EdgeInsetsGeometry.lerp(
             codeBlockToolbarPadding,
             other.codeBlockToolbarPadding,
             t,
@@ -705,37 +717,46 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
       linkStyle: TextStyle.lerp(linkStyle, other.linkStyle, t) ?? linkStyle,
       inlineCodeStyle:
           TextStyle.lerp(inlineCodeStyle, other.inlineCodeStyle, t) ??
-              inlineCodeStyle,
-      codeBlockStyle: TextStyle.lerp(codeBlockStyle, other.codeBlockStyle, t) ??
+          inlineCodeStyle,
+      codeBlockStyle:
+          TextStyle.lerp(codeBlockStyle, other.codeBlockStyle, t) ??
           codeBlockStyle,
       tableHeaderStyle:
           TextStyle.lerp(tableHeaderStyle, other.tableHeaderStyle, t) ??
-              tableHeaderStyle,
-      heading1Style: TextStyle.lerp(heading1Style, other.heading1Style, t) ??
+          tableHeaderStyle,
+      heading1Style:
+          TextStyle.lerp(heading1Style, other.heading1Style, t) ??
           heading1Style,
-      heading2Style: TextStyle.lerp(heading2Style, other.heading2Style, t) ??
+      heading2Style:
+          TextStyle.lerp(heading2Style, other.heading2Style, t) ??
           heading2Style,
-      heading3Style: TextStyle.lerp(heading3Style, other.heading3Style, t) ??
+      heading3Style:
+          TextStyle.lerp(heading3Style, other.heading3Style, t) ??
           heading3Style,
-      heading4Style: TextStyle.lerp(heading4Style, other.heading4Style, t) ??
+      heading4Style:
+          TextStyle.lerp(heading4Style, other.heading4Style, t) ??
           heading4Style,
-      heading5Style: TextStyle.lerp(heading5Style, other.heading5Style, t) ??
+      heading5Style:
+          TextStyle.lerp(heading5Style, other.heading5Style, t) ??
           heading5Style,
-      heading6Style: TextStyle.lerp(heading6Style, other.heading6Style, t) ??
+      heading6Style:
+          TextStyle.lerp(heading6Style, other.heading6Style, t) ??
           heading6Style,
       quoteBackgroundColor:
           Color.lerp(quoteBackgroundColor, other.quoteBackgroundColor, t) ??
-              quoteBackgroundColor,
+          quoteBackgroundColor,
       quoteBorderColor:
           Color.lerp(quoteBorderColor, other.quoteBorderColor, t) ??
-              quoteBorderColor,
-      inlineCodeBackgroundColor: Color.lerp(
+          quoteBorderColor,
+      inlineCodeBackgroundColor:
+          Color.lerp(
             inlineCodeBackgroundColor,
             other.inlineCodeBackgroundColor,
             t,
           ) ??
           inlineCodeBackgroundColor,
-      codeBlockBackgroundColor: Color.lerp(
+      codeBlockBackgroundColor:
+          Color.lerp(
             codeBlockBackgroundColor,
             other.codeBlockBackgroundColor,
             t,
@@ -745,14 +766,16 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
           Color.lerp(dividerColor, other.dividerColor, t) ?? dividerColor,
       tableBorderColor:
           Color.lerp(tableBorderColor, other.tableBorderColor, t) ??
-              tableBorderColor,
-      tableHeaderBackgroundColor: Color.lerp(
+          tableBorderColor,
+      tableHeaderBackgroundColor:
+          Color.lerp(
             tableHeaderBackgroundColor,
             other.tableHeaderBackgroundColor,
             t,
           ) ??
           tableHeaderBackgroundColor,
-      tableRowBackgroundColor: Color.lerp(
+      tableRowBackgroundColor:
+          Color.lerp(
             tableRowBackgroundColor,
             other.tableRowBackgroundColor,
             t,
@@ -762,19 +785,23 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
           Color.lerp(selectionColor, other.selectionColor, t) ?? selectionColor,
       quoteBorderWidth:
           lerpDouble(quoteBorderWidth, other.quoteBorderWidth, t) ??
-              quoteBorderWidth,
-      imagePlaceholderBackgroundColor: Color.lerp(
+          quoteBorderWidth,
+      imagePlaceholderBackgroundColor:
+          Color.lerp(
             imagePlaceholderBackgroundColor,
             other.imagePlaceholderBackgroundColor,
             t,
           ) ??
           imagePlaceholderBackgroundColor,
-      showHeading1Divider:
-          t < 0.5 ? showHeading1Divider : other.showHeading1Divider,
-      showHeading2Divider:
-          t < 0.5 ? showHeading2Divider : other.showHeading2Divider,
-      codeHighlightMaxLines:
-          t < 0.5 ? codeHighlightMaxLines : other.codeHighlightMaxLines,
+      showHeading1Divider: t < 0.5
+          ? showHeading1Divider
+          : other.showHeading1Divider,
+      showHeading2Divider: t < 0.5
+          ? showHeading2Divider
+          : other.showHeading2Divider,
+      codeHighlightMaxLines: t < 0.5
+          ? codeHighlightMaxLines
+          : other.codeHighlightMaxLines,
     );
   }
 
@@ -789,8 +816,9 @@ class MarkdownThemeData extends ThemeExtension<MarkdownThemeData>
     properties.add(IntProperty('codeHighlightMaxLines', codeHighlightMaxLines));
     properties.add(ColorProperty('selectionColor', selectionColor));
     properties.add(DiagnosticsProperty<TextStyle>('bodyStyle', bodyStyle));
-    properties
-        .add(DiagnosticsProperty<TextStyle>('heading1Style', heading1Style));
+    properties.add(
+      DiagnosticsProperty<TextStyle>('heading1Style', heading1Style),
+    );
   }
 
   @override

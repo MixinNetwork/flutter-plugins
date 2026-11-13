@@ -1,5 +1,5 @@
 import 'package:desktop_multi_window/desktop_multi_window.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:mixin_logger/mixin_logger.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:video_player/video_player.dart';

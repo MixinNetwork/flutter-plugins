@@ -1,5 +1,6 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
+
 import 'dart:math' as math;
 
 import '../../clipboard/plain_text_serializer.dart';
@@ -38,10 +39,10 @@ class MarkdownBlockBuilder {
     this.codeBlockBuilder,
     this.bulletBuilder,
     this.onTapLink,
-    required Map<String, CachedBlockRow> cachedBlockRows,
+    required this._cachedBlockRows,
     required this.tableLayoutPlanCache,
     required this.codeHighlightCache,
-  }) : _cachedBlockRows = cachedBlockRows;
+  });
 
   final MarkdownThemeData theme;
   final MarkdownSelectionController? selectionController;
@@ -90,9 +91,7 @@ class MarkdownBlockBuilder {
     }
 
     final widget = Padding(
-      padding: EdgeInsets.only(
-        bottom: _spacingAfterTopLevelBlock(blockIndex),
-      ),
+      padding: EdgeInsets.only(bottom: _spacingAfterTopLevelBlock(blockIndex)),
       child: Align(
         alignment: AlignmentDirectional.topStart,
         child: ConstrainedBox(
@@ -305,8 +304,8 @@ class MarkdownBlockBuilder {
           block.id,
           () => GlobalKey<SelectableMarkdownBlockState>(debugLabel: block.id),
         );
-        final captionDescriptor =
-            descriptorExtractor.buildImageCaptionDescriptor(block);
+        final captionDescriptor = descriptorExtractor
+            .buildImageCaptionDescriptor(block);
         final imageState = _buildImageVisual(context, block, hasCaption: true);
         return MarkdownImageBlockView(
           theme: theme,
@@ -368,13 +367,15 @@ class MarkdownBlockBuilder {
       case MarkdownBlockKind.heading:
         final heading = block as HeadingBlock;
         final style = theme.headingStyleForLevel(heading.level);
-        final plainText =
-            MarkdownInlineBuilder.flattenInlineText(heading.inlines);
+        final plainText = MarkdownInlineBuilder.flattenInlineText(
+          heading.inlines,
+        );
         final geometry = MarkdownTextLeafGeometry(
           runs: inlineBuilder.buildPretextRuns(style, heading.inlines),
           fallbackStyle: style,
-          textAlign:
-              MarkdownInlineBuilder.resolvedInlineTextAlign(heading.inlines),
+          textAlign: MarkdownInlineBuilder.resolvedInlineTextAlign(
+            heading.inlines,
+          ),
         );
         return _buildTextLeafSpec(
           child: _wrapHeadingBlock(
@@ -386,8 +387,9 @@ class MarkdownBlockBuilder {
         );
       case MarkdownBlockKind.paragraph:
         final paragraph = block as ParagraphBlock;
-        final plainText =
-            MarkdownInlineBuilder.flattenInlineText(paragraph.inlines);
+        final plainText = MarkdownInlineBuilder.flattenInlineText(
+          paragraph.inlines,
+        );
         if (_isStandaloneLineBreakBlock(paragraph)) {
           return SelectableBlockSpec(
             child: _buildStandaloneLineBreak(context),
@@ -401,8 +403,9 @@ class MarkdownBlockBuilder {
             paragraph.inlines,
           ),
           fallbackStyle: theme.bodyStyle,
-          textAlign:
-              MarkdownInlineBuilder.resolvedInlineTextAlign(paragraph.inlines),
+          textAlign: MarkdownInlineBuilder.resolvedInlineTextAlign(
+            paragraph.inlines,
+          ),
         );
         return _buildTextLeafSpec(
           child: _textLeaf(_topLevelLeafPath, geometry),
@@ -411,30 +414,27 @@ class MarkdownBlockBuilder {
         );
       case MarkdownBlockKind.quote:
         final quoteBlock = block as QuoteBlock;
-        final descriptor =
-            descriptorExtractor.buildSelectableDescriptorForBlock(quoteBlock);
+        final descriptor = descriptorExtractor
+            .buildSelectableDescriptorForBlock(quoteBlock);
         return _buildContainerSpec(
           block: quoteBlock,
           child: MarkdownQuoteBlockView(
             theme: theme,
-            child: _buildQuoteContent(
-              context,
-              quoteBlock,
-              path: const <int>[],
-            ),
+            child: _buildQuoteContent(context, quoteBlock, path: const <int>[]),
           ),
           textSpan: descriptor.span,
           highlightBorderRadius: theme.quoteBorderRadius,
           selectionPaintOrder: SelectableBlockSelectionPaintOrder.aboveChild,
           selectionColor: _quoteSelectionColor,
-          repaintListenable:
-              _nestedScrollableRepaintListenableForBlocks(quoteBlock.children),
+          repaintListenable: _nestedScrollableRepaintListenableForBlocks(
+            quoteBlock.children,
+          ),
         );
       case MarkdownBlockKind.orderedList:
       case MarkdownBlockKind.unorderedList:
         final listBlock = block as ListBlock;
-        final descriptor =
-            descriptorExtractor.buildSelectableDescriptorForBlock(listBlock);
+        final descriptor = descriptorExtractor
+            .buildSelectableDescriptorForBlock(listBlock);
         return _buildContainerSpec(
           block: listBlock,
           child: MarkdownListBlockView(
@@ -451,8 +451,9 @@ class MarkdownBlockBuilder {
             bulletBuilder: bulletBuilder,
           ),
           textSpan: descriptor.span,
-          repaintListenable:
-              _nestedScrollableRepaintListenableForListBlock(listBlock),
+          repaintListenable: _nestedScrollableRepaintListenableForListBlock(
+            listBlock,
+          ),
           selectionPaintOrder: SelectableBlockSelectionPaintOrder.aboveChild,
         );
       case MarkdownBlockKind.definitionList:
@@ -490,21 +491,19 @@ class MarkdownBlockBuilder {
             ),
           ),
           textSpan: footnoteDescriptor.span,
-          repaintListenable:
-              _nestedScrollableRepaintListenableForListBlock(orderedFootnotes),
+          repaintListenable: _nestedScrollableRepaintListenableForListBlock(
+            orderedFootnotes,
+          ),
           highlightBorderRadius: BorderRadius.circular(8),
         );
       case MarkdownBlockKind.details:
         final detailsBlock = block as DetailsBlock;
-        final descriptor =
-            descriptorExtractor.buildDetailsSelectableDescriptor(detailsBlock);
+        final descriptor = descriptorExtractor.buildDetailsSelectableDescriptor(
+          detailsBlock,
+        );
         return _buildContainerSpec(
           block: detailsBlock,
-          child: _buildDetails(
-            context,
-            detailsBlock,
-            path: const <int>[],
-          ),
+          child: _buildDetails(context, detailsBlock, path: const <int>[]),
           textSpan: descriptor.span,
           highlightBorderRadius: theme.quoteBorderRadius,
           selectionPaintOrder: SelectableBlockSelectionPaintOrder.aboveChild,
@@ -591,8 +590,8 @@ class MarkdownBlockBuilder {
         );
       case MarkdownBlockKind.table:
         final tableBlock = block as TableBlock;
-        final descriptor =
-            descriptorExtractor.buildSelectableDescriptorForBlock(tableBlock);
+        final descriptor = descriptorExtractor
+            .buildSelectableDescriptorForBlock(tableBlock);
         final scrollController = keysRegistry.tableScrollControllers
             .putIfAbsent(tableBlock.id, ScrollController.new);
         final viewportKey = keysRegistry.tableViewportKeys.putIfAbsent(
@@ -622,11 +621,7 @@ class MarkdownBlockBuilder {
         );
       case MarkdownBlockKind.thematicBreak:
         return SelectableBlockSpec(
-          child: Divider(
-            color: theme.dividerColor,
-            height: 1,
-            thickness: 1,
-          ),
+          child: Divider(color: theme.dividerColor, height: 1, thickness: 1),
           plainText: plainTextSerializer.serializeBlockText(block),
           hitTestBehavior: SelectableBlockHitTestBehavior.block,
         );
@@ -664,17 +659,17 @@ class MarkdownBlockBuilder {
           MarkdownContainerSelectionGeometry.rects(context, block, range),
       textOffsetResolver: (context, _, localPosition) =>
           MarkdownContainerSelectionGeometry.offsetAt(
-        context,
-        block,
-        localPosition,
-      ),
+            context,
+            block,
+            localPosition,
+          ),
       selectionUnitRangeResolver: (context, _, localPosition, position) =>
           MarkdownContainerSelectionGeometry.unitAt(
-        context,
-        block,
-        localPosition,
-        position,
-      ),
+            context,
+            block,
+            localPosition,
+            position,
+          ),
     );
   }
 
@@ -730,7 +725,8 @@ class MarkdownBlockBuilder {
       selectionStructure: selectionStructure,
       measurementPadding: measurementPadding,
       highlightBorderRadius: highlightBorderRadius,
-      selectionPaintOrder: selectionPaintOrder ??
+      selectionPaintOrder:
+          selectionPaintOrder ??
           (hasInlineSurface
               ? SelectableBlockSelectionPaintOrder.aboveChild
               : SelectableBlockSelectionPaintOrder.behindChild),
@@ -804,8 +800,8 @@ class MarkdownBlockBuilder {
     final styleFontSize = style.fontSize;
     final scaledFontSize =
         bodyFontSize == null || contextFontSize == null || styleFontSize == null
-            ? styleFontSize ?? contextFontSize
-            : styleFontSize * contextFontSize / bodyFontSize;
+        ? styleFontSize ?? contextFontSize
+        : styleFontSize * contextFontSize / bodyFontSize;
     return style.copyWith(
       color: textStyleContext.color,
       fontSize: scaledFontSize,
@@ -918,11 +914,7 @@ class MarkdownBlockBuilder {
       case MarkdownBlockKind.image:
         return _buildImage(context, block as ImageBlock);
       case MarkdownBlockKind.thematicBreak:
-        return Divider(
-          color: theme.dividerColor,
-          height: 1,
-          thickness: 1,
-        );
+        return Divider(color: theme.dividerColor, height: 1, thickness: 1);
     }
   }
 
@@ -933,11 +925,7 @@ class MarkdownBlockBuilder {
   }) {
     return MarkdownQuoteBlockView(
       theme: theme,
-      child: _buildQuoteContent(
-        context,
-        block,
-        path: path,
-      ),
+      child: _buildQuoteContent(context, block, path: path),
     );
   }
 
@@ -1046,10 +1034,10 @@ class MarkdownBlockBuilder {
   /// selection geometry reads.
   MarkdownListItemSlotBuilder _listItemSlotBuilder(List<int> path) {
     return (index, role, child) => MarkdownSelectionSlot(
-          path: PathInBlock(<int>[...path, index]),
-          role: role,
-          child: child,
-        );
+      path: PathInBlock(<int>[...path, index]),
+      role: role,
+      child: child,
+    );
   }
 
   Widget _buildDefinitionList(
@@ -1057,8 +1045,8 @@ class MarkdownBlockBuilder {
     DefinitionListBlock block, {
     required List<int> path,
   }) {
-    final descriptor =
-        descriptorExtractor.buildDefinitionListSelectableDescriptor(block);
+    final descriptor = descriptorExtractor
+        .buildDefinitionListSelectableDescriptor(block);
     return _buildDescriptorTextWidget(descriptor, leafPath: _leafPath(path));
   }
 
@@ -1105,8 +1093,10 @@ class MarkdownBlockBuilder {
         child: _buildTextBlock(
           style: summaryStyle,
           inlines: block.summary,
-          inlineCodeStyle:
-              _styleForContext(theme.inlineCodeStyle, paragraphStyle),
+          inlineCodeStyle: _styleForContext(
+            theme.inlineCodeStyle,
+            paragraphStyle,
+          ),
           linkStyle: _linkStyleForContext(paragraphStyle),
           path: summaryPath,
         ),
@@ -1185,10 +1175,7 @@ class MarkdownBlockBuilder {
     );
   }
 
-  Widget _buildStandaloneLineBreak(
-    BuildContext context, {
-    TextStyle? style,
-  }) {
+  Widget _buildStandaloneLineBreak(BuildContext context, {TextStyle? style}) {
     final textScaler =
         MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling;
     return SizedBox(
@@ -1209,16 +1196,14 @@ class MarkdownBlockBuilder {
     return textPainter.preferredLineHeight;
   }
 
-  Widget _wrapHeadingBlock({
-    required int level,
-    required Widget child,
-  }) {
+  Widget _wrapHeadingBlock({required int level, required Widget child}) {
     if (level > 2) {
       return child;
     }
 
-    final showDivider =
-        level == 1 ? theme.showHeading1Divider : theme.showHeading2Divider;
+    final showDivider = level == 1
+        ? theme.showHeading1Divider
+        : theme.showHeading2Divider;
     if (!showDivider) {
       return child;
     }
@@ -1230,11 +1215,7 @@ class MarkdownBlockBuilder {
       children: <Widget>[
         child,
         SizedBox(height: dividerSpacing),
-        Divider(
-          color: theme.dividerColor,
-          height: 1,
-          thickness: 1,
-        ),
+        Divider(color: theme.dividerColor, height: 1, thickness: 1),
       ],
     );
   }
@@ -1287,9 +1268,12 @@ class MarkdownBlockBuilder {
       theme: theme,
       codeSpan: codeSpan,
       viewportKey: viewportKey,
-      scrollController: scrollController ??
-          keysRegistry.codeBlockScrollControllers
-              .putIfAbsent(block.id, ScrollController.new),
+      scrollController:
+          scrollController ??
+          keysRegistry.codeBlockScrollControllers.putIfAbsent(
+            block.id,
+            ScrollController.new,
+          ),
       onCopyCode: () {
         Clipboard.setData(ClipboardData(text: block.code));
       },
@@ -1311,14 +1295,18 @@ class MarkdownBlockBuilder {
       switch (block.kind) {
         case MarkdownBlockKind.codeBlock:
           listenables.add(
-            keysRegistry.codeBlockScrollControllers
-                .putIfAbsent(block.id, ScrollController.new),
+            keysRegistry.codeBlockScrollControllers.putIfAbsent(
+              block.id,
+              ScrollController.new,
+            ),
           );
           return;
         case MarkdownBlockKind.table:
           listenables.add(
-            keysRegistry.tableScrollControllers
-                .putIfAbsent(block.id, ScrollController.new),
+            keysRegistry.tableScrollControllers.putIfAbsent(
+              block.id,
+              ScrollController.new,
+            ),
           );
           return;
         case MarkdownBlockKind.quote:
@@ -1378,7 +1366,8 @@ class MarkdownBlockBuilder {
     GlobalKey? viewportKey,
     List<int> path = const <int>[],
   }) {
-    final resolvedViewportKey = viewportKey ??
+    final resolvedViewportKey =
+        viewportKey ??
         keysRegistry.tableViewportKeys.putIfAbsent(
           block.id,
           () => GlobalKey(debugLabel: 'table-viewport-${block.id}'),
@@ -1387,41 +1376,42 @@ class MarkdownBlockBuilder {
       theme: theme,
       block: block,
       layoutPlan: tableLayoutPlanCache.planFor(block),
-      textWidgetBuilder: (
-        context,
-        style,
-        inlines,
-        textAlign, {
-        required int rowIndex,
-        required int columnIndex,
-        bool alignInlineMathToBaseline = true,
-        TextStyle? inlineCodeStyle,
-        TextStyle? linkStyle,
-      }) {
-        final runs = inlineBuilder.buildPretextRuns(
-          style,
-          inlines,
-          alignInlineMathToBaseline: alignInlineMathToBaseline,
-          inlineCodeStyle: inlineCodeStyle,
-          linkStyle: linkStyle,
-        );
-        return MarkdownSelectableLeaf(
-          path: PathInBlock(<int>[...path, rowIndex, columnIndex]),
-          geometry: MarkdownTextLeafGeometry(
-            runs: runs,
-            fallbackStyle: style,
-            textAlign: textAlign,
-            direct: true,
-            viewportKey: resolvedViewportKey,
-          ),
-          child: MarkdownPretextTextBlock.rich(
-            runs: runs,
-            fallbackStyle: style,
-            textAlign: textAlign,
-            intrinsicWidthSafe: true,
-          ),
-        );
-      },
+      textWidgetBuilder:
+          (
+            context,
+            style,
+            inlines,
+            textAlign, {
+            required int rowIndex,
+            required int columnIndex,
+            bool alignInlineMathToBaseline = true,
+            TextStyle? inlineCodeStyle,
+            TextStyle? linkStyle,
+          }) {
+            final runs = inlineBuilder.buildPretextRuns(
+              style,
+              inlines,
+              alignInlineMathToBaseline: alignInlineMathToBaseline,
+              inlineCodeStyle: inlineCodeStyle,
+              linkStyle: linkStyle,
+            );
+            return MarkdownSelectableLeaf(
+              path: PathInBlock(<int>[...path, rowIndex, columnIndex]),
+              geometry: MarkdownTextLeafGeometry(
+                runs: runs,
+                fallbackStyle: style,
+                textAlign: textAlign,
+                direct: true,
+                viewportKey: resolvedViewportKey,
+              ),
+              child: MarkdownPretextTextBlock.rich(
+                runs: runs,
+                fallbackStyle: style,
+                textAlign: textAlign,
+                intrinsicWidthSafe: true,
+              ),
+            );
+          },
       bodyStyle: _styleForContext(theme.bodyStyle, textStyleContext),
       tableHeaderStyle: _styleForContext(
         theme.tableHeaderStyle,
@@ -1433,24 +1423,28 @@ class MarkdownBlockBuilder {
       ),
       linkStyle: _linkStyleForContext(textStyleContext),
       viewportKey: resolvedViewportKey,
-      scrollController: scrollController ??
-          keysRegistry.tableScrollControllers
-              .putIfAbsent(block.id, ScrollController.new),
+      scrollController:
+          scrollController ??
+          keysRegistry.tableScrollControllers.putIfAbsent(
+            block.id,
+            ScrollController.new,
+          ),
     );
   }
 
   Widget _buildImage(BuildContext context, ImageBlock block) {
     if (imageBuilder != null) {
-      return _wrapLinkedImage(
-        block,
-        imageBuilder!(context, block, theme),
-      );
+      return _wrapLinkedImage(block, imageBuilder!(context, block, theme));
     }
     final caption = MarkdownDescriptorExtractor.imageCaptionText(block);
-    final captionDescriptor =
-        descriptorExtractor.buildImageCaptionDescriptor(block);
-    final imageState =
-        _buildImageVisual(context, block, hasCaption: caption.isNotEmpty);
+    final captionDescriptor = descriptorExtractor.buildImageCaptionDescriptor(
+      block,
+    );
+    final imageState = _buildImageVisual(
+      context,
+      block,
+      hasCaption: caption.isNotEmpty,
+    );
     return MarkdownImageBlockView(
       theme: theme,
       image: imageState.image,
@@ -1463,8 +1457,11 @@ class MarkdownBlockBuilder {
   }
 
   ({Widget image, ValueNotifier<bool> hasErrorNotifier, bool hasKnownSize})
-      _buildImageVisual(BuildContext context, ImageBlock block,
-          {bool hasCaption = false}) {
+  _buildImageVisual(
+    BuildContext context,
+    ImageBlock block, {
+    bool hasCaption = false,
+  }) {
     final uri = Uri.tryParse(block.url);
     double? w;
     double? h;
@@ -1475,8 +1472,10 @@ class MarkdownBlockBuilder {
       if (hStr != null) h = double.tryParse(hStr);
     }
     final hasKnownSize = w != null && h != null;
-    final hasErrorNotifier = keysRegistry.imageErrorNotifiers
-        .putIfAbsent(block.id, () => ValueNotifier<bool>(false));
+    final hasErrorNotifier = keysRegistry.imageErrorNotifiers.putIfAbsent(
+      block.id,
+      () => ValueNotifier<bool>(false),
+    );
 
     if (imageBuilder != null) {
       return (
@@ -1520,15 +1519,18 @@ class MarkdownBlockBuilder {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.broken_image_outlined,
-                  size: 18,
-                  color: theme.bodyStyle.color?.withValues(alpha: 0.72)),
+              Icon(
+                Icons.broken_image_outlined,
+                size: 18,
+                color: theme.bodyStyle.color?.withValues(alpha: 0.72),
+              ),
               const SizedBox(width: 8),
               Flexible(
                 child: Text(
                   text,
                   style: theme.bodyStyle.copyWith(
-                      color: theme.bodyStyle.color?.withValues(alpha: 0.72)),
+                    color: theme.bodyStyle.color?.withValues(alpha: 0.72),
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -1548,27 +1550,24 @@ class MarkdownBlockBuilder {
             errorBuilder: errorBuilder,
           )
         : localImageProvider != null
-            ? Image(
-                image: localImageProvider,
-                width: w,
-                height: h,
-                fit: BoxFit.cover,
-                errorBuilder: errorBuilder,
-              )
-            : Image.asset(
-                block.url,
-                width: w,
-                height: h,
-                fit: BoxFit.cover,
-                errorBuilder: errorBuilder,
-              );
+        ? Image(
+            image: localImageProvider,
+            width: w,
+            height: h,
+            fit: BoxFit.cover,
+            errorBuilder: errorBuilder,
+          )
+        : Image.asset(
+            block.url,
+            width: w,
+            height: h,
+            fit: BoxFit.cover,
+            errorBuilder: errorBuilder,
+          );
     return (
       image: _wrapLinkedImage(
         block,
-        ClipRRect(
-          borderRadius: theme.imageBorderRadius,
-          child: image,
-        ),
+        ClipRRect(borderRadius: theme.imageBorderRadius, child: image),
       ),
       hasErrorNotifier: hasErrorNotifier,
       hasKnownSize: hasKnownSize,
@@ -1596,7 +1595,9 @@ class MarkdownBlockBuilder {
   }
 
   SelectableBlockSpec _buildCustomImageBuilderSpec(
-      BuildContext context, ImageBlock block) {
+    BuildContext context,
+    ImageBlock block,
+  ) {
     final caption = MarkdownDescriptorExtractor.imageCaptionText(block);
     final blockPlainText = caption.isEmpty ? block.url : caption;
     final imageState = _buildImageVisual(context, block);
@@ -1630,10 +1631,7 @@ class MarkdownBlockBuilder {
   }) {
     final pretext = descriptor.pretext;
     if (pretext == null) {
-      return Text.rich(
-        descriptor.span,
-        style: pretext?.fallbackStyle,
-      );
+      return Text.rich(descriptor.span, style: pretext?.fallbackStyle);
     }
     if (leafPath != null) {
       return _textLeaf(
@@ -1650,8 +1648,9 @@ class MarkdownBlockBuilder {
       fallbackStyle: pretext.fallbackStyle,
       textAlign: pretext.textAlign,
       intrinsicWidthSafe: intrinsicWidthSafe,
-      preferDirectRichText:
-          markdownPretextCanUseDirectRichTextGeometry(pretext.runs),
+      preferDirectRichText: markdownPretextCanUseDirectRichTextGeometry(
+        pretext.runs,
+      ),
     );
   }
 
@@ -1701,19 +1700,12 @@ class MarkdownBlockBuilder {
     return structure;
   }
 
-  Widget _buildFootnoteListContainer({
-    required Widget child,
-  }) {
+  Widget _buildFootnoteListContainer({required Widget child}) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(color: theme.dividerColor),
-        ),
+        border: Border(top: BorderSide(color: theme.dividerColor)),
       ),
-      child: Padding(
-        padding: const EdgeInsets.only(top: 12),
-        child: child,
-      ),
+      child: Padding(padding: const EdgeInsets.only(top: 12), child: child),
     );
   }
 

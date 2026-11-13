@@ -24,8 +24,11 @@ enum MarkdownSelectionSlotRole {
 class MarkdownSelectionLeafRegistry {
   final Map<PathInBlock, MarkdownSelectableLeafState> _leaves =
       <PathInBlock, MarkdownSelectableLeafState>{};
-  final Map<(PathInBlock, MarkdownSelectionSlotRole),
-          _MarkdownSelectionSlotState> _slots =
+  final Map<
+    (PathInBlock, MarkdownSelectionSlotRole),
+    _MarkdownSelectionSlotState
+  >
+  _slots =
       <(PathInBlock, MarkdownSelectionSlotRole), _MarkdownSelectionSlotState>{};
 
   MarkdownSelectableLeafState? leaf(PathInBlock path) => _leaves[path];
@@ -356,10 +359,10 @@ class MarkdownTextLeafGeometry extends MarkdownLeafGeometry {
       );
       return markdownPretextPlainOffsetForRenderOffset(runs, position.offset);
     }
-    return _layout(context, box.size.width).textOffsetAt(
-      localPosition,
-      textDirection: Directionality.of(context),
-    );
+    return _layout(
+      context,
+      box.size.width,
+    ).textOffsetAt(localPosition, textDirection: Directionality.of(context));
   }
 
   @override
@@ -380,7 +383,7 @@ class MarkdownTextLeafGeometry extends MarkdownLeafGeometry {
     return localPosition == null
         ? layout.lineRangeForTextOffset(offset)
         : layout.visualLineRangeForLocalPosition(localPosition) ??
-            layout.lineRangeForTextOffset(offset);
+              layout.lineRangeForTextOffset(offset);
   }
 
   /// Pretext geometry of the runs at [maxWidth], for when no live paragraph
@@ -413,10 +416,10 @@ class MarkdownTextLeafGeometry extends MarkdownLeafGeometry {
   }
 
   int layoutOffsetAt(BuildContext context, double maxWidth, Offset position) {
-    return _layout(context, maxWidth).textOffsetAt(
-      position,
-      textDirection: Directionality.of(context),
-    );
+    return _layout(
+      context,
+      maxWidth,
+    ).textOffsetAt(position, textDirection: Directionality.of(context));
   }
 
   ({int start, int end})? layoutLineRangeAt(
@@ -429,7 +432,7 @@ class MarkdownTextLeafGeometry extends MarkdownLeafGeometry {
     return localPosition == null
         ? layout.lineRangeForTextOffset(offset)
         : layout.visualLineRangeForLocalPosition(localPosition) ??
-            layout.lineRangeForTextOffset(offset);
+              layout.lineRangeForTextOffset(offset);
   }
 
   RenderParagraph? _paragraphIn(RenderBox box) {
@@ -508,10 +511,10 @@ class MarkdownTextLeafGeometry extends MarkdownLeafGeometry {
             preferEnd: false,
           )
         : paragraph
-            .getPositionForOffset(
-              paragraph.globalToLocal(box.localToGlobal(localPosition)),
-            )
-            .offset;
+              .getPositionForOffset(
+                paragraph.globalToLocal(box.localToGlobal(localPosition)),
+              )
+              .offset;
     final boundary = _paragraphLineBoundary(paragraph, renderOffset);
     if (boundary == null) {
       return null;
@@ -668,10 +671,10 @@ List<_LineExtent> _paragraphLineExtents(RenderParagraph paragraph) {
     contiguousLines.add((
       top: previous != null
           ? (previous.baseline -
-                  previous.ascent +
-                  previous.height +
-                  currentTop) /
-              2.0
+                    previous.ascent +
+                    previous.height +
+                    currentTop) /
+                2.0
           : currentTop,
       bottom: next != null
           ? (currentBottom + next.baseline - next.ascent) / 2.0
@@ -725,22 +728,24 @@ List<TextBox> _normalizeBoxesToLineExtents(
   if (lineExtents.isEmpty) {
     return boxes;
   }
-  return boxes.map((box) {
-    for (final extent in lineExtents) {
-      final overlapTop = math.max(box.top, extent.top);
-      final overlapBottom = math.min(box.bottom, extent.bottom);
-      if (overlapBottom - overlapTop > 0.5) {
-        return TextBox.fromLTRBD(
-          box.left,
-          extent.top,
-          box.right,
-          extent.bottom,
-          box.direction,
-        );
-      }
-    }
-    return box;
-  }).toList(growable: false);
+  return boxes
+      .map((box) {
+        for (final extent in lineExtents) {
+          final overlapTop = math.max(box.top, extent.top);
+          final overlapBottom = math.min(box.bottom, extent.bottom);
+          if (overlapBottom - overlapTop > 0.5) {
+            return TextBox.fromLTRBD(
+              box.left,
+              extent.top,
+              box.right,
+              extent.bottom,
+              box.direction,
+            );
+          }
+        }
+        return box;
+      })
+      .toList(growable: false);
 }
 
 /// Merges the boxes of each line into one box spanning them.
@@ -762,7 +767,8 @@ List<TextBox> _mergeSameLineBoxes(List<TextBox> boxes) {
   final merged = <TextBox>[];
   var current = sorted.first;
   for (final next in sorted.skip(1)) {
-    final sameLine = (next.top - current.top).abs() <= lineTolerance &&
+    final sameLine =
+        (next.top - current.top).abs() <= lineTolerance &&
         (next.bottom - current.bottom).abs() <= lineTolerance;
     if (sameLine) {
       current = TextBox.fromLTRBD(

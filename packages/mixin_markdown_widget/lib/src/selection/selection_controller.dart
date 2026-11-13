@@ -5,9 +5,8 @@ import '../clipboard/plain_text_serializer.dart';
 import '../core/document.dart';
 
 class MarkdownSelectionController extends ChangeNotifier {
-  MarkdownSelectionController({
-    MarkdownPlainTextSerializer? serializer,
-  }) : _serializer = serializer ?? const MarkdownPlainTextSerializer();
+  MarkdownSelectionController({MarkdownPlainTextSerializer? serializer})
+    : _serializer = serializer ?? const MarkdownPlainTextSerializer();
 
   final MarkdownPlainTextSerializer _serializer;
 

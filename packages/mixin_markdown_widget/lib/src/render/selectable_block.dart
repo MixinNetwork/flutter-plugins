@@ -1,21 +1,15 @@
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:word_segmenter/word_segmenter.dart';
 
 import '../core/document.dart';
 import '../selection/structured_block_selection.dart';
 import 'selection/markdown_selectable_leaf.dart';
 
-enum SelectableBlockHitTestBehavior {
-  text,
-  block,
-}
+enum SelectableBlockHitTestBehavior { text, block }
 
-enum SelectableBlockSelectionPaintOrder {
-  behindChild,
-  aboveChild,
-}
+enum SelectableBlockSelectionPaintOrder { behindChild, aboveChild }
 
 @immutable
 class SelectableBlockSpec {
@@ -49,25 +43,24 @@ class SelectableBlockSpec {
     BuildContext context,
     Size constraints,
     DocumentRange range,
-  )? selectionRectResolver;
-  final int? Function(
-    BuildContext context,
-    Size size,
-    Offset localPosition,
-  )? textOffsetResolver;
+  )?
+  selectionRectResolver;
+  final int? Function(BuildContext context, Size size, Offset localPosition)?
+  textOffsetResolver;
   final DocumentRange? Function(
     BuildContext context,
     Size size,
     Offset? localPosition,
     DocumentPosition position,
-  )? selectionUnitRangeResolver;
+  )?
+  selectionUnitRangeResolver;
   final StructuredBlockSelection? selectionStructure;
   final SelectableBlockSelectionPaintOrder selectionPaintOrder;
   final Color? selectionColor;
   final Listenable? repaintListenable;
   final EdgeInsets? selectionClipPadding;
   final Rect? Function(BuildContext context, Size size)?
-      selectionClipRectResolver;
+  selectionClipRectResolver;
 }
 
 class SelectableMarkdownBlock extends StatefulWidget {
@@ -232,7 +225,8 @@ class SelectableMarkdownBlockState extends State<SelectableMarkdownBlock>
         widget.spec.plainText.isEmpty) {
       return selectWholeBlock();
     }
-    final upstream = globalPosition != null &&
+    final upstream =
+        globalPosition != null &&
         isPointerOnPrecedingCharacter(position.textOffset, globalPosition);
     ({int start, int end}) wordRangeAt(String text, int offset) =>
         markdownWordRangeAt(text, offset, upstream: upstream);
@@ -261,8 +255,8 @@ class SelectableMarkdownBlockState extends State<SelectableMarkdownBlock>
       position.textOffset < 0
           ? 0
           : position.textOffset > widget.spec.plainText.length
-              ? widget.spec.plainText.length
-              : position.textOffset,
+          ? widget.spec.plainText.length
+          : position.textOffset,
     );
     var start = word.start;
     var end = word.end;
@@ -303,13 +297,19 @@ class SelectableMarkdownBlockState extends State<SelectableMarkdownBlock>
     final size = renderObject is RenderBox && renderObject.hasSize
         ? renderObject.size
         : Size.zero;
-    final localPosition = renderObject is RenderBox &&
+    final localPosition =
+        renderObject is RenderBox &&
             renderObject.hasSize &&
             globalPosition != null
         ? renderObject.globalToLocal(globalPosition)
         : null;
-    final range = widget.spec.selectionUnitRangeResolver
-            ?.call(context, size, localPosition, position) ??
+    final range =
+        widget.spec.selectionUnitRangeResolver?.call(
+          context,
+          size,
+          localPosition,
+          position,
+        ) ??
         _resolveLineRangeWithTextPainter(position, size);
     if (range == null) {
       return selectWholeBlock();
@@ -381,7 +381,8 @@ class SelectableMarkdownBlockState extends State<SelectableMarkdownBlock>
       );
     }
     final localPosition = renderObject.globalToLocal(globalPosition);
-    final bool preferEnd = localPosition.dy > renderObject.size.height / 2 ||
+    final bool preferEnd =
+        localPosition.dy > renderObject.size.height / 2 ||
         localPosition.dx > renderObject.size.width / 2;
     if ((Offset.zero & renderObject.size).contains(localPosition)) {
       return _hitTestLocal(localPosition, renderObject.size) ??
@@ -429,11 +430,13 @@ class SelectableMarkdownBlockState extends State<SelectableMarkdownBlock>
           ),
         );
         final paintedChild = CustomPaint(
-          painter: widget.spec.selectionPaintOrder ==
+          painter:
+              widget.spec.selectionPaintOrder ==
                   SelectableBlockSelectionPaintOrder.behindChild
               ? selectionPainter
               : null,
-          foregroundPainter: widget.spec.selectionPaintOrder ==
+          foregroundPainter:
+              widget.spec.selectionPaintOrder ==
                   SelectableBlockSelectionPaintOrder.aboveChild
               ? selectionPainter
               : null,
@@ -471,8 +474,8 @@ class SelectableMarkdownBlockState extends State<SelectableMarkdownBlock>
       final textOffset = resolvedOffset < 0
           ? 0
           : resolvedOffset > widget.spec.plainText.length
-              ? widget.spec.plainText.length
-              : resolvedOffset;
+          ? widget.spec.plainText.length
+          : resolvedOffset;
       final structure = widget.spec.selectionStructure;
       if (structure != null) {
         return structure.positionForDisplayedOffset(
@@ -490,7 +493,8 @@ class SelectableMarkdownBlockState extends State<SelectableMarkdownBlock>
     if (widget.spec.hitTestBehavior == SelectableBlockHitTestBehavior.block ||
         widget.spec.textSpan == null) {
       return _edgePosition(
-        preferEnd: localPosition.dy > size.height / 2 ||
+        preferEnd:
+            localPosition.dy > size.height / 2 ||
             localPosition.dx > size.width / 2,
       );
     }
@@ -501,17 +505,21 @@ class SelectableMarkdownBlockState extends State<SelectableMarkdownBlock>
       widget.spec.measurementPadding.top,
     );
     final clampedOffset = Offset(
-      (localPosition.dx - contentOffset.dx)
-          .clamp(0.0, math.max(textPainter.width, 0.0)),
-      (localPosition.dy - contentOffset.dy)
-          .clamp(0.0, math.max(textPainter.height, 0.0)),
+      (localPosition.dx - contentOffset.dx).clamp(
+        0.0,
+        math.max(textPainter.width, 0.0),
+      ),
+      (localPosition.dy - contentOffset.dy).clamp(
+        0.0,
+        math.max(textPainter.height, 0.0),
+      ),
     );
     final position = textPainter.getPositionForOffset(clampedOffset);
     final textOffset = position.offset < 0
         ? 0
         : position.offset > widget.spec.plainText.length
-            ? widget.spec.plainText.length
-            : position.offset;
+        ? widget.spec.plainText.length
+        : position.offset;
     final structure = widget.spec.selectionStructure;
     if (structure != null) {
       return structure.positionForDisplayedOffset(
@@ -624,8 +632,10 @@ class SelectableMarkdownBlockState extends State<SelectableMarkdownBlock>
             ),
       );
     } else if (widget.spec.textSpan != null) {
-      final textPainter =
-          _buildTextPainter(renderObject.size, Directionality.of(context));
+      final textPainter = _buildTextPainter(
+        renderObject.size,
+        Directionality.of(context),
+      );
       final contentOffset = Offset(
         widget.spec.measurementPadding.left,
         widget.spec.measurementPadding.top,
@@ -665,10 +675,7 @@ class SelectableMarkdownBlockState extends State<SelectableMarkdownBlock>
       maxLines: null,
     );
     final maxWidth = math
-        .max(
-          size.width - widget.spec.measurementPadding.horizontal,
-          0,
-        )
+        .max(size.width - widget.spec.measurementPadding.horizontal, 0)
         .toDouble();
     textPainter.layout(maxWidth: maxWidth);
     return textPainter;
@@ -686,12 +693,13 @@ class SelectableMarkdownBlockState extends State<SelectableMarkdownBlock>
     final clampedOffset = position.textOffset < 0
         ? 0
         : position.textOffset > widget.spec.plainText.length
-            ? widget.spec.plainText.length
-            : position.textOffset;
+        ? widget.spec.plainText.length
+        : position.textOffset;
     late final TextRange boundary;
     try {
-      boundary =
-          textPainter.getLineBoundary(TextPosition(offset: clampedOffset));
+      boundary = textPainter.getLineBoundary(
+        TextPosition(offset: clampedOffset),
+      );
     } on AssertionError {
       return null;
     }
@@ -763,15 +771,18 @@ class _BlockSelectionPainter extends CustomPainter {
 
     if (spec.hitTestBehavior == SelectableBlockHitTestBehavior.text &&
         spec.textSpan != null) {
-      final textPainter = TextPainter(
-        text: spec.textSpan,
-        textAlign: spec.textAlign,
-        textDirection: textDirection,
-        maxLines: null,
-      )..layout(
-          maxWidth:
-              math.max(size.width - spec.measurementPadding.horizontal, 0),
-        );
+      final textPainter =
+          TextPainter(
+            text: spec.textSpan,
+            textAlign: spec.textAlign,
+            textDirection: textDirection,
+            maxLines: null,
+          )..layout(
+            maxWidth: math.max(
+              size.width - spec.measurementPadding.horizontal,
+              0,
+            ),
+          );
       final textSelection = TextSelection(
         baseOffset: range.start.textOffset,
         extentOffset: range.end.textOffset,
@@ -845,10 +856,7 @@ class _BlockSelectionPainter extends CustomPainter {
 
     canvas.saveLayer(null, Paint());
     for (var index = 0; index < normalizedRects.length; index++) {
-      canvas.drawRRect(
-        _selectionRRectForIndex(normalizedRects, index),
-        paint,
-      );
+      canvas.drawRRect(_selectionRRectForIndex(normalizedRects, index), paint);
     }
     _fillInnerCornerTransitions(canvas, normalizedRects, paint);
     canvas.restore();
@@ -1025,48 +1033,53 @@ class _BlockSelectionPainter extends CustomPainter {
 
     final squareRect = switch (quadrant) {
       _SelectionCornerQuadrant.topLeft => Rect.fromLTRB(
-          corner.dx - radius,
-          corner.dy - radius,
-          corner.dx,
-          corner.dy,
-        ),
+        corner.dx - radius,
+        corner.dy - radius,
+        corner.dx,
+        corner.dy,
+      ),
       _SelectionCornerQuadrant.topRight => Rect.fromLTRB(
-          corner.dx,
-          corner.dy - radius,
-          corner.dx + radius,
-          corner.dy,
-        ),
+        corner.dx,
+        corner.dy - radius,
+        corner.dx + radius,
+        corner.dy,
+      ),
       _SelectionCornerQuadrant.bottomLeft => Rect.fromLTRB(
-          corner.dx - radius,
-          corner.dy,
-          corner.dx,
-          corner.dy + radius,
-        ),
+        corner.dx - radius,
+        corner.dy,
+        corner.dx,
+        corner.dy + radius,
+      ),
       _SelectionCornerQuadrant.bottomRight => Rect.fromLTRB(
-          corner.dx,
-          corner.dy,
-          corner.dx + radius,
-          corner.dy + radius,
-        ),
+        corner.dx,
+        corner.dy,
+        corner.dx + radius,
+        corner.dy + radius,
+      ),
     };
     // Circle centered at the far corner of squareRect (opposite to corner)
     final center = switch (quadrant) {
-      _SelectionCornerQuadrant.topLeft =>
-        Offset(corner.dx - radius, corner.dy - radius),
-      _SelectionCornerQuadrant.topRight =>
-        Offset(corner.dx + radius, corner.dy - radius),
-      _SelectionCornerQuadrant.bottomLeft =>
-        Offset(corner.dx - radius, corner.dy + radius),
-      _SelectionCornerQuadrant.bottomRight =>
-        Offset(corner.dx + radius, corner.dy + radius),
+      _SelectionCornerQuadrant.topLeft => Offset(
+        corner.dx - radius,
+        corner.dy - radius,
+      ),
+      _SelectionCornerQuadrant.topRight => Offset(
+        corner.dx + radius,
+        corner.dy - radius,
+      ),
+      _SelectionCornerQuadrant.bottomLeft => Offset(
+        corner.dx - radius,
+        corner.dy + radius,
+      ),
+      _SelectionCornerQuadrant.bottomRight => Offset(
+        corner.dx + radius,
+        corner.dy + radius,
+      ),
     };
     final oval = Path()
       ..addOval(Rect.fromCircle(center: center, radius: radius));
     final clip = Path()..addRect(squareRect);
-    canvas.drawPath(
-      Path.combine(PathOperation.difference, clip, oval),
-      paint,
-    );
+    canvas.drawPath(Path.combine(PathOperation.difference, clip, oval), paint);
   }
 
   List<TextBox> _mergeSelectionBoxes(List<TextBox> boxes) {
@@ -1090,7 +1103,8 @@ class _BlockSelectionPainter extends CustomPainter {
     var current = sorted.first;
 
     for (final next in sorted.skip(1)) {
-      final sameLine = (next.top - current.top).abs() <= lineTolerance &&
+      final sameLine =
+          (next.top - current.top).abs() <= lineTolerance &&
           (next.bottom - current.bottom).abs() <= lineTolerance;
       final horizontalGap = next.left - current.right;
       if (sameLine && horizontalGap <= gapTolerance) {
@@ -1112,12 +1126,7 @@ class _BlockSelectionPainter extends CustomPainter {
   }
 }
 
-enum _SelectionCornerQuadrant {
-  topLeft,
-  topRight,
-  bottomLeft,
-  bottomRight,
-}
+enum _SelectionCornerQuadrant { topLeft, topRight, bottomLeft, bottomRight }
 
 /// The word around [offset] in [text], for double-click selection.
 ///

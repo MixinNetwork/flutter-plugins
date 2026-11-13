@@ -1,11 +1,12 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
 import 'package:mixin_markdown_widget/src/render/code_syntax_highlighter.dart';
 
 void main() {
-  testWidgets('prepared highlights show in the first frame of a code block',
-      (tester) async {
+  testWidgets('prepared highlights show in the first frame of a code block', (
+    tester,
+  ) async {
     late MarkdownThemeData theme;
     await tester.pumpWidget(
       MaterialApp(
@@ -38,8 +39,10 @@ $long
 ```
 ''');
 
-    final highlights =
-        MarkdownController.highlightCodeBlocks(document, maxLines: 1);
+    final highlights = MarkdownController.highlightCodeBlocks(
+      document,
+      maxLines: 1,
+    );
     expect(highlights.map((highlight) => highlight['source']), [top, nested]);
 
     MarkdownController.cacheCodeHighlights(highlights);

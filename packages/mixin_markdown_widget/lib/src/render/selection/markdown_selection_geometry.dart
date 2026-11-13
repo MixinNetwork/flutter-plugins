@@ -58,7 +58,8 @@ abstract final class MarkdownContainerSelectionGeometry {
       return null;
     }
     final query = localPosition == null ? null : _Query.of(context, block);
-    final unit = query?.unitAt(root, localPosition!) ??
+    final unit =
+        query?.unitAt(root, localPosition!) ??
         _modelUnitAt(root, position.textOffset);
     if (unit == null) {
       return null;
@@ -94,8 +95,8 @@ sealed class _Node {
 
 final class _LeafNode extends _Node {
   _LeafNode(super.path, this.leaf, {required this.leadsText})
-      : start = leaf.displayedOffsetForLocalOffset(0),
-        end = leaf.segmentEnd;
+    : start = leaf.displayedOffsetForLocalOffset(0),
+      end = leaf.segmentEnd;
 
   final StructuredBlockSelectionLeaf leaf;
 
@@ -183,12 +184,9 @@ class _Tree {
 
 _Node? _treeFor(BlockNode block) {
   return (_trees[block] ??= _Tree(
-    _TreeBuilder(StructuredBlockSelection.forBlock(block)).build(
-      block,
-      const <int>[],
-    ),
-  ))
-      .root;
+    _TreeBuilder(StructuredBlockSelection.forBlock(block))
+        .build(block, const <int>[]),
+  )).root;
 }
 
 /// Builds the selection tree of a block from its model, following the same
@@ -215,7 +213,8 @@ class _TreeBuilder {
         return _LeafNode(
           PathInBlock(path),
           leaf,
-          leadsText: block.kind == MarkdownBlockKind.paragraph ||
+          leadsText:
+              block.kind == MarkdownBlockKind.paragraph ||
               block.kind == MarkdownBlockKind.heading,
         );
       case MarkdownBlockKind.quote:
@@ -251,11 +250,14 @@ class _TreeBuilder {
         final table = block as TableBlock;
         final cells = <_LeafNode>[
           for (var row = 0; row < table.rows.length; row++)
-            for (var column = 0;
-                column < table.rows[row].cells.length;
-                column++)
-              if (structure
-                      .leafForPath(PathInBlock(<int>[...path, row, column]))
+            for (
+              var column = 0;
+              column < table.rows[row].cells.length;
+              column++
+            )
+              if (structure.leafForPath(
+                    PathInBlock(<int>[...path, row, column]),
+                  )
                   case final leaf?)
                 _LeafNode(leaf.path, leaf, leadsText: false),
         ];
@@ -271,8 +273,9 @@ class _TreeBuilder {
   _Node? _list(ListBlock list, List<int> path) {
     final items = <_ListItemNode>[];
     for (var index = 0; index < list.items.length; index++) {
-      final marker =
-          structure.leafForPath(PathInBlock(<int>[...path, index, 0]));
+      final marker = structure.leafForPath(
+        PathInBlock(<int>[...path, index, 0]),
+      );
       if (marker == null) {
         continue;
       }
@@ -280,8 +283,11 @@ class _TreeBuilder {
       _Node? leadTextChild;
       final children = <_Node>[];
       for (var child = 0; child < item.children.length; child++) {
-        final node =
-            build(item.children[child], <int>[...path, index, child + 1]);
+        final node = build(item.children[child], <int>[
+          ...path,
+          index,
+          child + 1,
+        ]);
         if (node == null) {
           continue;
         }
@@ -454,21 +460,23 @@ class _Query {
         continue;
       }
 
-      final contentRect =
-          _slotRect(item.path, MarkdownSelectionSlotRole.listContent);
+      final contentRect = _slotRect(
+        item.path,
+        MarkdownSelectionSlotRole.listContent,
+      );
       final rowRect = _slotRect(item.path, MarkdownSelectionSlotRole.listRow);
       final contentRects =
           contentSelectionStart < contentSelectionEnd && contentRect != null
-              ? _childrenRects(
-                  item.children,
-                  contentSelectionStart,
-                  contentSelectionEnd,
-                )
-              : const <Rect>[];
+          ? _childrenRects(
+              item.children,
+              contentSelectionStart,
+              contentSelectionEnd,
+            )
+          : const <Rect>[];
       final prefixRect =
           prefixSelectionStart < prefixSelectionEnd && rowRect != null
-              ? _listPrefixRect(list, item, rowRect, contentRect)
-              : null;
+          ? _listPrefixRect(list, item, rowRect, contentRect)
+          : null;
 
       if (contentSelectionStart >= contentSelectionEnd || contentRect == null) {
         if (prefixRect != null) {
@@ -526,11 +534,7 @@ class _Query {
 
   Rect? _firstLineRect(_Node node) {
     final rects = this
-        .rects(
-          node,
-          node.start,
-          math.min(node.start + 1, node.end),
-        )
+        .rects(node, node.start, math.min(node.start + 1, node.end))
         .toList();
     if (rects.isEmpty) {
       return null;
@@ -632,7 +636,8 @@ class _Query {
     if (nearest == null || nearestRect == null) {
       return null;
     }
-    final preferEnd = position.dy > nearestRect.center.dy ||
+    final preferEnd =
+        position.dy > nearestRect.center.dy ||
         position.dx > nearestRect.center.dx;
     return preferEnd ? nearest.end : nearest.start;
   }
@@ -643,8 +648,10 @@ class _Query {
     var bestDistance = double.infinity;
 
     for (final item in list.items) {
-      final contentRect =
-          _slotRect(item.path, MarkdownSelectionSlotRole.listContent);
+      final contentRect = _slotRect(
+        item.path,
+        MarkdownSelectionSlotRole.listContent,
+      );
       int? childOffset;
       if (contentRect != null) {
         final childContainsPosition = item.children.any(
@@ -706,7 +713,8 @@ class _Query {
     if (nearest == null || nearestRowRect == null) {
       return null;
     }
-    final preferEnd = position.dy > nearestRowRect.center.dy ||
+    final preferEnd =
+        position.dy > nearestRowRect.center.dy ||
         position.dx > nearestRowRect.center.dx;
     return preferEnd ? nearest.end : nearest.start;
   }
@@ -721,14 +729,13 @@ class _Query {
   }
 
   /// The cell whose text is nearest to [position].
-  ({
-    _LeafNode node,
-    ({MarkdownSelectableLeafState state, Offset origin}) leaf,
-  })? _nearestCell(_TableNode table, Offset position) {
+  ({_LeafNode node, ({MarkdownSelectableLeafState state, Offset origin}) leaf})?
+  _nearestCell(_TableNode table, Offset position) {
     ({
       _LeafNode node,
       ({MarkdownSelectableLeafState state, Offset origin}) leaf,
-    })? nearest;
+    })?
+    nearest;
     var bestDistance = double.infinity;
     for (final cell in table.cells) {
       final leaf = _leaf(cell);
@@ -790,12 +797,15 @@ class _Query {
         return (start: item.start, end: item.end);
       }
 
-      final contentRect =
-          _slotRect(item.path, MarkdownSelectionSlotRole.listContent);
+      final contentRect = _slotRect(
+        item.path,
+        MarkdownSelectionSlotRole.listContent,
+      );
       if (contentRect == null || !contentRect.contains(position)) {
         continue;
       }
-      final child = _childContaining(item.children, position) ??
+      final child =
+          _childContaining(item.children, position) ??
           _childContaining(
             item.children,
             _projectIntoContent(contentRect, position),
@@ -834,12 +844,12 @@ double _distanceToRect(Offset point, Rect rect) {
   final dx = point.dx < rect.left
       ? rect.left - point.dx
       : point.dx > rect.right
-          ? point.dx - rect.right
-          : 0.0;
+      ? point.dx - rect.right
+      : 0.0;
   final dy = point.dy < rect.top
       ? rect.top - point.dy
       : point.dy > rect.bottom
-          ? point.dy - rect.bottom
-          : 0.0;
+      ? point.dy - rect.bottom
+      : 0.0;
   return dx * dx + dy * dy;
 }
