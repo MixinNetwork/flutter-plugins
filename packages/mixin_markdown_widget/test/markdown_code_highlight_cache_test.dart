@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
 import 'package:mixin_markdown_widget/src/render/code_syntax_highlighter.dart';
@@ -19,8 +19,7 @@ class _FakeHighlighter extends MarkdownCodeSyntaxHighlighter {
     required TextStyle baseStyle,
     required MarkdownThemeData theme,
     String? language,
-  }) =>
-      null;
+  }) => null;
 
   @override
   Future<MarkdownCodeHighlightPresentation> buildPresentationAsync({
@@ -39,7 +38,9 @@ class _FakeHighlighter extends MarkdownCodeSyntaxHighlighter {
   void finishNext(TextStyle baseStyle) {
     final source = requests[requests.length - _pending.length];
     final style = baseStyle.copyWith(color: _keywordColor);
-    _pending.removeAt(0).complete(
+    _pending
+        .removeAt(0)
+        .complete(
           MarkdownCodeHighlightPresentation(
             span: TextSpan(
               style: baseStyle,
@@ -71,41 +72,43 @@ void main() {
   }
 
   testWidgets(
-      'a growing code block keeps its highlighted prefix as the placeholder',
-      (tester) async {
-    await pumpTheme(tester);
-    final highlighter = _FakeHighlighter();
-    final cache = MarkdownCodeHighlightCache(highlighter: highlighter);
-    addTearDown(cache.dispose);
-    final baseStyle = theme.codeBlockStyle;
+    'a growing code block keeps its highlighted prefix as the placeholder',
+    (tester) async {
+      await pumpTheme(tester);
+      final highlighter = _FakeHighlighter();
+      final cache = MarkdownCodeHighlightCache(highlighter: highlighter);
+      addTearDown(cache.dispose);
+      final baseStyle = theme.codeBlockStyle;
 
-    MarkdownCodeHighlightPresentation resolve(String source) => cache.resolve(
-          blockId: 'code',
-          source: source,
-          baseStyle: baseStyle,
-          theme: theme,
-          language: 'dart',
-        );
+      MarkdownCodeHighlightPresentation resolve(String source) => cache.resolve(
+        blockId: 'code',
+        source: source,
+        baseStyle: baseStyle,
+        theme: theme,
+        language: 'dart',
+      );
 
-    expect(resolve('a = 1;').isHighlighted, isFalse);
-    highlighter.finishNext(baseStyle);
-    await tester.pump();
-    expect(resolve('a = 1;').isHighlighted, isTrue);
+      expect(resolve('a = 1;').isHighlighted, isFalse);
+      highlighter.finishNext(baseStyle);
+      await tester.pump();
+      expect(resolve('a = 1;').isHighlighted, isTrue);
 
-    final placeholder = resolve('a = 1;\nb = 2;');
-    expect(placeholder.isHighlighted, isFalse);
-    expect(placeholder.span.toPlainText(), 'a = 1;\nb = 2;');
-    expect(
-      placeholder.runs.map((run) => (run.text, run.style.color)).toList(),
-      <(String, Color?)>[
-        ('a = 1;', _keywordColor),
-        ('\nb = 2;', baseStyle.color),
-      ],
-    );
-  });
+      final placeholder = resolve('a = 1;\nb = 2;');
+      expect(placeholder.isHighlighted, isFalse);
+      expect(placeholder.span.toPlainText(), 'a = 1;\nb = 2;');
+      expect(
+        placeholder.runs.map((run) => (run.text, run.style.color)).toList(),
+        <(String, Color?)>[
+          ('a = 1;', _keywordColor),
+          ('\nb = 2;', baseStyle.color),
+        ],
+      );
+    },
+  );
 
-  testWidgets('a growing code block runs one highlight at a time',
-      (tester) async {
+  testWidgets('a growing code block runs one highlight at a time', (
+    tester,
+  ) async {
     await pumpTheme(tester);
     final highlighter = _FakeHighlighter();
     final cache = MarkdownCodeHighlightCache(highlighter: highlighter);
@@ -115,12 +118,12 @@ void main() {
     cache.addListener(() => notifications += 1);
 
     MarkdownCodeHighlightPresentation resolve(String source) => cache.resolve(
-          blockId: 'code',
-          source: source,
-          baseStyle: baseStyle,
-          theme: theme,
-          language: 'dart',
-        );
+      blockId: 'code',
+      source: source,
+      baseStyle: baseStyle,
+      theme: theme,
+      language: 'dart',
+    );
 
     resolve('a');
     resolve('a = 1;');
@@ -148,8 +151,9 @@ void main() {
     expect(done.runs.single.text, 'a = 1;\nb = 2;');
   });
 
-  testWidgets('a code block that is not extended falls back to plain text',
-      (tester) async {
+  testWidgets('a code block that is not extended falls back to plain text', (
+    tester,
+  ) async {
     await pumpTheme(tester);
     final highlighter = _FakeHighlighter();
     final cache = MarkdownCodeHighlightCache(highlighter: highlighter);

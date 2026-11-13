@@ -1,5 +1,5 @@
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_math_fork/flutter_math.dart';
 
 import '../../core/document.dart';
@@ -71,11 +71,11 @@ class MarkdownLinkRecognizers {
             links.add(inline);
             visitInlines(children);
           case EmphasisInline(:final children) ||
-                StrongInline(:final children) ||
-                StrikethroughInline(:final children) ||
-                HighlightInline(:final children) ||
-                SubscriptInline(:final children) ||
-                SuperscriptInline(:final children):
+              StrongInline(:final children) ||
+              StrikethroughInline(:final children) ||
+              HighlightInline(:final children) ||
+              SubscriptInline(:final children) ||
+              SuperscriptInline(:final children):
             visitInlines(children);
           default:
         }
@@ -128,10 +128,12 @@ class MarkdownInlineBuilder {
   final MarkdownTapLinkCallback? onTapLink;
 
   List<MarkdownPretextInlineRun> buildPretextRuns(
-      TextStyle baseStyle, List<InlineNode> inlines,
-      {bool alignInlineMathToBaseline = true,
-      TextStyle? inlineCodeStyle,
-      TextStyle? linkStyle}) {
+    TextStyle baseStyle,
+    List<InlineNode> inlines, {
+    bool alignInlineMathToBaseline = true,
+    TextStyle? inlineCodeStyle,
+    TextStyle? linkStyle,
+  }) {
     return <MarkdownPretextInlineRun>[
       for (final inline in inlines)
         ..._buildPretextRun(
@@ -145,10 +147,12 @@ class MarkdownInlineBuilder {
   }
 
   List<MarkdownPretextInlineRun> _buildPretextRun(
-      TextStyle baseStyle, InlineNode inline,
-      {required bool alignInlineMathToBaseline,
-      TextStyle? inlineCodeStyle,
-      TextStyle? linkStyle}) {
+    TextStyle baseStyle,
+    InlineNode inline, {
+    required bool alignInlineMathToBaseline,
+    TextStyle? inlineCodeStyle,
+    TextStyle? linkStyle,
+  }) {
     switch (inline.kind) {
       case MarkdownInlineKind.text:
         return <MarkdownPretextInlineRun>[
@@ -224,12 +228,12 @@ class MarkdownInlineBuilder {
               });
         final style = _linkTextStyle(baseStyle, linkStyle);
         return buildPretextRuns(
-          style,
-          link.children,
-          alignInlineMathToBaseline: alignInlineMathToBaseline,
-          inlineCodeStyle: inlineCodeStyle,
-          linkStyle: linkStyle,
-        )
+              style,
+              link.children,
+              alignInlineMathToBaseline: alignInlineMathToBaseline,
+              inlineCodeStyle: inlineCodeStyle,
+              linkStyle: linkStyle,
+            )
             .map(
               (run) => MarkdownPretextInlineRun(
                 text: run.text,
@@ -278,10 +282,7 @@ class MarkdownInlineBuilder {
       case MarkdownInlineKind.softBreak:
       case MarkdownInlineKind.hardBreak:
         return <MarkdownPretextInlineRun>[
-          MarkdownPretextInlineRun(
-            text: '\n',
-            style: baseStyle,
-          ),
+          MarkdownPretextInlineRun(text: '\n', style: baseStyle),
         ];
       case MarkdownInlineKind.image:
         final image = inline as InlineImage;
@@ -298,8 +299,11 @@ class MarkdownInlineBuilder {
   }
 
   List<InlineSpan> buildInlineSpans(
-      TextStyle baseStyle, List<InlineNode> inlines,
-      {TextStyle? inlineCodeStyle, TextStyle? linkStyle}) {
+    TextStyle baseStyle,
+    List<InlineNode> inlines, {
+    TextStyle? inlineCodeStyle,
+    TextStyle? linkStyle,
+  }) {
     return <InlineSpan>[
       for (final inline in inlines)
         ..._buildInlineSpan(
@@ -461,10 +465,7 @@ class MarkdownInlineBuilder {
             ? image.alt!.trim()
             : image.url;
         return <InlineSpan>[
-          TextSpan(
-            text: label,
-            style: _linkTextStyle(baseStyle, linkStyle),
-          ),
+          TextSpan(text: label, style: _linkTextStyle(baseStyle, linkStyle)),
         ];
     }
   }
@@ -472,7 +473,9 @@ class MarkdownInlineBuilder {
   TextStyle _linkTextStyle(TextStyle baseStyle, TextStyle? overrideStyle) {
     final style = overrideStyle ?? theme.linkStyle;
     final linkColor = style.color ?? baseStyle.color;
-    return baseStyle.merge(style).copyWith(
+    return baseStyle
+        .merge(style)
+        .copyWith(
           color: linkColor,
           decoration: style.decoration ?? baseStyle.decoration,
           decorationColor:
@@ -488,7 +491,9 @@ class MarkdownInlineBuilder {
     TextStyle? overrideStyle,
   ) {
     final style = overrideStyle ?? theme.inlineCodeStyle;
-    return baseStyle.merge(style).copyWith(
+    return baseStyle
+        .merge(style)
+        .copyWith(
           color: baseStyle.color ?? style.color,
           fontSize: _scaledInlineFontSize(style, baseStyle),
           fontStyle: baseStyle.fontStyle ?? style.fontStyle,
@@ -511,9 +516,7 @@ class MarkdownInlineBuilder {
 
   TextStyle highlightStyle(TextStyle baseStyle) {
     final accent = theme.linkStyle.color ?? theme.dividerColor;
-    return baseStyle.copyWith(
-      backgroundColor: accent.withValues(alpha: 0.18),
-    );
+    return baseStyle.copyWith(backgroundColor: accent.withValues(alpha: 0.18));
   }
 
   TextStyle subscriptStyle(TextStyle baseStyle) {
@@ -554,10 +557,8 @@ class MarkdownInlineBuilder {
         math.tex,
         mathStyle: math.displayStyle ? MathStyle.display : MathStyle.text,
         textStyle: baseStyle,
-        onErrorFallback: (error) => Text(
-          math.tex,
-          style: _inlineCodeTextStyle(baseStyle, null),
-        ),
+        onErrorFallback: (error) =>
+            Text(math.tex, style: _inlineCodeTextStyle(baseStyle, null)),
       ),
     );
     final useBaselineAlignment = !math.displayStyle && alignToBaseline;

@@ -15,12 +15,22 @@
   - Disable default scroll view (ListView) using `useColumn: true` for easy integration into existing custom scrollable layouts.
 - **Theming:** `MarkdownThemeData` allows deep customization of text styles, spacing, colors, and block decorations (e.g., hiding heading dividers via `showHeading1Divider`).
 
+## Requirements and Material integration
+
+Requires Dart ^3.13.0 and Flutter >=3.47.0. This package uses
+`package:material_ui/material_ui.dart` for its public Material types and widgets.
+Use the same import in your application for `MaterialApp`, `Theme`, `ThemeData`,
+`TextSelectionTheme`, and `Material` ancestors, including custom block builders.
+`MarkdownThemeData` extends the `material_ui` `ThemeExtension` and can be
+registered in its `ThemeData.extensions`. Flutter's legacy Material theme types
+are separate types and cannot be used interchangeably with these APIs.
+
 ## Usage
 
 ### Basic Rendering
 
 ```dart
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
 
 class ExamplePage extends StatelessWidget {

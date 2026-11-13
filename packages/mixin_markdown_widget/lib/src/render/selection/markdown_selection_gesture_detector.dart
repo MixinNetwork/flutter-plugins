@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:math' as math;
+
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 
 import '../../core/document.dart';
 import '../../selection/selection_controller.dart';
@@ -67,7 +68,7 @@ class MarkdownSelectionGestureDetector extends StatefulWidget {
   final MarkdownSelectBlockCallback selectBlockAt;
   final MarkdownSelectSelectionUnitCallback selectSelectionUnitAt;
   final Iterable<MarkdownSelectionAutoScrollTarget> Function()?
-      additionalAutoScrollTargets;
+  additionalAutoScrollTargets;
 
   @override
   State<MarkdownSelectionGestureDetector> createState() =>
@@ -97,8 +98,9 @@ class _MarkdownSelectionGestureDetectorState
     final candidates = <_AutoScrollCandidate>[];
     final seenPositions = <ScrollPosition>{};
 
-    for (final target in widget.additionalAutoScrollTargets?.call() ??
-        const <MarkdownSelectionAutoScrollTarget>[]) {
+    for (final target
+        in widget.additionalAutoScrollTargets?.call() ??
+            const <MarkdownSelectionAutoScrollTarget>[]) {
       final candidate = _candidateForScrollable(
         position: target.scrollController.hasClients
             ? target.scrollController.position
@@ -238,7 +240,8 @@ class _MarkdownSelectionGestureDetectorState
     if (!_isDraggingSelection) {
       return;
     }
-    final shouldClearSelection = _clearSelectionOnPointerUp &&
+    final shouldClearSelection =
+        _clearSelectionOnPointerUp &&
         _dragStartPointerPosition != null &&
         (event.position - _dragStartPointerPosition!).distance < kTouchSlop;
     _isDraggingSelection = false;
@@ -310,9 +313,10 @@ class _MarkdownSelectionGestureDetectorState
         continue;
       }
       final velocity = autoScroll.velocity;
-      final nextOffset = (position.pixels +
-              velocity * _autoScrollTickInterval.inMilliseconds / 1000)
-          .clamp(position.minScrollExtent, position.maxScrollExtent);
+      final nextOffset =
+          (position.pixels +
+                  velocity * _autoScrollTickInterval.inMilliseconds / 1000)
+              .clamp(position.minScrollExtent, position.maxScrollExtent);
       if ((nextOffset - position.pixels).abs() < 0.5) {
         continue;
       }
@@ -345,13 +349,17 @@ class _MarkdownSelectionGestureDetectorState
 
     final bestMatches = <Axis, _ResolvedAutoScroll>{};
     for (final candidate in _autoScrollCandidates()) {
-      final velocity =
-          _autoScrollVelocityForCandidate(candidate, globalPosition);
+      final velocity = _autoScrollVelocityForCandidate(
+        candidate,
+        globalPosition,
+      );
       if (velocity == 0) {
         continue;
       }
-      final resolved =
-          _ResolvedAutoScroll(candidate: candidate, velocity: velocity);
+      final resolved = _ResolvedAutoScroll(
+        candidate: candidate,
+        velocity: velocity,
+      );
       final existing = bestMatches[candidate.axis];
       if (existing == null ||
           _isPreferredAutoScrollCandidate(resolved, existing)) {
@@ -383,7 +391,8 @@ class _MarkdownSelectionGestureDetectorState
       case Axis.vertical:
         if (globalPosition.dy < viewportRect.top + _autoScrollActivationZone &&
             position.pixels > position.minScrollExtent) {
-          final proximity = 1 -
+          final proximity =
+              1 -
               ((globalPosition.dy - viewportRect.top) /
                       _autoScrollActivationZone)
                   .clamp(0.0, 1.0);
@@ -392,16 +401,18 @@ class _MarkdownSelectionGestureDetectorState
         if (globalPosition.dy >
                 viewportRect.bottom - _autoScrollActivationZone &&
             position.pixels < position.maxScrollExtent) {
-          final proximity = ((globalPosition.dy -
-                      (viewportRect.bottom - _autoScrollActivationZone)) /
-                  _autoScrollActivationZone)
-              .clamp(0.0, 1.0);
+          final proximity =
+              ((globalPosition.dy -
+                          (viewportRect.bottom - _autoScrollActivationZone)) /
+                      _autoScrollActivationZone)
+                  .clamp(0.0, 1.0);
           return _autoScrollSpeedForProximity(proximity);
         }
       case Axis.horizontal:
         if (globalPosition.dx < viewportRect.left + _autoScrollActivationZone &&
             position.pixels > position.minScrollExtent) {
-          final proximity = 1 -
+          final proximity =
+              1 -
               ((globalPosition.dx - viewportRect.left) /
                       _autoScrollActivationZone)
                   .clamp(0.0, 1.0);
@@ -410,10 +421,11 @@ class _MarkdownSelectionGestureDetectorState
         if (globalPosition.dx >
                 viewportRect.right - _autoScrollActivationZone &&
             position.pixels < position.maxScrollExtent) {
-          final proximity = ((globalPosition.dx -
-                      (viewportRect.right - _autoScrollActivationZone)) /
-                  _autoScrollActivationZone)
-              .clamp(0.0, 1.0);
+          final proximity =
+              ((globalPosition.dx -
+                          (viewportRect.right - _autoScrollActivationZone)) /
+                      _autoScrollActivationZone)
+                  .clamp(0.0, 1.0);
           return _autoScrollSpeedForProximity(proximity);
         }
     }
@@ -520,8 +532,8 @@ class _MarkdownSelectionGestureDetectorState
     if (!mounted) {
       return null;
     }
-    final renderObject =
-        widget.scrollableKey.currentContext?.findRenderObject();
+    final renderObject = widget.scrollableKey.currentContext
+        ?.findRenderObject();
     if (renderObject is! RenderBox || !renderObject.hasSize) {
       return null;
     }
@@ -571,10 +583,7 @@ class _AutoScrollCandidate {
 }
 
 class _ResolvedAutoScroll {
-  const _ResolvedAutoScroll({
-    required this.candidate,
-    required this.velocity,
-  });
+  const _ResolvedAutoScroll({required this.candidate, required this.velocity});
 
   final _AutoScrollCandidate candidate;
   final double velocity;

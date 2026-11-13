@@ -18,7 +18,9 @@ class ImageCaptionLayout extends MultiChildRenderObjectWidget {
 
   @override
   void updateRenderObject(
-      BuildContext context, covariant RenderImageCaptionLayout renderObject) {
+    BuildContext context,
+    covariant RenderImageCaptionLayout renderObject,
+  ) {
     renderObject.spacing = spacing;
   }
 }
@@ -29,7 +31,7 @@ class RenderImageCaptionLayout extends RenderBox
     with
         ContainerRenderObjectMixin<RenderBox, ImageCaptionParentData>,
         RenderBoxContainerDefaultsMixin<RenderBox, ImageCaptionParentData> {
-  RenderImageCaptionLayout({required double spacing}) : _spacing = spacing;
+  RenderImageCaptionLayout({required this._spacing});
 
   double _spacing;
   double get spacing => _spacing;
@@ -69,13 +71,16 @@ class RenderImageCaptionLayout extends RenderBox
       final dx = (imageSize.width - captionSize.width) / 2.0;
       captionParentData.offset = Offset(dx, imageSize.height + spacing);
 
-      size = BoxConstraints(
-        minWidth: constraints.minWidth,
-        maxWidth: constraints.maxWidth,
-      ).constrain(Size(
-        imageSize.width,
-        imageSize.height + spacing + captionSize.height,
-      ));
+      size =
+          BoxConstraints(
+            minWidth: constraints.minWidth,
+            maxWidth: constraints.maxWidth,
+          ).constrain(
+            Size(
+              imageSize.width,
+              imageSize.height + spacing + captionSize.height,
+            ),
+          );
     } else {
       size = BoxConstraints(
         minWidth: constraints.minWidth,

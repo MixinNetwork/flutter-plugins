@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:desktop_webview_window/src/native_transport.dart';
 import 'package:desktop_webview_window/src/webview_impl.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 

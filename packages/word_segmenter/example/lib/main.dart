@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:word_segmenter/word_segmenter.dart';
 
 void main() => runApp(const ExampleApp());

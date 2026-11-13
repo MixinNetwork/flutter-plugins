@@ -2,10 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../core/document.dart';
 
-enum StructuredSelectionAffinity {
-  upstream,
-  downstream,
-}
+enum StructuredSelectionAffinity { upstream, downstream }
 
 @immutable
 class StructuredBlockSelectionLeaf {
@@ -53,8 +50,9 @@ class StructuredBlockSelectionLeaf {
   }
 
   int localOffsetForDisplayedOffset(int displayedOffset) {
-    final clampedDisplayed =
-        displayedOffset.clamp(segmentStart, segmentEnd).toInt();
+    final clampedDisplayed = displayedOffset
+        .clamp(segmentStart, segmentEnd)
+        .toInt();
     var relative = clampedDisplayed - segmentStart;
     if (relative <= leadingText.length + firstLinePrefix.length) {
       return 0;
@@ -100,8 +98,9 @@ LinkInline? _linkContaining(List<InlineNode> inlines, int offset) {
         StrikethroughInline(:final children) ||
         HighlightInline(:final children) ||
         SubscriptInline(:final children) ||
-        SuperscriptInline(:final children) =>
-          _linkContaining(children, offset - start),
+        SuperscriptInline(
+          :final children,
+        ) => _linkContaining(children, offset - start),
         _ => null,
       };
     }
@@ -122,8 +121,9 @@ class StructuredBlockSelection {
   // and shared by the renderer, the controller, and the serializer.
   static final Expando<StructuredBlockSelection> _cache =
       Expando<StructuredBlockSelection>('StructuredBlockSelection');
-  static final Expando<String> _serializedBlockTextCache =
-      Expando<String>('serializedBlockText');
+  static final Expando<String> _serializedBlockTextCache = Expando<String>(
+    'serializedBlockText',
+  );
 
   factory StructuredBlockSelection.forBlock(BlockNode block) {
     return _cache[block] ??= StructuredBlockSelection._fromBlueprints(
@@ -179,8 +179,8 @@ class StructuredBlockSelection {
 
   late final Map<PathInBlock, StructuredBlockSelectionLeaf> _leavesByPath =
       <PathInBlock, StructuredBlockSelectionLeaf>{
-    for (final leaf in leaves) leaf.path: leaf,
-  };
+        for (final leaf in leaves) leaf.path: leaf,
+      };
 
   bool get isEmpty => leaves.isEmpty;
 
@@ -224,8 +224,9 @@ class StructuredBlockSelection {
     StructuredSelectionAffinity affinity =
         StructuredSelectionAffinity.downstream,
   }) {
-    final clampedOffset =
-        position.textOffset.clamp(0, plainText.length).toInt();
+    final clampedOffset = position.textOffset
+        .clamp(0, plainText.length)
+        .toInt();
     final leaf = leafForPath(position.path);
     if (leaf != null &&
         clampedOffset >= leaf.segmentStart &&
@@ -328,9 +329,10 @@ class StructuredBlockSelection {
     required int blockIndex,
     required DocumentPosition position,
     required ({int start, int end}) Function(String text, int offset)
-        wordRangeAt,
+    wordRangeAt,
   }) {
-    final leaf = leafForPath(position.path) ??
+    final leaf =
+        leafForPath(position.path) ??
         _leafContainingOffset(position.textOffset);
     if (leaf == null || leaf.visibleText.isEmpty) {
       return null;
@@ -382,20 +384,17 @@ class StructuredBlockSelection {
     return leaves.isEmpty ? null : leaves.last;
   }
 
-  String serializeDisplayedRange({
-    required int start,
-    required int end,
-  }) {
+  String serializeDisplayedRange({required int start, required int end}) {
     final lower = start < 0
         ? 0
         : start > plainText.length
-            ? plainText.length
-            : start;
+        ? plainText.length
+        : start;
     final upper = end < 0
         ? 0
         : end > plainText.length
-            ? plainText.length
-            : end;
+        ? plainText.length
+        : end;
     if (lower >= upper || leaves.isEmpty) {
       return '';
     }
@@ -409,8 +408,9 @@ class StructuredBlockSelection {
         continue;
       }
 
-      final localStart =
-          lower <= leaf.segmentStart ? 0 : lower - leaf.segmentStart;
+      final localStart = lower <= leaf.segmentStart
+          ? 0
+          : lower - leaf.segmentStart;
       final localEnd = upper >= leaf.segmentEnd
           ? leaf.renderedText.length
           : upper - leaf.segmentStart;
@@ -444,9 +444,7 @@ class _LeafBlueprint {
   final String exportText;
   final List<InlineNode> inlines;
 
-  _LeafBlueprint copyWith({
-    String? leadingText,
-  }) {
+  _LeafBlueprint copyWith({String? leadingText}) {
     return _LeafBlueprint(
       path: path,
       leadingText: leadingText ?? this.leadingText,
@@ -503,8 +501,7 @@ class _StructuredBlockSelectionBuilder {
             exportText: exportText,
             inlines: switch (block) {
               HeadingBlock(:final inlines) ||
-              ParagraphBlock(:final inlines) =>
-                inlines,
+              ParagraphBlock(:final inlines) => inlines,
               _ => const <InlineNode>[],
             },
           ),
@@ -524,8 +521,9 @@ class _StructuredBlockSelectionBuilder {
           final childLeaves = _buildBlock(
             details.children[index],
             pathPrefix: <int>[...pathPrefix, index + 1],
-            firstLinePrefix:
-                leaves.isEmpty ? firstLinePrefix : continuationPrefix,
+            firstLinePrefix: leaves.isEmpty
+                ? firstLinePrefix
+                : continuationPrefix,
             continuationPrefix: continuationPrefix,
             listIndentLevel: listIndentLevel,
           );
@@ -545,8 +543,9 @@ class _StructuredBlockSelectionBuilder {
           final childLeaves = _buildBlock(
             quote.children[index],
             pathPrefix: <int>[...pathPrefix, index],
-            firstLinePrefix:
-                leaves.isEmpty ? firstLinePrefix : continuationPrefix,
+            firstLinePrefix: leaves.isEmpty
+                ? firstLinePrefix
+                : continuationPrefix,
             continuationPrefix: continuationPrefix,
             listIndentLevel: listIndentLevel,
           );
@@ -605,23 +604,26 @@ class _StructuredBlockSelectionBuilder {
       final itemLeaves = <_LeafBlueprint>[];
       var hasContent = false;
 
-      for (var childIndex = 0;
-          childIndex < item.children.length;
-          childIndex++) {
+      for (
+        var childIndex = 0;
+        childIndex < item.children.length;
+        childIndex++
+      ) {
         final childLeaves = _buildBlock(
           item.children[childIndex],
           pathPrefix: <int>[...pathPrefix, itemIndex, childIndex + 1],
-          firstLinePrefix:
-              hasContent ? continuationPrefix + ' ' * markerText.length : '',
+          firstLinePrefix: hasContent
+              ? continuationPrefix + ' ' * markerText.length
+              : '',
           continuationPrefix: continuationPrefix + ' ' * markerText.length,
           listIndentLevel:
               item.children[childIndex].kind == MarkdownBlockKind.orderedList ||
-                      item.children[childIndex].kind ==
-                          MarkdownBlockKind.unorderedList ||
-                      item.children[childIndex].kind ==
-                          MarkdownBlockKind.footnoteList
-                  ? listIndentLevel + 1
-                  : listIndentLevel,
+                  item.children[childIndex].kind ==
+                      MarkdownBlockKind.unorderedList ||
+                  item.children[childIndex].kind ==
+                      MarkdownBlockKind.footnoteList
+              ? listIndentLevel + 1
+              : listIndentLevel,
         );
         if (childLeaves.isEmpty) {
           continue;
@@ -642,8 +644,9 @@ class _StructuredBlockSelectionBuilder {
         _LeafBlueprint(
           path: PathInBlock(<int>[...pathPrefix, itemIndex, 0]),
           leadingText: '',
-          firstLinePrefix:
-              leaves.isEmpty ? firstLinePrefix : continuationPrefix,
+          firstLinePrefix: leaves.isEmpty
+              ? firstLinePrefix
+              : continuationPrefix,
           continuationPrefix: continuationPrefix,
           visibleText: hasContent ? markerText : markerText.trimRight(),
           exportText: hasContent ? markerText : markerText.trimRight(),
@@ -669,16 +672,17 @@ class _StructuredBlockSelectionBuilder {
     for (var rowIndex = 0; rowIndex < block.rows.length; rowIndex++) {
       final row = block.rows[rowIndex];
       for (var columnIndex = 0; columnIndex < row.cells.length; columnIndex++) {
-        final visibleText =
-            _flattenVisibleInlines(row.cells[columnIndex].inlines);
+        final visibleText = _flattenVisibleInlines(
+          row.cells[columnIndex].inlines,
+        );
         if (visibleText.isEmpty) {
           continue;
         }
         final leadingText = rowIndex == 0 && columnIndex == 0
             ? ''
             : columnIndex == 0
-                ? '\n'
-                : '\t';
+            ? '\n'
+            : '\t';
         leaves.add(
           _LeafBlueprint(
             path: PathInBlock(<int>[...pathPrefix, rowIndex, columnIndex]),
@@ -779,8 +783,7 @@ class _StructuredBlockSelectionBuilder {
       case MarkdownBlockKind.paragraph:
         return _flattenVisibleInlines((block as ParagraphBlock).inlines);
       case MarkdownBlockKind.quote:
-        return (block as QuoteBlock)
-            .children
+        return (block as QuoteBlock).children
             .map(_visibleBlockText)
             .where((value) => value.trim().isNotEmpty)
             .join('\n\n');
@@ -793,15 +796,17 @@ class _StructuredBlockSelectionBuilder {
         return _visibleDetailsText(block as DetailsBlock);
       case MarkdownBlockKind.footnoteList:
         return _visibleListText(
-            _footnoteListAsOrderedList(block as FootnoteListBlock));
+          _footnoteListAsOrderedList(block as FootnoteListBlock),
+        );
       case MarkdownBlockKind.codeBlock:
         return (block as CodeBlock).code;
       case MarkdownBlockKind.table:
-        return (block as TableBlock)
-            .rows
-            .map((row) => row.cells
-                .map((cell) => _flattenVisibleInlines(cell.inlines))
-                .join('\t'))
+        return (block as TableBlock).rows
+            .map(
+              (row) => row.cells
+                  .map((cell) => _flattenVisibleInlines(cell.inlines))
+                  .join('\t'),
+            )
             .join('\n');
       case MarkdownBlockKind.image:
         return _imageCaptionText(block as ImageBlock);
@@ -874,8 +879,7 @@ class _StructuredBlockSelectionBuilder {
       case MarkdownBlockKind.paragraph:
         return _flattenExportInlines((block as ParagraphBlock).inlines);
       case MarkdownBlockKind.quote:
-        return (block as QuoteBlock)
-            .children
+        return (block as QuoteBlock).children
             .map(_exportBlockText)
             .where((value) => value.trim().isNotEmpty)
             .join('\n\n');
@@ -888,15 +892,17 @@ class _StructuredBlockSelectionBuilder {
         return _exportDetailsText(block as DetailsBlock);
       case MarkdownBlockKind.footnoteList:
         return _exportListText(
-            _footnoteListAsOrderedList(block as FootnoteListBlock));
+          _footnoteListAsOrderedList(block as FootnoteListBlock),
+        );
       case MarkdownBlockKind.codeBlock:
         return (block as CodeBlock).code;
       case MarkdownBlockKind.table:
-        return (block as TableBlock)
-            .rows
-            .map((row) => row.cells
-                .map((cell) => _flattenExportInlines(cell.inlines))
-                .join('\t'))
+        return (block as TableBlock).rows
+            .map(
+              (row) => row.cells
+                  .map((cell) => _flattenExportInlines(cell.inlines))
+                  .join('\t'),
+            )
             .join('\n');
       case MarkdownBlockKind.image:
         return _exportImageText(block as ImageBlock);
@@ -909,11 +915,7 @@ class _StructuredBlockSelectionBuilder {
     final items = <String>[];
     for (var index = 0; index < block.items.length; index++) {
       final item = block.items[index];
-      final markerText = _listItemMarkerText(
-        block,
-        index,
-        indentLevel: 0,
-      );
+      final markerText = _listItemMarkerText(block, index, indentLevel: 0);
       final content = item.children
           .map(_visibleBlockText)
           .where((value) => value.trim().isNotEmpty)
@@ -925,9 +927,7 @@ class _StructuredBlockSelectionBuilder {
         items.add(markerText.trimRight());
         continue;
       }
-      items.add(
-        _prefixMultiline(content, markerText, ' ' * markerText.length),
-      );
+      items.add(_prefixMultiline(content, markerText, ' ' * markerText.length));
     }
     return items.join('\n');
   }
@@ -936,11 +936,7 @@ class _StructuredBlockSelectionBuilder {
     final items = <String>[];
     for (var index = 0; index < block.items.length; index++) {
       final item = block.items[index];
-      final markerText = _listItemMarkerText(
-        block,
-        index,
-        indentLevel: 0,
-      );
+      final markerText = _listItemMarkerText(block, index, indentLevel: 0);
       final content = item.children
           .map(_exportBlockText)
           .where((value) => value.trim().isNotEmpty)
@@ -952,9 +948,7 @@ class _StructuredBlockSelectionBuilder {
         items.add(markerText.trimRight());
         continue;
       }
-      items.add(
-        _prefixMultiline(content, markerText, ' ' * markerText.length),
-      );
+      items.add(_prefixMultiline(content, markerText, ' ' * markerText.length));
     }
     return items.join('\n');
   }
@@ -968,27 +962,33 @@ class _StructuredBlockSelectionBuilder {
           break;
         case MarkdownInlineKind.emphasis:
           buffer.write(
-              _flattenVisibleInlines((inline as EmphasisInline).children));
+            _flattenVisibleInlines((inline as EmphasisInline).children),
+          );
           break;
         case MarkdownInlineKind.strong:
-          buffer
-              .write(_flattenVisibleInlines((inline as StrongInline).children));
+          buffer.write(
+            _flattenVisibleInlines((inline as StrongInline).children),
+          );
           break;
         case MarkdownInlineKind.strikethrough:
           buffer.write(
-              _flattenVisibleInlines((inline as StrikethroughInline).children));
+            _flattenVisibleInlines((inline as StrikethroughInline).children),
+          );
           break;
         case MarkdownInlineKind.highlight:
           buffer.write(
-              _flattenVisibleInlines((inline as HighlightInline).children));
+            _flattenVisibleInlines((inline as HighlightInline).children),
+          );
           break;
         case MarkdownInlineKind.subscript:
           buffer.write(
-              _flattenVisibleInlines((inline as SubscriptInline).children));
+            _flattenVisibleInlines((inline as SubscriptInline).children),
+          );
           break;
         case MarkdownInlineKind.superscript:
           buffer.write(
-              _flattenVisibleInlines((inline as SuperscriptInline).children));
+            _flattenVisibleInlines((inline as SuperscriptInline).children),
+          );
           break;
         case MarkdownInlineKind.link:
           buffer.write(_flattenVisibleInlines((inline as LinkInline).children));
@@ -1021,27 +1021,33 @@ class _StructuredBlockSelectionBuilder {
           break;
         case MarkdownInlineKind.emphasis:
           buffer.write(
-              _flattenExportInlines((inline as EmphasisInline).children));
+            _flattenExportInlines((inline as EmphasisInline).children),
+          );
           break;
         case MarkdownInlineKind.strong:
-          buffer
-              .write(_flattenExportInlines((inline as StrongInline).children));
+          buffer.write(
+            _flattenExportInlines((inline as StrongInline).children),
+          );
           break;
         case MarkdownInlineKind.strikethrough:
           buffer.write(
-              _flattenExportInlines((inline as StrikethroughInline).children));
+            _flattenExportInlines((inline as StrikethroughInline).children),
+          );
           break;
         case MarkdownInlineKind.highlight:
           buffer.write(
-              _flattenExportInlines((inline as HighlightInline).children));
+            _flattenExportInlines((inline as HighlightInline).children),
+          );
           break;
         case MarkdownInlineKind.subscript:
           buffer.write(
-              _flattenExportInlines((inline as SubscriptInline).children));
+            _flattenExportInlines((inline as SubscriptInline).children),
+          );
           break;
         case MarkdownInlineKind.superscript:
           buffer.write(
-              _flattenExportInlines((inline as SuperscriptInline).children));
+            _flattenExportInlines((inline as SuperscriptInline).children),
+          );
           break;
         case MarkdownInlineKind.link:
           final link = inline as LinkInline;
@@ -1096,8 +1102,8 @@ class _StructuredBlockSelectionBuilder {
     final label = block.alt?.trim().isNotEmpty == true
         ? block.alt!.trim()
         : block.title?.trim().isNotEmpty == true
-            ? block.title!.trim()
-            : block.url;
+        ? block.title!.trim()
+        : block.url;
     return label;
   }
 

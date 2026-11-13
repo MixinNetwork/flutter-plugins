@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
 
 class CompositeSelectionDemoPage extends StatefulWidget {
@@ -84,10 +84,8 @@ No issues found! (ran in 1.3s)
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final markdownTheme = MarkdownThemeData.fallback(context).copyWith(
-      padding: EdgeInsets.zero,
-      maxContentWidth: double.infinity,
-    );
+    final markdownTheme = MarkdownThemeData.fallback(context)
+        .copyWith(padding: EdgeInsets.zero, maxContentWidth: double.infinity);
 
     return Scaffold(
       appBar: AppBar(
@@ -102,8 +100,9 @@ No issues found! (ran in 1.3s)
             animation: _selectionController,
             builder: (context, _) => IconButton(
               tooltip: 'Copy selected composite text',
-              onPressed:
-                  _selectionController.hasSelection ? _copySelected : null,
+              onPressed: _selectionController.hasSelection
+                  ? _copySelected
+                  : null,
               icon: const Icon(Icons.content_copy_outlined),
             ),
           ),
@@ -175,8 +174,7 @@ No issues found! (ran in 1.3s)
                               SizedBox(height: 14),
                               _ToolCallBlock(
                                 id: 'git-status',
-                                summary:
-                                    'Explored 2 files, searched once, ran 1 command',
+                                summary: 'Explored 2 files, searched once, ran 1 command',
                                 command: 'git status --short',
                                 resultMarkdown: _gitStatusOutput,
                               ),
@@ -188,10 +186,8 @@ No issues found! (ran in 1.3s)
                               SizedBox(height: 14),
                               _ToolCallBlock(
                                 id: 'flutter-analyze',
-                                summary:
-                                    'Read 1 file, resolved dependencies, ran 1 command',
-                                command:
-                                    'flutter analyze example/lib/composite_selection_demo.dart',
+                                summary: 'Read 1 file, resolved dependencies, ran 1 command',
+                                command: 'flutter analyze example/lib/composite_selection_demo.dart',
                                 resultMarkdown: _analyzeOutput,
                               ),
                               SizedBox(height: 14),
@@ -223,27 +219,24 @@ class _LineWithTwoSelectable extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     return DecoratedBox(
-        decoration: BoxDecoration(
-          color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.72),
-          border: Border.all(color: colorScheme.outlineVariant),
-          borderRadius: BorderRadius.circular(8),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.72),
+        border: Border.all(color: colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: MixinSelectableRow(
+          selectionId: 'line-with-two-selectable',
+          spacing: 6,
+          children: const <Widget>[
+            MixinSelectableText('left'),
+            Icon(Icons.arrow_forward_rounded, size: 16),
+            MixinSelectableText('right'),
+          ],
         ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: MixinSelectableRow(
-            selectionId: 'line-with-two-selectable',
-            spacing: 6,
-            children: const <Widget>[
-              MixinSelectableText(
-                'left',
-              ),
-              Icon(Icons.arrow_forward_rounded, size: 16),
-              MixinSelectableText(
-                'right',
-              ),
-            ],
-          ),
-        ));
+      ),
+    );
   }
 }
 
@@ -285,15 +278,11 @@ class _ToolCallBlockState extends State<_ToolCallBlock>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             InkWell(
-              onTap: () => setState(
-                () => _isToolCallExpanded = !_isToolCallExpanded,
-              ),
+              onTap: () =>
+                  setState(() => _isToolCallExpanded = !_isToolCallExpanded),
               borderRadius: BorderRadius.circular(6),
               child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 2,
-                  vertical: 4,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
                 child: Row(
                   children: <Widget>[
                     Icon(
@@ -335,9 +324,7 @@ class _ToolCallBlockState extends State<_ToolCallBlock>
                       child: DecoratedBox(
                         decoration: BoxDecoration(
                           color: colorScheme.surface.withValues(alpha: 0.72),
-                          border: Border.all(
-                            color: colorScheme.outlineVariant,
-                          ),
+                          border: Border.all(color: colorScheme.outlineVariant),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Padding(
@@ -395,12 +382,11 @@ class _ToolCallBlockState extends State<_ToolCallBlock>
                                 alignment: Alignment.topCenter,
                                 child: _isCommandExpanded
                                     ? Padding(
-                                        padding: const EdgeInsets.only(
-                                          top: 10,
-                                        ),
+                                        padding: const EdgeInsets.only(top: 10),
                                         child: ClipRRect(
-                                          borderRadius:
-                                              BorderRadius.circular(6),
+                                          borderRadius: BorderRadius.circular(
+                                            6,
+                                          ),
                                           child: ConstrainedBox(
                                             constraints: const BoxConstraints(
                                               maxHeight: 200,

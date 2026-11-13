@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
 
@@ -183,65 +183,86 @@ String _buildComplexMarkdown({required int sections}) {
         '`mu_$index` `nu_$index` `xi_$index` `omicron_$index` `pi_$index`.',
       )
       ..write(
-          '\n\n> Quote line one for section $index with **highlighted** context.')
+        '\n\n> Quote line one for section $index with **highlighted** context.',
+      )
       ..write(
-          '\n> Quote line two includes \$x_${index % 9}\$ and [nested links](https://quote.example/$index).')
-      ..write('\n> > Nested quote line keeps `nested_quote_$index`, '
-          '**bold**, _emphasis_, and more text for geometry traversal.')
-      ..write('\n> > > Deep quote line with '
-          r'\( \sum_{i=0}^{n} i = n(n+1)/2 \)'
-          ' and `deep_$index`.')
+        '\n> Quote line two includes \$x_${index % 9}\$ and [nested links](https://quote.example/$index).',
+      )
+      ..write(
+        '\n> > Nested quote line keeps `nested_quote_$index`, '
+        '**bold**, _emphasis_, and more text for geometry traversal.',
+      )
+      ..write(
+        '\n> > > Deep quote line with '
+        r'\( \sum_{i=0}^{n} i = n(n+1)/2 \)'
+        ' and `deep_$index`.',
+      )
       ..write('\n\n- Bullet one with detail for section $index')
       ..write(
-          '\n- Bullet two with `token_$index` and more copy to wrap across the viewport width')
-      ..write('\n- Bullet three contains many inline code spans: '
-          '`a_$index`, `b_$index`, `c_$index`, `d_$index`, `e_$index`, '
-          '`f_$index`, `g_$index`, `h_$index`, `i_$index`, `j_$index`, '
-          '`k_$index`, and `l_$index` in one visual row candidate')
+        '\n- Bullet two with `token_$index` and more copy to wrap across the viewport width',
+      )
+      ..write(
+        '\n- Bullet three contains many inline code spans: '
+        '`a_$index`, `b_$index`, `c_$index`, `d_$index`, `e_$index`, '
+        '`f_$index`, `g_$index`, `h_$index`, `i_$index`, `j_$index`, '
+        '`k_$index`, and `l_$index` in one visual row candidate',
+      )
       ..write('\n- [x] Checked task with [audit](https://tasks.example/$index)')
       ..write('\n- [ ] Pending task with **rich** text and `pending_$index`')
       ..write(
-          '\n  - Nested child with extra words and \$y_${index % 11}\$ inline math')
+        '\n  - Nested child with extra words and \$y_${index % 11}\$ inline math',
+      )
       ..write('\n  1. Ordered nested child with `ordered_${index}_a`')
-      ..write('\n  2. Ordered nested child with `ordered_${index}_b` '
-          'and enough text to wrap onto another line')
-      ..write('\n\nTerm $index')
-      ..write('\n: Definition paragraph with **rich text**, ==mark==, H~2~O, '
-          '2^10^, <kbd>Cmd</kbd>+<kbd>K</kbd>, and a trailing sentence for wrapping.')
       ..write(
-          '\n\n![Selection image $index](missing-selection-$index.png?w=640&h=260)')
+        '\n  2. Ordered nested child with `ordered_${index}_b` '
+        'and enough text to wrap onto another line',
+      )
+      ..write('\n\nTerm $index')
+      ..write(
+        '\n: Definition paragraph with **rich text**, ==mark==, H~2~O, '
+        '2^10^, <kbd>Cmd</kbd>+<kbd>K</kbd>, and a trailing sentence for wrapping.',
+      )
+      ..write(
+        '\n\n![Selection image $index](missing-selection-$index.png?w=640&h=260)',
+      )
       ..write('\n\n| Col A | Col B | Col C |')
       ..write('\n| --- | --- | --- |')
       ..write(
-          '\n| row $index | value ${index * 3} | note with [ref](https://table.example/$index) |')
+        '\n| row $index | value ${index * 3} | note with [ref](https://table.example/$index) |',
+      )
       ..write(
-          '\n| row ${index + 1} | value ${index * 5} | another wrapped cell for coverage |')
+        '\n| row ${index + 1} | value ${index * 5} | another wrapped cell for coverage |',
+      )
       ..write(
-          '\n| row ${index + 2} | `cell_${index}_a` `cell_${index}_b` `cell_${index}_c` | '
-          r'\( \sqrt{x^2+y^2} \)'
-          ' mixed with **bold** and _emphasis_ |')
+        '\n| row ${index + 2} | `cell_${index}_a` `cell_${index}_b` `cell_${index}_c` | '
+        r'\( \sqrt{x^2+y^2} \)'
+        ' mixed with **bold** and _emphasis_ |',
+      )
       ..write('\n\n| Wide A | Wide B | Wide C | Wide D | Wide E |')
       ..write('\n| :--- | ---: | :---: | :--- | :--- |')
-      ..write('\n| `parse_$index` | ${index * 7} | ✅ | '
-          '[trace](https://wide.example/$index) | long text that should push horizontal table logic |')
-      ..write('\n| `layout_$index` | ${index * 11} | ⚠️ | '
-          r'\( x_{i+1}=x_i+\Delta \)'
-          ' | `a` `b` `c` `d` `e` in cell |')
+      ..write(
+        '\n| `parse_$index` | ${index * 7} | ✅ | '
+        '[trace](https://wide.example/$index) | long text that should push horizontal table logic |',
+      )
+      ..write(
+        '\n| `layout_$index` | ${index * 11} | ⚠️ | '
+        r'\( x_{i+1}=x_i+\Delta \)'
+        ' | `a` `b` `c` `d` `e` in cell |',
+      )
       ..write('\n\n```dart')
       ..write('\nString label$index = "section_$index";')
       ..write('\nint compute$index(int input) => input * ${index + 3};')
       ..write('\n```')
-      ..write('\n\n[^selection-$index]: Footnote body with `note_$index`, '
-          '[source](https://footnote.example/$index), and text that selection can traverse.');
+      ..write(
+        '\n\n[^selection-$index]: Footnote body with `note_$index`, '
+        '[source](https://footnote.example/$index), and text that selection can traverse.',
+      );
   }
   return buffer.toString();
 }
 
 class _BenchmarkScenario {
-  const _BenchmarkScenario({
-    required this.name,
-    required this.sections,
-  });
+  const _BenchmarkScenario({required this.name, required this.sections});
 
   final String name;
   final int sections;

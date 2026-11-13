@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:fts5_simple/fts5_simple.dart';
 import 'package:sqlite3/sqlite3.dart' hide Row;
 

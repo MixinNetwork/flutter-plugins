@@ -19,9 +19,9 @@ class MarkdownController extends ChangeNotifier {
     MarkdownDocument? document,
     MarkdownDocumentParser? parser,
     MarkdownCopySerializer? plainTextSerializer,
-  })  : _parser = parser ?? const MarkdownDocumentParser(),
-        _plainTextSerializer =
-            plainTextSerializer ?? const MarkdownPlainTextSerializer() {
+  }) : _parser = parser ?? const MarkdownDocumentParser(),
+       _plainTextSerializer =
+           plainTextSerializer ?? const MarkdownPlainTextSerializer() {
     _replaceData(data, document: document);
   }
 
@@ -41,8 +41,7 @@ class MarkdownController extends ChangeNotifier {
   static List<Map<String, Object?>> highlightCodeBlocks(
     MarkdownDocument document, {
     int maxLines = 120,
-  }) =>
-      highlighter.highlightCodeBlocks(document, maxLines: maxLines);
+  }) => highlighter.highlightCodeBlocks(document, maxLines: maxLines);
 
   /// Stores the result of [highlightCodeBlocks] on this isolate.
   static void cacheCodeHighlights(List<Map<String, Object?>> highlights) =>

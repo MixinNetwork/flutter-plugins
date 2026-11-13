@@ -1,6 +1,6 @@
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 
 import '../clipboard/plain_text_serializer.dart';
@@ -47,8 +47,10 @@ class MixinSelectionArea extends StatefulWidget {
     this.selectionColor,
     this.contextMenuBuilder = defaultMarkdownContextMenuBuilder,
     this.enableCopyFullDocumentShortcut = true,
-    @Deprecated('Filter MarkdownContextMenuDetails.buttonItems in '
-        'contextMenuBuilder instead.')
+    @Deprecated(
+      'Filter MarkdownContextMenuDetails.buttonItems in '
+      'contextMenuBuilder instead.',
+    )
     this.showCopyAllInContextMenu = true,
   });
 
@@ -60,8 +62,10 @@ class MixinSelectionArea extends StatefulWidget {
   /// Builds the right-click menu; null shows none.
   final MarkdownContextMenuBuilder? contextMenuBuilder;
   final bool enableCopyFullDocumentShortcut;
-  @Deprecated('Filter MarkdownContextMenuDetails.buttonItems in '
-      'contextMenuBuilder instead.')
+  @Deprecated(
+    'Filter MarkdownContextMenuDetails.buttonItems in '
+    'contextMenuBuilder instead.',
+  )
   final bool showCopyAllInContextMenu;
 
   @override
@@ -71,8 +75,9 @@ class MixinSelectionArea extends StatefulWidget {
 class _MixinSelectionAreaState extends State<MixinSelectionArea> {
   final MarkdownPlainTextSerializer _plainTextSerializer =
       const MarkdownPlainTextSerializer();
-  final GlobalKey _selectionAreaKey =
-      GlobalKey(debugLabel: 'mixin-selection-area');
+  final GlobalKey _selectionAreaKey = GlobalKey(
+    debugLabel: 'mixin-selection-area',
+  );
   final ScrollController _fallbackScrollController = ScrollController();
   final Map<Object, MixinSelectionParticipant> _participants =
       <Object, MixinSelectionParticipant>{};
@@ -137,8 +142,9 @@ class _MixinSelectionAreaState extends State<MixinSelectionArea> {
     _registrationOrder.remove(owner);
     _blockIndexOffsets.remove(owner);
     _blockCounts.remove(owner);
-    _orderedParticipants
-        .removeWhere((participant) => participant.owner == owner);
+    _orderedParticipants.removeWhere(
+      (participant) => participant.owner == owner,
+    );
     _scheduleDocumentRefresh();
   }
 
@@ -209,8 +215,9 @@ class _MixinSelectionAreaState extends State<MixinSelectionArea> {
         return leftDelta < 0 ? -1 : 1;
       }
     }
-    return (_registrationOrder[a.owner] ?? 0)
-        .compareTo(_registrationOrder[b.owner] ?? 0);
+    return (_registrationOrder[a.owner] ?? 0).compareTo(
+      _registrationOrder[b.owner] ?? 0,
+    );
   }
 
   String? _linkDestinationAt(Offset globalPosition) {
@@ -253,13 +260,13 @@ class _MixinSelectionAreaState extends State<MixinSelectionArea> {
       final dx = globalPosition.dx < rect.left
           ? rect.left - globalPosition.dx
           : globalPosition.dx > rect.right
-              ? globalPosition.dx - rect.right
-              : 0.0;
+          ? globalPosition.dx - rect.right
+          : 0.0;
       final dy = globalPosition.dy < rect.top
           ? rect.top - globalPosition.dy
           : globalPosition.dy > rect.bottom
-              ? globalPosition.dy - rect.bottom
-              : 0.0;
+          ? globalPosition.dy - rect.bottom
+          : 0.0;
       final distance = dx * dx + dy * dy;
       if (distance < bestDistance) {
         bestDistance = distance;
@@ -328,15 +335,15 @@ class _MixinSelectionAreaState extends State<MixinSelectionArea> {
 
   @override
   Widget build(BuildContext context) {
-    final selectionColor = widget.selectionColor ??
+    final selectionColor =
+        widget.selectionColor ??
         TextSelectionTheme.of(context).selectionColor ??
         MarkdownTheme.of(context).selectionColor;
     _controller.attachDocument(_document);
 
     return TextSelectionTheme(
-      data: TextSelectionTheme.of(context).copyWith(
-        selectionColor: selectionColor,
-      ),
+      data: TextSelectionTheme.of(context)
+          .copyWith(selectionColor: selectionColor),
       child: AnimatedBuilder(
         animation: _controller,
         builder: (context, _) {
@@ -370,10 +377,7 @@ class _MixinSelectionAreaState extends State<MixinSelectionArea> {
             selectBlockAt: _selectBlockAt,
             selectSelectionUnitAt: _selectSelectionUnitAt,
             additionalAutoScrollTargets: _autoScrollTargets,
-            child: KeyedSubtree(
-              key: _selectionAreaKey,
-              child: scopedChild,
-            ),
+            child: KeyedSubtree(key: _selectionAreaKey, child: scopedChild),
           );
         },
       ),
@@ -479,9 +483,7 @@ class _MixinSelectableState extends State<MixinSelectable> {
         return <BlockNode>[
           ParagraphBlock(
             id: 'mixin-selection-$blockIndex-${id.hashCode}',
-            inlines: <InlineNode>[
-              TextInline(text: widget.plainText),
-            ],
+            inlines: <InlineNode>[TextInline(text: widget.plainText)],
           ),
         ];
       },
@@ -564,8 +566,10 @@ class _MixinSelectableState extends State<MixinSelectable> {
     DocumentPosition position, {
     Offset? globalPosition,
   }) {
-    return _blockKey.currentState
-            ?.selectWord(position, globalPosition: globalPosition) ??
+    return _blockKey.currentState?.selectWord(
+          position,
+          globalPosition: globalPosition,
+        ) ??
         DocumentSelection(base: position, extent: position);
   }
 
@@ -595,8 +599,9 @@ class _MixinSelectableState extends State<MixinSelectable> {
     }
 
     final blockIndex = registrar.blockIndexOffsetOf(this);
-    final selectionRange =
-        blockIndex == null ? null : registrar.controller.normalizedRange;
+    final selectionRange = blockIndex == null
+        ? null
+        : registrar.controller.normalizedRange;
     return SelectableMarkdownBlock(
       key: _blockKey,
       blockIndex: blockIndex ?? 0,
@@ -677,9 +682,11 @@ class _MixinSelectableRowState extends State<MixinSelectableRow> {
     var textOffset = 0;
     var hasVisualChildSinceLastText = false;
 
-    for (var childIndex = 0;
-        childIndex < widget.children.length;
-        childIndex++) {
+    for (
+      var childIndex = 0;
+      childIndex < widget.children.length;
+      childIndex++
+    ) {
       final child = widget.children[childIndex];
       if (rowChildren.isNotEmpty && widget.spacing > 0) {
         rowChildren.add(SizedBox(width: widget.spacing));
@@ -868,7 +875,7 @@ class _MixinSelectableRowState extends State<MixinSelectableRow> {
     required DocumentRange range,
     required List<_MixinSelectableRowTextBridge> bridges,
     required Map<int, _ResolvedMixinSelectableRowTextSegment>
-        resolvedSegmentsByIndex,
+    resolvedSegmentsByIndex,
   }) sync* {
     for (final bridge in bridges) {
       if (range.start.textOffset >= bridge.endOffset ||
@@ -1094,10 +1101,7 @@ class MixinSelectableText extends StatelessWidget {
       MarkdownPretextInlineRun(text: data, style: effectiveStyle),
     ];
 
-    MarkdownPretextLayoutResult resolveLayout(
-      BuildContext context,
-      Size size,
-    ) {
+    MarkdownPretextLayoutResult resolveLayout(BuildContext context, Size size) {
       final textScaler =
           MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling;
       return computeMarkdownPretextLayoutFromRuns(
@@ -1138,7 +1142,7 @@ class MixinSelectableText extends StatelessWidget {
         final lineRange = localPosition == null
             ? layout.lineRangeForTextOffset(position.textOffset)
             : layout.visualLineRangeForLocalPosition(localPosition) ??
-                layout.lineRangeForTextOffset(position.textOffset);
+                  layout.lineRangeForTextOffset(position.textOffset);
         if (lineRange == null) {
           return null;
         }

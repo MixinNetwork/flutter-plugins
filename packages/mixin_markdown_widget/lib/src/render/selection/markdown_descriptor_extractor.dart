@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 
 import '../../clipboard/plain_text_serializer.dart';
 import '../../core/document.dart';
@@ -37,10 +37,7 @@ class PretextTextDescriptor {
 
 @immutable
 class _PrefixedPretextRuns {
-  const _PrefixedPretextRuns({
-    required this.plainText,
-    required this.runs,
-  });
+  const _PrefixedPretextRuns({required this.plainText, required this.runs});
 
   final String plainText;
   final List<MarkdownPretextInlineRun> runs;
@@ -160,8 +157,9 @@ class MarkdownDescriptorExtractor {
         return descriptorFromInlines(
           style,
           heading.inlines,
-          textAlign:
-              MarkdownInlineBuilder.resolvedInlineTextAlign(heading.inlines),
+          textAlign: MarkdownInlineBuilder.resolvedInlineTextAlign(
+            heading.inlines,
+          ),
           inlineCodeStyle: effectiveInlineCodeStyle,
           linkStyle: effectiveLinkStyle,
         );
@@ -170,8 +168,9 @@ class MarkdownDescriptorExtractor {
         return descriptorFromInlines(
           effectiveParagraphStyle,
           paragraph.inlines,
-          textAlign:
-              MarkdownInlineBuilder.resolvedInlineTextAlign(paragraph.inlines),
+          textAlign: MarkdownInlineBuilder.resolvedInlineTextAlign(
+            paragraph.inlines,
+          ),
           inlineCodeStyle: effectiveInlineCodeStyle,
           linkStyle: effectiveLinkStyle,
         );
@@ -230,14 +229,12 @@ class MarkdownDescriptorExtractor {
   }) {
     final itemDescriptors = <SelectableTextDescriptor>[
       for (var index = 0; index < block.items.length; index++)
-        if (_buildListItemDescriptor(
+        ?_buildListItemDescriptor(
           block,
           index,
           indentLevel: indentLevel,
           paragraphStyle: paragraphStyle,
-        )
-            case final descriptor?)
-          descriptor,
+        ),
     ];
     return joinSelectableTextDescriptors(
       itemDescriptors,
@@ -251,8 +248,10 @@ class MarkdownDescriptorExtractor {
   ) {
     final itemDescriptors = <SelectableTextDescriptor>[];
     for (final item in block.items) {
-      final termDescriptor =
-          descriptorFromInlines(definitionTermStyle, item.term);
+      final termDescriptor = descriptorFromInlines(
+        definitionTermStyle,
+        item.term,
+      );
       final definitionDescriptors = <SelectableTextDescriptor>[];
       for (final definition in item.definitions) {
         final childDescriptors = <SelectableTextDescriptor>[];
@@ -325,11 +324,7 @@ class MarkdownDescriptorExtractor {
     TextStyle? paragraphStyle,
   }) {
     final effectiveParagraphStyle = paragraphStyle ?? theme.bodyStyle;
-    final prefix = listItemPrefixText(
-      block,
-      index,
-      indentLevel: indentLevel,
-    );
+    final prefix = listItemPrefixText(block, index, indentLevel: indentLevel);
     final contentDescriptor = buildListItemSelectableDescriptor(
       block.items[index],
       indentLevel: indentLevel + 1,
@@ -400,8 +395,8 @@ class MarkdownDescriptorExtractor {
     final styleFontSize = style.fontSize;
     final scaledFontSize =
         bodyFontSize == null || contextFontSize == null || styleFontSize == null
-            ? styleFontSize ?? contextFontSize
-            : styleFontSize * contextFontSize / bodyFontSize;
+        ? styleFontSize ?? contextFontSize
+        : styleFontSize * contextFontSize / bodyFontSize;
     return style.copyWith(
       color: textStyleContext.color,
       fontSize: scaledFontSize,
@@ -444,15 +439,17 @@ class MarkdownDescriptorExtractor {
     for (final row in block.rows) {
       final cellDescriptors = <SelectableTextDescriptor>[];
       for (final cell in row.cells) {
-        cellDescriptors.add(descriptorFromInlines(
-          row.isHeader ? tableHeaderStyle : bodyStyle,
-          cell.inlines,
-          textAlign: MarkdownInlineBuilder.resolvedInlineTextAlign(
+        cellDescriptors.add(
+          descriptorFromInlines(
+            row.isHeader ? tableHeaderStyle : bodyStyle,
             cell.inlines,
+            textAlign: MarkdownInlineBuilder.resolvedInlineTextAlign(
+              cell.inlines,
+            ),
+            inlineCodeStyle: inlineCodeStyle,
+            linkStyle: linkStyle,
           ),
-          inlineCodeStyle: inlineCodeStyle,
-          linkStyle: linkStyle,
-        ));
+        );
       }
       rowDescriptors.add(
         joinSelectableTextDescriptors(
@@ -476,10 +473,8 @@ class MarkdownDescriptorExtractor {
     TextAlign textAlign = TextAlign.start,
   }) {
     return _descriptorFromSpan(
-      buildMarkdownPretextSpan(
-        runs: runs,
-        fallbackStyle: fallbackStyle,
-      ) as TextSpan,
+      buildMarkdownPretextSpan(runs: runs, fallbackStyle: fallbackStyle)
+          as TextSpan,
       plainText,
       pretext: PretextTextDescriptor(
         runs: runs,
@@ -537,8 +532,9 @@ class MarkdownDescriptorExtractor {
     required String separator,
     required TextStyle separatorStyle,
   }) {
-    final nonEmpty =
-        descriptors.where((descriptor) => !descriptor.isEmpty).toList();
+    final nonEmpty = descriptors
+        .where((descriptor) => !descriptor.isEmpty)
+        .toList();
     if (nonEmpty.isEmpty) {
       return plainTextDescriptor('', separatorStyle);
     }
@@ -560,7 +556,8 @@ class MarkdownDescriptorExtractor {
       for (var index = 0; index < nonEmpty.length; index++) {
         if (index > 0 && separator.isNotEmpty) {
           runs.add(
-              MarkdownPretextInlineRun(text: separator, style: separatorStyle));
+            MarkdownPretextInlineRun(text: separator, style: separatorStyle),
+          );
         }
         runs.addAll(nonEmpty[index].pretext!.runs);
       }
@@ -651,8 +648,9 @@ class MarkdownDescriptorExtractor {
     var atLineStart = true;
 
     void writePrefix({required bool trimTrailing}) {
-      final prefixText =
-          trimTrailing ? pendingPrefix.trimRight() : pendingPrefix;
+      final prefixText = trimTrailing
+          ? pendingPrefix.trimRight()
+          : pendingPrefix;
       if (prefixText.isNotEmpty) {
         prefixedRuns.add(
           MarkdownPretextInlineRun(text: prefixText, style: prefixStyle),
@@ -682,8 +680,9 @@ class MarkdownDescriptorExtractor {
         if (atLineStart) {
           writePrefix(trimTrailing: true);
         }
-        prefixedRuns
-            .add(MarkdownPretextInlineRun(text: '\n', style: run.style));
+        prefixedRuns.add(
+          MarkdownPretextInlineRun(text: '\n', style: run.style),
+        );
         buffer.write('\n');
         atLineStart = true;
         pendingPrefix = continuationPrefix;

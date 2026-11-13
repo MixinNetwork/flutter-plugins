@@ -53,7 +53,8 @@ void main() {
         'incremental parser timing: ${incrementalResult.timing.describe()}',
       );
       if (incrementalResult.elapsed.inMicroseconds > 0) {
-        final speedup = fullResult.elapsed.inMicroseconds /
+        final speedup =
+            fullResult.elapsed.inMicroseconds /
             incrementalResult.elapsed.inMicroseconds;
         stdout.writeln('speedup: ${speedup.toStringAsFixed(2)}x');
       }
@@ -61,10 +62,7 @@ void main() {
   });
 }
 
-void _warmUp(
-  String initialSource,
-  List<String> chunks,
-) {
+void _warmUp(String initialSource, List<String> chunks) {
   _benchmarkFullParse(initialSource, chunks);
   _benchmarkIncrementalParse(initialSource, chunks);
 }
@@ -116,28 +114,42 @@ String _buildInitialMarkdown({required int repetitions}) {
         r'\( a_i^2 + b_i^2 = c_i^2 \), and plain prose that should wrap '
         'across multiple visual lines in realistic desktop layouts.',
       )
-      ..write('\n\n- Hot path with `parse_$index`, `scan_$index`, '
-          '`normalize_$index`, `layout_$index`, `paint_$index`, '
-          '`select_$index`, `copy_$index`, and `commit_$index` all in one line')
       ..write(
-          '\n- [x] Completed task with [trace](https://trace.example/$index)')
+        '\n\n- Hot path with `parse_$index`, `scan_$index`, '
+        '`normalize_$index`, `layout_$index`, `paint_$index`, '
+        '`select_$index`, `copy_$index`, and `commit_$index` all in one line',
+      )
+      ..write(
+        '\n- [x] Completed task with [trace](https://trace.example/$index)',
+      )
       ..write('\n- [ ] Pending task with nested context')
-      ..write('\n  1. Ordered child with `child_${index}_a` and '
-          r'\( \Delta t < 16ms \)')
+      ..write(
+        '\n  1. Ordered child with `child_${index}_a` and '
+        r'\( \Delta t < 16ms \)',
+      )
       ..write('\n  2. Ordered child with **rich text** and more wrapping text')
       ..write(
-          '\n\n> Quote $index starts with `quoted_token_$index` and a link.')
-      ..write('\n> > Nested quote keeps **strong text**, _emphasis_, and '
-          r'\( q_{n+1}=q_n+r \).')
+        '\n\n> Quote $index starts with `quoted_token_$index` and a link.',
+      )
+      ..write(
+        '\n> > Nested quote keeps **strong text**, _emphasis_, and '
+        r'\( q_{n+1}=q_n+r \).',
+      )
       ..write('\n\nTerm $index')
-      ..write('\n: Definition includes ==mark==, H~2~O, 2^10^, '
-          '<kbd>Cmd</kbd>+<kbd>K</kbd>, and https://example.com/plain/$index.')
+      ..write(
+        '\n: Definition includes ==mark==, H~2~O, 2^10^, '
+        '<kbd>Cmd</kbd>+<kbd>K</kbd>, and https://example.com/plain/$index.',
+      )
       ..write('\n\n| Metric | Value | Notes |')
       ..write('\n| :--- | ---: | :--- |')
-      ..write('\n| parse | ${index * 3 + 7} | `MarkdownDocumentParser` '
-          'with [range](https://range.example/$index) |')
-      ..write('\n| render | ${index * 5 + 11} | wraps `inline` code and '
-          r'\( \sqrt{x^2+y^2} \) math |')
+      ..write(
+        '\n| parse | ${index * 3 + 7} | `MarkdownDocumentParser` '
+        'with [range](https://range.example/$index) |',
+      )
+      ..write(
+        '\n| render | ${index * 5 + 11} | wraps `inline` code and '
+        r'\( \sqrt{x^2+y^2} \) math |',
+      )
       ..write('\n\n```dart')
       ..write('\nfinal tokens$index = <String>[')
       ..write('\n  for (var i = 0; i < 8; i++) "token_\$i",')
@@ -147,8 +159,10 @@ String _buildInitialMarkdown({required int repetitions}) {
       ..write(
         '\n\n![Benchmark image $index](missing-image-$index.png?w=640&h=240)',
       )
-      ..write('\n\n[^baseline-$index]: Footnote with `footnote_$index`, '
-          '[reference](https://footnote.example/$index), and extra detail.');
+      ..write(
+        '\n\n[^baseline-$index]: Footnote with `footnote_$index`, '
+        '[reference](https://footnote.example/$index), and extra detail.',
+      );
   }
   return buffer.toString();
 }
@@ -224,10 +238,7 @@ class _BenchmarkScenario {
 }
 
 class _BenchmarkResult {
-  const _BenchmarkResult({
-    required this.elapsed,
-    required this.timing,
-  });
+  const _BenchmarkResult({required this.elapsed, required this.timing});
 
   final Duration elapsed;
   final _TimingSummary timing;

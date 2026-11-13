@@ -1,20 +1,14 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
 
 import 'ai_chat_demo.dart';
 import 'composite_selection_demo.dart';
 
-enum _DemoLayoutMode {
-  split,
-  previewOnly,
-}
+enum _DemoLayoutMode { split, previewOnly }
 
 class _PreviewBackgroundPreset {
-  const _PreviewBackgroundPreset({
-    required this.name,
-    required this.color,
-  });
+  const _PreviewBackgroundPreset({required this.name, required this.color});
 
   final String name;
   final Color color;
@@ -320,9 +314,7 @@ This content was appended through `MarkdownController.appendChunk`.
             tooltip: 'AI Chat Demo',
             onPressed: () {
               Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => const AIChatDemoPage(),
-                ),
+                MaterialPageRoute(builder: (context) => const AIChatDemoPage()),
               );
             },
             icon: const Icon(Icons.chat_outlined),
@@ -383,8 +375,9 @@ This content was appended through `MarkdownController.appendChunk`.
           ),
           IconButton(
             tooltip: 'Commit stream draft',
-            onPressed:
-                _controller.streamingState.hasDraft ? _commitStream : null,
+            onPressed: _controller.streamingState.hasDraft
+                ? _commitStream
+                : null,
             icon: const Icon(Icons.done_all_rounded),
           ),
           IconButton(
@@ -408,9 +401,8 @@ This content was appended through `MarkdownController.appendChunk`.
               minLines: null,
               keyboardType: TextInputType.multiline,
               textAlignVertical: TextAlignVertical.top,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontFamily: 'Menlo',
-                  ),
+              style: Theme.of(context).textTheme.bodyMedium
+                  ?.copyWith(fontFamily: 'Menlo'),
               decoration: const InputDecoration(
                 border: InputBorder.none,
                 hintText: 'Type Markdown here...',
@@ -454,10 +446,11 @@ This content was appended through `MarkdownController.appendChunk`.
                         selectionController: _selectionController,
                         theme: markdownTheme,
                         imageBuilder: _buildMarkdownImage,
-                        onTapLink: (destination, _, __) {
+                        onTapLink: (destination, _, _) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                                content: Text('Link tapped: $destination')),
+                              content: Text('Link tapped: $destination'),
+                            ),
                           );
                         },
                         contextMenuBuilder: (context, details) {
@@ -523,20 +516,20 @@ This content was appended through `MarkdownController.appendChunk`.
             child: _layoutMode == _DemoLayoutMode.previewOnly
                 ? previewPanel
                 : isWide
-                    ? Row(
-                        children: <Widget>[
-                          Expanded(child: editorPanel),
-                          const SizedBox(width: 20),
-                          Expanded(child: previewPanel),
-                        ],
-                      )
-                    : Column(
-                        children: <Widget>[
-                          Expanded(child: editorPanel),
-                          const SizedBox(height: 20),
-                          Expanded(child: previewPanel),
-                        ],
-                      ),
+                ? Row(
+                    children: <Widget>[
+                      Expanded(child: editorPanel),
+                      const SizedBox(width: 20),
+                      Expanded(child: previewPanel),
+                    ],
+                  )
+                : Column(
+                    children: <Widget>[
+                      Expanded(child: editorPanel),
+                      const SizedBox(height: 20),
+                      Expanded(child: previewPanel),
+                    ],
+                  ),
           );
         },
       ),
@@ -601,10 +594,7 @@ This content was appended through `MarkdownController.appendChunk`.
         Row(
           children: <Widget>[
             Expanded(
-              child: Text(
-                'Preview appearance',
-                style: textTheme.titleMedium,
-              ),
+              child: Text('Preview appearance', style: textTheme.titleMedium),
             ),
             IconButton(
               tooltip: 'Close preview appearance controls',
@@ -712,9 +702,8 @@ This content was appended through `MarkdownController.appendChunk`.
                     color: preset.color,
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: ThemeData.estimateBrightnessForColor(
-                                preset.color,
-                              ) ==
+                      color:
+                          ThemeData.estimateBrightnessForColor(preset.color) ==
                               Brightness.dark
                           ? Colors.white.withValues(alpha: 0.45)
                           : Colors.black.withValues(alpha: 0.12),
@@ -723,7 +712,8 @@ This content was appended through `MarkdownController.appendChunk`.
                 ),
                 label: Text(preset.name),
                 labelStyle: textTheme.labelMedium?.copyWith(
-                  color: ThemeData.estimateBrightnessForColor(preset.color) ==
+                  color:
+                      ThemeData.estimateBrightnessForColor(preset.color) ==
                           Brightness.dark
                       ? const Color(0xFFF8FAFC)
                       : const Color(0xFF1F2937),
@@ -732,13 +722,15 @@ This content was appended through `MarkdownController.appendChunk`.
                       : FontWeight.w500,
                 ),
                 backgroundColor: preset.color.withValues(
-                  alpha: ThemeData.estimateBrightnessForColor(preset.color) ==
+                  alpha:
+                      ThemeData.estimateBrightnessForColor(preset.color) ==
                           Brightness.dark
                       ? 0.24
                       : 0.34,
                 ),
                 selectedColor: preset.color.withValues(
-                  alpha: ThemeData.estimateBrightnessForColor(preset.color) ==
+                  alpha:
+                      ThemeData.estimateBrightnessForColor(preset.color) ==
                           Brightness.dark
                       ? 0.42
                       : 0.54,
@@ -776,9 +768,9 @@ This content was appended through `MarkdownController.appendChunk`.
 
   void _copySelectedModelText() {
     _selectionController.copySelectionToClipboard();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Copied selected model text')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Copied selected model text')));
   }
 
   void _resetDocument() {
@@ -813,36 +805,28 @@ This content was appended through `MarkdownController.appendChunk`.
 
     final image = isSvg
         ? isNetwork
-            ? SvgPicture.network(
-                block.url,
-                width: width,
-                height: height,
-                fit: BoxFit.contain,
-              )
-            : SvgPicture.asset(
-                path,
-                width: width,
-                height: height,
-                fit: BoxFit.contain,
-              )
+              ? SvgPicture.network(
+                  block.url,
+                  width: width,
+                  height: height,
+                  fit: BoxFit.contain,
+                )
+              : SvgPicture.asset(
+                  path,
+                  width: width,
+                  height: height,
+                  fit: BoxFit.contain,
+                )
         : isNetwork
-            ? Image.network(
-                block.url,
-                width: width,
-                height: height,
-                fit: BoxFit.cover,
-              )
-            : Image.asset(
-                path,
-                width: width,
-                height: height,
-                fit: BoxFit.cover,
-              );
+        ? Image.network(
+            block.url,
+            width: width,
+            height: height,
+            fit: BoxFit.cover,
+          )
+        : Image.asset(path, width: width, height: height, fit: BoxFit.cover);
 
-    return ClipRRect(
-      borderRadius: theme.imageBorderRadius,
-      child: image,
-    );
+    return ClipRRect(borderRadius: theme.imageBorderRadius, child: image);
   }
 
   double? _dimensionFromQuery(Uri? uri, String key) {
@@ -933,10 +917,7 @@ class _PaneShell extends StatelessWidget {
             if (subtitleBuilder != null)
               subtitleBuilder!(context)
             else if (subtitle != null)
-              Text(
-                subtitle!,
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
+              Text(subtitle!, style: Theme.of(context).textTheme.bodyMedium),
             const SizedBox(height: 16),
             Expanded(child: child),
           ],

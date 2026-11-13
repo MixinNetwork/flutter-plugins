@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../clipboard/plain_text_serializer.dart';
 import '../core/document.dart';
@@ -291,10 +291,10 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       return null;
     }
     final block = widget.document.blocks[localBlockIndex];
-    final upstream = _blockStateFor(block)?.isPointerOnPrecedingCharacter(
-          position.textOffset,
-          globalPosition,
-        ) ??
+    final upstream =
+        _blockStateFor(
+          block,
+        )?.isPointerOnPrecedingCharacter(position.textOffset, globalPosition) ??
         false;
     return StructuredBlockSelection.forBlock(block)
         .linkAt(position, upstream: upstream)
@@ -306,8 +306,10 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
     return state is MarkdownSelectableBlockHandle ? state : null;
   }
 
-  DocumentPosition? _hitTestPosition(Offset globalPosition,
-      {required bool clamp}) {
+  DocumentPosition? _hitTestPosition(
+    Offset globalPosition, {
+    required bool clamp,
+  }) {
     for (final block in widget.document.blocks) {
       final hit = _blockStateFor(block)?.hitTestGlobal(globalPosition);
       if (hit != null) {
@@ -329,13 +331,13 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       final dx = globalPosition.dx < rect.left
           ? rect.left - globalPosition.dx
           : globalPosition.dx > rect.right
-              ? globalPosition.dx - rect.right
-              : 0.0;
+          ? globalPosition.dx - rect.right
+          : 0.0;
       final dy = globalPosition.dy < rect.top
           ? rect.top - globalPosition.dy
           : globalPosition.dy > rect.bottom
-              ? globalPosition.dy - rect.bottom
-              : 0.0;
+          ? globalPosition.dy - rect.bottom
+          : 0.0;
       final distance = dx * dx + dy * dy;
       if (distance < bestDistance) {
         bestDistance = distance;
@@ -385,7 +387,9 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
   }
 
   void _selectSelectionUnitAt(
-      Offset globalPosition, DocumentPosition position) {
+    Offset globalPosition,
+    DocumentPosition position,
+  ) {
     final selectionController = widget.selectionController;
     if (selectionController == null) {
       return;
@@ -398,10 +402,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
       return;
     }
     selectionController.setSelection(
-      blockState.selectSelectionUnit(
-        position,
-        globalPosition: globalPosition,
-      ),
+      blockState.selectSelectionUnit(position, globalPosition: globalPosition),
     );
   }
 
@@ -589,7 +590,7 @@ class _MarkdownDocumentViewState extends State<MarkdownDocumentView> {
   }
 
   Iterable<MarkdownSelectionAutoScrollTarget>
-      _inheritedSelectionAutoScrollTargets() sync* {
+  _inheritedSelectionAutoScrollTargets() sync* {
     if (!widget.useColumn) {
       yield MarkdownSelectionAutoScrollTarget(
         scrollController: _effectiveScrollController,

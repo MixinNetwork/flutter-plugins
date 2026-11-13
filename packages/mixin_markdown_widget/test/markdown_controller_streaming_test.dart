@@ -33,10 +33,7 @@ void main() {
         expect(identical(controller.document.blocks.first, heading), isTrue);
         expect(controller.document.blocks.last.id, id);
       }
-      expect(
-        controller.plainText,
-        contains('Streaming text keeps growing.'),
-      );
+      expect(controller.plainText, contains('Streaming text keeps growing.'));
     });
 
     test('a streamed fenced code block keeps its id after it closes', () {
@@ -48,7 +45,7 @@ void main() {
       for (final chunk in <String>[
         '\nfinal b = 2;',
         '\nfinal c = 3;',
-        '\n```'
+        '\n```',
       ]) {
         controller.appendChunk(chunk);
         final code = controller.document.blocks.last as CodeBlock;
@@ -111,12 +108,10 @@ void main() {
       final streamedId = controller.document.blocks.last.id;
 
       controller.setData('# Title\n\nStreaming text, replaced');
-      final parsed = const MarkdownDocumentParser()
-          .parse('# Title\n\nStreaming text, replaced');
-      expect(
-        _blockIds(controller.document.blocks),
-        _blockIds(parsed.blocks),
+      final parsed = const MarkdownDocumentParser().parse(
+        '# Title\n\nStreaming text, replaced',
       );
+      expect(_blockIds(controller.document.blocks), _blockIds(parsed.blocks));
       expect(controller.document.blocks.last.id, isNot(streamedId));
     });
   });

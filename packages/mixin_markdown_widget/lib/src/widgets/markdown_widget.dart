@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../render/markdown_document_view.dart';
 import '../selection/selection_controller.dart';
@@ -19,8 +19,10 @@ class MarkdownWidget extends StatefulWidget {
     this.useColumn = false,
     this.selectable = true,
     this.enableCopyFullDocumentShortcut = true,
-    @Deprecated('Filter MarkdownContextMenuDetails.buttonItems in '
-        'contextMenuBuilder instead.')
+    @Deprecated(
+      'Filter MarkdownContextMenuDetails.buttonItems in '
+      'contextMenuBuilder instead.',
+    )
     this.showCopyAllInContextMenu = true,
     this.selectionController,
     this.padding,
@@ -30,9 +32,9 @@ class MarkdownWidget extends StatefulWidget {
     this.bulletBuilder,
     this.contextMenuBuilder = defaultMarkdownContextMenuBuilder,
   }) : assert(
-          (data == null) != (controller == null),
-          'Provide exactly one of data or controller.',
-        );
+         (data == null) != (controller == null),
+         'Provide exactly one of data or controller.',
+       );
 
   final String? data;
   final MarkdownController? controller;
@@ -43,8 +45,10 @@ class MarkdownWidget extends StatefulWidget {
   final bool useColumn;
   final bool selectable;
   final bool enableCopyFullDocumentShortcut;
-  @Deprecated('Filter MarkdownContextMenuDetails.buttonItems in '
-      'contextMenuBuilder instead.')
+  @Deprecated(
+    'Filter MarkdownContextMenuDetails.buttonItems in '
+    'contextMenuBuilder instead.',
+  )
   final bool showCopyAllInContextMenu;
   final MarkdownSelectionController? selectionController;
   final EdgeInsetsGeometry? padding;
@@ -61,7 +65,8 @@ class MarkdownWidget extends StatefulWidget {
 }
 
 @Deprecated(
-    'Use MarkdownWidget instead. This misspelled alias will be removed.')
+  'Use MarkdownWidget instead. This misspelled alias will be removed.',
+)
 typedef MarkownWidget = MarkdownWidget;
 
 class _MarkdownWidgetState extends State<MarkdownWidget> {
@@ -117,28 +122,28 @@ class _MarkdownWidgetState extends State<MarkdownWidget> {
           final selectionRegistrar = MixinSelectionRegistrar.maybeOf(context);
           final selectionController = widget.selectable
               ? (widget.selectionController ??
-                  selectionRegistrar?.controller ??
-                  _fallbackSelectionController)
+                    selectionRegistrar?.controller ??
+                    _fallbackSelectionController)
               : null;
-          final usesInheritedSelectionController = widget.selectable &&
+          final usesInheritedSelectionController =
+              widget.selectable &&
               widget.selectionController == null &&
               selectionRegistrar != null;
           final animation = selectionController == null
               ? _effectiveController.documentListenable
-              : Listenable.merge(
-                  <Listenable>[
-                    _effectiveController.documentListenable,
-                    selectionController,
-                  ],
-                );
+              : Listenable.merge(<Listenable>[
+                  _effectiveController.documentListenable,
+                  selectionController,
+                ]);
           return TextSelectionTheme(
             data: TextSelectionThemeData(selectionColor: theme.selectionColor),
             child: AnimatedBuilder(
               animation: animation,
               builder: (context, _) {
                 if (!usesInheritedSelectionController) {
-                  selectionController
-                      ?.attachDocument(_effectiveController.document);
+                  selectionController?.attachDocument(
+                    _effectiveController.document,
+                  );
                 }
                 return MarkdownDocumentView(
                   document: _effectiveController.document,

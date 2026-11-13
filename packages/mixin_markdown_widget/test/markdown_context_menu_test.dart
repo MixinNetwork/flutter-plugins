@@ -1,5 +1,5 @@
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
@@ -64,8 +64,10 @@ List<String> _mockClipboard(WidgetTester tester) {
     },
   );
   addTearDown(
-    () => tester.binding.defaultBinaryMessenger
-        .setMockMethodCallHandler(SystemChannels.platform, null),
+    () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      null,
+    ),
   );
   return copied;
 }
@@ -96,36 +98,46 @@ Future<MarkdownSelectionController> _pumpMarkdown(
 
 void main() {
   group('right click selection', () {
-    testWidgets(
-      'selects the word under the pointer outside the selection',
-      (tester) async {
-        final selection = await _pumpMarkdown(tester);
-        final brave =
-            _characterCenter(tester, containing: 'Hello', character: 'v');
-        // Left of `brave`: the menu opens to the right of the pointer.
-        final hello =
-            _characterCenter(tester, containing: 'Hello', character: 'H');
+    testWidgets('selects the word under the pointer outside the selection', (
+      tester,
+    ) async {
+      final selection = await _pumpMarkdown(tester);
+      final brave = _characterCenter(
+        tester,
+        containing: 'Hello',
+        character: 'v',
+      );
+      // Left of `brave`: the menu opens to the right of the pointer.
+      final hello = _characterCenter(
+        tester,
+        containing: 'Hello',
+        character: 'H',
+      );
 
-        await _rightClick(tester, brave);
-        expect(selection.selectedPlainText, 'brave');
-        expect(_menu, findsOneWidget);
-        expect(find.text('Copy'), findsOneWidget);
+      await _rightClick(tester, brave);
+      expect(selection.selectedPlainText, 'brave');
+      expect(_menu, findsOneWidget);
+      expect(find.text('Copy'), findsOneWidget);
 
-        await _rightClick(tester, hello);
-        expect(selection.selectedPlainText, 'Hello');
-      },
-      variant: TargetPlatformVariant.only(TargetPlatform.macOS),
-    );
+      await _rightClick(tester, hello);
+      expect(selection.selectedPlainText, 'Hello');
+    }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
 
     testWidgets(
       'keeps the selection under the pointer and clears it elsewhere',
       (tester) async {
         final selection = await _pumpMarkdown(tester);
-        final brave =
-            _characterCenter(tester, containing: 'Hello', character: 'v');
+        final brave = _characterCenter(
+          tester,
+          containing: 'Hello',
+          character: 'v',
+        );
         // Left of `brave`: the menu opens to the right of the pointer.
-        final hello =
-            _characterCenter(tester, containing: 'Hello', character: 'H');
+        final hello = _characterCenter(
+          tester,
+          containing: 'Hello',
+          character: 'H',
+        );
 
         await _doubleClick(tester, brave);
         expect(selection.selectedPlainText, 'brave');
@@ -142,137 +154,126 @@ void main() {
       variant: TargetPlatformVariant.only(TargetPlatform.windows),
     );
 
-    testWidgets(
-      'applies inside MixinSelectionArea',
-      (tester) async {
-        final selection = MarkdownSelectionController();
-        addTearDown(selection.dispose);
-        await tester.pumpWidget(
-          MaterialApp(
-            home: Scaffold(
-              body: MixinSelectionArea(
-                controller: selection,
-                child: const MarkdownWidget(data: _document, useColumn: true),
-              ),
+    testWidgets('applies inside MixinSelectionArea', (tester) async {
+      final selection = MarkdownSelectionController();
+      addTearDown(selection.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MixinSelectionArea(
+              controller: selection,
+              child: const MarkdownWidget(data: _document, useColumn: true),
             ),
           ),
-        );
+        ),
+      );
 
-        await tester.pumpAndSettle();
-        await _rightClick(
-          tester,
-          _characterCenter(tester, containing: 'Hello', character: 'v'),
-        );
-        expect(selection.selectedPlainText, 'brave');
-        expect(_menu, findsOneWidget);
-      },
-      variant: TargetPlatformVariant.only(TargetPlatform.macOS),
-    );
+      await tester.pumpAndSettle();
+      await _rightClick(
+        tester,
+        _characterCenter(tester, containing: 'Hello', character: 'v'),
+      );
+      expect(selection.selectedPlainText, 'brave');
+      expect(_menu, findsOneWidget);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
   });
 
   group('menu', () {
-    testWidgets(
-      'buttons run their action and close the menu',
-      (tester) async {
-        final selection = await _pumpMarkdown(tester);
+    testWidgets('buttons run their action and close the menu', (tester) async {
+      final selection = await _pumpMarkdown(tester);
 
-        await _rightClick(
-          tester,
-          _characterCenter(tester, containing: 'Hello', character: 'v'),
-        );
-        await tester.tap(find.text('Select all'));
-        await tester.pumpAndSettle();
+      await _rightClick(
+        tester,
+        _characterCenter(tester, containing: 'Hello', character: 'v'),
+      );
+      await tester.tap(find.text('Select all'));
+      await tester.pumpAndSettle();
 
-        expect(selection.selectedPlainText, contains('Second paragraph'));
-        expect(_menu, findsNothing);
-      },
-      variant: TargetPlatformVariant.only(TargetPlatform.windows),
-    );
+      expect(selection.selectedPlainText, contains('Second paragraph'));
+      expect(_menu, findsNothing);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
 
-    testWidgets(
-      'Escape closes the menu and keeps the selection',
-      (tester) async {
-        final selection = await _pumpMarkdown(tester);
-        final brave =
-            _characterCenter(tester, containing: 'Hello', character: 'v');
-        await _doubleClick(tester, brave);
-        await _rightClick(tester, brave);
-        expect(_menu, findsOneWidget);
+    testWidgets('Escape closes the menu and keeps the selection', (
+      tester,
+    ) async {
+      final selection = await _pumpMarkdown(tester);
+      final brave = _characterCenter(
+        tester,
+        containing: 'Hello',
+        character: 'v',
+      );
+      await _doubleClick(tester, brave);
+      await _rightClick(tester, brave);
+      expect(_menu, findsOneWidget);
 
-        await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-        await tester.pumpAndSettle();
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
 
-        expect(_menu, findsNothing);
-        expect(selection.selectedPlainText, 'brave');
-      },
-      variant: TargetPlatformVariant.only(TargetPlatform.windows),
-    );
+      expect(_menu, findsNothing);
+      expect(selection.selectedPlainText, 'brave');
+    }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
 
-    testWidgets(
-      'scrolling closes the menu',
-      (tester) async {
-        final scrollController = ScrollController();
-        addTearDown(scrollController.dispose);
-        await _pumpMarkdown(
-          tester,
-          data: [
-            _document,
-            for (var index = 0; index < 60; index++) 'Line $index',
-          ].join('\n\n'),
-          scrollController: scrollController,
-        );
+    testWidgets('scrolling closes the menu', (tester) async {
+      final scrollController = ScrollController();
+      addTearDown(scrollController.dispose);
+      await _pumpMarkdown(
+        tester,
+        data: [
+          _document,
+          for (var index = 0; index < 60; index++) 'Line $index',
+        ].join('\n\n'),
+        scrollController: scrollController,
+      );
 
-        await _rightClick(
-          tester,
-          _characterCenter(tester, containing: 'Hello', character: 'v'),
-        );
-        expect(_menu, findsOneWidget);
+      await _rightClick(
+        tester,
+        _characterCenter(tester, containing: 'Hello', character: 'v'),
+      );
+      expect(_menu, findsOneWidget);
 
-        scrollController.jumpTo(120);
-        await tester.pumpAndSettle();
+      scrollController.jumpTo(120);
+      await tester.pumpAndSettle();
 
-        expect(_menu, findsNothing);
-      },
-      variant: TargetPlatformVariant.only(TargetPlatform.windows),
-    );
+      expect(_menu, findsNothing);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
 
-    testWidgets(
-      'Copy copies the selection',
-      (tester) async {
-        final copied = _mockClipboard(tester);
-        await _pumpMarkdown(tester);
-        final brave =
-            _characterCenter(tester, containing: 'Hello', character: 'v');
-        await _doubleClick(tester, brave);
-        await _rightClick(tester, brave);
+    testWidgets('Copy copies the selection', (tester) async {
+      final copied = _mockClipboard(tester);
+      await _pumpMarkdown(tester);
+      final brave = _characterCenter(
+        tester,
+        containing: 'Hello',
+        character: 'v',
+      );
+      await _doubleClick(tester, brave);
+      await _rightClick(tester, brave);
 
-        await tester.tap(find.text('Copy'));
-        await tester.pumpAndSettle();
+      await tester.tap(find.text('Copy'));
+      await tester.pumpAndSettle();
 
-        expect(copied, ['brave']);
-        expect(_menu, findsNothing);
-      },
-      variant: TargetPlatformVariant.only(TargetPlatform.windows),
-    );
+      expect(copied, ['brave']);
+      expect(_menu, findsNothing);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
 
-    testWidgets(
-      'a null builder shows no menu and keeps the selection',
-      (tester) async {
-        final selection = await _pumpMarkdown(tester, contextMenuBuilder: null);
-        final brave =
-            _characterCenter(tester, containing: 'Hello', character: 'v');
-        await _doubleClick(tester, brave);
+    testWidgets('a null builder shows no menu and keeps the selection', (
+      tester,
+    ) async {
+      final selection = await _pumpMarkdown(tester, contextMenuBuilder: null);
+      final brave = _characterCenter(
+        tester,
+        containing: 'Hello',
+        character: 'v',
+      );
+      await _doubleClick(tester, brave);
 
-        await _rightClick(
-          tester,
-          _characterCenter(tester, containing: 'Second', character: 'S'),
-        );
+      await _rightClick(
+        tester,
+        _characterCenter(tester, containing: 'Second', character: 'S'),
+      );
 
-        expect(_menu, findsNothing);
-        expect(selection.selectedPlainText, 'brave');
-      },
-      variant: TargetPlatformVariant.only(TargetPlatform.windows),
-    );
+      expect(_menu, findsNothing);
+      expect(selection.selectedPlainText, 'brave');
+    }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
   });
 
   group('links', () {
@@ -299,85 +300,78 @@ void main() {
         'https://example.com/cell',
       ),
     ]) {
-      testWidgets(
-        'Copy link copies $name',
-        (tester) async {
-          final copied = _mockClipboard(tester);
-          await _pumpMarkdown(tester, data: data);
-
-          await _rightClick(
-            tester,
-            _characterCenter(
-              tester,
-              containing: containing,
-              character: character,
-            ),
-          );
-          await tester.tap(find.text('Copy link'));
-          await tester.pumpAndSettle();
-
-          expect(copied, [destination]);
-          expect(_menu, findsNothing);
-        },
-        variant: TargetPlatformVariant.only(TargetPlatform.windows),
-      );
-    }
-
-    testWidgets(
-      'plain text has no Copy link',
-      (tester) async {
-        await _pumpMarkdown(
-          tester,
-          data: 'Read [the docs](https://example.com/docs) first',
-        );
+      testWidgets('Copy link copies $name', (tester) async {
+        final copied = _mockClipboard(tester);
+        await _pumpMarkdown(tester, data: data);
 
         await _rightClick(
           tester,
-          _characterCenter(tester, containing: 'Read', character: 'R'),
+          _characterCenter(
+            tester,
+            containing: containing,
+            character: character,
+          ),
         );
+        await tester.tap(find.text('Copy link'));
+        await tester.pumpAndSettle();
 
-        expect(_menu, findsOneWidget);
-        expect(find.text('Copy link'), findsNothing);
-      },
-      variant: TargetPlatformVariant.only(TargetPlatform.windows),
-    );
-  });
+        expect(copied, [destination]);
+        expect(_menu, findsNothing);
+      }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
+    }
 
-  testWidgets(
-    'custom builders get the details and can hide the menu',
-    (tester) async {
-      MarkdownContextMenuDetails? received;
-      final selection = await _pumpMarkdown(
+    testWidgets('plain text has no Copy link', (tester) async {
+      await _pumpMarkdown(
         tester,
         data: 'Read [the docs](https://example.com/docs) first',
-        contextMenuBuilder: (context, details) {
-          received = details;
-          return AdaptiveTextSelectionToolbar.buttonItems(
-            anchors: details.anchors,
-            buttonItems: [
-              ...details.buttonItems,
-              ContextMenuButtonItem(label: 'Search', onPressed: details.hide),
-            ],
-          );
-        },
-      );
-      final target =
-          _characterCenter(tester, containing: 'Read', character: 'docs');
-
-      await _rightClick(tester, target);
-
-      expect(received!.linkDestination, 'https://example.com/docs');
-      expect(received!.anchors.primaryAnchor, target);
-      expect(received!.selectionController, same(selection));
-      expect(
-        received!.buttonItems.map((item) => item.type),
-        contains(ContextMenuButtonType.selectAll),
       );
 
-      await tester.tap(find.text('Search'));
-      await tester.pumpAndSettle();
-      expect(_menu, findsNothing);
-    },
-    variant: TargetPlatformVariant.only(TargetPlatform.windows),
-  );
+      await _rightClick(
+        tester,
+        _characterCenter(tester, containing: 'Read', character: 'R'),
+      );
+
+      expect(_menu, findsOneWidget);
+      expect(find.text('Copy link'), findsNothing);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
+  });
+
+  testWidgets('custom builders get the details and can hide the menu', (
+    tester,
+  ) async {
+    MarkdownContextMenuDetails? received;
+    final selection = await _pumpMarkdown(
+      tester,
+      data: 'Read [the docs](https://example.com/docs) first',
+      contextMenuBuilder: (context, details) {
+        received = details;
+        return AdaptiveTextSelectionToolbar.buttonItems(
+          anchors: details.anchors,
+          buttonItems: [
+            ...details.buttonItems,
+            ContextMenuButtonItem(label: 'Search', onPressed: details.hide),
+          ],
+        );
+      },
+    );
+    final target = _characterCenter(
+      tester,
+      containing: 'Read',
+      character: 'docs',
+    );
+
+    await _rightClick(tester, target);
+
+    expect(received!.linkDestination, 'https://example.com/docs');
+    expect(received!.anchors.primaryAnchor, target);
+    expect(received!.selectionController, same(selection));
+    expect(
+      received!.buttonItems.map((item) => item.type),
+      contains(ContextMenuButtonType.selectAll),
+    );
+
+    await tester.tap(find.text('Search'));
+    await tester.pumpAndSettle();
+    expect(_menu, findsNothing);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
 }

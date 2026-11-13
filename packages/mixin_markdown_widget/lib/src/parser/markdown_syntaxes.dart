@@ -4,33 +4,33 @@ import 'package:html/parser.dart' as html_parser;
 
 final List<md.BlockSyntax> _markdownBlockSyntaxes =
     List<md.BlockSyntax>.unmodifiable(<md.BlockSyntax>[
-  const md.FencedCodeBlockSyntax(),
-  const MarkdownMathBlockSyntax(),
-  const MarkdownHtmlCommentBlockSyntax(),
-  const MarkdownHtmlBlockSyntax(),
-  const md.HeaderWithIdSyntax(),
-  const md.SetextHeaderWithIdSyntax(),
-  const md.TableSyntax(),
-  const md.UnorderedListWithCheckboxSyntax(),
-  const md.OrderedListWithCheckboxSyntax(),
-  const md.FootnoteDefSyntax(),
-  const MarkdownDefinitionListSyntax(),
-]);
+      const md.FencedCodeBlockSyntax(),
+      const MarkdownMathBlockSyntax(),
+      const MarkdownHtmlCommentBlockSyntax(),
+      const MarkdownHtmlBlockSyntax(),
+      const md.HeaderWithIdSyntax(),
+      const md.SetextHeaderWithIdSyntax(),
+      const md.TableSyntax(),
+      const md.UnorderedListWithCheckboxSyntax(),
+      const md.OrderedListWithCheckboxSyntax(),
+      const md.FootnoteDefSyntax(),
+      const MarkdownDefinitionListSyntax(),
+    ]);
 
 final List<md.InlineSyntax> _markdownInlineSyntaxes =
     List<md.InlineSyntax>.unmodifiable(<md.InlineSyntax>[
-  MarkdownDollarMathSyntax(),
-  MarkdownBackslashMathSyntax(),
-  MarkdownInlineHtmlTagSyntax(),
-  MarkdownHighlightSyntax(),
-  MarkdownSubscriptSyntax(),
-  MarkdownSuperscriptSyntax(),
-  MarkdownDoubleTildeStrikethroughSyntax(),
-  md.EmojiSyntax(),
-  md.ColorSwatchSyntax(),
-  md.AutolinkExtensionSyntax(),
-  md.InlineHtmlSyntax(),
-]);
+      MarkdownDollarMathSyntax(),
+      MarkdownBackslashMathSyntax(),
+      MarkdownInlineHtmlTagSyntax(),
+      MarkdownHighlightSyntax(),
+      MarkdownSubscriptSyntax(),
+      MarkdownSuperscriptSyntax(),
+      MarkdownDoubleTildeStrikethroughSyntax(),
+      md.EmojiSyntax(),
+      md.ColorSwatchSyntax(),
+      md.AutolinkExtensionSyntax(),
+      md.InlineHtmlSyntax(),
+    ]);
 
 List<md.BlockSyntax> buildMarkdownBlockSyntaxes() => _markdownBlockSyntaxes;
 
@@ -139,9 +139,10 @@ class MarkdownHtmlBlockSyntax extends md.BlockSyntax {
   }
 
   int _openingTagCount(String line, String tag) {
-    return RegExp('<$tag(?:\\s+[^>]*)?>', caseSensitive: false)
-        .allMatches(line)
-        .length;
+    return RegExp(
+      '<$tag(?:\\s+[^>]*)?>',
+      caseSensitive: false,
+    ).allMatches(line).length;
   }
 
   int _closingTagCount(String line, String tag) {
@@ -185,15 +186,14 @@ class MarkdownHtmlBlockSyntax extends md.BlockSyntax {
       );
     }
 
-    final details = md.Element(
-      'details',
-      <md.Node>[
-        if (summary != null) summary,
-        ..._parseMarkdownFragment(bodySource),
-      ],
-    );
-    if (RegExp(r'(^|\s)open(?:\s|=|$)', caseSensitive: false)
-        .hasMatch(attributesSource)) {
+    final details = md.Element('details', <md.Node>[
+      ?summary,
+      ..._parseMarkdownFragment(bodySource),
+    ]);
+    if (RegExp(
+      r'(^|\s)open(?:\s|=|$)',
+      caseSensitive: false,
+    ).hasMatch(attributesSource)) {
       details.attributes['open'] = '';
     }
     return <md.Node>[details];
@@ -294,8 +294,9 @@ class MarkdownHtmlBlockSyntax extends md.BlockSyntax {
     String tag,
     List<md.Node> children,
   ) {
-    final element =
-        children.isEmpty ? md.Element.empty(tag) : md.Element(tag, children);
+    final element = children.isEmpty
+        ? md.Element.empty(tag)
+        : md.Element(tag, children);
     for (final entry in node.attributes.entries) {
       element.attributes[entry.key.toString().toLowerCase()] = entry.value;
     }
@@ -392,14 +393,17 @@ class MarkdownDefinitionListSyntax extends md.BlockSyntax {
       }
 
       children.add(
-          md.Element('dt', <md.Node>[md.UnparsedContent(termLine.trim())]));
+        md.Element('dt', <md.Node>[md.UnparsedContent(termLine.trim())]),
+      );
       parser.advance();
 
       while (!parser.isDone &&
           _definitionPattern.hasMatch(parser.current.content)) {
         final lines = _parseDefinitionLines(parser);
-        final definitionChildren = md.BlockParser(lines, parser.document)
-            .parseLines(parentSyntax: this, disabledSetextHeading: true);
+        final definitionChildren = md.BlockParser(
+          lines,
+          parser.document,
+        ).parseLines(parentSyntax: this, disabledSetextHeading: true);
         children.add(md.Element('dd', definitionChildren));
       }
 
@@ -598,7 +602,8 @@ class MarkdownDollarMathSyntax extends md.InlineSyntax {
       return false;
     }
 
-    final isDisplay = startMatchPos + 1 < parser.source.length &&
+    final isDisplay =
+        startMatchPos + 1 < parser.source.length &&
         parser.source.codeUnitAt(startMatchPos + 1) == 0x24;
     final delimiter = isDisplay ? r'$$' : r'$';
     final match = _extractDelimitedMath(
@@ -676,13 +681,13 @@ class MarkdownBackslashMathSyntax extends md.InlineSyntax {
 
 class MarkdownDoubleTildeStrikethroughSyntax extends md.DelimiterSyntax {
   MarkdownDoubleTildeStrikethroughSyntax()
-      : super(
-          '~+',
-          requiresDelimiterRun: true,
-          allowIntraWord: true,
-          startCharacter: 0x7E,
-          tags: <md.DelimiterTag>[md.DelimiterTag('del', 2)],
-        );
+    : super(
+        '~+',
+        requiresDelimiterRun: true,
+        allowIntraWord: true,
+        startCharacter: 0x7E,
+        tags: <md.DelimiterTag>[md.DelimiterTag('del', 2)],
+      );
 }
 
 class MarkdownHighlightSyntax extends _DelimitedInlineSyntax {
@@ -723,10 +728,8 @@ bool _hasBoundaryWhitespace(String content) {
 }
 
 abstract class _DelimitedInlineSyntax extends md.InlineSyntax {
-  _DelimitedInlineSyntax({
-    required this.delimiter,
-    required this.tag,
-  }) : super(RegExp.escape(delimiter), startCharacter: delimiter.codeUnitAt(0));
+  _DelimitedInlineSyntax({required this.delimiter, required this.tag})
+    : super(RegExp.escape(delimiter), startCharacter: delimiter.codeUnitAt(0));
 
   final String delimiter;
   final String tag;

@@ -2,7 +2,7 @@ import 'image_caption_layout.dart';
 
 import 'dart:math' as math;
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../core/document.dart';
 import '../widgets/markdown_theme.dart';
@@ -56,10 +56,7 @@ typedef MarkdownTableWidgetBuilder = Widget Function(
   TableColumnWidth defaultColumnWidth,
 );
 
-enum MarkdownTableColumnSizing {
-  fixed,
-  flex,
-}
+enum MarkdownTableColumnSizing { fixed, flex }
 
 class MarkdownTableLayoutPlanCache {
   final Map<String, _CachedMarkdownTableLayoutPlan> _plans =
@@ -71,10 +68,7 @@ class MarkdownTableLayoutPlanCache {
       return cached.plan;
     }
     final plan = MarkdownTableLayoutPlan.fromBlock(block);
-    _plans[block.id] = _CachedMarkdownTableLayoutPlan(
-      block: block,
-      plan: plan,
-    );
+    _plans[block.id] = _CachedMarkdownTableLayoutPlan(block: block, plan: plan);
     return plan;
   }
 
@@ -120,9 +114,11 @@ class MarkdownTableLayoutPlan {
 
     final colMaxChars = List<int>.filled(columnCount, 0);
     for (final row in block.rows) {
-      for (var index = 0;
-          index < row.cells.length && index < columnCount;
-          index++) {
+      for (
+        var index = 0;
+        index < row.cells.length && index < columnCount;
+        index++
+      ) {
         final textLen = _estimateInlineTextLength(row.cells[index].inlines);
         if (textLen > colMaxChars[index]) {
           colMaxChars[index] = textLen;
@@ -281,10 +277,7 @@ class MarkdownTableContentFrame extends StatelessWidget {
         borderColor: theme.tableBorderColor,
         borderRadius: borderRadius,
       ),
-      child: ClipRRect(
-        borderRadius: borderRadius,
-        child: child,
-      ),
+      child: ClipRRect(borderRadius: borderRadius, child: child),
     );
   }
 }
@@ -318,15 +311,13 @@ class MarkdownQuoteBlockView extends StatelessWidget {
               decoration: BoxDecoration(
                 color: theme.quoteBorderColor,
                 borderRadius: BorderRadius.horizontal(
-                    left: theme.quoteBorderRadius.topLeft),
+                  left: theme.quoteBorderRadius.topLeft,
+                ),
               ),
               child: SizedBox(width: theme.quoteBorderWidth),
             ),
           ),
-          Padding(
-            padding: theme.quotePadding,
-            child: _buildContent(),
-          ),
+          Padding(padding: theme.quotePadding, child: _buildContent()),
         ],
       ),
     );
@@ -604,8 +595,9 @@ class MarkdownCodeBlockView extends StatelessWidget {
                   padding: EdgeInsets.zero,
                   style: IconButton.styleFrom(
                     backgroundColor: Colors.transparent,
-                    foregroundColor:
-                        theme.bodyStyle.color?.withValues(alpha: 0.72),
+                    foregroundColor: theme.bodyStyle.color?.withValues(
+                      alpha: 0.72,
+                    ),
                   ),
                   icon: const Icon(Icons.copy_rounded, size: 18),
                   onPressed: onCopyCode,

@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:bring_window_to_front/bring_window_to_front.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 void main() {
   runApp(const MyApp());

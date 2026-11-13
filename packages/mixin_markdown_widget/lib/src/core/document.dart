@@ -31,24 +31,13 @@ enum MarkdownInlineKind {
   image,
 }
 
-enum MarkdownTaskListItemState {
-  checked,
-  unchecked,
-}
+enum MarkdownTaskListItemState { checked, unchecked }
 
-enum MarkdownTableColumnAlignment {
-  left,
-  center,
-  right,
-  none,
-}
+enum MarkdownTableColumnAlignment { left, center, right, none }
 
 @immutable
 class SourceRange {
-  const SourceRange({
-    required this.start,
-    required this.end,
-  });
+  const SourceRange({required this.start, required this.end});
 
   final int start;
   final int end;
@@ -56,14 +45,9 @@ class SourceRange {
 
 @immutable
 class MarkdownDocument {
-  const MarkdownDocument({
-    required this.blocks,
-    this.version = 0,
-  });
+  const MarkdownDocument({required this.blocks, this.version = 0});
 
-  const MarkdownDocument.empty()
-      : blocks = const <BlockNode>[],
-        version = 0;
+  const MarkdownDocument.empty() : blocks = const <BlockNode>[], version = 0;
 
   final List<BlockNode> blocks;
   final int version;
@@ -71,11 +55,7 @@ class MarkdownDocument {
 
 @immutable
 abstract class BlockNode {
-  const BlockNode({
-    required this.id,
-    required this.kind,
-    this.sourceRange,
-  });
+  const BlockNode({required this.id, required this.kind, this.sourceRange});
 
   final String id;
   final MarkdownBlockKind kind;
@@ -128,10 +108,10 @@ class ListBlock extends BlockNode {
     this.startIndex = 1,
     super.sourceRange,
   }) : super(
-          kind: ordered
-              ? MarkdownBlockKind.orderedList
-              : MarkdownBlockKind.unorderedList,
-        );
+         kind: ordered
+             ? MarkdownBlockKind.orderedList
+             : MarkdownBlockKind.unorderedList,
+       );
 
   final bool ordered;
   final int startIndex;
@@ -140,10 +120,7 @@ class ListBlock extends BlockNode {
 
 @immutable
 class ListItemNode {
-  const ListItemNode({
-    required this.children,
-    this.taskState,
-  });
+  const ListItemNode({required this.children, this.taskState});
 
   final List<BlockNode> children;
   final MarkdownTaskListItemState? taskState;
@@ -162,10 +139,7 @@ class DefinitionListBlock extends BlockNode {
 
 @immutable
 class DefinitionListItemNode {
-  const DefinitionListItemNode({
-    required this.term,
-    required this.definitions,
-  });
+  const DefinitionListItemNode({required this.term, required this.definitions});
 
   final List<InlineNode> term;
   final List<List<BlockNode>> definitions;
@@ -225,10 +199,7 @@ class TableBlock extends BlockNode {
 
 @immutable
 class TableRowNode {
-  const TableRowNode({
-    required this.cells,
-    required this.isHeader,
-  });
+  const TableRowNode({required this.cells, required this.isHeader});
 
   final List<TableCellNode> cells;
   final bool isHeader;
@@ -262,18 +233,13 @@ class ImageBlock extends BlockNode {
 
 @immutable
 class ThematicBreakBlock extends BlockNode {
-  const ThematicBreakBlock({
-    required super.id,
-    super.sourceRange,
-  }) : super(kind: MarkdownBlockKind.thematicBreak);
+  const ThematicBreakBlock({required super.id, super.sourceRange})
+    : super(kind: MarkdownBlockKind.thematicBreak);
 }
 
 @immutable
 abstract class InlineNode {
-  const InlineNode({
-    required this.kind,
-    this.sourceRange,
-  });
+  const InlineNode({required this.kind, this.sourceRange});
 
   final MarkdownInlineKind kind;
   final SourceRange? sourceRange;
@@ -281,70 +247,56 @@ abstract class InlineNode {
 
 @immutable
 class TextInline extends InlineNode {
-  const TextInline({
-    required this.text,
-    super.sourceRange,
-  }) : super(kind: MarkdownInlineKind.text);
+  const TextInline({required this.text, super.sourceRange})
+    : super(kind: MarkdownInlineKind.text);
 
   final String text;
 }
 
 @immutable
 class EmphasisInline extends InlineNode {
-  const EmphasisInline({
-    required this.children,
-    super.sourceRange,
-  }) : super(kind: MarkdownInlineKind.emphasis);
+  const EmphasisInline({required this.children, super.sourceRange})
+    : super(kind: MarkdownInlineKind.emphasis);
 
   final List<InlineNode> children;
 }
 
 @immutable
 class StrongInline extends InlineNode {
-  const StrongInline({
-    required this.children,
-    super.sourceRange,
-  }) : super(kind: MarkdownInlineKind.strong);
+  const StrongInline({required this.children, super.sourceRange})
+    : super(kind: MarkdownInlineKind.strong);
 
   final List<InlineNode> children;
 }
 
 @immutable
 class StrikethroughInline extends InlineNode {
-  const StrikethroughInline({
-    required this.children,
-    super.sourceRange,
-  }) : super(kind: MarkdownInlineKind.strikethrough);
+  const StrikethroughInline({required this.children, super.sourceRange})
+    : super(kind: MarkdownInlineKind.strikethrough);
 
   final List<InlineNode> children;
 }
 
 @immutable
 class HighlightInline extends InlineNode {
-  const HighlightInline({
-    required this.children,
-    super.sourceRange,
-  }) : super(kind: MarkdownInlineKind.highlight);
+  const HighlightInline({required this.children, super.sourceRange})
+    : super(kind: MarkdownInlineKind.highlight);
 
   final List<InlineNode> children;
 }
 
 @immutable
 class SubscriptInline extends InlineNode {
-  const SubscriptInline({
-    required this.children,
-    super.sourceRange,
-  }) : super(kind: MarkdownInlineKind.subscript);
+  const SubscriptInline({required this.children, super.sourceRange})
+    : super(kind: MarkdownInlineKind.subscript);
 
   final List<InlineNode> children;
 }
 
 @immutable
 class SuperscriptInline extends InlineNode {
-  const SuperscriptInline({
-    required this.children,
-    super.sourceRange,
-  }) : super(kind: MarkdownInlineKind.superscript);
+  const SuperscriptInline({required this.children, super.sourceRange})
+    : super(kind: MarkdownInlineKind.superscript);
 
   final List<InlineNode> children;
 }
@@ -377,10 +329,8 @@ class MathInline extends InlineNode {
 
 @immutable
 class InlineCode extends InlineNode {
-  const InlineCode({
-    required this.text,
-    super.sourceRange,
-  }) : super(kind: MarkdownInlineKind.inlineCode);
+  const InlineCode({required this.text, super.sourceRange})
+    : super(kind: MarkdownInlineKind.inlineCode);
 
   final String text;
 }
@@ -388,22 +338,19 @@ class InlineCode extends InlineNode {
 @immutable
 class SoftBreakInline extends InlineNode {
   const SoftBreakInline({super.sourceRange})
-      : super(kind: MarkdownInlineKind.softBreak);
+    : super(kind: MarkdownInlineKind.softBreak);
 }
 
 @immutable
 class HardBreakInline extends InlineNode {
   const HardBreakInline({super.sourceRange})
-      : super(kind: MarkdownInlineKind.hardBreak);
+    : super(kind: MarkdownInlineKind.hardBreak);
 }
 
 @immutable
 class InlineImage extends InlineNode {
-  const InlineImage({
-    required this.url,
-    this.alt,
-    super.sourceRange,
-  }) : super(kind: MarkdownInlineKind.image);
+  const InlineImage({required this.url, this.alt, super.sourceRange})
+    : super(kind: MarkdownInlineKind.image);
 
   final String url;
   final String? alt;
@@ -483,10 +430,7 @@ class DocumentPosition implements Comparable<DocumentPosition> {
 
 @immutable
 class DocumentSelection {
-  const DocumentSelection({
-    required this.base,
-    required this.extent,
-  });
+  const DocumentSelection({required this.base, required this.extent});
 
   final DocumentPosition base;
   final DocumentPosition extent;
@@ -514,10 +458,7 @@ class DocumentSelection {
 
 @immutable
 class DocumentRange {
-  const DocumentRange({
-    required this.start,
-    required this.end,
-  });
+  const DocumentRange({required this.start, required this.end});
 
   final DocumentPosition start;
   final DocumentPosition end;

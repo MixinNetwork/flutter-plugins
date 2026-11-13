@@ -1,12 +1,14 @@
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
 import 'package:mixin_markdown_widget/src/render/selectable_block.dart';
 
 /// The separator-only word rule that ASCII text keeps.
 ({int start, int end}) _asciiWordRangeAt(String text, int offset) {
-  const separators = r'.,;:!?()[]{}<>/\"' "'`|-+=*&";
+  const separators =
+      r'.,;:!?()[]{}<>/\"'
+      "'`|-+=*&";
   bool isWordCharacter(String character) =>
       character.trim().isNotEmpty && !separators.contains(character);
   var start = offset;
@@ -65,7 +67,8 @@ Future<void> _resetTapCount(WidgetTester tester) async {
 
 void main() {
   testWidgets('ASCII text keeps the separator word rule', (tester) async {
-    const text = "foo_bar baz-qux (x.y) #tag don't a+b café_au "
+    const text =
+        "foo_bar baz-qux (x.y) #tag don't a+b café_au "
         'path/to/file.dart';
     for (var offset = 0; offset <= text.length; offset += 1) {
       final ascii = _asciiWordRangeAt(text, offset);
@@ -109,8 +112,9 @@ void main() {
     }
   });
 
-  testWidgets('double click selects a word in a Chinese paragraph',
-      (tester) async {
+  testWidgets('double click selects a word in a Chinese paragraph', (
+    tester,
+  ) async {
     final selectionController = MarkdownSelectionController();
     addTearDown(selectionController.dispose);
     await tester.pumpWidget(
@@ -124,32 +128,21 @@ void main() {
       ),
     );
 
-    await _doubleTapCharacter(
-      tester,
-      containing: '我们使用',
-      character: 'F',
-    );
+    await _doubleTapCharacter(tester, containing: '我们使用', character: 'F');
     expect(selectionController.selectedPlainText, 'Flutter');
 
     await _resetTapCount(tester);
-    await _doubleTapCharacter(
-      tester,
-      containing: '我们使用',
-      character: '效',
-    );
+    await _doubleTapCharacter(tester, containing: '我们使用', character: '效');
     expect(selectionController.selectedPlainText, '效果');
 
     await _resetTapCount(tester);
-    await _doubleTapCharacter(
-      tester,
-      containing: '我们使用',
-      character: '桌',
-    );
+    await _doubleTapCharacter(tester, containing: '我们使用', character: '桌');
     expect(selectionController.selectedPlainText, '桌面');
   });
 
-  testWidgets('double click selects a word in Chinese list text',
-      (tester) async {
+  testWidgets('double click selects a word in Chinese list text', (
+    tester,
+  ) async {
     final selectionController = MarkdownSelectionController();
     addTearDown(selectionController.dispose);
     await tester.pumpWidget(
@@ -163,19 +156,11 @@ void main() {
       ),
     );
 
-    await _doubleTapCharacter(
-      tester,
-      containing: '第一项',
-      character: 'F',
-    );
+    await _doubleTapCharacter(tester, containing: '第一项', character: 'F');
     expect(selectionController.selectedPlainText, 'Flutter');
 
     await _resetTapCount(tester);
-    await _doubleTapCharacter(
-      tester,
-      containing: '第一项',
-      character: '项',
-    );
+    await _doubleTapCharacter(tester, containing: '第一项', character: '项');
     expect(selectionController.selectedPlainText, isNot(contains('：')));
     expect(selectionController.selectedPlainText, contains('项'));
   });

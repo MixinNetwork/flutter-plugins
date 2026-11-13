@@ -10,7 +10,7 @@
 //
 // and paste the printed literals back into [_cases].
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
 import 'package:mixin_markdown_widget/src/render/selectable_block.dart';
@@ -24,11 +24,7 @@ const SelectableBlockSelectionPaintOrder _above =
     SelectableBlockSelectionPaintOrder.aboveChild;
 
 class _BlockPaint {
-  const _BlockPaint({
-    required this.order,
-    required this.rects,
-    this.clip,
-  });
+  const _BlockPaint({required this.order, required this.rects, this.clip});
 
   final SelectableBlockSelectionPaintOrder order;
   final Rect? clip;
@@ -198,9 +194,7 @@ const List<_Case> _cases = <_Case>[
     expected: <int, _BlockPaint>{
       0: _BlockPaint(
         order: _behind,
-        rects: <Rect>[
-          Rect.fromLTRB(29.13, -0.45, 148.73, 20.55),
-        ],
+        rects: <Rect>[Rect.fromLTRB(29.13, -0.45, 148.73, 20.55)],
       ),
       1: _BlockPaint(
         order: _behind,
@@ -327,10 +321,7 @@ Future<MarkdownSelectionController> _pump(
           child: SizedBox(
             width: 360,
             height: 600,
-            child: MarkdownWidget(
-              data: data,
-              selectionController: controller,
-            ),
+            child: MarkdownWidget(data: data, selectionController: controller),
           ),
         ),
       ),
@@ -353,8 +344,10 @@ DocumentPosition _position(
   int blockIndex,
   int displayedOffset,
 ) {
-  final structure =
-      _blockState(tester, blockIndex).widget.spec.selectionStructure;
+  final structure = _blockState(
+    tester,
+    blockIndex,
+  ).widget.spec.selectionStructure;
   return structure?.positionForDisplayedOffset(
         blockIndex: blockIndex,
         displayedOffset: displayedOffset,
@@ -419,14 +412,16 @@ String _rectLiteral(Rect rect) {
 }
 
 void _expectRect(Rect actual, Rect expected, String reason) {
-  final matches = (actual.left - expected.left).abs() <= _tolerance &&
+  final matches =
+      (actual.left - expected.left).abs() <= _tolerance &&
       (actual.top - expected.top).abs() <= _tolerance &&
       (actual.right - expected.right).abs() <= _tolerance &&
       (actual.bottom - expected.bottom).abs() <= _tolerance;
   expect(
     matches,
     isTrue,
-    reason: '$reason: expected ${_rectLiteral(expected)}, '
+    reason:
+        '$reason: expected ${_rectLiteral(expected)}, '
         'got ${_rectLiteral(actual)}',
   );
 }
@@ -513,7 +508,8 @@ void main() {
         expect(
           paint.rects.length,
           expected.rects.length,
-          reason: '$reason rect count: '
+          reason:
+              '$reason rect count: '
               '${paint.rects.map(_rectLiteral).join(', ')}',
         );
         for (var i = 0; i < expected.rects.length; i++) {
@@ -524,27 +520,28 @@ void main() {
   }
 
   testWidgets(
-      'horizontally scrolled code block paints selection in the foreground',
-      (tester) async {
-    final controller = await _pump(
-      tester,
-      '```dart\nfinal value = computeSomethingLongEnoughToScroll(alpha);\n```',
-    );
-    controller.setSelection(
-      DocumentSelection(
-        base: _position(tester, 0, 0),
-        extent: _position(tester, 0, 10),
-      ),
-    );
-    await tester.pump();
+    'horizontally scrolled code block paints selection in the foreground',
+    (tester) async {
+      final controller = await _pump(
+        tester,
+        '```dart\nfinal value = computeSomethingLongEnoughToScroll(alpha);\n```',
+      );
+      controller.setSelection(
+        DocumentSelection(
+          base: _position(tester, 0, 0),
+          extent: _position(tester, 0, 10),
+        ),
+      );
+      await tester.pump();
 
-    final paint = find.descendant(
-      of: find.byType(SelectableMarkdownBlock),
-      matching: find.byWidgetPredicate(
-        (widget) => widget is CustomPaint && widget.foregroundPainter != null,
-      ),
-    );
-    expect(paint, findsOneWidget);
-    expect(tester.widget<CustomPaint>(paint).painter, isNull);
-  });
+      final paint = find.descendant(
+        of: find.byType(SelectableMarkdownBlock),
+        matching: find.byWidgetPredicate(
+          (widget) => widget is CustomPaint && widget.foregroundPainter != null,
+        ),
+      );
+      expect(paint, findsOneWidget);
+      expect(tester.widget<CustomPaint>(paint).painter, isNull);
+    },
+  );
 }

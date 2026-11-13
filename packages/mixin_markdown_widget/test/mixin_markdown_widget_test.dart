@@ -2,7 +2,7 @@ import 'dart:math' as math;
 import 'dart:io';
 
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -184,8 +184,9 @@ String _inlinePlainText(List<InlineNode> inlines) {
         buffer.write(_inlinePlainText((inline as StrongInline).children));
         break;
       case MarkdownInlineKind.strikethrough:
-        buffer
-            .write(_inlinePlainText((inline as StrikethroughInline).children));
+        buffer.write(
+          _inlinePlainText((inline as StrikethroughInline).children),
+        );
         break;
       case MarkdownInlineKind.highlight:
         buffer.write(_inlinePlainText((inline as HighlightInline).children));
@@ -219,7 +220,8 @@ String _inlinePlainText(List<InlineNode> inlines) {
 
 bool _hasMeaningfulHorizontalOverlap(Rect a, Rect b) {
   final verticalOverlap = (a.bottom <= b.top || b.bottom <= a.top) == false;
-  final horizontalOverlap = (a.right < b.left || b.right < a.left) == false &&
+  final horizontalOverlap =
+      (a.right < b.left || b.right < a.left) == false &&
       math.min(a.right, b.right) - math.max(a.left, b.left) > 1.0;
   return verticalOverlap && horizontalOverlap;
 }
@@ -445,7 +447,9 @@ return value;
       '/MixinNetwork/flutter-plugins/new/main?filename=.github/instructions/*.instructions.md',
     );
     expect(
-        _inlinePlainText(links[0].children), 'Add Copilot custom instructions');
+      _inlinePlainText(links[0].children),
+      'Add Copilot custom instructions',
+    );
     expect(
       links[1].destination,
       'https://docs.github.com/en/copilot/customizing-copilot/adding-repository-custom-instructions-for-github-copilot',
@@ -453,26 +457,28 @@ return value;
     expect(_inlinePlainText(links[1].children), 'Learn how to get started');
   });
 
-  test('parses additional simple inline html tags into existing inline nodes',
-      () {
-    const input = '''
+  test(
+    'parses additional simple inline html tags into existing inline nodes',
+    () {
+      const input = '''
 Before <b>bold</b> <i>italic</i> <s>strike</s> <kbd>cmd</kbd> <span data-x="1">span text</span> <small>small text</small> <u>underlined</u> <ins>inserted</ins> after
 ''';
 
-    final document = const MarkdownDocumentParser().parse(input);
-    final paragraph = document.blocks.single as ParagraphBlock;
-    final flattened =
-        _flattenInlineNodes(paragraph.inlines).toList(growable: false);
+      final document = const MarkdownDocumentParser().parse(input);
+      final paragraph = document.blocks.single as ParagraphBlock;
+      final flattened = _flattenInlineNodes(paragraph.inlines)
+          .toList(growable: false);
 
-    expect(flattened.any((inline) => inline is StrongInline), isTrue);
-    expect(flattened.any((inline) => inline is EmphasisInline), isTrue);
-    expect(flattened.any((inline) => inline is StrikethroughInline), isTrue);
-    expect(flattened.any((inline) => inline is InlineCode), isTrue);
-    expect(
-      _inlinePlainText(paragraph.inlines),
-      'Before bold italic strike cmd span text small text underlined inserted after',
-    );
-  });
+      expect(flattened.any((inline) => inline is StrongInline), isTrue);
+      expect(flattened.any((inline) => inline is EmphasisInline), isTrue);
+      expect(flattened.any((inline) => inline is StrikethroughInline), isTrue);
+      expect(flattened.any((inline) => inline is InlineCode), isTrue);
+      expect(
+        _inlinePlainText(paragraph.inlines),
+        'Before bold italic strike cmd span text small text underlined inserted after',
+      );
+    },
+  );
 
   test('uses collapsed details blocks by default', () {
     const block = DetailsBlock(
@@ -531,8 +537,10 @@ from the workspace leaving a stale <code>workspace.ref</code> file.</li>
       controller.plainText,
       contains('Release notes\n\npackage:build_runner v2.14.1'),
     );
-    expect(controller.plainText,
-        contains('was removed from the workspace leaving a stale'));
+    expect(
+      controller.plainText,
+      contains('was removed from the workspace leaving a stale'),
+    );
   });
 
   test('parses markdown blocks nested inside html details', () {
@@ -551,11 +559,15 @@ You can trigger Dependabot actions by commenting on this PR:
     final details = document.blocks.single as DetailsBlock;
 
     expect(
-        _inlinePlainText(details.summary), 'Dependabot commands and options');
+      _inlinePlainText(details.summary),
+      'Dependabot commands and options',
+    );
     expect(details.children, hasLength(3));
     expect(details.children[0], isA<ParagraphBlock>());
-    expect((details.children[0] as ParagraphBlock).inlines.single,
-        isA<HardBreakInline>());
+    expect(
+      (details.children[0] as ParagraphBlock).inlines.single,
+      isA<HardBreakInline>(),
+    );
     expect(details.children[1], isA<ParagraphBlock>());
     expect(details.children[2], isA<ListBlock>());
 
@@ -563,8 +575,10 @@ You can trigger Dependabot actions by commenting on this PR:
     expect(list.ordered, isFalse);
     expect(list.items, hasLength(2));
     final firstItem = list.items.first.children.single as ParagraphBlock;
-    expect(_inlinePlainText(firstItem.inlines),
-        '@dependabot rebase will rebase this PR');
+    expect(
+      _inlinePlainText(firstItem.inlines),
+      '@dependabot rebase will rebase this PR',
+    );
   });
 
   test('preserves indented markdown inside html details', () {
@@ -608,16 +622,15 @@ You can trigger Dependabot actions by commenting on this PR:
     expect(_inlinePlainText(paragraph.inlines), 'Before\nAfter');
   });
 
-  testWidgets('renders standalone html br without paragraph block spacing',
-      (tester) async {
+  testWidgets('renders standalone html br without paragraph block spacing', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Builder(
           builder: (context) {
-            final theme = MarkdownThemeData.fallback(context).copyWith(
-              blockSpacing: 80,
-              padding: EdgeInsets.zero,
-            );
+            final theme = MarkdownThemeData.fallback(context)
+                .copyWith(blockSpacing: 80, padding: EdgeInsets.zero);
             return Scaffold(
               body: MarkdownWidget(
                 data: '''
@@ -749,10 +762,7 @@ $$
         .toList(growable: false);
     expect(mathInlines, hasLength(1));
     expect(mathInlines.single.displayStyle, isFalse);
-    expect(
-      mathInlines.single.tex,
-      r'x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}',
-    );
+    expect(mathInlines.single.tex, r'x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}');
 
     final controller = MarkdownController(data: input);
     expect(
@@ -792,23 +802,34 @@ $$
     expect(controller.streamingState.committedBlocks, hasLength(2));
   });
 
-  test('assigns source ranges and reuses committed prefix blocks on append',
-      () {
-    final controller = MarkdownController(data: '# Title\n\nIntro');
-    final initialHeading = controller.document.blocks.first as HeadingBlock;
-    final initialParagraph = controller.document.blocks[1] as ParagraphBlock;
+  test(
+    'assigns source ranges and reuses committed prefix blocks on append',
+    () {
+      final controller = MarkdownController(data: '# Title\n\nIntro');
+      final initialHeading = controller.document.blocks.first as HeadingBlock;
+      final initialParagraph = controller.document.blocks[1] as ParagraphBlock;
 
-    expect(initialHeading.sourceRange, isNotNull);
-    expect(initialHeading.sourceRange!.start, 0);
+      expect(initialHeading.sourceRange, isNotNull);
+      expect(initialHeading.sourceRange!.start, 0);
 
-    controller.appendChunk('\n\nParagraph');
+      controller.appendChunk('\n\nParagraph');
 
-    expect(controller.document.blocks, hasLength(3));
-    expect(identical(controller.document.blocks.first, initialHeading), isTrue);
-    expect(identical(controller.document.blocks[1], initialParagraph), isTrue);
-    expect(controller.document.blocks.last.sourceRange, isNotNull);
-    expect(controller.document.blocks.last.sourceRange!.start, greaterThan(0));
-  });
+      expect(controller.document.blocks, hasLength(3));
+      expect(
+        identical(controller.document.blocks.first, initialHeading),
+        isTrue,
+      );
+      expect(
+        identical(controller.document.blocks[1], initialParagraph),
+        isTrue,
+      );
+      expect(controller.document.blocks.last.sourceRange, isNotNull);
+      expect(
+        controller.document.blocks.last.sourceRange!.start,
+        greaterThan(0),
+      );
+    },
+  );
 
   test('normalizes CRLF split across appended chunks', () {
     final controller = MarkdownController(data: 'Line\r');
@@ -834,25 +855,28 @@ $$
     expect(documentNotifications, 1);
   });
 
-  test('assigns source ranges for setext headings and indented code blocks',
-      () {
-    const input = 'Title\n=====\n\n    final answer = 42;\n';
+  test(
+    'assigns source ranges for setext headings and indented code blocks',
+    () {
+      const input = 'Title\n=====\n\n    final answer = 42;\n';
 
-    final document = const MarkdownDocumentParser().parse(input);
+      final document = const MarkdownDocumentParser().parse(input);
 
-    expect(document.blocks, hasLength(2));
-    expect(document.blocks.first, isA<HeadingBlock>());
-    expect(document.blocks.last, isA<CodeBlock>());
-    expect(document.blocks.first.sourceRange, isNotNull);
-    expect(document.blocks.last.sourceRange, isNotNull);
-    expect(
-      document.blocks.last.sourceRange!.start,
-      greaterThan(document.blocks.first.sourceRange!.end),
-    );
-  });
+      expect(document.blocks, hasLength(2));
+      expect(document.blocks.first, isA<HeadingBlock>());
+      expect(document.blocks.last, isA<CodeBlock>());
+      expect(document.blocks.first.sourceRange, isNotNull);
+      expect(document.blocks.last.sourceRange, isNotNull);
+      expect(
+        document.blocks.last.sourceRange!.start,
+        greaterThan(document.blocks.first.sourceRange!.end),
+      );
+    },
+  );
 
   test('keeps top-level fenced code range separate after a list', () {
-    const input = '# Benchmark\n'
+    const input =
+        '# Benchmark\n'
         '\n'
         'Paragraph with a [link](https://example.com/0).\n'
         '\n'
@@ -902,10 +926,14 @@ $$
 
     expect(controller.document.blocks, hasLength(3));
     expect(
-        identical(controller.document.blocks.first, initialParagraph), isTrue);
+      identical(controller.document.blocks.first, initialParagraph),
+      isTrue,
+    );
     expect(controller.document.blocks[1], isA<ParagraphBlock>());
     expect(
-        identical(controller.document.blocks.last, initialFootnotes), isTrue);
+      identical(controller.document.blocks.last, initialFootnotes),
+      isTrue,
+    );
     expect(timings.single.parseLineCount, 3);
   });
 
@@ -925,7 +953,9 @@ $$
 
     expect(controller.document.blocks, hasLength(3));
     expect(
-        identical(controller.document.blocks.first, initialParagraph), isTrue);
+      identical(controller.document.blocks.first, initialParagraph),
+      isTrue,
+    );
     expect(controller.document.blocks[1], isA<ParagraphBlock>());
     final footnotes = controller.document.blocks.last as FootnoteListBlock;
     expect(footnotes.items, hasLength(2));
@@ -1057,30 +1087,32 @@ Reference[^note]
     expect(text.trimRight(), '1. Footnote link (https://example.com)');
   });
 
-  test('serializes a fully selected definition list with link destinations',
-      () {
-    const input = '''
+  test(
+    'serializes a fully selected definition list with link destinations',
+    () {
+      const input = '''
 Term
 : before [link](https://example.com) after
 ''';
 
-    final controller = MarkdownController(data: input);
-    const serializer = MarkdownPlainTextSerializer();
-    final definitionList =
-        controller.document.blocks.single as DefinitionListBlock;
-    final structure = StructuredBlockSelection.forBlock(definitionList);
+      final controller = MarkdownController(data: input);
+      const serializer = MarkdownPlainTextSerializer();
+      final definitionList =
+          controller.document.blocks.single as DefinitionListBlock;
+      final structure = StructuredBlockSelection.forBlock(definitionList);
 
-    final text = serializer.serializeSelection(
-      controller.document,
-      DocumentSelection(
-        base: structure.startPosition(blockIndex: 0),
-        extent: structure.endPosition(blockIndex: 0),
-      ),
-    );
+      final text = serializer.serializeSelection(
+        controller.document,
+        DocumentSelection(
+          base: structure.startPosition(blockIndex: 0),
+          extent: structure.endPosition(blockIndex: 0),
+        ),
+      );
 
-    expect(structure.plainText, 'Term\n: before link after');
-    expect(text, 'Term\n: before link (https://example.com) after');
-  });
+      expect(structure.plainText, 'Term\n: before link after');
+      expect(text, 'Term\n: before link (https://example.com) after');
+    },
+  );
 
   test('selection controller selects and exposes plain text', () {
     final controller = MarkdownController(data: '# Heading\n\nParagraph');
@@ -1114,9 +1146,7 @@ Term
 
     await tester.pumpWidget(
       MaterialApp(
-        home: Scaffold(
-          body: MarkdownWidget(controller: controller),
-        ),
+        home: Scaffold(body: MarkdownWidget(controller: controller)),
       ),
     );
 
@@ -1156,9 +1186,7 @@ Term
     expect(find.byType(Divider), findsNWidgets(2));
   });
 
-  testWidgets('uses pretext for rich inline paragraphs too', (
-    tester,
-  ) async {
+  testWidgets('uses pretext for rich inline paragraphs too', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(
         home: Scaffold(
@@ -1193,9 +1221,7 @@ Term
     await tester.pumpWidget(
       const MaterialApp(
         home: Scaffold(
-          body: MarkdownWidget(
-            data: r'Inline $a^2+b^2=c^2$ formula.',
-          ),
+          body: MarkdownWidget(data: r'Inline $a^2+b^2=c^2$ formula.'),
         ),
       ),
     );
@@ -1215,156 +1241,155 @@ Term
     expect(widgetSpans.single.baseline, TextBaseline.alphabetic);
   });
 
-  testWidgets('math selection geometry tracks live widget bounds in paragraphs',
-      (tester) async {
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
-          body: MarkdownWidget(
-            data: r'Before $x^2$ after',
+  testWidgets(
+    'math selection geometry tracks live widget bounds in paragraphs',
+    (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(body: MarkdownWidget(data: r'Before $x^2$ after')),
+        ),
+      );
+
+      final blockFinder = find.byWidgetPredicate(
+        (widget) =>
+            widget is SelectableMarkdownBlock &&
+            widget.spec.plainText.contains('Before x^2 after'),
+      );
+      final block = tester.widget<SelectableMarkdownBlock>(blockFinder);
+      final blockContext = tester.element(blockFinder);
+      final blockRenderBox = tester.renderObject<RenderBox>(blockFinder);
+      final blockOrigin = blockRenderBox.localToGlobal(Offset.zero);
+      final mathRect = tester.getRect(find.byType(Math).first);
+      final mathStart = block.spec.plainText.indexOf('x^2');
+      final mathEnd = mathStart + 'x^2'.length;
+
+      final selectionRects = block.spec.selectionRectResolver!(
+        blockContext,
+        blockRenderBox.size,
+        DocumentRange(
+          start: DocumentPosition(
+            blockIndex: 0,
+            path: const PathInBlock(<int>[0]),
+            textOffset: mathStart,
+          ),
+          end: DocumentPosition(
+            blockIndex: 0,
+            path: const PathInBlock(<int>[0]),
+            textOffset: mathEnd,
           ),
         ),
-      ),
-    );
+      );
+      final globalSelectionRects = selectionRects
+          .map((rect) => rect.shift(blockOrigin))
+          .toList(growable: false);
 
-    final blockFinder = find.byWidgetPredicate(
-      (widget) =>
-          widget is SelectableMarkdownBlock &&
-          widget.spec.plainText.contains('Before x^2 after'),
-    );
-    final block = tester.widget<SelectableMarkdownBlock>(blockFinder);
-    final blockContext = tester.element(blockFinder);
-    final blockRenderBox = tester.renderObject<RenderBox>(blockFinder);
-    final blockOrigin = blockRenderBox.localToGlobal(Offset.zero);
-    final mathRect = tester.getRect(find.byType(Math).first);
-    final mathStart = block.spec.plainText.indexOf('x^2');
-    final mathEnd = mathStart + 'x^2'.length;
+      expect(globalSelectionRects, isNotEmpty);
+      expect(
+        globalSelectionRects.any((rect) => rect.overlaps(mathRect.inflate(1))),
+        isTrue,
+      );
+      final mathSelectionRect = globalSelectionRects.firstWhere(
+        (rect) => rect.overlaps(mathRect.inflate(1)),
+      );
+      expect(mathSelectionRect.contains(mathRect.center), isTrue);
+      expect(mathSelectionRect.width, lessThan(mathRect.width + 16));
+      expect(mathSelectionRect.left, lessThanOrEqualTo(mathRect.left + 6));
+      expect(mathSelectionRect.right, greaterThanOrEqualTo(mathRect.right - 6));
 
-    final selectionRects = block.spec.selectionRectResolver!(
-      blockContext,
-      blockRenderBox.size,
-      DocumentRange(
-        start: DocumentPosition(
-          blockIndex: 0,
-          path: const PathInBlock(<int>[0]),
-          textOffset: mathStart,
-        ),
-        end: DocumentPosition(
-          blockIndex: 0,
-          path: const PathInBlock(<int>[0]),
-          textOffset: mathEnd,
-        ),
-      ),
-    );
-    final globalSelectionRects = selectionRects
-        .map((rect) => rect.shift(blockOrigin))
-        .toList(growable: false);
+      final leftOffset = block.spec.textOffsetResolver!(
+        blockContext,
+        blockRenderBox.size,
+        blockRenderBox.globalToLocal(mathRect.centerLeft + const Offset(1, 0)),
+      );
+      final rightOffset = block.spec.textOffsetResolver!(
+        blockContext,
+        blockRenderBox.size,
+        blockRenderBox.globalToLocal(mathRect.centerRight + const Offset(2, 0)),
+      );
 
-    expect(globalSelectionRects, isNotEmpty);
-    expect(
-      globalSelectionRects.any((rect) => rect.overlaps(mathRect.inflate(1))),
-      isTrue,
-    );
-    final mathSelectionRect = globalSelectionRects.firstWhere(
-      (rect) => rect.overlaps(mathRect.inflate(1)),
-    );
-    expect(mathSelectionRect.contains(mathRect.center), isTrue);
-    expect(mathSelectionRect.width, lessThan(mathRect.width + 16));
-    expect(mathSelectionRect.left, lessThanOrEqualTo(mathRect.left + 6));
-    expect(mathSelectionRect.right, greaterThanOrEqualTo(mathRect.right - 6));
-
-    final leftOffset = block.spec.textOffsetResolver!(
-      blockContext,
-      blockRenderBox.size,
-      blockRenderBox.globalToLocal(mathRect.centerLeft + const Offset(1, 0)),
-    );
-    final rightOffset = block.spec.textOffsetResolver!(
-      blockContext,
-      blockRenderBox.size,
-      blockRenderBox.globalToLocal(mathRect.centerRight + const Offset(2, 0)),
-    );
-
-    expect(leftOffset, mathStart);
-    expect(rightOffset, mathEnd);
-  });
+      expect(leftOffset, mathStart);
+      expect(rightOffset, mathEnd);
+    },
+  );
 
   testWidgets(
-      'math selection geometry tracks live widget bounds after inline code',
-      (tester) async {
-    const data = r'test `math` a \( x = \frac{-b \pm \sqrt{b^2-4ac}}{2a} \)';
+    'math selection geometry tracks live widget bounds after inline code',
+    (tester) async {
+      const data = r'test `math` a \( x = \frac{-b \pm \sqrt{b^2-4ac}}{2a} \)';
 
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
-          body: MarkdownWidget(
-            data: data,
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(body: MarkdownWidget(data: data)),
+        ),
+      );
+
+      final blockFinder = find.byWidgetPredicate(
+        (widget) =>
+            widget is SelectableMarkdownBlock &&
+            widget.spec.plainText.contains('test math a ') &&
+            widget.spec.plainText.contains(
+              r'x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}',
+            ),
+      );
+      final block = tester.widget<SelectableMarkdownBlock>(blockFinder);
+      final blockContext = tester.element(blockFinder);
+      final blockRenderBox = tester.renderObject<RenderBox>(blockFinder);
+      final blockOrigin = blockRenderBox.localToGlobal(Offset.zero);
+      final mathRect = tester.getRect(find.byType(Math).first);
+      final mathStart = block.spec.plainText.indexOf(
+        r'x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}',
+      );
+      final mathEnd =
+          mathStart + r'x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}'.length;
+
+      final selectionRects = block.spec.selectionRectResolver!(
+        blockContext,
+        blockRenderBox.size,
+        DocumentRange(
+          start: DocumentPosition(
+            blockIndex: 0,
+            path: const PathInBlock(<int>[0]),
+            textOffset: mathStart,
+          ),
+          end: DocumentPosition(
+            blockIndex: 0,
+            path: const PathInBlock(<int>[0]),
+            textOffset: mathEnd,
           ),
         ),
-      ),
-    );
+      );
+      final globalSelectionRects = selectionRects
+          .map((rect) => rect.shift(blockOrigin))
+          .toList(growable: false);
 
-    final blockFinder = find.byWidgetPredicate(
-      (widget) =>
-          widget is SelectableMarkdownBlock &&
-          widget.spec.plainText.contains('test math a ') &&
-          widget.spec.plainText
-              .contains(r'x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}'),
-    );
-    final block = tester.widget<SelectableMarkdownBlock>(blockFinder);
-    final blockContext = tester.element(blockFinder);
-    final blockRenderBox = tester.renderObject<RenderBox>(blockFinder);
-    final blockOrigin = blockRenderBox.localToGlobal(Offset.zero);
-    final mathRect = tester.getRect(find.byType(Math).first);
-    final mathStart =
-        block.spec.plainText.indexOf(r'x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}');
-    final mathEnd = mathStart + r'x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}'.length;
+      expect(globalSelectionRects, isNotEmpty);
+      final mathSelectionRect = globalSelectionRects.firstWhere(
+        (rect) => rect.overlaps(mathRect.inflate(1)),
+      );
+      expect(mathSelectionRect.contains(mathRect.center), isTrue);
+      expect(mathSelectionRect.width, lessThan(mathRect.width + 16));
+      expect(mathSelectionRect.left, lessThanOrEqualTo(mathRect.left + 6));
+      expect(mathSelectionRect.right, greaterThanOrEqualTo(mathRect.right - 6));
 
-    final selectionRects = block.spec.selectionRectResolver!(
-      blockContext,
-      blockRenderBox.size,
-      DocumentRange(
-        start: DocumentPosition(
-          blockIndex: 0,
-          path: const PathInBlock(<int>[0]),
-          textOffset: mathStart,
-        ),
-        end: DocumentPosition(
-          blockIndex: 0,
-          path: const PathInBlock(<int>[0]),
-          textOffset: mathEnd,
-        ),
-      ),
-    );
-    final globalSelectionRects = selectionRects
-        .map((rect) => rect.shift(blockOrigin))
-        .toList(growable: false);
+      final leftOffset = block.spec.textOffsetResolver!(
+        blockContext,
+        blockRenderBox.size,
+        blockRenderBox.globalToLocal(mathRect.centerLeft + const Offset(1, 0)),
+      );
+      final rightOffset = block.spec.textOffsetResolver!(
+        blockContext,
+        blockRenderBox.size,
+        blockRenderBox.globalToLocal(mathRect.centerRight + const Offset(2, 0)),
+      );
 
-    expect(globalSelectionRects, isNotEmpty);
-    final mathSelectionRect = globalSelectionRects.firstWhere(
-      (rect) => rect.overlaps(mathRect.inflate(1)),
-    );
-    expect(mathSelectionRect.contains(mathRect.center), isTrue);
-    expect(mathSelectionRect.width, lessThan(mathRect.width + 16));
-    expect(mathSelectionRect.left, lessThanOrEqualTo(mathRect.left + 6));
-    expect(mathSelectionRect.right, greaterThanOrEqualTo(mathRect.right - 6));
+      expect(leftOffset, mathStart);
+      expect(rightOffset, mathEnd);
+    },
+  );
 
-    final leftOffset = block.spec.textOffsetResolver!(
-      blockContext,
-      blockRenderBox.size,
-      blockRenderBox.globalToLocal(mathRect.centerLeft + const Offset(1, 0)),
-    );
-    final rightOffset = block.spec.textOffsetResolver!(
-      blockContext,
-      blockRenderBox.size,
-      blockRenderBox.globalToLocal(mathRect.centerRight + const Offset(2, 0)),
-    );
-
-    expect(leftOffset, mathStart);
-    expect(rightOffset, mathEnd);
-  });
-
-  testWidgets('inline code stays compact when a paragraph also contains math',
-      (tester) async {
+  testWidgets('inline code stays compact when a paragraph also contains math', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       const MaterialApp(
         home: Scaffold(
@@ -1379,76 +1404,73 @@ Term
   });
 
   testWidgets(
-      'selection across text inline code and math does not produce overlapping boxes',
-      (tester) async {
-    const data = r'test `math` a \( x = \frac{-b \pm \sqrt{b^2-4ac}}{2a} \)';
-    const mathText = r'x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}';
+    'selection across text inline code and math does not produce overlapping boxes',
+    (tester) async {
+      const data = r'test `math` a \( x = \frac{-b \pm \sqrt{b^2-4ac}}{2a} \)';
+      const mathText = r'x = \frac{-b \pm \sqrt{b^2-4ac}}{2a}';
 
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
-          body: MarkdownWidget(
-            data: data,
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(body: MarkdownWidget(data: data)),
+        ),
+      );
+
+      final blockFinder = find.byWidgetPredicate(
+        (widget) =>
+            widget is SelectableMarkdownBlock &&
+            widget.spec.plainText.contains('test math a ') &&
+            widget.spec.plainText.contains(mathText),
+      );
+      final block = tester.widget<SelectableMarkdownBlock>(blockFinder);
+      final blockContext = tester.element(blockFinder);
+      final blockRenderBox = tester.renderObject<RenderBox>(blockFinder);
+      final mathEnd = block.spec.plainText.indexOf(mathText) + mathText.length;
+      final selectionRects = block.spec.selectionRectResolver!(
+        blockContext,
+        blockRenderBox.size,
+        DocumentRange(
+          start: const DocumentPosition(
+            blockIndex: 0,
+            path: PathInBlock(<int>[0]),
+            textOffset: 0,
+          ),
+          end: DocumentPosition(
+            blockIndex: 0,
+            path: const PathInBlock(<int>[0]),
+            textOffset: mathEnd,
           ),
         ),
-      ),
-    );
+      );
 
-    final blockFinder = find.byWidgetPredicate(
-      (widget) =>
-          widget is SelectableMarkdownBlock &&
-          widget.spec.plainText.contains('test math a ') &&
-          widget.spec.plainText.contains(mathText),
-    );
-    final block = tester.widget<SelectableMarkdownBlock>(blockFinder);
-    final blockContext = tester.element(blockFinder);
-    final blockRenderBox = tester.renderObject<RenderBox>(blockFinder);
-    final mathEnd = block.spec.plainText.indexOf(mathText) + mathText.length;
-    final selectionRects = block.spec.selectionRectResolver!(
-      blockContext,
-      blockRenderBox.size,
-      DocumentRange(
-        start: const DocumentPosition(
-          blockIndex: 0,
-          path: PathInBlock(<int>[0]),
-          textOffset: 0,
-        ),
-        end: DocumentPosition(
-          blockIndex: 0,
-          path: const PathInBlock(<int>[0]),
-          textOffset: mathEnd,
-        ),
-      ),
-    );
-
-    expect(selectionRects, isNotEmpty);
-    final sortedRects = selectionRects.toList(growable: false)
-      ..sort((a, b) {
-        final topCompare = a.top.compareTo(b.top);
-        if (topCompare != 0) {
-          return topCompare;
+      expect(selectionRects, isNotEmpty);
+      final sortedRects = selectionRects.toList(growable: false)
+        ..sort((a, b) {
+          final topCompare = a.top.compareTo(b.top);
+          if (topCompare != 0) {
+            return topCompare;
+          }
+          return a.left.compareTo(b.left);
+        });
+      for (var index = 0; index < sortedRects.length - 1; index++) {
+        final current = sortedRects[index];
+        final next = sortedRects[index + 1];
+        final sameLine =
+            (next.top - current.top).abs() <= 2.0 &&
+            (next.bottom - current.bottom).abs() <= 2.0;
+        if (!sameLine) {
+          continue;
         }
-        return a.left.compareTo(b.left);
-      });
-    for (var index = 0; index < sortedRects.length - 1; index++) {
-      final current = sortedRects[index];
-      final next = sortedRects[index + 1];
-      final sameLine = (next.top - current.top).abs() <= 2.0 &&
-          (next.bottom - current.bottom).abs() <= 2.0;
-      if (!sameLine) {
-        continue;
+        expect(current.overlaps(next), isFalse);
       }
-      expect(current.overlaps(next), isFalse);
-    }
-  });
+    },
+  );
 
-  testWidgets('pretext blocks with math paint selection above child',
-      (tester) async {
+  testWidgets('pretext blocks with math paint selection above child', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       const MaterialApp(
-        home: Scaffold(
-          body: MarkdownWidget(data: r'before $x^2$ after'),
-        ),
+        home: Scaffold(body: MarkdownWidget(data: r'before $x^2$ after')),
       ),
     );
 
@@ -1470,11 +1492,7 @@ Term
   ) async {
     await tester.pumpWidget(
       const MaterialApp(
-        home: Scaffold(
-          body: MarkdownWidget(
-            data: r'$$x^2$$',
-          ),
-        ),
+        home: Scaffold(body: MarkdownWidget(data: r'$$x^2$$')),
       ),
     );
 
@@ -1521,71 +1539,69 @@ Term
     expect(mathSelectionRect.right, greaterThanOrEqualTo(mathRect.right - 6));
   });
 
-  testWidgets('math selection geometry tracks live widget bounds inside lists',
-      (tester) async {
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
-          body: MarkdownWidget(
-            data: r'- Before $x^2$ after',
+  testWidgets(
+    'math selection geometry tracks live widget bounds inside lists',
+    (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(body: MarkdownWidget(data: r'- Before $x^2$ after')),
+        ),
+      );
+
+      final listBlockFinder = find.byWidgetPredicate(
+        (widget) =>
+            widget is SelectableMarkdownBlock &&
+            widget.spec.plainText.contains('- Before x^2 after'),
+      );
+      final listBlock = tester.widget<SelectableMarkdownBlock>(listBlockFinder);
+      final listContext = tester.element(listBlockFinder);
+      final listRenderBox = tester.renderObject<RenderBox>(listBlockFinder);
+      final listOrigin = listRenderBox.localToGlobal(Offset.zero);
+      final mathRect = tester.getRect(find.byType(Math).first);
+      final mathStart = listBlock.spec.plainText.indexOf('x^2');
+      final mathEnd = mathStart + 'x^2'.length;
+
+      final selectionRects = listBlock.spec.selectionRectResolver!(
+        listContext,
+        listRenderBox.size,
+        DocumentRange(
+          start: DocumentPosition(
+            blockIndex: 0,
+            path: const PathInBlock(<int>[0]),
+            textOffset: mathStart,
+          ),
+          end: DocumentPosition(
+            blockIndex: 0,
+            path: const PathInBlock(<int>[0]),
+            textOffset: mathEnd,
           ),
         ),
-      ),
-    );
+      );
+      final globalSelectionRects = selectionRects
+          .map((rect) => rect.shift(listOrigin))
+          .toList(growable: false);
 
-    final listBlockFinder = find.byWidgetPredicate(
-      (widget) =>
-          widget is SelectableMarkdownBlock &&
-          widget.spec.plainText.contains('- Before x^2 after'),
-    );
-    final listBlock = tester.widget<SelectableMarkdownBlock>(listBlockFinder);
-    final listContext = tester.element(listBlockFinder);
-    final listRenderBox = tester.renderObject<RenderBox>(listBlockFinder);
-    final listOrigin = listRenderBox.localToGlobal(Offset.zero);
-    final mathRect = tester.getRect(find.byType(Math).first);
-    final mathStart = listBlock.spec.plainText.indexOf('x^2');
-    final mathEnd = mathStart + 'x^2'.length;
+      expect(globalSelectionRects, isNotEmpty);
+      expect(
+        globalSelectionRects.any((rect) => rect.overlaps(mathRect.inflate(1))),
+        isTrue,
+      );
 
-    final selectionRects = listBlock.spec.selectionRectResolver!(
-      listContext,
-      listRenderBox.size,
-      DocumentRange(
-        start: DocumentPosition(
-          blockIndex: 0,
-          path: const PathInBlock(<int>[0]),
-          textOffset: mathStart,
-        ),
-        end: DocumentPosition(
-          blockIndex: 0,
-          path: const PathInBlock(<int>[0]),
-          textOffset: mathEnd,
-        ),
-      ),
-    );
-    final globalSelectionRects = selectionRects
-        .map((rect) => rect.shift(listOrigin))
-        .toList(growable: false);
+      final leftOffset = listBlock.spec.textOffsetResolver!(
+        listContext,
+        listRenderBox.size,
+        listRenderBox.globalToLocal(mathRect.centerLeft + const Offset(1, 0)),
+      );
+      final rightOffset = listBlock.spec.textOffsetResolver!(
+        listContext,
+        listRenderBox.size,
+        listRenderBox.globalToLocal(mathRect.centerRight + const Offset(2, 0)),
+      );
 
-    expect(globalSelectionRects, isNotEmpty);
-    expect(
-      globalSelectionRects.any((rect) => rect.overlaps(mathRect.inflate(1))),
-      isTrue,
-    );
-
-    final leftOffset = listBlock.spec.textOffsetResolver!(
-      listContext,
-      listRenderBox.size,
-      listRenderBox.globalToLocal(mathRect.centerLeft + const Offset(1, 0)),
-    );
-    final rightOffset = listBlock.spec.textOffsetResolver!(
-      listContext,
-      listRenderBox.size,
-      listRenderBox.globalToLocal(mathRect.centerRight + const Offset(2, 0)),
-    );
-
-    expect(leftOffset, mathStart);
-    expect(rightOffset, mathEnd);
-  });
+      expect(leftOffset, mathStart);
+      expect(rightOffset, mathEnd);
+    },
+  );
 
   testWidgets('renders backslash inline math with surrounding whitespace', (
     tester,
@@ -1594,8 +1610,7 @@ Term
       const MaterialApp(
         home: Scaffold(
           body: MarkdownWidget(
-            data:
-                r'Quadratic formula: \( x = \frac{-b \pm \sqrt{b^2-4ac}}{2a} \).',
+            data: r'Quadratic formula: \( x = \frac{-b \pm \sqrt{b^2-4ac}}{2a} \).',
           ),
         ),
       ),
@@ -1606,50 +1621,50 @@ Term
     expect(find.textContaining(r'\)'), findsNothing);
   });
 
-  testWidgets('tap on links still triggers onTapLink when selection is enabled',
-      (
-    tester,
-  ) async {
-    String? tappedDestination;
-    String? tappedLabel;
+  testWidgets(
+    'tap on links still triggers onTapLink when selection is enabled',
+    (tester) async {
+      String? tappedDestination;
+      String? tappedLabel;
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: MarkdownWidget(
-            data: 'Visit [Example](https://example.com)',
-            onTapLink: (destination, title, label) {
-              tappedDestination = destination;
-              tappedLabel = label;
-            },
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MarkdownWidget(
+              data: 'Visit [Example](https://example.com)',
+              onTapLink: (destination, title, label) {
+                tappedDestination = destination;
+                tappedLabel = label;
+              },
+            ),
           ),
         ),
-      ),
-    );
+      );
 
-    final richTextFinder = find.byWidgetPredicate(
-      (widget) =>
-          widget is RichText &&
-          widget.text.toPlainText().contains('Visit Example'),
-    );
-    final richText = tester.widget<RichText>(richTextFinder);
-    final renderBox = tester.renderObject<RenderBox>(richTextFinder);
-    final painter = TextPainter(
-      text: richText.text,
-      textDirection: TextDirection.ltr,
-    )..layout(maxWidth: renderBox.size.width);
-    final linkBoxes = painter.getBoxesForSelection(
-      const TextSelection(baseOffset: 6, extentOffset: 13),
-    );
+      final richTextFinder = find.byWidgetPredicate(
+        (widget) =>
+            widget is RichText &&
+            widget.text.toPlainText().contains('Visit Example'),
+      );
+      final richText = tester.widget<RichText>(richTextFinder);
+      final renderBox = tester.renderObject<RenderBox>(richTextFinder);
+      final painter = TextPainter(
+        text: richText.text,
+        textDirection: TextDirection.ltr,
+      )..layout(maxWidth: renderBox.size.width);
+      final linkBoxes = painter.getBoxesForSelection(
+        const TextSelection(baseOffset: 6, extentOffset: 13),
+      );
 
-    await tester.tapAt(
-      renderBox.localToGlobal(linkBoxes.first.toRect().center),
-    );
-    await tester.pump();
+      await tester.tapAt(
+        renderBox.localToGlobal(linkBoxes.first.toRect().center),
+      );
+      await tester.pump();
 
-    expect(tappedDestination, 'https://example.com');
-    expect(tappedLabel, 'Example');
-  });
+      expect(tappedDestination, 'https://example.com');
+      expect(tappedLabel, 'Example');
+    },
+  );
 
   testWidgets('renders html details as a collapsible block', (tester) async {
     await tester.pumpWidget(
@@ -1682,14 +1697,15 @@ You can trigger Dependabot actions by commenting on this PR:
     expect(find.byType(MarkdownListBlockView), findsOne);
   });
 
-  testWidgets('details paints selection backgrounds for nested quote and list',
-      (tester) async {
-    final selectionController = MarkdownSelectionController();
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: MarkdownWidget(
-            data: '''
+  testWidgets(
+    'details paints selection backgrounds for nested quote and list',
+    (tester) async {
+      final selectionController = MarkdownSelectionController();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MarkdownWidget(
+              data: '''
 <details>
 <summary>Release notes</summary>
 <blockquote>
@@ -1701,112 +1717,118 @@ Quoted line
 </ul>
 </details>
 ''',
-            selectionController: selectionController,
+              selectionController: selectionController,
+            ),
           ),
         ),
-      ),
-    );
+      );
 
-    await tester.tap(find.byIcon(Icons.chevron_right_rounded));
-    await tester.pumpAndSettle();
+      await tester.tap(find.byIcon(Icons.chevron_right_rounded));
+      await tester.pumpAndSettle();
 
-    final detailsFinder = find.byWidgetPredicate(
-      (widget) =>
-          widget is SelectableMarkdownBlock &&
-          widget.spec.plainText.contains('Release notes') &&
-          widget.spec.plainText.contains('Quoted line') &&
-          widget.spec.plainText.contains('List item'),
-    );
-    final detailsBlock = tester.widget<SelectableMarkdownBlock>(detailsFinder);
-    expect(detailsBlock.spec.selectionStructure, isNotNull);
-    expect(detailsBlock.spec.selectionColor, isNull);
-    final globalSelectionRects = _globalSelectionRectsForBlock(
-      tester,
-      detailsFinder,
-      start: 0,
-      end: detailsBlock.spec.plainText.length,
-    );
-    final quotedTextRect = tester.getRect(
-      find.byWidgetPredicate(
+      final detailsFinder = find.byWidgetPredicate(
         (widget) =>
-            widget is RichText &&
-            widget.text.toPlainText().contains('Quoted line'),
-      ),
-    );
-    final listTextRect = tester.getRect(
-      find.byWidgetPredicate(
-        (widget) =>
-            widget is RichText &&
-            widget.text.toPlainText().contains('List item'),
-      ),
-    );
-
-    expect(
-      globalSelectionRects.any((rect) => rect.overlaps(quotedTextRect)),
-      isTrue,
-    );
-    expect(
-      globalSelectionRects.any((rect) => rect.overlaps(listTextRect)),
-      isTrue,
-    );
-
-    final detailsElement = tester.element(detailsFinder);
-    final detailsRenderBox = tester.renderObject<RenderBox>(detailsFinder);
-    final listOffset = detailsBlock.spec.textOffsetResolver!(
-      detailsElement,
-      detailsRenderBox.size,
-      detailsRenderBox.globalToLocal(listTextRect.center),
-    );
-    expect(
-      listOffset,
-      greaterThan(detailsBlock.spec.plainText.indexOf('List item')),
-    );
-
-    final listEnd =
-        detailsBlock.spec.plainText.indexOf('List item') + 'List item'.length;
-    selectionController.setSelection(
-      DocumentSelection(
-        base: detailsBlock.spec.selectionStructure!.startPosition(
-          blockIndex: 0,
+            widget is SelectableMarkdownBlock &&
+            widget.spec.plainText.contains('Release notes') &&
+            widget.spec.plainText.contains('Quoted line') &&
+            widget.spec.plainText.contains('List item'),
+      );
+      final detailsBlock = tester.widget<SelectableMarkdownBlock>(
+        detailsFinder,
+      );
+      expect(detailsBlock.spec.selectionStructure, isNotNull);
+      expect(detailsBlock.spec.selectionColor, isNull);
+      final globalSelectionRects = _globalSelectionRectsForBlock(
+        tester,
+        detailsFinder,
+        start: 0,
+        end: detailsBlock.spec.plainText.length,
+      );
+      final quotedTextRect = tester.getRect(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is RichText &&
+              widget.text.toPlainText().contains('Quoted line'),
         ),
-        extent:
-            detailsBlock.spec.selectionStructure!.positionForDisplayedOffset(
-          blockIndex: 0,
-          displayedOffset: listEnd,
+      );
+      final listTextRect = tester.getRect(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is RichText &&
+              widget.text.toPlainText().contains('List item'),
         ),
-      ),
-    );
-    await tester.pump();
+      );
 
-    final detailsAfterSelection =
-        tester.widget<SelectableMarkdownBlock>(detailsFinder);
-    final selectedGlobalRects = _globalSelectionRectsForBlock(
-      tester,
-      detailsFinder,
-      start: 0,
-      end: detailsAfterSelection.spec.plainText.indexOf('List item') +
-          'List item'.length,
-    );
-    expect(
-      selectedGlobalRects.any((rect) => rect.overlaps(quotedTextRect)),
-      isTrue,
-    );
-    expect(
-      selectedGlobalRects.any((rect) => rect.overlaps(listTextRect)),
-      isTrue,
-    );
-    expect(tester.takeException(), isNull);
+      expect(
+        globalSelectionRects.any((rect) => rect.overlaps(quotedTextRect)),
+        isTrue,
+      );
+      expect(
+        globalSelectionRects.any((rect) => rect.overlaps(listTextRect)),
+        isTrue,
+      );
 
-    final paintFinder = find.ancestor(
-      of: detailsFinder,
-      matching: find.byType(CustomPaint),
-    );
-    final detailsPaint = tester.widget<CustomPaint>(paintFinder.first);
-    expect(detailsPaint.foregroundPainter, isNotNull);
-  });
+      final detailsElement = tester.element(detailsFinder);
+      final detailsRenderBox = tester.renderObject<RenderBox>(detailsFinder);
+      final listOffset = detailsBlock.spec.textOffsetResolver!(
+        detailsElement,
+        detailsRenderBox.size,
+        detailsRenderBox.globalToLocal(listTextRect.center),
+      );
+      expect(
+        listOffset,
+        greaterThan(detailsBlock.spec.plainText.indexOf('List item')),
+      );
 
-  testWidgets('tap on inline html anchor tags triggers onTapLink',
-      (tester) async {
+      final listEnd =
+          detailsBlock.spec.plainText.indexOf('List item') + 'List item'.length;
+      selectionController.setSelection(
+        DocumentSelection(
+          base: detailsBlock.spec.selectionStructure!.startPosition(
+            blockIndex: 0,
+          ),
+          extent: detailsBlock.spec.selectionStructure!
+              .positionForDisplayedOffset(
+                blockIndex: 0,
+                displayedOffset: listEnd,
+              ),
+        ),
+      );
+      await tester.pump();
+
+      final detailsAfterSelection = tester.widget<SelectableMarkdownBlock>(
+        detailsFinder,
+      );
+      final selectedGlobalRects = _globalSelectionRectsForBlock(
+        tester,
+        detailsFinder,
+        start: 0,
+        end:
+            detailsAfterSelection.spec.plainText.indexOf('List item') +
+            'List item'.length,
+      );
+      expect(
+        selectedGlobalRects.any((rect) => rect.overlaps(quotedTextRect)),
+        isTrue,
+      );
+      expect(
+        selectedGlobalRects.any((rect) => rect.overlaps(listTextRect)),
+        isTrue,
+      );
+      expect(tester.takeException(), isNull);
+
+      final paintFinder = find.ancestor(
+        of: detailsFinder,
+        matching: find.byType(CustomPaint),
+      );
+      final detailsPaint = tester.widget<CustomPaint>(paintFinder.first);
+      expect(detailsPaint.foregroundPainter, isNotNull);
+    },
+  );
+
+  testWidgets('tap on inline html anchor tags triggers onTapLink', (
+    tester,
+  ) async {
     String? tappedDestination;
     String? tappedLabel;
 
@@ -1814,8 +1836,7 @@ Quoted line
       MaterialApp(
         home: Scaffold(
           body: MarkdownWidget(
-            data:
-                '💡 <a href="https://docs.github.com/en/copilot/customizing-copilot/adding-repository-custom-instructions-for-github-copilot" class="Link--inTextBlock" target="_blank" rel="noopener noreferrer">Learn how to get started</a>.',
+            data: '💡 <a href="https://docs.github.com/en/copilot/customizing-copilot/adding-repository-custom-instructions-for-github-copilot" class="Link--inTextBlock" target="_blank" rel="noopener noreferrer">Learn how to get started</a>.',
             onTapLink: (destination, title, label) {
               tappedDestination = destination;
               tappedLabel = label;
@@ -1843,8 +1864,9 @@ Quoted line
       TextSelection(baseOffset: start, extentOffset: end),
     );
 
-    await tester
-        .tapAt(renderBox.localToGlobal(linkBoxes.first.toRect().center));
+    await tester.tapAt(
+      renderBox.localToGlobal(linkBoxes.first.toRect().center),
+    );
     await tester.pump();
 
     expect(
@@ -1932,47 +1954,45 @@ Reference[^note]
   });
 
   testWidgets(
-      'renders multiple footnote references without swallowing body text',
-      (tester) async {
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
-          body: MarkdownWidget(
-            data: '''
+    'renders multiple footnote references without swallowing body text',
+    (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: MarkdownWidget(
+              data: '''
 Here is a statement with a footnote.[^1] Another reference can be added here.[^long]
 
 [^1]: This is a simple footnote.
 [^long]: This footnote contains a longer explanation to showcase how multiple lines can be formatted in a footnote. It supports Markdown formatting such as **bold** and *italic* text.
 ''',
+            ),
           ),
         ),
-      ),
-    );
+      );
 
-    final renderedText = tester
-        .widgetList<RichText>(find.byType(RichText))
-        .map((widget) => widget.text.toPlainText())
-        .join('\n');
-    expect(
-      renderedText,
-      contains('Here is a statement with a footnote.1 Another'),
-    );
-    expect(
-      renderedText,
-      contains('reference can be added here.2'),
-    );
-    expect(
-      find.textContaining('This is a simple footnote.', findRichText: true),
-      findsOneWidget,
-    );
-    expect(
-      find.textContaining(
-        'This footnote contains a longer explanation',
-        findRichText: true,
-      ),
-      findsOneWidget,
-    );
-  });
+      final renderedText = tester
+          .widgetList<RichText>(find.byType(RichText))
+          .map((widget) => widget.text.toPlainText())
+          .join('\n');
+      expect(
+        renderedText,
+        contains('Here is a statement with a footnote.1 Another'),
+      );
+      expect(renderedText, contains('reference can be added here.2'));
+      expect(
+        find.textContaining('This is a simple footnote.', findRichText: true),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining(
+          'This footnote contains a longer explanation',
+          findRichText: true,
+        ),
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets('renders tables and code blocks with direct data input', (
     tester,
@@ -1989,9 +2009,7 @@ copy me
 
     await tester.pumpWidget(
       const MaterialApp(
-        home: Scaffold(
-          body: MarkdownWidget(data: input),
-        ),
+        home: Scaffold(body: MarkdownWidget(data: input)),
       ),
     );
 
@@ -2020,9 +2038,7 @@ copy me
 
     await tester.pumpWidget(
       const MaterialApp(
-        home: Scaffold(
-          body: MarkdownWidget(data: input),
-        ),
+        home: Scaffold(body: MarkdownWidget(data: input)),
       ),
     );
 
@@ -2050,9 +2066,7 @@ copy me
 
     await tester.pumpWidget(
       const MaterialApp(
-        home: Scaffold(
-          body: MarkdownWidget(data: input),
-        ),
+        home: Scaffold(body: MarkdownWidget(data: input)),
       ),
     );
 
@@ -2081,90 +2095,94 @@ copy me
   });
 
   testWidgets(
-      'table uses only internal grid lines and leaves outer frame to the content shell',
-      (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
-          body: MarkdownWidget(
-            data: '''
+    'table uses only internal grid lines and leaves outer frame to the content shell',
+    (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: MarkdownWidget(
+              data: '''
 | A | B | C | D | E |
 | --- | --- | --- | --- | --- |
 | alpha | beta | gamma | delta | epsilon |
 ''',
+            ),
           ),
         ),
-      ),
-    );
+      );
 
-    final table = tester.widget<Table>(find.byType(Table));
-    final border = table.border!;
-    expect(border.top.style, BorderStyle.none);
-    expect(border.bottom.style, BorderStyle.none);
-    expect(border.left.style, BorderStyle.none);
-    expect(border.right.style, BorderStyle.none);
-    expect(border.horizontalInside.style, BorderStyle.solid);
-    expect(border.verticalInside.style, BorderStyle.solid);
-  });
+      final table = tester.widget<Table>(find.byType(Table));
+      final border = table.border!;
+      expect(border.top.style, BorderStyle.none);
+      expect(border.bottom.style, BorderStyle.none);
+      expect(border.left.style, BorderStyle.none);
+      expect(border.right.style, BorderStyle.none);
+      expect(border.horizontalInside.style, BorderStyle.solid);
+      expect(border.verticalInside.style, BorderStyle.solid);
+    },
+  );
 
   testWidgets(
-      'code blocks render without an outer border and keep copy in the top right',
-      (tester) async {
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
-          body: MarkdownWidget(
-            data: '''
+    'code blocks render without an outer border and keep copy in the top right',
+    (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: MarkdownWidget(
+              data: '''
 ```dart
 final settleResult = 42;
 ```
 ''',
+            ),
           ),
         ),
-      ),
-    );
+      );
 
-    final theme = MarkdownTheme.of(tester.element(find.byType(MarkdownWidget)));
-    final codeBlockBox = tester
-        .widgetList<DecoratedBox>(find.byType(DecoratedBox))
-        .firstWhere((widget) {
-      final decoration = widget.decoration;
-      return decoration is BoxDecoration &&
-          decoration.color != null &&
-          decoration.borderRadius != null &&
-          decoration.border == null;
-    });
-    final decoration = codeBlockBox.decoration as BoxDecoration;
-    expect(decoration.border, isNull);
-    expect(decoration.color, theme.codeBlockBackgroundColor);
+      final theme = MarkdownTheme.of(
+        tester.element(find.byType(MarkdownWidget)),
+      );
+      final codeBlockBox = tester
+          .widgetList<DecoratedBox>(find.byType(DecoratedBox))
+          .firstWhere((widget) {
+            final decoration = widget.decoration;
+            return decoration is BoxDecoration &&
+                decoration.color != null &&
+                decoration.borderRadius != null &&
+                decoration.border == null;
+          });
+      final decoration = codeBlockBox.decoration as BoxDecoration;
+      expect(decoration.border, isNull);
+      expect(decoration.color, theme.codeBlockBackgroundColor);
 
-    final codeBlockFinder = find.byWidgetPredicate(
-      (widget) =>
-          widget is DecoratedBox &&
-          widget.decoration is BoxDecoration &&
-          (widget.decoration as BoxDecoration).color ==
-              theme.codeBlockBackgroundColor &&
-          (widget.decoration as BoxDecoration).border == null,
-    );
-    expect(codeBlockFinder, findsOneWidget);
+      final codeBlockFinder = find.byWidgetPredicate(
+        (widget) =>
+            widget is DecoratedBox &&
+            widget.decoration is BoxDecoration &&
+            (widget.decoration as BoxDecoration).color ==
+                theme.codeBlockBackgroundColor &&
+            (widget.decoration as BoxDecoration).border == null,
+      );
+      expect(codeBlockFinder, findsOneWidget);
 
-    final copyButton = find.byTooltip('Copy code');
-    expect(copyButton, findsOneWidget);
-    final buttonTopRight = tester.getTopRight(copyButton);
-    final codeBlockTopRight = tester.getTopRight(codeBlockFinder);
-    expect((buttonTopRight.dx - codeBlockTopRight.dx).abs(), lessThan(36));
-    expect((buttonTopRight.dy - codeBlockTopRight.dy).abs(), lessThan(36));
+      final copyButton = find.byTooltip('Copy code');
+      expect(copyButton, findsOneWidget);
+      final buttonTopRight = tester.getTopRight(copyButton);
+      final codeBlockTopRight = tester.getTopRight(codeBlockFinder);
+      expect((buttonTopRight.dx - codeBlockTopRight.dx).abs(), lessThan(36));
+      expect((buttonTopRight.dy - codeBlockTopRight.dy).abs(), lessThan(36));
 
-    final markdownWidth = tester.getSize(find.byType(MarkdownWidget)).width -
-        theme.padding.resolve(TextDirection.ltr).horizontal;
-    final codeBlockWidth = tester.getSize(codeBlockFinder).width;
-    expect(codeBlockWidth, closeTo(markdownWidth, 1.0));
-  });
+      final markdownWidth =
+          tester.getSize(find.byType(MarkdownWidget)).width -
+          theme.padding.resolve(TextDirection.ltr).horizontal;
+      final codeBlockWidth = tester.getSize(codeBlockFinder).width;
+      expect(codeBlockWidth, closeTo(markdownWidth, 1.0));
+    },
+  );
 
-  testWidgets('wraps compact tables inside the viewport when columns are few',
-      (tester) async {
+  testWidgets('wraps compact tables inside the viewport when columns are few', (
+    tester,
+  ) async {
     const input = '''
 | Name | Description |
 | --- | --- |
@@ -2178,10 +2196,7 @@ final settleResult = 42;
             alignment: Alignment.topLeft,
             child: SizedBox(
               width: 320,
-              child: MarkdownWidget(
-                data: input,
-                selectable: false,
-              ),
+              child: MarkdownWidget(data: input, selectable: false),
             ),
           ),
         ),
@@ -2199,8 +2214,10 @@ final settleResult = 42;
     // The table should be exactly taking its available width (320 max minus markdown container padding, ~288)
     expect(tableRenderBox.size.width, closeTo(288.0, 2.0));
 
-    final descriptionHeaderFinder =
-        find.text('Description', findRichText: true);
+    final descriptionHeaderFinder = find.text(
+      'Description',
+      findRichText: true,
+    );
     final descriptionCellFinder = find.textContaining(
       'This description is intentionally long',
       findRichText: true,
@@ -2230,10 +2247,7 @@ final settleResult = 42;
             alignment: Alignment.topLeft,
             child: SizedBox(
               width: 320,
-              child: MarkdownWidget(
-                data: input,
-                selectable: false,
-              ),
+              child: MarkdownWidget(data: input, selectable: false),
             ),
           ),
         ),
@@ -2261,9 +2275,7 @@ return value;
 
     await tester.pumpWidget(
       const MaterialApp(
-        home: Scaffold(
-          body: MarkdownWidget(data: input),
-        ),
+        home: Scaffold(body: MarkdownWidget(data: input)),
       ),
     );
 
@@ -2279,196 +2291,202 @@ return value;
     final richText = tester.widget<RichText>(richTextFinder);
     final rootSpan = richText.text as TextSpan;
     expect(
-        _countStyledDescendantSpans(rootSpan, rootSpan.style), greaterThan(0));
+      _countStyledDescendantSpans(rootSpan, rootSpan.style),
+      greaterThan(0),
+    );
   });
 
   testWidgets(
-      'code blocks render plain text on the first frame, then highlight',
-      (tester) async {
-    const input = '''
+    'code blocks render plain text on the first frame, then highlight',
+    (tester) async {
+      const input = '''
 ```dart
 const firstFrameValue = 42;
 return firstFrameValue;
 ```
 ''';
 
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
-          body: MarkdownWidget(data: input),
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(body: MarkdownWidget(data: input)),
         ),
-      ),
-    );
+      );
 
-    final richTextFinder = find.byWidgetPredicate(
-      (widget) =>
-          widget is RichText &&
-          widget.text.toPlainText().contains('const firstFrameValue = 42;'),
-    );
-    expect(richTextFinder, findsOneWidget);
+      final richTextFinder = find.byWidgetPredicate(
+        (widget) =>
+            widget is RichText &&
+            widget.text.toPlainText().contains('const firstFrameValue = 42;'),
+      );
+      expect(richTextFinder, findsOneWidget);
 
-    var richText = tester.widget<RichText>(richTextFinder);
-    var rootSpan = richText.text as TextSpan;
-    expect(_countStyledDescendantSpans(rootSpan, rootSpan.style), 0);
+      var richText = tester.widget<RichText>(richTextFinder);
+      var rootSpan = richText.text as TextSpan;
+      expect(_countStyledDescendantSpans(rootSpan, rootSpan.style), 0);
 
-    await _pumpUntilCodeBlockHighlighted(tester, richTextFinder);
+      await _pumpUntilCodeBlockHighlighted(tester, richTextFinder);
 
-    richText = tester.widget<RichText>(richTextFinder);
-    rootSpan = richText.text as TextSpan;
-    expect(
-        _countStyledDescendantSpans(rootSpan, rootSpan.style), greaterThan(0));
-  });
+      richText = tester.widget<RichText>(richTextFinder);
+      rootSpan = richText.text as TextSpan;
+      expect(
+        _countStyledDescendantSpans(rootSpan, rootSpan.style),
+        greaterThan(0),
+      );
+    },
+  );
 
-  testWidgets('disposing markdown view ignores pending code highlight results',
-      (tester) async {
-    const input = '''
+  testWidgets(
+    'disposing markdown view ignores pending code highlight results',
+    (tester) async {
+      const input = '''
 ```dart
 const value = 42;
 return value;
 ```
 ''';
 
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
-          body: MarkdownWidget(data: input),
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(body: MarkdownWidget(data: input)),
         ),
-      ),
-    );
+      );
 
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
-    await tester.pump();
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+      await tester.pump();
 
-    expect(tester.takeException(), isNull);
-  });
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
-      'code highlight cache keeps highlighted presentation visible while theme changes refresh styles',
-      (tester) async {
-    late MarkdownThemeData fallbackTheme;
-    late MarkdownThemeData tightTheme;
+    'code highlight cache keeps highlighted presentation visible while theme changes refresh styles',
+    (tester) async {
+      late MarkdownThemeData fallbackTheme;
+      late MarkdownThemeData tightTheme;
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Builder(
-          builder: (context) {
-            fallbackTheme = MarkdownThemeData.fallback(context);
-            tightTheme = MarkdownThemeData.tight(context);
-            return const SizedBox.shrink();
-          },
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) {
+              fallbackTheme = MarkdownThemeData.fallback(context);
+              tightTheme = MarkdownThemeData.tight(context);
+              return const SizedBox.shrink();
+            },
+          ),
         ),
-      ),
-    );
+      );
 
-    final cache = MarkdownCodeHighlightCache(
-      highlighter: const MarkdownCodeSyntaxHighlighter(),
-    );
-    addTearDown(cache.dispose);
+      final cache = MarkdownCodeHighlightCache(
+        highlighter: const MarkdownCodeSyntaxHighlighter(),
+      );
+      addTearDown(cache.dispose);
 
-    // The segment cache is shared by every test, so the source is unique.
-    const source = 'const themeValue = 7;\nreturn themeValue;';
+      // The segment cache is shared by every test, so the source is unique.
+      const source = 'const themeValue = 7;\nreturn themeValue;';
 
-    var presentation = cache.resolve(
-      blockId: 'block-1',
-      source: source,
-      baseStyle: fallbackTheme.codeBlockStyle,
-      theme: fallbackTheme,
-      language: 'dart',
-    );
-    expect(presentation.isHighlighted, isFalse);
+      var presentation = cache.resolve(
+        blockId: 'block-1',
+        source: source,
+        baseStyle: fallbackTheme.codeBlockStyle,
+        theme: fallbackTheme,
+        language: 'dart',
+      );
+      expect(presentation.isHighlighted, isFalse);
 
-    presentation = await _pumpUntilCacheHighlighted(
-      tester,
-      cache: cache,
-      blockId: 'block-1',
-      source: source,
-      baseStyle: fallbackTheme.codeBlockStyle,
-      theme: fallbackTheme,
-      language: 'dart',
-    );
-    expect(presentation.isHighlighted, isTrue);
+      presentation = await _pumpUntilCacheHighlighted(
+        tester,
+        cache: cache,
+        blockId: 'block-1',
+        source: source,
+        baseStyle: fallbackTheme.codeBlockStyle,
+        theme: fallbackTheme,
+        language: 'dart',
+      );
+      expect(presentation.isHighlighted, isTrue);
 
-    presentation = cache.resolve(
-      blockId: 'block-1',
-      source: source,
-      baseStyle: tightTheme.codeBlockStyle,
-      theme: tightTheme,
-      language: 'dart',
-    );
-    expect(presentation.isHighlighted, isTrue);
+      presentation = cache.resolve(
+        blockId: 'block-1',
+        source: source,
+        baseStyle: tightTheme.codeBlockStyle,
+        theme: tightTheme,
+        language: 'dart',
+      );
+      expect(presentation.isHighlighted, isTrue);
 
-    presentation = await _pumpUntilCacheHighlighted(
-      tester,
-      cache: cache,
-      blockId: 'block-1',
-      source: source,
-      baseStyle: tightTheme.codeBlockStyle,
-      theme: tightTheme,
-      language: 'dart',
-    );
-    expect(presentation.isHighlighted, isTrue);
-  });
+      presentation = await _pumpUntilCacheHighlighted(
+        tester,
+        cache: cache,
+        blockId: 'block-1',
+        source: source,
+        baseStyle: tightTheme.codeBlockStyle,
+        theme: tightTheme,
+        language: 'dart',
+      );
+      expect(presentation.isHighlighted, isTrue);
+    },
+  );
 
-  testWidgets('a code block with cached segments highlights in its first frame',
-      (tester) async {
-    late MarkdownThemeData theme;
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Builder(
-          builder: (context) {
-            theme = MarkdownThemeData.fallback(context);
-            return const SizedBox.shrink();
-          },
+  testWidgets(
+    'a code block with cached segments highlights in its first frame',
+    (tester) async {
+      late MarkdownThemeData theme;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) {
+              theme = MarkdownThemeData.fallback(context);
+              return const SizedBox.shrink();
+            },
+          ),
         ),
-      ),
-    );
+      );
 
-    const source = 'final remounted = true;\nprint(remounted);';
-    final first = MarkdownCodeHighlightCache(
-      highlighter: const MarkdownCodeSyntaxHighlighter(),
-    );
-    addTearDown(first.dispose);
-    expect(
-      first
-          .resolve(
-            blockId: 'block-1',
-            source: source,
-            baseStyle: theme.codeBlockStyle,
-            theme: theme,
-            language: 'dart',
-          )
-          .isHighlighted,
-      isFalse,
-    );
-    await _pumpUntilCacheHighlighted(
-      tester,
-      cache: first,
-      blockId: 'block-1',
-      source: source,
-      baseStyle: theme.codeBlockStyle,
-      theme: theme,
-      language: 'dart',
-    );
+      const source = 'final remounted = true;\nprint(remounted);';
+      final first = MarkdownCodeHighlightCache(
+        highlighter: const MarkdownCodeSyntaxHighlighter(),
+      );
+      addTearDown(first.dispose);
+      expect(
+        first
+            .resolve(
+              blockId: 'block-1',
+              source: source,
+              baseStyle: theme.codeBlockStyle,
+              theme: theme,
+              language: 'dart',
+            )
+            .isHighlighted,
+        isFalse,
+      );
+      await _pumpUntilCacheHighlighted(
+        tester,
+        cache: first,
+        blockId: 'block-1',
+        source: source,
+        baseStyle: theme.codeBlockStyle,
+        theme: theme,
+        language: 'dart',
+      );
 
-    // A view that mounts later, such as the same post in another list.
-    final second = MarkdownCodeHighlightCache(
-      highlighter: const MarkdownCodeSyntaxHighlighter(),
-    );
-    addTearDown(second.dispose);
-    var notified = false;
-    second.addListener(() => notified = true);
-    final presentation = second.resolve(
-      blockId: 'block-1',
-      source: source,
-      baseStyle: theme.codeBlockStyle,
-      theme: theme,
-      language: 'dart',
-    );
-    expect(presentation.isHighlighted, isTrue);
-    await tester.pump();
-    expect(notified, isFalse);
-  });
+      // A view that mounts later, such as the same post in another list.
+      final second = MarkdownCodeHighlightCache(
+        highlighter: const MarkdownCodeSyntaxHighlighter(),
+      );
+      addTearDown(second.dispose);
+      var notified = false;
+      second.addListener(() => notified = true);
+      final presentation = second.resolve(
+        blockId: 'block-1',
+        source: source,
+        baseStyle: theme.codeBlockStyle,
+        theme: theme,
+        language: 'dart',
+      );
+      expect(presentation.isHighlighted, isTrue);
+      await tester.pump();
+      expect(notified, isFalse);
+    },
+  );
 
   testWidgets('code highlight link tokens keep the code block font size', (
     tester,
@@ -2533,10 +2551,7 @@ return value;
             nightTheme = MarkdownThemeData.night(context);
             currentTheme ??= fallbackTheme;
             return Scaffold(
-              body: MarkdownWidget(
-                data: input,
-                theme: currentTheme,
-              ),
+              body: MarkdownWidget(data: input, theme: currentTheme),
             );
           },
         ),
@@ -2593,9 +2608,9 @@ return value;
   });
 
   testWidgets(
-      'long code blocks can degrade to plain text above the configured line limit',
-      (tester) async {
-    const input = '''
+    'long code blocks can degrade to plain text above the configured line limit',
+    (tester) async {
+      const input = '''
 ```dart
 final a = 1;
 final b = 2;
@@ -2603,34 +2618,34 @@ final c = a + b;
 ```
 ''';
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Builder(
-          builder: (context) => Scaffold(
-            body: MarkdownWidget(
-              data: input,
-              theme: MarkdownThemeData.fallback(context).copyWith(
-                codeHighlightMaxLines: 2,
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: MarkdownWidget(
+                data: input,
+                theme: MarkdownThemeData.fallback(context)
+                    .copyWith(codeHighlightMaxLines: 2),
               ),
             ),
           ),
         ),
-      ),
-    );
+      );
 
-    await tester.pumpAndSettle();
+      await tester.pumpAndSettle();
 
-    final richTextFinder = find.byWidgetPredicate(
-      (widget) =>
-          widget is RichText &&
-          widget.text.toPlainText().contains('final c = a + b;'),
-    );
-    expect(richTextFinder, findsOneWidget);
+      final richTextFinder = find.byWidgetPredicate(
+        (widget) =>
+            widget is RichText &&
+            widget.text.toPlainText().contains('final c = a + b;'),
+      );
+      expect(richTextFinder, findsOneWidget);
 
-    final richText = tester.widget<RichText>(richTextFinder);
-    final rootSpan = richText.text as TextSpan;
-    expect(_countStyledDescendantSpans(rootSpan, rootSpan.style), 0);
-  });
+      final richText = tester.widget<RichText>(richTextFinder);
+      final rootSpan = richText.text as TextSpan;
+      expect(_countStyledDescendantSpans(rootSpan, rootSpan.style), 0);
+    },
+  );
 
   testWidgets('tight theme keeps normal text sizing while reducing spacing', (
     tester,
@@ -2681,10 +2696,7 @@ final c = a + b;
     );
 
     expect(nightTheme.bodyStyle.color, isNotNull);
-    expect(
-      nightTheme.bodyStyle.color!.computeLuminance(),
-      greaterThan(0.75),
-    );
+    expect(nightTheme.bodyStyle.color!.computeLuminance(), greaterThan(0.75));
     expect(
       nightTheme.tableRowBackgroundColor.computeLuminance(),
       lessThan(0.02),
@@ -2704,9 +2716,7 @@ final c = a + b;
   ) async {
     await tester.pumpWidget(
       const MaterialApp(
-        home: Scaffold(
-          body: MarkdownWidget(data: 'Inline `code` sample'),
-        ),
+        home: Scaffold(body: MarkdownWidget(data: 'Inline `code` sample')),
       ),
     );
 
@@ -2720,15 +2730,13 @@ final c = a + b;
     final inlineCodeFinder = _decoratedInlineTextFinder();
     expect(inlineCodeFinder, findsWidgets);
 
-    final inlineCodeRenderBox =
-        tester.renderObject<RenderBox>(inlineCodeFinder.first);
+    final inlineCodeRenderBox = tester.renderObject<RenderBox>(
+      inlineCodeFinder.first,
+    );
     final expectedHeight =
         _tightTextHeight('code', theme.bodyStyle.merge(theme.inlineCodeStyle)) +
-            theme.inlineCodePadding.vertical;
-    expect(
-      inlineCodeRenderBox.size.height,
-      closeTo(expectedHeight, 0.001),
-    );
+        theme.inlineCodePadding.vertical;
+    expect(inlineCodeRenderBox.size.height, closeTo(expectedHeight, 0.001));
   });
 
   testWidgets('inline code prefers the default Mono font family', (
@@ -2736,9 +2744,7 @@ final c = a + b;
   ) async {
     await tester.pumpWidget(
       const MaterialApp(
-        home: Scaffold(
-          body: MarkdownWidget(data: 'Inline `code` sample'),
-        ),
+        home: Scaffold(body: MarkdownWidget(data: 'Inline `code` sample')),
       ),
     );
 
@@ -2756,16 +2762,16 @@ final c = a + b;
   ) async {
     await tester.pumpWidget(
       const MaterialApp(
-        home: Scaffold(
-          body: MarkdownWidget(data: '`popup`'),
-        ),
+        home: Scaffold(body: MarkdownWidget(data: '`popup`')),
       ),
     );
 
-    final blockBox =
-        tester.renderObject<RenderBox>(find.byType(MarkdownPretextTextBlock));
-    final inlineCodeBox =
-        tester.renderObject<RenderBox>(_decoratedInlineTextFinder().first);
+    final blockBox = tester.renderObject<RenderBox>(
+      find.byType(MarkdownPretextTextBlock),
+    );
+    final inlineCodeBox = tester.renderObject<RenderBox>(
+      _decoratedInlineTextFinder().first,
+    );
     final theme = MarkdownTheme.of(tester.element(find.byType(MarkdownWidget)));
     final textPainter = TextPainter(
       text: TextSpan(text: 'popup', style: theme.bodyStyle),
@@ -2789,16 +2795,16 @@ final c = a + b;
   ) async {
     await tester.pumpWidget(
       const MaterialApp(
-        home: Scaffold(
-          body: MarkdownWidget(data: '- `popup`'),
-        ),
+        home: Scaffold(body: MarkdownWidget(data: '- `popup`')),
       ),
     );
 
-    final blockBox = tester
-        .renderObject<RenderBox>(find.byType(MarkdownPretextTextBlock).first);
-    final inlineCodeBox =
-        tester.renderObject<RenderBox>(_decoratedInlineTextFinder().first);
+    final blockBox = tester.renderObject<RenderBox>(
+      find.byType(MarkdownPretextTextBlock).first,
+    );
+    final inlineCodeBox = tester.renderObject<RenderBox>(
+      _decoratedInlineTextFinder().first,
+    );
     final theme = MarkdownTheme.of(tester.element(find.byType(MarkdownWidget)));
     final textPainter = TextPainter(
       text: TextSpan(text: 'popup', style: theme.bodyStyle),
@@ -2817,8 +2823,9 @@ final c = a + b;
     expect(inlineCodeRect.bottom, lessThanOrEqualTo(blockRect.bottom + 0.01));
   });
 
-  testWidgets('code blocks prefer the default Mono font family',
-      (tester) async {
+  testWidgets('code blocks prefer the default Mono font family', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       const MaterialApp(
         home: Scaffold(
@@ -2848,13 +2855,12 @@ const value = 42;
     expect(richText.softWrap, isFalse);
   });
 
-  testWidgets('selecting text across inline code does not throw',
-      (tester) async {
+  testWidgets('selecting text across inline code does not throw', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       const MaterialApp(
-        home: Scaffold(
-          body: MarkdownWidget(data: '- before `code` after'),
-        ),
+        home: Scaffold(body: MarkdownWidget(data: '- before `code` after')),
       ),
     );
 
@@ -2880,13 +2886,12 @@ const value = 42;
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('pretext blocks with inline code paint selection above child',
-      (tester) async {
+  testWidgets('pretext blocks with inline code paint selection above child', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       const MaterialApp(
-        home: Scaffold(
-          body: MarkdownWidget(data: 'before `code` after'),
-        ),
+        home: Scaffold(body: MarkdownWidget(data: 'before `code` after')),
       ),
     );
 
@@ -3146,8 +3151,10 @@ const value = 42;
     );
 
     expect(layout.lines, hasLength(2));
-    expect(
-        layout.lines.map((line) => line.text).toList(), <String>['ab', 'cd']);
+    expect(layout.lines.map((line) => line.text).toList(), <String>[
+      'ab',
+      'cd',
+    ]);
   });
 
   test('breakable decorated inline wraps across lines', () {
@@ -3178,14 +3185,21 @@ const value = 42;
           .toList(growable: false);
       expect(decoratedSegments, isNotEmpty);
       expect(decoratedSegments.first.padding.left, greaterThan(0));
-      expect(decoratedSegments.first.padding.left,
-          lessThanOrEqualTo(padding.left));
+      expect(
+        decoratedSegments.first.padding.left,
+        lessThanOrEqualTo(padding.left),
+      );
       expect(decoratedSegments.last.padding.right, greaterThan(0));
-      expect(decoratedSegments.last.padding.right,
-          lessThanOrEqualTo(padding.right));
-      for (final middle in decoratedSegments.skip(1).take(
-            decoratedSegments.length > 2 ? decoratedSegments.length - 2 : 0,
-          )) {
+      expect(
+        decoratedSegments.last.padding.right,
+        lessThanOrEqualTo(padding.right),
+      );
+      for (final middle
+          in decoratedSegments
+              .skip(1)
+              .take(
+                decoratedSegments.length > 2 ? decoratedSegments.length - 2 : 0,
+              )) {
         expect(middle.padding.left, 0);
         expect(middle.padding.right, 0);
       }
@@ -3204,15 +3218,10 @@ const value = 42;
       wrapped.lines.map((line) => line.text).toList(growable: false),
       <String>['xxx', 'x ', 'to ', 'o ', 'xxx', 'x'],
     );
-    expect(
-      wrapped.lines.map((line) => line.text).join(),
-      'xxxx to o xxxx',
-    );
+    expect(wrapped.lines.map((line) => line.text).join(), 'xxxx to o xxxx');
   });
 
-  test(
-      'breakable decorated inline prefers identifier boundaries before character fallback',
-      () {
+  test('breakable decorated inline prefers identifier boundaries before character fallback', () {
     const baseStyle = TextStyle(fontSize: 14, height: 1.2);
 
     double measureWidth(String text) {
@@ -3275,10 +3284,7 @@ const value = 42;
     final width = measureWidth('cachetoken') + 1;
     final layout = computeMarkdownPretextLayoutFromRuns(
       runs: const <MarkdownPretextInlineRun>[
-        MarkdownPretextInlineRun(
-          text: 'Use ',
-          style: baseStyle,
-        ),
+        MarkdownPretextInlineRun(text: 'Use ', style: baseStyle),
         MarkdownPretextInlineRun(
           text: 'cachetoken',
           style: baseStyle,
@@ -3289,10 +3295,7 @@ const value = 42;
             padding: EdgeInsets.zero,
           ),
         ),
-        MarkdownPretextInlineRun(
-          text: ' after.',
-          style: baseStyle,
-        ),
+        MarkdownPretextInlineRun(text: ' after.', style: baseStyle),
       ],
       fallbackStyle: baseStyle,
       maxWidth: width,
@@ -3309,10 +3312,7 @@ const value = 42;
 
     final layout = computeMarkdownPretextLayoutFromRuns(
       runs: const <MarkdownPretextInlineRun>[
-        MarkdownPretextInlineRun(
-          text: 'Use ',
-          style: baseStyle,
-        ),
+        MarkdownPretextInlineRun(text: 'Use ', style: baseStyle),
         MarkdownPretextInlineRun(
           text: 'cachetoken',
           style: baseStyle,
@@ -3367,9 +3367,7 @@ const value = 42;
         MarkdownPretextInlineRun(
           text: 'x^2',
           style: baseStyle,
-          renderSpan: const WidgetSpan(
-            child: SizedBox(width: 36, height: 28),
-          ),
+          renderSpan: const WidgetSpan(child: SizedBox(width: 36, height: 28)),
           estimatedWidth: 36,
           estimatedLineHeight: 32,
         ),
@@ -3390,42 +3388,38 @@ const value = 42;
     );
   });
 
-  test('direct rich text geometry is used for undecorated or render-span runs',
-      () {
-    const baseStyle = TextStyle(fontSize: 14, height: 1.2);
+  test(
+    'direct rich text geometry is used for undecorated or render-span runs',
+    () {
+      const baseStyle = TextStyle(fontSize: 14, height: 1.2);
 
-    expect(
-      markdownPretextCanUseDirectRichTextGeometry(
-        const <MarkdownPretextInlineRun>[
-          MarkdownPretextInlineRun(text: 'plain text', style: baseStyle),
-        ],
-      ),
-      isTrue,
-    );
+      expect(
+        markdownPretextCanUseDirectRichTextGeometry(
+          const <MarkdownPretextInlineRun>[
+            MarkdownPretextInlineRun(text: 'plain text', style: baseStyle),
+          ],
+        ),
+        isTrue,
+      );
 
-    expect(
-      markdownPretextCanUseDirectRichTextGeometry(
-        <MarkdownPretextInlineRun>[
+      expect(
+        markdownPretextCanUseDirectRichTextGeometry(<MarkdownPretextInlineRun>[
           MarkdownPretextInlineRun(
             text: 'x^2',
             style: baseStyle,
-            renderSpan:
-                const WidgetSpan(child: SizedBox(width: 20, height: 16)),
+            renderSpan: const WidgetSpan(
+              child: SizedBox(width: 20, height: 16),
+            ),
             estimatedWidth: 20,
             estimatedLineHeight: 18,
           ),
-        ],
-      ),
-      isTrue,
-    );
+        ]),
+        isTrue,
+      );
 
-    expect(
-      markdownPretextCanUseDirectRichTextGeometry(
-        <MarkdownPretextInlineRun>[
-          const MarkdownPretextInlineRun(
-            text: 'prefix ',
-            style: baseStyle,
-          ),
+      expect(
+        markdownPretextCanUseDirectRichTextGeometry(<MarkdownPretextInlineRun>[
+          const MarkdownPretextInlineRun(text: 'prefix ', style: baseStyle),
           const MarkdownPretextInlineRun(
             text: 'inline_code',
             style: baseStyle,
@@ -3439,19 +3433,18 @@ const value = 42;
           MarkdownPretextInlineRun(
             text: 'x^2',
             style: baseStyle,
-            renderSpan:
-                const WidgetSpan(child: SizedBox(width: 20, height: 16)),
+            renderSpan: const WidgetSpan(
+              child: SizedBox(width: 20, height: 16),
+            ),
             estimatedWidth: 20,
             estimatedLineHeight: 18,
           ),
-        ],
-      ),
-      isTrue,
-    );
+        ]),
+        isTrue,
+      );
 
-    expect(
-      markdownPretextRenderText(
-        <MarkdownPretextInlineRun>[
+      expect(
+        markdownPretextRenderText(<MarkdownPretextInlineRun>[
           const MarkdownPretextInlineRun(
             text: 'inline_code',
             style: baseStyle,
@@ -3465,34 +3458,35 @@ const value = 42;
           MarkdownPretextInlineRun(
             text: 'x^2',
             style: baseStyle,
-            renderSpan:
-                const WidgetSpan(child: SizedBox(width: 20, height: 16)),
+            renderSpan: const WidgetSpan(
+              child: SizedBox(width: 20, height: 16),
+            ),
             estimatedWidth: 20,
             estimatedLineHeight: 18,
           ),
-        ],
-      ),
-      String.fromCharCodes(List<int>.filled(3, 0xFFFC)),
-    );
+        ]),
+        String.fromCharCodes(List<int>.filled(3, 0xFFFC)),
+      );
 
-    expect(
-      markdownPretextCanUseDirectRichTextGeometry(
-        const <MarkdownPretextInlineRun>[
-          MarkdownPretextInlineRun(
-            text: 'inline_code',
-            style: baseStyle,
-            allowCharacterWrap: true,
-            decoration: MarkdownPretextInlineDecoration(
-              backgroundColor: Color(0xFFE9EDF2),
-              borderRadius: BorderRadius.all(Radius.circular(6)),
-              padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      expect(
+        markdownPretextCanUseDirectRichTextGeometry(
+          const <MarkdownPretextInlineRun>[
+            MarkdownPretextInlineRun(
+              text: 'inline_code',
+              style: baseStyle,
+              allowCharacterWrap: true,
+              decoration: MarkdownPretextInlineDecoration(
+                backgroundColor: Color(0xFFE9EDF2),
+                borderRadius: BorderRadius.all(Radius.circular(6)),
+                padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              ),
             ),
-          ),
-        ],
-      ),
-      isFalse,
-    );
-  });
+          ],
+        ),
+        isFalse,
+      );
+    },
+  );
 
   testWidgets('table cells keep inline code compact when mixed with math', (
     tester,
@@ -3500,9 +3494,7 @@ const value = 42;
     await tester.pumpWidget(
       const MaterialApp(
         home: Scaffold(
-          body: MarkdownWidget(
-            data: '| Value |\n| --- |\n| `code` (x^2) |',
-          ),
+          body: MarkdownWidget(data: '| Value |\n| --- |\n| `code` (x^2) |'),
         ),
       ),
     );
@@ -3515,9 +3507,7 @@ const value = 42;
       matching: find.byWidgetPredicate(
         (widget) =>
             widget is RichText &&
-            widget.text.toPlainText().contains(
-                  String.fromCharCode(0xFFFC),
-                ),
+            widget.text.toPlainText().contains(String.fromCharCode(0xFFFC)),
       ),
     );
     expect(cellRichTextFinder, findsOneWidget);
@@ -3535,9 +3525,7 @@ const value = 42;
     await tester.pumpWidget(
       const MaterialApp(
         home: Scaffold(
-          body: MarkdownWidget(
-            data: '| Formula |\n| --- |\n| value \$x^2\$ |',
-          ),
+          body: MarkdownWidget(data: '| Formula |\n| --- |\n| value \$x^2\$ |'),
         ),
       ),
     );
@@ -3553,8 +3541,8 @@ const value = 42;
               (widget) =>
                   widget is RichText &&
                   widget.text.toPlainText().contains(
-                        String.fromCharCode(0xFFFC),
-                      ),
+                    String.fromCharCode(0xFFFC),
+                  ),
             ),
           )
           .first,
@@ -3572,8 +3560,7 @@ const value = 42;
     const baseStyle = TextStyle(fontSize: 14, height: 1.2);
     const runs = <MarkdownPretextInlineRun>[
       MarkdownPretextInlineRun(
-        text:
-            'This plain paragraph is intentionally long so it wraps across multiple lines without inline code.',
+        text: 'This plain paragraph is intentionally long so it wraps across multiple lines without inline code.',
         style: baseStyle,
       ),
     ];
@@ -3718,11 +3705,17 @@ const value = 42;
         }
         expect(lineDecoratedSegments.first.text, isNotEmpty);
         expect(
-            lineDecoratedSegments.first.padding.left, greaterThanOrEqualTo(0));
+          lineDecoratedSegments.first.padding.left,
+          greaterThanOrEqualTo(0),
+        );
         expect(
-            lineDecoratedSegments.last.padding.right, greaterThanOrEqualTo(0));
-        expect(lineDecoratedSegments.last.padding.right,
-            lessThanOrEqualTo(padding.right));
+          lineDecoratedSegments.last.padding.right,
+          greaterThanOrEqualTo(0),
+        );
+        expect(
+          lineDecoratedSegments.last.padding.right,
+          lessThanOrEqualTo(padding.right),
+        );
       }
     }
   });
@@ -3747,10 +3740,7 @@ const value = 42;
           padding: padding,
         ),
       ),
-      MarkdownPretextInlineRun(
-        text: ') used during ',
-        style: baseStyle,
-      ),
+      MarkdownPretextInlineRun(text: ') used during ', style: baseStyle),
       MarkdownPretextInlineRun(
         text: 'settle_result',
         style: baseStyle,
@@ -3810,10 +3800,7 @@ const value = 42;
           padding: padding,
         ),
       ),
-      MarkdownPretextInlineRun(
-        text: '提示。',
-        style: baseStyle,
-      ),
+      MarkdownPretextInlineRun(text: '提示。', style: baseStyle),
     ];
 
     for (final width in <double>[232, 228, 224, 220, 216, 212, 208, 204]) {
@@ -3841,11 +3828,7 @@ const value = 42;
           .where((segment) => segment.decoration != null)
           .map((segment) => segment.text)
           .join();
-      expect(
-        decoratedText,
-        'send_sol_for_rent',
-        reason: 'width=$width',
-      );
+      expect(decoratedText, 'send_sol_for_rent', reason: 'width=$width');
     }
   });
 
@@ -3871,10 +3854,7 @@ const value = 42;
 
     final codeLayout = computeMarkdownPretextLayoutFromRuns(
       runs: const <MarkdownPretextInlineRun>[
-        MarkdownPretextInlineRun(
-          text: '$prefix ',
-          style: baseStyle,
-        ),
+        MarkdownPretextInlineRun(text: '$prefix ', style: baseStyle),
         MarkdownPretextInlineRun(
           text: 'send_sol_for_rent',
           style: baseStyle,
@@ -3885,10 +3865,7 @@ const value = 42;
             padding: padding,
           ),
         ),
-        MarkdownPretextInlineRun(
-          text: suffix,
-          style: baseStyle,
-        ),
+        MarkdownPretextInlineRun(text: suffix, style: baseStyle),
       ],
       fallbackStyle: baseStyle,
       maxWidth: width,
@@ -3904,109 +3881,118 @@ const value = 42;
   });
 
   testWidgets(
-      'markdown inline code at paragraph tail does not shift the first line break',
-      (tester) async {
-    const inlineCodeMarkdown =
-        '某人发布了一份**《TEST 某功能校验说明》**文档，整理了某客户端转账页的逻辑，区分了三种场景，分别说明金额校验、可用余额计算、手续费校验规则，重点明确：只有某链真实租金场景，才会显示`rent_tip_token` 提示。';
-    late MarkdownThemeData theme;
+    'markdown inline code at paragraph tail does not shift the first line break',
+    (tester) async {
+      const inlineCodeMarkdown =
+          '某人发布了一份**《TEST 某功能校验说明》**文档，整理了某客户端转账页的逻辑，区分了三种场景，分别说明金额校验、可用余额计算、手续费校验规则，重点明确：只有某链真实租金场景，才会显示`rent_tip_token` 提示。';
+      late MarkdownThemeData theme;
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Builder(
-          builder: (context) {
-            theme = MarkdownThemeData.fallback(context);
-            return const SizedBox.shrink();
-          },
-        ),
-      ),
-    );
-
-    List<String> layoutLinesFromMarkdown(String markdown, double width) {
-      final parser = MarkdownDocumentParser();
-      final document = parser.parse(markdown);
-      final paragraph = document.blocks.single as ParagraphBlock;
-      final builder = MarkdownInlineBuilder(
-        theme: theme,
-        recognizers: MarkdownLinkRecognizers(),
-      );
-      final runs = builder.buildPretextRuns(theme.bodyStyle, paragraph.inlines);
-      final layout = computeMarkdownPretextLayoutFromRuns(
-        runs: runs,
-        fallbackStyle: theme.bodyStyle,
-        maxWidth: width,
-        textScaleFactor: 1,
-      );
-      return layout.lines.map((line) => line.text).toList(growable: false);
-    }
-
-    for (final width in <double>[500]) {
-      final inlineCodeLines =
-          layoutLinesFromMarkdown(inlineCodeMarkdown, width);
-
-      expect(inlineCodeLines, isNotEmpty, reason: 'width=$width');
-      expect(
-        inlineCodeLines.first,
-        isNot('某人发布了一份**《TEST'),
-        reason: 'width=$width first=${inlineCodeLines.first}',
-      );
-      expect(
-        inlineCodeLines.first,
-        contains('某功能'),
-        reason: 'width=$width first=${inlineCodeLines.first}',
-      );
-    }
-  });
-
-  testWidgets(
-      'widget rendering keeps the first list line stable with trailing inline code',
-      (tester) async {
-    const inlineCodeMarkdown =
-        '1. 某人发布了一份**《TEST 某功能校验说明》**文档，整理了某客户端转账页的逻辑，区分了三种场景，分别说明金额校验、可用余额计算、手续费校验规则，重点明确：只有某链真实租金场景，才会显示`rent_tip_token` 提示。';
-
-    Future<List<String>> renderedLines(String markdown, double width) async {
       await tester.pumpWidget(
         MaterialApp(
-          home: Scaffold(
-            body: Align(
-              alignment: Alignment.topLeft,
-              child: SizedBox(
-                width: width,
-                child: MarkdownWidget(data: markdown),
-              ),
-            ),
+          home: Builder(
+            builder: (context) {
+              theme = MarkdownThemeData.fallback(context);
+              return const SizedBox.shrink();
+            },
           ),
         ),
       );
-      await tester.pumpAndSettle();
 
-      final blockFinder = find.byType(MarkdownPretextTextBlock).first;
-      final blockWidget = tester.widget<MarkdownPretextTextBlock>(blockFinder);
-      final blockRenderBox = tester.renderObject<RenderBox>(blockFinder);
-      final layout = computeMarkdownPretextLayoutFromRuns(
-        runs: blockWidget.runs!,
-        fallbackStyle: blockWidget.fallbackStyle,
-        maxWidth: blockRenderBox.size.width,
-        textScaleFactor: 1,
-      );
-      return layout.lines.map((line) => line.text).toList(growable: false);
-    }
+      List<String> layoutLinesFromMarkdown(String markdown, double width) {
+        final parser = MarkdownDocumentParser();
+        final document = parser.parse(markdown);
+        final paragraph = document.blocks.single as ParagraphBlock;
+        final builder = MarkdownInlineBuilder(
+          theme: theme,
+          recognizers: MarkdownLinkRecognizers(),
+        );
+        final runs = builder.buildPretextRuns(
+          theme.bodyStyle,
+          paragraph.inlines,
+        );
+        final layout = computeMarkdownPretextLayoutFromRuns(
+          runs: runs,
+          fallbackStyle: theme.bodyStyle,
+          maxWidth: width,
+          textScaleFactor: 1,
+        );
+        return layout.lines.map((line) => line.text).toList(growable: false);
+      }
 
-    for (final width in <double>[500]) {
-      final inlineCodeLines = await renderedLines(inlineCodeMarkdown, width);
+      for (final width in <double>[500]) {
+        final inlineCodeLines = layoutLinesFromMarkdown(
+          inlineCodeMarkdown,
+          width,
+        );
 
-      expect(inlineCodeLines, isNotEmpty, reason: 'width=$width');
-      expect(
-        inlineCodeLines.first,
-        isNot('某人发布了一份**《TEST'),
-        reason: 'width=$width first=${inlineCodeLines.first}',
-      );
-      expect(
-        inlineCodeLines.first,
-        contains('某功能'),
-        reason: 'width=$width first=${inlineCodeLines.first}',
-      );
-    }
-  });
+        expect(inlineCodeLines, isNotEmpty, reason: 'width=$width');
+        expect(
+          inlineCodeLines.first,
+          isNot('某人发布了一份**《TEST'),
+          reason: 'width=$width first=${inlineCodeLines.first}',
+        );
+        expect(
+          inlineCodeLines.first,
+          contains('某功能'),
+          reason: 'width=$width first=${inlineCodeLines.first}',
+        );
+      }
+    },
+  );
+
+  testWidgets(
+    'widget rendering keeps the first list line stable with trailing inline code',
+    (tester) async {
+      const inlineCodeMarkdown =
+          '1. 某人发布了一份**《TEST 某功能校验说明》**文档，整理了某客户端转账页的逻辑，区分了三种场景，分别说明金额校验、可用余额计算、手续费校验规则，重点明确：只有某链真实租金场景，才会显示`rent_tip_token` 提示。';
+
+      Future<List<String>> renderedLines(String markdown, double width) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: Align(
+                alignment: Alignment.topLeft,
+                child: SizedBox(
+                  width: width,
+                  child: MarkdownWidget(data: markdown),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final blockFinder = find.byType(MarkdownPretextTextBlock).first;
+        final blockWidget = tester.widget<MarkdownPretextTextBlock>(
+          blockFinder,
+        );
+        final blockRenderBox = tester.renderObject<RenderBox>(blockFinder);
+        final layout = computeMarkdownPretextLayoutFromRuns(
+          runs: blockWidget.runs!,
+          fallbackStyle: blockWidget.fallbackStyle,
+          maxWidth: blockRenderBox.size.width,
+          textScaleFactor: 1,
+        );
+        return layout.lines.map((line) => line.text).toList(growable: false);
+      }
+
+      for (final width in <double>[500]) {
+        final inlineCodeLines = await renderedLines(inlineCodeMarkdown, width);
+
+        expect(inlineCodeLines, isNotEmpty, reason: 'width=$width');
+        expect(
+          inlineCodeLines.first,
+          isNot('某人发布了一份**《TEST'),
+          reason: 'width=$width first=${inlineCodeLines.first}',
+        );
+        expect(
+          inlineCodeLines.first,
+          contains('某功能'),
+          reason: 'width=$width first=${inlineCodeLines.first}',
+        );
+      }
+    },
+  );
 
   testWidgets('reuses cached unchanged pretext block widgets on append', (
     tester,
@@ -4014,9 +4000,7 @@ const value = 42;
     final controller = MarkdownController(data: '# Hello\n\nBody');
     await tester.pumpWidget(
       MaterialApp(
-        home: Scaffold(
-          body: MarkdownWidget(controller: controller),
-        ),
+        home: Scaffold(body: MarkdownWidget(controller: controller)),
       ),
     );
 
@@ -4045,12 +4029,12 @@ const value = 42;
 
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(SystemChannels.platform, (methodCall) async {
-      if (methodCall.method == 'Clipboard.setData') {
-        final arguments = methodCall.arguments as Map<Object?, Object?>;
-        copiedText = arguments['text'] as String?;
-      }
-      return null;
-    });
+          if (methodCall.method == 'Clipboard.setData') {
+            final arguments = methodCall.arguments as Map<Object?, Object?>;
+            copiedText = arguments['text'] as String?;
+          }
+          return null;
+        });
 
     addTearDown(() {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -4059,9 +4043,7 @@ const value = 42;
 
     await tester.pumpWidget(
       const MaterialApp(
-        home: Scaffold(
-          body: MarkdownWidget(data: '# Hello\n\nWorld'),
-        ),
+        home: Scaffold(body: MarkdownWidget(data: '# Hello\n\nWorld')),
       ),
     );
 
@@ -4109,8 +4091,9 @@ const value = 42;
     expect(selectionController.selectedPlainText, 'Hello\n\nWorld');
   });
 
-  testWidgets('dragging from blank space starts a text selection',
-      (tester) async {
+  testWidgets('dragging from blank space starts a text selection', (
+    tester,
+  ) async {
     final selectionController = MarkdownSelectionController();
 
     await tester.pumpWidget(
@@ -4180,49 +4163,51 @@ const value = 42;
     expect(selectionController.hasSelection, isFalse);
   });
 
-  testWidgets('clicking trailing blank space inside markdown clears selection',
-      (
-    tester,
-  ) async {
-    final selectionController = MarkdownSelectionController();
+  testWidgets(
+    'clicking trailing blank space inside markdown clears selection',
+    (tester) async {
+      final selectionController = MarkdownSelectionController();
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SizedBox(
-            width: 420,
-            child: MarkdownWidget(
-              data: '# Hello\n\nWorld',
-              selectionController: selectionController,
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 420,
+              child: MarkdownWidget(
+                data: '# Hello\n\nWorld',
+                selectionController: selectionController,
+              ),
             ),
           ),
         ),
-      ),
-    );
+      );
 
-    final start = tester.getTopLeft(find.text('Hello')) + const Offset(1, 8);
-    final end = tester.getBottomRight(find.text('World')) - const Offset(1, 8);
-    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
-    await gesture.addPointer(location: start);
-    await gesture.down(start);
-    await tester.pump();
-    await gesture.moveTo(end);
-    await tester.pump();
-    await gesture.up();
-    await tester.pump();
+      final start = tester.getTopLeft(find.text('Hello')) + const Offset(1, 8);
+      final end =
+          tester.getBottomRight(find.text('World')) - const Offset(1, 8);
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await gesture.addPointer(location: start);
+      await gesture.down(start);
+      await tester.pump();
+      await gesture.moveTo(end);
+      await tester.pump();
+      await gesture.up();
+      await tester.pump();
 
-    expect(selectionController.hasSelection, isTrue);
+      expect(selectionController.hasSelection, isTrue);
 
-    final pretextBox = tester
-        .renderObject<RenderBox>(find.byType(MarkdownPretextTextBlock).first);
-    final trailingBlankTap = pretextBox.localToGlobal(
-      Offset(pretextBox.size.width - 4, pretextBox.size.height / 2),
-    );
-    await tester.tapAt(trailingBlankTap);
-    await tester.pump();
+      final pretextBox = tester.renderObject<RenderBox>(
+        find.byType(MarkdownPretextTextBlock).first,
+      );
+      final trailingBlankTap = pretextBox.localToGlobal(
+        Offset(pretextBox.size.width - 4, pretextBox.size.height / 2),
+      );
+      await tester.tapAt(trailingBlankTap);
+      await tester.pump();
 
-    expect(selectionController.hasSelection, isFalse);
-  });
+      expect(selectionController.hasSelection, isFalse);
+    },
+  );
 
   testWidgets('clicking outside markdown clears selection', (tester) async {
     final selectionController = MarkdownSelectionController();
@@ -4240,10 +4225,7 @@ const value = 42;
                 ),
               ),
               const Expanded(
-                child: ColoredBox(
-                  key: outsideKey,
-                  color: Colors.transparent,
-                ),
+                child: ColoredBox(key: outsideKey, color: Colors.transparent),
               ),
             ],
           ),
@@ -4277,12 +4259,12 @@ const value = 42;
 
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(SystemChannels.platform, (methodCall) async {
-      if (methodCall.method == 'Clipboard.setData') {
-        final arguments = methodCall.arguments as Map<Object?, Object?>;
-        copiedText = arguments['text'] as String?;
-      }
-      return null;
-    });
+          if (methodCall.method == 'Clipboard.setData') {
+            final arguments = methodCall.arguments as Map<Object?, Object?>;
+            copiedText = arguments['text'] as String?;
+          }
+          return null;
+        });
 
     addTearDown(() {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -4291,9 +4273,7 @@ const value = 42;
 
     await tester.pumpWidget(
       const MaterialApp(
-        home: Scaffold(
-          body: MarkdownWidget(data: '# Hello\n\nWorld'),
-        ),
+        home: Scaffold(body: MarkdownWidget(data: '# Hello\n\nWorld')),
       ),
     );
 
@@ -4347,8 +4327,9 @@ const value = 42;
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('drag selection auto-scrolls near the viewport edge',
-      (tester) async {
+  testWidgets('drag selection auto-scrolls near the viewport edge', (
+    tester,
+  ) async {
     final selectionController = MarkdownSelectionController();
     final buffer = StringBuffer();
     for (var index = 0; index < 40; index++) {
@@ -4387,8 +4368,9 @@ const value = 42;
     await gesture.up();
     await tester.pumpAndSettle();
 
-    final scrollableState =
-        tester.state<ScrollableState>(find.byType(Scrollable));
+    final scrollableState = tester.state<ScrollableState>(
+      find.byType(Scrollable),
+    );
     expect(scrollableState.position.pixels, greaterThan(0));
     expect(selectionController.hasSelection, isTrue);
     expect(selectionController.selectedPlainText, contains('Paragraph 0'));
@@ -4430,8 +4412,8 @@ const scrollTargetIdentifierWithVeryLongSuffixAndExtraCharactersForAutoScroll = 
       (widget) =>
           widget is RichText &&
           widget.text.toPlainText().contains(
-                'const scrollTargetIdentifierWithVeryLongSuffixAndExtraCharactersForAutoScroll = 42;',
-              ),
+            'const scrollTargetIdentifierWithVeryLongSuffixAndExtraCharactersForAutoScroll = 42;',
+          ),
     );
     final richText = tester.widget<RichText>(richTextFinder);
     final renderBox = tester.renderObject<RenderBox>(richTextFinder);
@@ -4527,12 +4509,12 @@ const scrollTargetIdentifierWithVeryLongSuffixAndExtraCharactersForAutoScroll = 
 
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(SystemChannels.platform, (methodCall) async {
-      if (methodCall.method == 'Clipboard.setData') {
-        final arguments = methodCall.arguments as Map<Object?, Object?>;
-        copiedText = arguments['text'] as String?;
-      }
-      return null;
-    });
+          if (methodCall.method == 'Clipboard.setData') {
+            final arguments = methodCall.arguments as Map<Object?, Object?>;
+            copiedText = arguments['text'] as String?;
+          }
+          return null;
+        });
 
     addTearDown(() {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -4820,9 +4802,7 @@ const veryLongValueName = 42;
     );
 
     final scrollable = tester
-        .widgetList<SingleChildScrollView>(
-          find.byType(SingleChildScrollView),
-        )
+        .widgetList<SingleChildScrollView>(find.byType(SingleChildScrollView))
         .firstWhere((widget) => widget.scrollDirection == Axis.horizontal);
     scrollable.controller!.jumpTo(60);
     await tester.pump();
@@ -5035,8 +5015,7 @@ const veryLongValueName = 42;
           body: SizedBox(
             width: 320,
             child: MarkdownWidget(
-              data:
-                  '3. Use the theme button in the app bar to switch the reading surface.',
+              data: '3. Use the theme button in the app bar to switch the reading surface.',
               selectionController: selectionController,
             ),
           ),
@@ -5078,61 +5057,60 @@ const veryLongValueName = 42;
   });
 
   testWidgets(
-      'wrapped list hit testing keeps content selection in the line gutter', (
-    tester,
-  ) async {
-    final selectionController = MarkdownSelectionController();
+    'wrapped list hit testing keeps content selection in the line gutter',
+    (tester) async {
+      final selectionController = MarkdownSelectionController();
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SizedBox(
-            width: 320,
-            child: MarkdownWidget(
-              data:
-                  '3. Use the theme button in the app bar to switch the reading surface.',
-              selectionController: selectionController,
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 320,
+              child: MarkdownWidget(
+                data: '3. Use the theme button in the app bar to switch the reading surface.',
+                selectionController: selectionController,
+              ),
             ),
           ),
         ),
-      ),
-    );
+      );
 
-    final listBlockFinder = find.byWidgetPredicate(
-      (widget) =>
-          widget is SelectableMarkdownBlock &&
-          widget.spec.plainText.contains('Use the theme button'),
-    );
-    final listBlock = tester.widget<SelectableMarkdownBlock>(listBlockFinder);
-    final listContext = tester.element(listBlockFinder);
-    final listSize = tester.getSize(listBlockFinder);
-    final fullSelectionRects = listBlock.spec.selectionRectResolver!(
-      listContext,
-      listSize,
-      DocumentRange(
-        start: const DocumentPosition(
-          blockIndex: 0,
-          path: PathInBlock(<int>[0]),
-          textOffset: 0,
+      final listBlockFinder = find.byWidgetPredicate(
+        (widget) =>
+            widget is SelectableMarkdownBlock &&
+            widget.spec.plainText.contains('Use the theme button'),
+      );
+      final listBlock = tester.widget<SelectableMarkdownBlock>(listBlockFinder);
+      final listContext = tester.element(listBlockFinder);
+      final listSize = tester.getSize(listBlockFinder);
+      final fullSelectionRects = listBlock.spec.selectionRectResolver!(
+        listContext,
+        listSize,
+        DocumentRange(
+          start: const DocumentPosition(
+            blockIndex: 0,
+            path: PathInBlock(<int>[0]),
+            textOffset: 0,
+          ),
+          end: DocumentPosition(
+            blockIndex: 0,
+            path: const PathInBlock(<int>[0]),
+            textOffset: listBlock.spec.plainText.length,
+          ),
         ),
-        end: DocumentPosition(
-          blockIndex: 0,
-          path: const PathInBlock(<int>[0]),
-          textOffset: listBlock.spec.plainText.length,
-        ),
-      ),
-    )..sort((a, b) => a.top.compareTo(b.top));
+      )..sort((a, b) => a.top.compareTo(b.top));
 
-    expect(fullSelectionRects.length, greaterThanOrEqualTo(2));
-    final secondLineRect = fullSelectionRects[1];
-    final resolvedOffset = listBlock.spec.textOffsetResolver!(
-      listContext,
-      listSize,
-      Offset(secondLineRect.left - 2, secondLineRect.center.dy),
-    );
+      expect(fullSelectionRects.length, greaterThanOrEqualTo(2));
+      final secondLineRect = fullSelectionRects[1];
+      final resolvedOffset = listBlock.spec.textOffsetResolver!(
+        listContext,
+        listSize,
+        Offset(secondLineRect.left - 2, secondLineRect.center.dy),
+      );
 
-    expect(resolvedOffset, greaterThan(3));
-  });
+      expect(resolvedOffset, greaterThan(3));
+    },
+  );
 
   test('pretext selection rects merge overlapping inline style boxes', () {
     final layout = computeMarkdownPretextLayoutFromRuns(
@@ -5185,9 +5163,11 @@ const veryLongValueName = 42;
     );
 
     for (var index = 0; index < rects.length; index++) {
-      for (var otherIndex = index + 1;
-          otherIndex < rects.length;
-          otherIndex++) {
+      for (
+        var otherIndex = index + 1;
+        otherIndex < rects.length;
+        otherIndex++
+      ) {
         expect(
           _hasMeaningfulHorizontalOverlap(rects[index], rects[otherIndex]),
           isFalse,
@@ -5197,85 +5177,88 @@ const veryLongValueName = 42;
   });
 
   testWidgets(
-      'quote renders without raw markdown marker and remains selectable', (
-    tester,
-  ) async {
-    final selectionController = MarkdownSelectionController();
+    'quote renders without raw markdown marker and remains selectable',
+    (tester) async {
+      final selectionController = MarkdownSelectionController();
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: MarkdownWidget(
-            data: '''
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MarkdownWidget(
+              data: '''
 > Quoted line
 > Next line
 ''',
-            selectionController: selectionController,
+              selectionController: selectionController,
+            ),
           ),
         ),
-      ),
-    );
+      );
 
-    final richTextFinder = find.byWidgetPredicate(
-      (widget) =>
-          widget is RichText &&
-          widget.text.toPlainText().contains('Quoted line'),
-    );
-    final rawMarkdownFinder = find.byWidgetPredicate(
-      (widget) =>
-          widget is RichText &&
-          widget.text.toPlainText().contains('> Quoted line'),
-    );
+      final richTextFinder = find.byWidgetPredicate(
+        (widget) =>
+            widget is RichText &&
+            widget.text.toPlainText().contains('Quoted line'),
+      );
+      final rawMarkdownFinder = find.byWidgetPredicate(
+        (widget) =>
+            widget is RichText &&
+            widget.text.toPlainText().contains('> Quoted line'),
+      );
 
-    expect(rawMarkdownFinder, findsNothing);
+      expect(rawMarkdownFinder, findsNothing);
 
-    final richText = tester.widget<RichText>(richTextFinder);
-    final theme = MarkdownTheme.of(tester.element(find.byType(MarkdownWidget)));
-    final quotedStyle = _styleForText(richText.text, 'Quoted line');
-    expect(quotedStyle?.fontSize, theme.quoteStyle.fontSize);
-    expect(quotedStyle?.color, theme.quoteStyle.color);
+      final richText = tester.widget<RichText>(richTextFinder);
+      final theme = MarkdownTheme.of(
+        tester.element(find.byType(MarkdownWidget)),
+      );
+      final quotedStyle = _styleForText(richText.text, 'Quoted line');
+      expect(quotedStyle?.fontSize, theme.quoteStyle.fontSize);
+      expect(quotedStyle?.color, theme.quoteStyle.color);
 
-    final renderBox = tester.renderObject<RenderBox>(richTextFinder);
-    final painter = TextPainter(
-      text: richText.text,
-      textDirection: TextDirection.ltr,
-    )..layout(maxWidth: renderBox.size.width);
+      final renderBox = tester.renderObject<RenderBox>(richTextFinder);
+      final painter = TextPainter(
+        text: richText.text,
+        textDirection: TextDirection.ltr,
+      )..layout(maxWidth: renderBox.size.width);
 
-    final startOffset = painter.getOffsetForCaret(
-      const TextPosition(offset: 0),
-      Rect.zero,
-    );
-    final endOffset = painter.getOffsetForCaret(
-      const TextPosition(offset: 6),
-      Rect.zero,
-    );
-    final start = renderBox.localToGlobal(startOffset + const Offset(1, 8));
-    final end = renderBox.localToGlobal(endOffset + const Offset(1, 8));
+      final startOffset = painter.getOffsetForCaret(
+        const TextPosition(offset: 0),
+        Rect.zero,
+      );
+      final endOffset = painter.getOffsetForCaret(
+        const TextPosition(offset: 6),
+        Rect.zero,
+      );
+      final start = renderBox.localToGlobal(startOffset + const Offset(1, 8));
+      final end = renderBox.localToGlobal(endOffset + const Offset(1, 8));
 
-    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
-    await gesture.addPointer(location: start);
-    await gesture.down(start);
-    await tester.pump();
-    await gesture.moveTo(end);
-    await tester.pump();
-    await gesture.up();
-    await tester.pump();
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await gesture.addPointer(location: start);
+      await gesture.down(start);
+      await tester.pump();
+      await gesture.moveTo(end);
+      await tester.pump();
+      await gesture.up();
+      await tester.pump();
 
-    expect(selectionController.hasSelection, isTrue);
-    expect(selectionController.selectedPlainText, 'Quoted');
+      expect(selectionController.hasSelection, isTrue);
+      expect(selectionController.selectedPlainText, 'Quoted');
 
-    final paintFinder = find.ancestor(
-      of: richTextFinder,
-      matching: find.byType(CustomPaint),
-    );
-    expect(
-      tester.widget<CustomPaint>(paintFinder.first).foregroundPainter,
-      isNotNull,
-    );
-  });
+      final paintFinder = find.ancestor(
+        of: richTextFinder,
+        matching: find.byType(CustomPaint),
+      );
+      expect(
+        tester.widget<CustomPaint>(paintFinder.first).foregroundPainter,
+        isNotNull,
+      );
+    },
+  );
 
-  testWidgets('quote partial selection does not paint the next visual line',
-      (tester) async {
+  testWidgets('quote partial selection does not paint the next visual line', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       const MaterialApp(
         home: Scaffold(
@@ -5333,68 +5316,67 @@ const veryLongValueName = 42;
   });
 
   testWidgets(
-      'quote uses a separate rounded side bar with transparent background', (
-    tester,
-  ) async {
-    late MarkdownThemeData theme;
+    'quote uses a separate rounded side bar with transparent background',
+    (tester) async {
+      late MarkdownThemeData theme;
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: Builder(
-            builder: (context) {
-              theme = MarkdownThemeData.fallback(context).copyWith(
-                quoteBackgroundColor: Colors.transparent,
-                quoteBorderRadius: BorderRadius.circular(4),
-              );
-              return MarkdownWidget(
-                data: '> Quoted line',
-                theme: theme,
-              );
-            },
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) {
+                theme = MarkdownThemeData.fallback(context).copyWith(
+                  quoteBackgroundColor: Colors.transparent,
+                  quoteBorderRadius: BorderRadius.circular(4),
+                );
+                return MarkdownWidget(data: '> Quoted line', theme: theme);
+              },
+            ),
           ),
         ),
-      ),
-    );
+      );
 
-    final backgroundBox = tester.widget<DecoratedBox>(
-      find
-          .ancestor(
-            of: find.text('Quoted line'),
-            matching: find.byType(DecoratedBox),
-          )
-          .last,
-    );
-    final backgroundDecoration = backgroundBox.decoration as BoxDecoration;
-    expect(backgroundDecoration.color, theme.quoteBackgroundColor);
-    expect(backgroundDecoration.borderRadius, theme.quoteBorderRadius);
-    expect(backgroundDecoration.border, isNull);
+      final backgroundBox = tester.widget<DecoratedBox>(
+        find
+            .ancestor(
+              of: find.text('Quoted line'),
+              matching: find.byType(DecoratedBox),
+            )
+            .last,
+      );
+      final backgroundDecoration = backgroundBox.decoration as BoxDecoration;
+      expect(backgroundDecoration.color, theme.quoteBackgroundColor);
+      expect(backgroundDecoration.borderRadius, theme.quoteBorderRadius);
+      expect(backgroundDecoration.border, isNull);
 
-    final sideBar = tester.widget<DecoratedBox>(
-      find.descendant(
-        of: find.byType(MarkdownQuoteBlockView),
-        matching: find.byWidgetPredicate((widget) {
-          if (widget is! DecoratedBox) {
-            return false;
-          }
-          final decoration = widget.decoration;
-          return decoration is BoxDecoration &&
-              decoration.color == theme.quoteBorderColor;
-        }),
-      ),
-    );
-    final sideBarDecoration = sideBar.decoration as BoxDecoration;
-    expect(sideBarDecoration.borderRadius,
-        BorderRadius.horizontal(left: theme.quoteBorderRadius.topLeft));
+      final sideBar = tester.widget<DecoratedBox>(
+        find.descendant(
+          of: find.byType(MarkdownQuoteBlockView),
+          matching: find.byWidgetPredicate((widget) {
+            if (widget is! DecoratedBox) {
+              return false;
+            }
+            final decoration = widget.decoration;
+            return decoration is BoxDecoration &&
+                decoration.color == theme.quoteBorderColor;
+          }),
+        ),
+      );
+      final sideBarDecoration = sideBar.decoration as BoxDecoration;
+      expect(
+        sideBarDecoration.borderRadius,
+        BorderRadius.horizontal(left: theme.quoteBorderRadius.topLeft),
+      );
 
-    final sideBarSize = tester.widget<SizedBox>(
-      find.descendant(
-        of: find.byWidget(sideBar),
-        matching: find.byType(SizedBox),
-      ),
-    );
-    expect(sideBarSize.width, theme.quoteBorderWidth);
-  });
+      final sideBarSize = tester.widget<SizedBox>(
+        find.descendant(
+          of: find.byWidget(sideBar),
+          matching: find.byType(SizedBox),
+        ),
+      );
+      expect(sideBarSize.width, theme.quoteBorderWidth);
+    },
+  );
 
   testWidgets('quote style applies to nested heading list and inline code', (
     tester,
@@ -5439,8 +5421,9 @@ const veryLongValueName = 42;
             widget.runs?.any((run) => run.text == 'code') == true,
       ),
     );
-    final codeStyle =
-        listTextBlock.runs!.singleWhere((run) => run.text == 'code').style;
+    final codeStyle = listTextBlock.runs!
+        .singleWhere((run) => run.text == 'code')
+        .style;
     expect(codeStyle.color, theme.quoteStyle.color);
     expect(codeStyle.fontStyle, theme.quoteStyle.fontStyle);
 
@@ -5460,8 +5443,10 @@ const veryLongValueName = 42;
           )
           .first,
     );
-    final descriptorLinkStyle =
-        _styleForText(quoteBlock.spec.textSpan!, 'quoted link');
+    final descriptorLinkStyle = _styleForText(
+      quoteBlock.spec.textSpan!,
+      'quoted link',
+    );
     expect(descriptorLinkStyle?.color, theme.linkStyle.color);
     expect(descriptorLinkStyle?.decoration, theme.linkStyle.decoration);
   });
@@ -5472,9 +5457,7 @@ const veryLongValueName = 42;
     await tester.pumpWidget(
       const MaterialApp(
         home: Scaffold(
-          body: MarkdownWidget(
-            data: '## [Title `code`](https://example.com)',
-          ),
+          body: MarkdownWidget(data: '## [Title `code`](https://example.com)'),
         ),
       ),
     );
@@ -5488,13 +5471,15 @@ const veryLongValueName = 42;
       ),
     );
 
-    final titleStyle =
-        headingTextBlock.runs!.singleWhere((run) => run.text == 'Title ').style;
+    final titleStyle = headingTextBlock.runs!
+        .singleWhere((run) => run.text == 'Title ')
+        .style;
     expect(titleStyle.color, theme.linkStyle.color);
     expect(titleStyle.fontSize, theme.heading2Style.fontSize);
 
-    final codeStyle =
-        headingTextBlock.runs!.singleWhere((run) => run.text == 'code').style;
+    final codeStyle = headingTextBlock.runs!
+        .singleWhere((run) => run.text == 'code')
+        .style;
     expect(codeStyle.color, theme.linkStyle.color);
     expect(codeStyle.fontFamily, theme.inlineCodeStyle.fontFamily);
     expect(codeStyle.fontSize, theme.heading2Style.fontSize);
@@ -5560,8 +5545,9 @@ const veryLongValueName = 42;
     final globalSelectionRects = selectionRects
         .map((rect) => rect.shift(quoteOrigin))
         .toList(growable: false);
-    final headingRenderBox =
-        tester.renderObject<RenderBox>(headingFinder.first);
+    final headingRenderBox = tester.renderObject<RenderBox>(
+      headingFinder.first,
+    );
     final headingRect =
         headingRenderBox.localToGlobal(Offset.zero) & headingRenderBox.size;
     final nestedRenderBox = tester.renderObject<RenderBox>(nestedFinder.first);
@@ -5573,52 +5559,52 @@ const veryLongValueName = 42;
     expect(selectionController.selectedPlainText, contains('Nested line'));
     expect(selectionController.selectedPlainText, isNot(contains('>')));
     expect(globalSelectionRects, hasLength(3));
+    expect(globalSelectionRects.first.overlaps(headingRect.deflate(1)), isTrue);
+    expect(globalSelectionRects.last.overlaps(nestedRect.deflate(1)), isTrue);
     expect(
-      globalSelectionRects.first.overlaps(headingRect.deflate(1)),
-      isTrue,
+      globalSelectionRects.first.center.dy,
+      lessThan(nestedRect.center.dy),
     );
     expect(
-      globalSelectionRects.last.overlaps(nestedRect.deflate(1)),
-      isTrue,
+      globalSelectionRects.last.center.dy,
+      greaterThan(headingRect.center.dy),
     );
-    expect(
-        globalSelectionRects.first.center.dy, lessThan(nestedRect.center.dy));
-    expect(globalSelectionRects.last.center.dy,
-        greaterThan(headingRect.center.dy));
   });
 
   testWidgets(
-      'quoted code blocks subscribe selection overlay to nested horizontal scrolls',
-      (tester) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SizedBox(
-            width: 220,
-            child: MarkdownWidget(
-              data: '''
+    'quoted code blocks subscribe selection overlay to nested horizontal scrolls',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 220,
+              child: MarkdownWidget(
+                data: '''
 > ```dart
 > const veryLongValueName = 42;
 > ```
 ''',
+              ),
             ),
           ),
         ),
-      ),
-    );
+      );
 
-    final quoteFinder = find.byWidgetPredicate(
-      (widget) =>
-          widget is SelectableMarkdownBlock &&
-          widget.spec.plainText.contains('const veryLongValueName = 42;'),
-    );
-    final quoteWidget = tester.widget<SelectableMarkdownBlock>(quoteFinder);
+      final quoteFinder = find.byWidgetPredicate(
+        (widget) =>
+            widget is SelectableMarkdownBlock &&
+            widget.spec.plainText.contains('const veryLongValueName = 42;'),
+      );
+      final quoteWidget = tester.widget<SelectableMarkdownBlock>(quoteFinder);
 
-    expect(quoteWidget.spec.repaintListenable, isNotNull);
-  });
+      expect(quoteWidget.spec.repaintListenable, isNotNull);
+    },
+  );
 
-  testWidgets('quoted code block selection is clipped to the nested viewport',
-      (tester) async {
+  testWidgets('quoted code block selection is clipped to the nested viewport', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -5669,83 +5655,88 @@ const veryLongValueName = 42;
   });
 
   testWidgets(
-      'quoted code blocks merge adjacent syntax-highlight selection boxes', (
-    tester,
-  ) async {
-    final selectionController = MarkdownSelectionController();
+    'quoted code blocks merge adjacent syntax-highlight selection boxes',
+    (tester) async {
+      final selectionController = MarkdownSelectionController();
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: MarkdownWidget(
-            data: '''
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MarkdownWidget(
+              data: '''
 > ```python
 > for i in range(3):
 >     print(i)
 > ```
 ''',
-            selectionController: selectionController,
+              selectionController: selectionController,
+            ),
           ),
         ),
-      ),
-    );
+      );
 
-    final quoteFinder = find.byWidgetPredicate(
-      (widget) =>
-          widget is SelectableMarkdownBlock &&
-          widget.spec.plainText.contains('for i in range(3):'),
-    );
-    final quoteWidget = tester.widget<SelectableMarkdownBlock>(quoteFinder);
-    final quoteElement = tester.element(quoteFinder);
-    final quoteRenderBox = tester.renderObject<RenderBox>(quoteFinder);
-    final lineTextFinder = find.byWidgetPredicate(
-      (widget) =>
-          widget is RichText &&
-          widget.text.toPlainText().contains('for i in range(3):'),
-    );
-    final lineRenderBox = tester.renderObject<RenderBox>(lineTextFinder.first);
-    final lineRect =
-        lineRenderBox.localToGlobal(Offset.zero) & lineRenderBox.size;
+      final quoteFinder = find.byWidgetPredicate(
+        (widget) =>
+            widget is SelectableMarkdownBlock &&
+            widget.spec.plainText.contains('for i in range(3):'),
+      );
+      final quoteWidget = tester.widget<SelectableMarkdownBlock>(quoteFinder);
+      final quoteElement = tester.element(quoteFinder);
+      final quoteRenderBox = tester.renderObject<RenderBox>(quoteFinder);
+      final lineTextFinder = find.byWidgetPredicate(
+        (widget) =>
+            widget is RichText &&
+            widget.text.toPlainText().contains('for i in range(3):'),
+      );
+      final lineRenderBox = tester.renderObject<RenderBox>(
+        lineTextFinder.first,
+      );
+      final lineRect =
+          lineRenderBox.localToGlobal(Offset.zero) & lineRenderBox.size;
 
-    final selectionRects = quoteWidget.spec.selectionRectResolver!.call(
-      quoteElement,
-      quoteRenderBox.size,
-      DocumentRange(
-        start: const DocumentPosition(
-          blockIndex: 0,
-          path: PathInBlock(<int>[0]),
-          textOffset: 0,
+      final selectionRects = quoteWidget.spec.selectionRectResolver!.call(
+        quoteElement,
+        quoteRenderBox.size,
+        DocumentRange(
+          start: const DocumentPosition(
+            blockIndex: 0,
+            path: PathInBlock(<int>[0]),
+            textOffset: 0,
+          ),
+          end: DocumentPosition(
+            blockIndex: 0,
+            path: const PathInBlock(<int>[0]),
+            textOffset: quoteWidget.spec.plainText.length,
+          ),
         ),
-        end: DocumentPosition(
-          blockIndex: 0,
-          path: const PathInBlock(<int>[0]),
-          textOffset: quoteWidget.spec.plainText.length,
-        ),
-      ),
-    );
-    final quoteOrigin = quoteRenderBox.localToGlobal(Offset.zero);
-    final globalRects = selectionRects
-        .map((rect) => rect.shift(quoteOrigin))
-        .where(
-          (rect) =>
-              rect.bottom > lineRect.top + 1 && rect.top < lineRect.bottom - 1,
-        )
-        .toList(growable: false);
+      );
+      final quoteOrigin = quoteRenderBox.localToGlobal(Offset.zero);
+      final globalRects = selectionRects
+          .map((rect) => rect.shift(quoteOrigin))
+          .where(
+            (rect) =>
+                rect.bottom > lineRect.top + 1 &&
+                rect.top < lineRect.bottom - 1,
+          )
+          .toList(growable: false);
 
-    for (var index = 0; index < globalRects.length; index++) {
-      for (var otherIndex = index + 1;
+      for (var index = 0; index < globalRects.length; index++) {
+        for (
+          var otherIndex = index + 1;
           otherIndex < globalRects.length;
-          otherIndex++) {
-        expect(
-          _hasMeaningfulHorizontalOverlap(
-            globalRects[index],
-            globalRects[otherIndex],
-          ),
-          isFalse,
-        );
+          otherIndex++
+        ) {
+          expect(
+            _hasMeaningfulHorizontalOverlap(
+              globalRects[index],
+              globalRects[otherIndex],
+            ),
+            isFalse,
+          );
+        }
       }
-    }
-  });
+    },
+  );
 
   testWidgets('quoted table selection is clipped to the nested viewport', (
     tester,
@@ -5801,80 +5792,83 @@ const veryLongValueName = 42;
   });
 
   testWidgets(
-      'quote gap below a list keeps downward selection anchored at the list end',
-      (tester) async {
-    final selectionController = MarkdownSelectionController();
+    'quote gap below a list keeps downward selection anchored at the list end',
+    (tester) async {
+      final selectionController = MarkdownSelectionController();
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: MarkdownWidget(
-            data: '''
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MarkdownWidget(
+              data: '''
 > - First item
 > - Second item
 >
 > After block
 ''',
-            selectionController: selectionController,
+              selectionController: selectionController,
+            ),
           ),
         ),
-      ),
-    );
+      );
 
-    final secondFinder = find.byWidgetPredicate(
-      (widget) =>
-          widget is RichText &&
-          widget.text.toPlainText().contains('Second item'),
-    );
-    final afterFinder = find.byWidgetPredicate(
-      (widget) =>
-          widget is RichText &&
-          widget.text.toPlainText().contains('After block'),
-    );
-    final quoteFinder = find.byWidgetPredicate(
-      (widget) =>
-          widget is SelectableMarkdownBlock &&
-          widget.spec.plainText.contains('Second item') &&
-          widget.spec.plainText.contains('After block'),
-    );
-    final quoteWidget = tester.widget<SelectableMarkdownBlock>(quoteFinder);
-    final quoteElement = tester.element(quoteFinder);
-    final quoteRenderBox = tester.renderObject<RenderBox>(quoteFinder);
-    final secondRenderBox = tester.renderObject<RenderBox>(secondFinder.first);
-    final secondRect =
-        secondRenderBox.localToGlobal(Offset.zero) & secondRenderBox.size;
-    final afterRenderBox = tester.renderObject<RenderBox>(afterFinder.first);
-    final afterRect =
-        afterRenderBox.localToGlobal(Offset.zero) & afterRenderBox.size;
-    final secondItemPoint = Offset(
-      secondRect.right - 2,
-      secondRect.center.dy,
-    );
-    final gapPoint = Offset(
-      secondRect.center.dx,
-      (secondRect.bottom + afterRect.top) / 2,
-    );
-    final secondItemOffset = quoteWidget.spec.textOffsetResolver!(
-      quoteElement,
-      quoteRenderBox.size,
-      quoteRenderBox.globalToLocal(secondItemPoint),
-    );
-    final gapOffset = quoteWidget.spec.textOffsetResolver!(
-      quoteElement,
-      quoteRenderBox.size,
-      quoteRenderBox.globalToLocal(gapPoint),
-    );
-    final afterOffset = quoteWidget.spec.plainText.indexOf('After block');
+      final secondFinder = find.byWidgetPredicate(
+        (widget) =>
+            widget is RichText &&
+            widget.text.toPlainText().contains('Second item'),
+      );
+      final afterFinder = find.byWidgetPredicate(
+        (widget) =>
+            widget is RichText &&
+            widget.text.toPlainText().contains('After block'),
+      );
+      final quoteFinder = find.byWidgetPredicate(
+        (widget) =>
+            widget is SelectableMarkdownBlock &&
+            widget.spec.plainText.contains('Second item') &&
+            widget.spec.plainText.contains('After block'),
+      );
+      final quoteWidget = tester.widget<SelectableMarkdownBlock>(quoteFinder);
+      final quoteElement = tester.element(quoteFinder);
+      final quoteRenderBox = tester.renderObject<RenderBox>(quoteFinder);
+      final secondRenderBox = tester.renderObject<RenderBox>(
+        secondFinder.first,
+      );
+      final secondRect =
+          secondRenderBox.localToGlobal(Offset.zero) & secondRenderBox.size;
+      final afterRenderBox = tester.renderObject<RenderBox>(afterFinder.first);
+      final afterRect =
+          afterRenderBox.localToGlobal(Offset.zero) & afterRenderBox.size;
+      final secondItemPoint = Offset(
+        secondRect.right - 2,
+        secondRect.center.dy,
+      );
+      final gapPoint = Offset(
+        secondRect.center.dx,
+        (secondRect.bottom + afterRect.top) / 2,
+      );
+      final secondItemOffset = quoteWidget.spec.textOffsetResolver!(
+        quoteElement,
+        quoteRenderBox.size,
+        quoteRenderBox.globalToLocal(secondItemPoint),
+      );
+      final gapOffset = quoteWidget.spec.textOffsetResolver!(
+        quoteElement,
+        quoteRenderBox.size,
+        quoteRenderBox.globalToLocal(gapPoint),
+      );
+      final afterOffset = quoteWidget.spec.plainText.indexOf('After block');
 
-    expect(secondItemOffset, isNotNull);
-    expect(gapOffset, isNotNull);
+      expect(secondItemOffset, isNotNull);
+      expect(gapOffset, isNotNull);
 
-    final resolvedSecondItemOffset = secondItemOffset!;
-    final resolvedGapOffset = gapOffset!;
-    expect(resolvedSecondItemOffset, greaterThan(0));
-    expect(resolvedGapOffset, greaterThanOrEqualTo(resolvedSecondItemOffset));
-    expect(resolvedGapOffset, lessThanOrEqualTo(afterOffset));
-  });
+      final resolvedSecondItemOffset = secondItemOffset!;
+      final resolvedGapOffset = gapOffset!;
+      expect(resolvedSecondItemOffset, greaterThan(0));
+      expect(resolvedGapOffset, greaterThanOrEqualTo(resolvedSecondItemOffset));
+      expect(resolvedGapOffset, lessThanOrEqualTo(afterOffset));
+    },
+  );
 
   testWidgets('nested lists keep selection backgrounds aligned to item text', (
     tester,
@@ -5996,42 +5990,41 @@ const veryLongValueName = 42;
   });
 
   testWidgets(
-      'dragging inside an image caption with unknown size selects caption text',
-      (
-    tester,
-  ) async {
-    final selectionController = MarkdownSelectionController();
+    'dragging inside an image caption with unknown size selects caption text',
+    (tester) async {
+      final selectionController = MarkdownSelectionController();
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: MarkdownWidget(
-            data: '![Caption text](missing-image.png)',
-            selectionController: selectionController,
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MarkdownWidget(
+              data: '![Caption text](missing-image.png)',
+              selectionController: selectionController,
+            ),
           ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    final captionFinder = find.text('Caption text');
-    expect(captionFinder, findsOneWidget);
+      final captionFinder = find.text('Caption text');
+      expect(captionFinder, findsOneWidget);
 
-    final start = tester.getTopLeft(captionFinder) + const Offset(1, 4);
-    final end = tester.getTopRight(captionFinder) + const Offset(-1, 4);
+      final start = tester.getTopLeft(captionFinder) + const Offset(1, 4);
+      final end = tester.getTopRight(captionFinder) + const Offset(-1, 4);
 
-    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
-    await gesture.addPointer(location: start);
-    await gesture.down(start);
-    await tester.pump();
-    await gesture.moveTo(end);
-    await tester.pump();
-    await gesture.up();
-    await tester.pump();
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await gesture.addPointer(location: start);
+      await gesture.down(start);
+      await tester.pump();
+      await gesture.moveTo(end);
+      await tester.pump();
+      await gesture.up();
+      await tester.pump();
 
-    expect(selectionController.hasSelection, isTrue);
-    expect(selectionController.selectedPlainText, 'Caption text');
-  });
+      expect(selectionController.hasSelection, isTrue);
+      expect(selectionController.selectedPlainText, 'Caption text');
+    },
+  );
 
   testWidgets('custom imageBuilder blocks participate in selection', (
     tester,
@@ -6074,19 +6067,20 @@ const veryLongValueName = 42;
     expect(selectionController.selectedPlainText, 'Custom caption');
   });
 
-  testWidgets('dragging across table cells copies TSV selection',
-      (tester) async {
+  testWidgets('dragging across table cells copies TSV selection', (
+    tester,
+  ) async {
     String? copiedText;
     final selectionController = MarkdownSelectionController();
 
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(SystemChannels.platform, (methodCall) async {
-      if (methodCall.method == 'Clipboard.setData') {
-        final arguments = methodCall.arguments as Map<Object?, Object?>;
-        copiedText = arguments['text'] as String?;
-      }
-      return null;
-    });
+          if (methodCall.method == 'Clipboard.setData') {
+            final arguments = methodCall.arguments as Map<Object?, Object?>;
+            copiedText = arguments['text'] as String?;
+          }
+          return null;
+        });
 
     addTearDown(() {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -6165,425 +6159,439 @@ const veryLongValueName = 42;
   });
 
   testWidgets(
-      'triple click inside a table cell with inline math selects the whole cell',
-      (tester) async {
-    final selectionController = MarkdownSelectionController();
+    'triple click inside a table cell with inline math selects the whole cell',
+    (tester) async {
+      final selectionController = MarkdownSelectionController();
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: MarkdownWidget(
-            data: r'''
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MarkdownWidget(
+              data: r'''
 | Feature | Description | Status |
 | :--- | :---: | ---: |
 | **Math** | Full LaTeX parsing & rendering (\( \alpha^2 \)) | ✅ |
 ''',
-            selectionController: selectionController,
+              selectionController: selectionController,
+            ),
           ),
         ),
-      ),
-    );
+      );
 
-    final target = tester.getCenter(find.textContaining('LaTeX'));
+      final target = tester.getCenter(find.textContaining('LaTeX'));
 
-    await _tripleTapAt(tester, target);
+      await _tripleTapAt(tester, target);
 
-    expect(selectionController.hasSelection, isTrue);
-    expect(
-      selectionController.selectedPlainText,
-      contains('Full LaTeX parsing & rendering'),
-    );
-    expect(selectionController.selectedPlainText, contains(r'\alpha^2'));
-    expect(selectionController.selectedPlainText, isNot(contains('\t')));
-    expect(selectionController.selectedPlainText, isNot(contains('\n')));
-  });
+      expect(selectionController.hasSelection, isTrue);
+      expect(
+        selectionController.selectedPlainText,
+        contains('Full LaTeX parsing & rendering'),
+      );
+      expect(selectionController.selectedPlainText, contains(r'\alpha^2'));
+      expect(selectionController.selectedPlainText, isNot(contains('\t')));
+      expect(selectionController.selectedPlainText, isNot(contains('\n')));
+    },
+  );
 
   testWidgets(
-      'table block refreshes cached selection visuals when the selection range changes',
-      (tester) async {
-    final selectionController = MarkdownSelectionController();
+    'table block refreshes cached selection visuals when the selection range changes',
+    (tester) async {
+      final selectionController = MarkdownSelectionController();
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: MarkdownWidget(
-            data: '''
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MarkdownWidget(
+              data: '''
 | Name | Value |
 | --- | --- |
 | row | 42 |
 ''',
-            selectionController: selectionController,
+              selectionController: selectionController,
+            ),
           ),
         ),
-      ),
-    );
+      );
 
-    final tableBlockFinder = find.byWidgetPredicate(
-      (widget) =>
-          widget is SelectableMarkdownBlock &&
-          widget.spec.plainText == 'Name\tValue\nrow\t42',
-    );
-    expect(tableBlockFinder, findsOneWidget);
+      final tableBlockFinder = find.byWidgetPredicate(
+        (widget) =>
+            widget is SelectableMarkdownBlock &&
+            widget.spec.plainText == 'Name\tValue\nrow\t42',
+      );
+      expect(tableBlockFinder, findsOneWidget);
 
-    selectionController.setSelection(
-      const DocumentSelection(
-        base: DocumentPosition(
-          blockIndex: 0,
-          path: PathInBlock(<int>[0]),
-          textOffset: 0,
+      selectionController.setSelection(
+        const DocumentSelection(
+          base: DocumentPosition(
+            blockIndex: 0,
+            path: PathInBlock(<int>[0]),
+            textOffset: 0,
+          ),
+          extent: DocumentPosition(
+            blockIndex: 0,
+            path: PathInBlock(<int>[0]),
+            textOffset: 4,
+          ),
         ),
-        extent: DocumentPosition(
-          blockIndex: 0,
-          path: PathInBlock(<int>[0]),
-          textOffset: 4,
+      );
+      await tester.pump();
+
+      var tableBlock = tester.widget<SelectableMarkdownBlock>(tableBlockFinder);
+      expect(tableBlock.selectionRange, isNotNull);
+      expect(tableBlock.selectionRange!.start.textOffset, 0);
+      expect(tableBlock.selectionRange!.end.textOffset, 4);
+
+      selectionController.setSelection(
+        const DocumentSelection(
+          base: DocumentPosition(
+            blockIndex: 0,
+            path: PathInBlock(<int>[0]),
+            textOffset: 15,
+          ),
+          extent: DocumentPosition(
+            blockIndex: 0,
+            path: PathInBlock(<int>[0]),
+            textOffset: 17,
+          ),
         ),
-      ),
-    );
-    await tester.pump();
+      );
+      await tester.pump();
 
-    var tableBlock = tester.widget<SelectableMarkdownBlock>(tableBlockFinder);
-    expect(tableBlock.selectionRange, isNotNull);
-    expect(tableBlock.selectionRange!.start.textOffset, 0);
-    expect(tableBlock.selectionRange!.end.textOffset, 4);
+      tableBlock = tester.widget<SelectableMarkdownBlock>(tableBlockFinder);
+      expect(tableBlock.selectionRange, isNotNull);
+      expect(tableBlock.selectionRange!.start.textOffset, 15);
+      expect(tableBlock.selectionRange!.end.textOffset, 17);
+    },
+  );
 
-    selectionController.setSelection(
-      const DocumentSelection(
-        base: DocumentPosition(
-          blockIndex: 0,
-          path: PathInBlock(<int>[0]),
-          textOffset: 15,
-        ),
-        extent: DocumentPosition(
-          blockIndex: 0,
-          path: PathInBlock(<int>[0]),
-          textOffset: 17,
-        ),
-      ),
-    );
-    await tester.pump();
+  testWidgets(
+    'triple click inside wrapped paragraph selects the current line',
+    (tester) async {
+      final selectionController = MarkdownSelectionController();
 
-    tableBlock = tester.widget<SelectableMarkdownBlock>(tableBlockFinder);
-    expect(tableBlock.selectionRange, isNotNull);
-    expect(tableBlock.selectionRange!.start.textOffset, 15);
-    expect(tableBlock.selectionRange!.end.textOffset, 17);
-  });
-
-  testWidgets('triple click inside wrapped paragraph selects the current line',
-      (
-    tester,
-  ) async {
-    final selectionController = MarkdownSelectionController();
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: Align(
-            alignment: Alignment.topLeft,
-            child: SizedBox(
-              width: 120,
-              child: MarkdownWidget(
-                data: 'alpha  \nbeta  \ngamma',
-                selectionController: selectionController,
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Align(
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: 120,
+                child: MarkdownWidget(
+                  data: 'alpha  \nbeta  \ngamma',
+                  selectionController: selectionController,
+                ),
               ),
             ),
           ),
         ),
-      ),
-    );
+      );
 
-    final paragraphFinder = find.textContaining('alpha', findRichText: true);
-    final rect = tester.getRect(paragraphFinder);
-    final target = Offset(rect.center.dx, rect.top + rect.height / 2);
+      final paragraphFinder = find.textContaining('alpha', findRichText: true);
+      final rect = tester.getRect(paragraphFinder);
+      final target = Offset(rect.center.dx, rect.top + rect.height / 2);
 
-    await tester.tapAt(target);
-    await tester.pump();
-    await tester.tapAt(target);
-    await tester.pump();
-    await tester.tapAt(target);
-    await tester.pump();
+      await tester.tapAt(target);
+      await tester.pump();
+      await tester.tapAt(target);
+      await tester.pump();
+      await tester.tapAt(target);
+      await tester.pump();
 
-    expect(selectionController.hasSelection, isTrue);
-    expect(selectionController.selectedPlainText, 'beta');
-  });
+      expect(selectionController.hasSelection, isTrue);
+      expect(selectionController.selectedPlainText, 'beta');
+    },
+  );
 
   testWidgets(
-      'triple click on wrapped kbd paragraph selects only the first visual line',
-      (tester) async {
-    final selectionController = MarkdownSelectionController();
+    'triple click on wrapped kbd paragraph selects only the first visual line',
+    (tester) async {
+      final selectionController = MarkdownSelectionController();
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: Align(
-            alignment: Alignment.topLeft,
-            child: SizedBox(
-              width: 170,
-              child: MarkdownWidget(
-                data:
-                    'Press <kbd>Ctrl</kbd> + <kbd>C</kbd> to copy the current selection quickly.',
-                selectionController: selectionController,
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Align(
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: 170,
+                child: MarkdownWidget(
+                  data: 'Press <kbd>Ctrl</kbd> + <kbd>C</kbd> to copy the current selection quickly.',
+                  selectionController: selectionController,
+                ),
               ),
             ),
           ),
         ),
-      ),
-    );
+      );
 
-    final blockFinder = find.byWidgetPredicate(
-      (widget) =>
-          widget is SelectableMarkdownBlock &&
-          widget.spec.plainText.contains(
-              'Press Ctrl + C to copy the current selection quickly.'),
-    );
-    final block = tester.widget<SelectableMarkdownBlock>(blockFinder);
-    final blockElement = tester.element(blockFinder);
-    final blockRenderBox = tester.renderObject<RenderBox>(blockFinder);
+      final blockFinder = find.byWidgetPredicate(
+        (widget) =>
+            widget is SelectableMarkdownBlock &&
+            widget.spec.plainText.contains(
+              'Press Ctrl + C to copy the current selection quickly.',
+            ),
+      );
+      final block = tester.widget<SelectableMarkdownBlock>(blockFinder);
+      final blockElement = tester.element(blockFinder);
+      final blockRenderBox = tester.renderObject<RenderBox>(blockFinder);
 
-    final fullRects = block.spec.selectionRectResolver!(
-      blockElement,
-      blockRenderBox.size,
-      DocumentRange(
-        start: const DocumentPosition(
-          blockIndex: 0,
-          path: PathInBlock(<int>[0]),
-          textOffset: 0,
-        ),
-        end: DocumentPosition(
-          blockIndex: 0,
-          path: const PathInBlock(<int>[0]),
-          textOffset: block.spec.plainText.length,
-        ),
-      ),
-    )..sort((a, b) {
-        final topCompare = a.top.compareTo(b.top);
-        if (topCompare != 0) {
-          return topCompare;
-        }
-        return a.left.compareTo(b.left);
-      });
+      final fullRects =
+          block.spec.selectionRectResolver!(
+            blockElement,
+            blockRenderBox.size,
+            DocumentRange(
+              start: const DocumentPosition(
+                blockIndex: 0,
+                path: PathInBlock(<int>[0]),
+                textOffset: 0,
+              ),
+              end: DocumentPosition(
+                blockIndex: 0,
+                path: const PathInBlock(<int>[0]),
+                textOffset: block.spec.plainText.length,
+              ),
+            ),
+          )..sort((a, b) {
+            final topCompare = a.top.compareTo(b.top);
+            if (topCompare != 0) {
+              return topCompare;
+            }
+            return a.left.compareTo(b.left);
+          });
 
-    expect(fullRects.length, greaterThanOrEqualTo(2));
+      expect(fullRects.length, greaterThanOrEqualTo(2));
 
-    bool sameVisualLine(Rect a, Rect b) {
-      return (a.top - b.top).abs() <= 1.0 && (a.bottom - b.bottom).abs() <= 1.0;
-    }
+      bool sameVisualLine(Rect a, Rect b) {
+        return (a.top - b.top).abs() <= 1.0 &&
+            (a.bottom - b.bottom).abs() <= 1.0;
+      }
 
-    final firstLineRects = fullRects
-        .where((rect) => sameVisualLine(rect, fullRects.first))
-        .toList(growable: false);
-    final secondLineAnchor =
-        fullRects.firstWhere((rect) => !sameVisualLine(rect, fullRects.first));
-    final secondLineRects = fullRects
-        .where((rect) => sameVisualLine(rect, secondLineAnchor))
-        .toList(growable: false);
-    final secondLineTop =
-        secondLineRects.map((rect) => rect.top).reduce(math.min);
-    final secondLineStartOffset = block.spec.textOffsetResolver!(
-      blockElement,
-      blockRenderBox.size,
-      Offset(secondLineRects.first.left + 1, secondLineRects.first.center.dy),
-    );
+      final firstLineRects = fullRects
+          .where((rect) => sameVisualLine(rect, fullRects.first))
+          .toList(growable: false);
+      final secondLineAnchor = fullRects.firstWhere(
+        (rect) => !sameVisualLine(rect, fullRects.first),
+      );
+      final secondLineRects = fullRects
+          .where((rect) => sameVisualLine(rect, secondLineAnchor))
+          .toList(growable: false);
+      final secondLineTop = secondLineRects
+          .map((rect) => rect.top)
+          .reduce(math.min);
+      final secondLineStartOffset = block.spec.textOffsetResolver!(
+        blockElement,
+        blockRenderBox.size,
+        Offset(secondLineRects.first.left + 1, secondLineRects.first.center.dy),
+      );
 
-    final target = blockRenderBox.localToGlobal(firstLineRects.first.center);
+      final target = blockRenderBox.localToGlobal(firstLineRects.first.center);
 
-    await tester.tapAt(target);
-    await tester.pump();
-    await tester.tapAt(target);
-    await tester.pump();
-    await tester.tapAt(target);
-    await tester.pump();
+      await tester.tapAt(target);
+      await tester.pump();
+      await tester.tapAt(target);
+      await tester.pump();
+      await tester.tapAt(target);
+      await tester.pump();
 
-    expect(selectionController.hasSelection, isTrue);
-    expect(selectionController.selectedPlainText.length,
-        lessThan(block.spec.plainText.length));
+      expect(selectionController.hasSelection, isTrue);
+      expect(
+        selectionController.selectedPlainText.length,
+        lessThan(block.spec.plainText.length),
+      );
 
-    final selectionRange = selectionController.normalizedRange!;
-    expect(secondLineStartOffset, isNotNull);
-    expect(
-      selectionRange.end.textOffset,
-      lessThanOrEqualTo(secondLineStartOffset!),
-    );
+      final selectionRange = selectionController.normalizedRange!;
+      expect(secondLineStartOffset, isNotNull);
+      expect(
+        selectionRange.end.textOffset,
+        lessThanOrEqualTo(secondLineStartOffset!),
+      );
 
-    final selectionRects = block.spec.selectionRectResolver!(
-      blockElement,
-      blockRenderBox.size,
-      selectionRange,
-    );
-    expect(selectionRects, isNotEmpty);
-    for (final rect in selectionRects) {
-      expect(rect.bottom, lessThanOrEqualTo(secondLineTop + 0.5));
-    }
-  });
+      final selectionRects = block.spec.selectionRectResolver!(
+        blockElement,
+        blockRenderBox.size,
+        selectionRange,
+      );
+      expect(selectionRects, isNotEmpty);
+      for (final rect in selectionRects) {
+        expect(rect.bottom, lessThanOrEqualTo(secondLineTop + 0.5));
+      }
+    },
+  );
 
   testWidgets(
-      'double click on copy and triple click on second line work for wrapped kbd sentence',
-      (tester) async {
-    final selectionController = MarkdownSelectionController();
-    const markdown =
-        'You can also use HTML tags like `<kbd>` depending on your parser config: Press <kbd>Ctrl</kbd> + <kbd>C</kbd> to copy.';
+    'double click on copy and triple click on second line work for wrapped kbd sentence',
+    (tester) async {
+      final selectionController = MarkdownSelectionController();
+      const markdown =
+          'You can also use HTML tags like `<kbd>` depending on your parser config: Press <kbd>Ctrl</kbd> + <kbd>C</kbd> to copy.';
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Builder(
-          builder: (context) {
-            final baseTheme = MarkdownThemeData.fallback(context);
-            return Scaffold(
-              body: Align(
-                alignment: Alignment.topLeft,
-                child: SizedBox(
-                  width: 1280,
-                  child: MarkdownWidget(
-                    data: markdown,
-                    padding: EdgeInsets.zero,
-                    selectionController: selectionController,
-                    theme: baseTheme.copyWith(
-                      maxContentWidth: 1400,
-                      bodyStyle: baseTheme.bodyStyle.copyWith(
-                        fontSize: 16,
-                        height: 1.25,
-                      ),
-                      inlineCodeStyle: baseTheme.inlineCodeStyle.copyWith(
-                        fontSize: 15,
-                        height: 1.25,
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) {
+              final baseTheme = MarkdownThemeData.fallback(context);
+              return Scaffold(
+                body: Align(
+                  alignment: Alignment.topLeft,
+                  child: SizedBox(
+                    width: 1280,
+                    child: MarkdownWidget(
+                      data: markdown,
+                      padding: EdgeInsets.zero,
+                      selectionController: selectionController,
+                      theme: baseTheme.copyWith(
+                        maxContentWidth: 1400,
+                        bodyStyle: baseTheme.bodyStyle.copyWith(
+                          fontSize: 16,
+                          height: 1.25,
+                        ),
+                        inlineCodeStyle: baseTheme.inlineCodeStyle.copyWith(
+                          fontSize: 15,
+                          height: 1.25,
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            );
-          },
-        ),
-      ),
-    );
-
-    final blockFinder = find.byWidgetPredicate(
-      (widget) =>
-          widget is SelectableMarkdownBlock &&
-          widget.spec.plainText.contains(
-            'You can also use HTML tags like <kbd> depending on your parser config: Press Ctrl + C to copy.',
+              );
+            },
           ),
-    );
-    expect(blockFinder, findsOneWidget);
-
-    final block = tester.widget<SelectableMarkdownBlock>(blockFinder);
-    final blockElement = tester.element(blockFinder);
-    final blockRenderBox = tester.renderObject<RenderBox>(blockFinder);
-    final pretextFinder = find.descendant(
-      of: blockFinder,
-      matching: find.byType(MarkdownPretextTextBlock),
-    );
-    expect(pretextFinder, findsOneWidget);
-    final columnFinder = find.descendant(
-      of: pretextFinder,
-      matching: find.byType(Column),
-    );
-    expect(columnFinder, findsOneWidget);
-    final lineBoxes = tester
-        .renderObjectList<RenderBox>(
-          find.descendant(of: columnFinder, matching: find.byType(SizedBox)),
-        )
-        .toList(growable: false);
-    expect(lineBoxes, hasLength(2));
-
-    final copyStart = block.spec.plainText.lastIndexOf('copy');
-    final firstLineGlobalRect =
-        lineBoxes.first.localToGlobal(Offset.zero) & lineBoxes.first.size;
-    final secondLineGlobalRect =
-        lineBoxes[1].localToGlobal(Offset.zero) & lineBoxes[1].size;
-    final firstLineBottom =
-        blockRenderBox.globalToLocal(firstLineGlobalRect.bottomLeft).dy;
-    final secondLineRect = Rect.fromPoints(
-      blockRenderBox.globalToLocal(secondLineGlobalRect.topLeft),
-      blockRenderBox.globalToLocal(secondLineGlobalRect.bottomRight),
-    );
-    final copyEnd = copyStart + 'copy'.length;
-    Offset? copyLocalTarget;
-    final sampleWidth = math.max(secondLineGlobalRect.width - 4, 1.0);
-    for (var step = 0; step <= 200; step++) {
-      final ratio = step / 200;
-      final sampleGlobal = Offset(
-        secondLineGlobalRect.right - 2 - sampleWidth * ratio,
-        secondLineGlobalRect.center.dy,
+        ),
       );
-      final sample = blockRenderBox.globalToLocal(sampleGlobal);
-      final resolvedOffset = block.spec.textOffsetResolver!(
+
+      final blockFinder = find.byWidgetPredicate(
+        (widget) =>
+            widget is SelectableMarkdownBlock &&
+            widget.spec.plainText.contains(
+              'You can also use HTML tags like <kbd> depending on your parser config: Press Ctrl + C to copy.',
+            ),
+      );
+      expect(blockFinder, findsOneWidget);
+
+      final block = tester.widget<SelectableMarkdownBlock>(blockFinder);
+      final blockElement = tester.element(blockFinder);
+      final blockRenderBox = tester.renderObject<RenderBox>(blockFinder);
+      final pretextFinder = find.descendant(
+        of: blockFinder,
+        matching: find.byType(MarkdownPretextTextBlock),
+      );
+      expect(pretextFinder, findsOneWidget);
+      final columnFinder = find.descendant(
+        of: pretextFinder,
+        matching: find.byType(Column),
+      );
+      expect(columnFinder, findsOneWidget);
+      final lineBoxes = tester
+          .renderObjectList<RenderBox>(
+            find.descendant(of: columnFinder, matching: find.byType(SizedBox)),
+          )
+          .toList(growable: false);
+      expect(lineBoxes, hasLength(2));
+
+      final copyStart = block.spec.plainText.lastIndexOf('copy');
+      final firstLineGlobalRect =
+          lineBoxes.first.localToGlobal(Offset.zero) & lineBoxes.first.size;
+      final secondLineGlobalRect =
+          lineBoxes[1].localToGlobal(Offset.zero) & lineBoxes[1].size;
+      final firstLineBottom = blockRenderBox
+          .globalToLocal(firstLineGlobalRect.bottomLeft)
+          .dy;
+      final secondLineRect = Rect.fromPoints(
+        blockRenderBox.globalToLocal(secondLineGlobalRect.topLeft),
+        blockRenderBox.globalToLocal(secondLineGlobalRect.bottomRight),
+      );
+      final copyEnd = copyStart + 'copy'.length;
+      Offset? copyLocalTarget;
+      final sampleWidth = math.max(secondLineGlobalRect.width - 4, 1.0);
+      for (var step = 0; step <= 200; step++) {
+        final ratio = step / 200;
+        final sampleGlobal = Offset(
+          secondLineGlobalRect.right - 2 - sampleWidth * ratio,
+          secondLineGlobalRect.center.dy,
+        );
+        final sample = blockRenderBox.globalToLocal(sampleGlobal);
+        final resolvedOffset = block.spec.textOffsetResolver!(
+          blockElement,
+          blockRenderBox.size,
+          sample,
+        );
+        if (resolvedOffset != null &&
+            resolvedOffset >= copyStart &&
+            resolvedOffset <= copyEnd) {
+          copyLocalTarget = sample;
+          break;
+        }
+      }
+      expect(
+        copyLocalTarget,
+        isNotNull,
+        reason: 'Expected to resolve a hit target for copy on the second rendered line.',
+      );
+      final copyTarget = blockRenderBox.localToGlobal(copyLocalTarget!);
+
+      await _doubleTapAt(tester, copyTarget);
+
+      expect(selectionController.hasSelection, isTrue);
+      expect(selectionController.selectedPlainText, 'copy');
+      final wordSelection = selectionController.normalizedRange!;
+      expect(wordSelection.start.textOffset, copyStart);
+      expect(wordSelection.end.textOffset, copyStart + 'copy'.length);
+
+      selectionController.clear();
+      await tester.pump();
+
+      final secondLineStart = block.spec.textOffsetResolver!(
         blockElement,
         blockRenderBox.size,
-        sample,
+        Offset(secondLineRect.left + 1, secondLineRect.center.dy),
       );
-      if (resolvedOffset != null &&
-          resolvedOffset >= copyStart &&
-          resolvedOffset <= copyEnd) {
-        copyLocalTarget = sample;
-        break;
+      final secondLineEnd = block.spec.textOffsetResolver!(
+        blockElement,
+        blockRenderBox.size,
+        Offset(secondLineRect.right - 1, secondLineRect.center.dy),
+      );
+      expect(secondLineStart, isNotNull);
+      expect(secondLineEnd, isNotNull);
+      final secondLineStartOffset = secondLineStart!;
+      final secondLineEndOffset = secondLineEnd!;
+      expect(secondLineStartOffset, greaterThan(0));
+      expect(secondLineEndOffset, greaterThan(secondLineStartOffset));
+      final expectedSecondLine = block.spec.plainText
+          .substring(secondLineStartOffset, secondLineEndOffset)
+          .trimRight();
+      final tripleTarget = blockRenderBox.localToGlobal(
+        Offset(secondLineRect.center.dx, secondLineRect.center.dy),
+      );
+
+      await _tripleTapAt(tester, tripleTarget);
+
+      expect(selectionController.hasSelection, isTrue);
+      expect(selectionController.selectedPlainText, expectedSecondLine);
+      final lineSelection = selectionController.normalizedRange!;
+      expect(
+        lineSelection.start.textOffset,
+        greaterThanOrEqualTo(secondLineStartOffset),
+      );
+      expect(
+        lineSelection.end.textOffset,
+        lessThanOrEqualTo(secondLineEndOffset),
+      );
+
+      final selectionRects = block.spec.selectionRectResolver!(
+        blockElement,
+        blockRenderBox.size,
+        selectionController.normalizedRange!,
+      );
+      expect(selectionRects, isNotEmpty);
+      for (final rect in selectionRects) {
+        expect(rect.top, greaterThanOrEqualTo(firstLineBottom - 0.5));
       }
-    }
-    expect(copyLocalTarget, isNotNull,
-        reason:
-            'Expected to resolve a hit target for copy on the second rendered line.');
-    final copyTarget = blockRenderBox.localToGlobal(copyLocalTarget!);
+    },
+  );
 
-    await _doubleTapAt(tester, copyTarget);
-
-    expect(selectionController.hasSelection, isTrue);
-    expect(selectionController.selectedPlainText, 'copy');
-    final wordSelection = selectionController.normalizedRange!;
-    expect(wordSelection.start.textOffset, copyStart);
-    expect(wordSelection.end.textOffset, copyStart + 'copy'.length);
-
-    selectionController.clear();
-    await tester.pump();
-
-    final secondLineStart = block.spec.textOffsetResolver!(
-      blockElement,
-      blockRenderBox.size,
-      Offset(secondLineRect.left + 1, secondLineRect.center.dy),
-    );
-    final secondLineEnd = block.spec.textOffsetResolver!(
-      blockElement,
-      blockRenderBox.size,
-      Offset(secondLineRect.right - 1, secondLineRect.center.dy),
-    );
-    expect(secondLineStart, isNotNull);
-    expect(secondLineEnd, isNotNull);
-    final secondLineStartOffset = secondLineStart!;
-    final secondLineEndOffset = secondLineEnd!;
-    expect(secondLineStartOffset, greaterThan(0));
-    expect(secondLineEndOffset, greaterThan(secondLineStartOffset));
-    final expectedSecondLine = block.spec.plainText
-        .substring(secondLineStartOffset, secondLineEndOffset)
-        .trimRight();
-    final tripleTarget = blockRenderBox.localToGlobal(
-      Offset(secondLineRect.center.dx, secondLineRect.center.dy),
-    );
-
-    await _tripleTapAt(tester, tripleTarget);
-
-    expect(selectionController.hasSelection, isTrue);
-    expect(selectionController.selectedPlainText, expectedSecondLine);
-    final lineSelection = selectionController.normalizedRange!;
-    expect(
-      lineSelection.start.textOffset,
-      greaterThanOrEqualTo(secondLineStartOffset),
-    );
-    expect(
-      lineSelection.end.textOffset,
-      lessThanOrEqualTo(secondLineEndOffset),
-    );
-
-    final selectionRects = block.spec.selectionRectResolver!(
-      blockElement,
-      blockRenderBox.size,
-      selectionController.normalizedRange!,
-    );
-    expect(selectionRects, isNotEmpty);
-    for (final rect in selectionRects) {
-      expect(rect.top, greaterThanOrEqualTo(firstLineBottom - 0.5));
-    }
-  });
-
-  testWidgets('triple click inside code block with empty lines stays on line',
-      (tester) async {
+  testWidgets('triple click inside code block with empty lines stays on line', (
+    tester,
+  ) async {
     final selectionController = MarkdownSelectionController();
 
     await tester.pumpWidget(
@@ -6651,8 +6659,9 @@ def test_edge_case():
     );
   });
 
-  testWidgets('triple click inside a code block does not throw',
-      (tester) async {
+  testWidgets('triple click inside a code block does not throw', (
+    tester,
+  ) async {
     final selectionController = MarkdownSelectionController();
 
     await tester.pumpWidget(
@@ -6684,8 +6693,9 @@ return value;
     expect(selectionController.hasSelection, isTrue);
   });
 
-  testWidgets('triple click inside a rich list item selects the current item',
-      (tester) async {
+  testWidgets('triple click inside a rich list item selects the current item', (
+    tester,
+  ) async {
     final selectionController = MarkdownSelectionController();
 
     await tester.pumpWidget(
@@ -6715,19 +6725,19 @@ return value;
   });
 
   testWidgets(
-      'double click on blank area after a rich list line selects that line',
-      (tester) async {
-    final selectionController = MarkdownSelectionController();
+    'double click on blank area after a rich list line selects that line',
+    (tester) async {
+      final selectionController = MarkdownSelectionController();
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: Align(
-            alignment: Alignment.topLeft,
-            child: SizedBox(
-              width: 500,
-              child: MarkdownWidget(
-                data: '''
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Align(
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: 500,
+                child: MarkdownWidget(
+                  data: '''
 * *Italicized text*
 * **Bold emphasis**
 * ***Bold and italic***
@@ -6735,488 +6745,505 @@ return value;
 * `inline code snippets`
 * Link to [Flutter](https://flutter.dev), and an auto-link: <https://github.com>
 ''',
-                selectionController: selectionController,
+                  selectionController: selectionController,
+                ),
               ),
             ),
           ),
         ),
-      ),
-    );
+      );
 
-    final targetRect = tester.getRect(find.text('Bold emphasis'));
-    final documentRect = tester.getRect(find.byType(Scaffold));
-    final target = Offset(
-      math.min(targetRect.right + 8, documentRect.right - 12),
-      targetRect.center.dy,
-    );
+      final targetRect = tester.getRect(find.text('Bold emphasis'));
+      final documentRect = tester.getRect(find.byType(Scaffold));
+      final target = Offset(
+        math.min(targetRect.right + 8, documentRect.right - 12),
+        targetRect.center.dy,
+      );
 
-    await _doubleTapAt(tester, target);
+      await _doubleTapAt(tester, target);
 
-    expect(selectionController.hasSelection, isTrue);
-    expect(selectionController.selectedPlainText, '- Bold emphasis');
-  });
+      expect(selectionController.hasSelection, isTrue);
+      expect(selectionController.selectedPlainText, '- Bold emphasis');
+    },
+  );
 
   testWidgets(
-      'triple click on a parent list item does not include its nested sublist',
-      (tester) async {
-    final selectionController = MarkdownSelectionController();
+    'triple click on a parent list item does not include its nested sublist',
+    (tester) async {
+      final selectionController = MarkdownSelectionController();
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: MarkdownWidget(
-            data: '''
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MarkdownWidget(
+              data: '''
 * Outer item
   * Inner item
 ''',
-            selectionController: selectionController,
+              selectionController: selectionController,
+            ),
           ),
         ),
-      ),
-    );
+      );
 
-    final target = tester.getCenter(find.text('Outer item'));
+      final target = tester.getCenter(find.text('Outer item'));
 
-    await tester.tapAt(target);
-    await tester.pump();
-    await tester.tapAt(target);
-    await tester.pump();
-    await tester.tapAt(target);
-    await tester.pump();
+      await tester.tapAt(target);
+      await tester.pump();
+      await tester.tapAt(target);
+      await tester.pump();
+      await tester.tapAt(target);
+      await tester.pump();
 
-    expect(selectionController.hasSelection, isTrue);
-    expect(selectionController.selectedPlainText, '- Outer item');
-  });
+      expect(selectionController.hasSelection, isTrue);
+      expect(selectionController.selectedPlainText, '- Outer item');
+    },
+  );
 
   testWidgets(
-      'triple click inside a list item code block selects the code block only',
-      (tester) async {
-    final selectionController = MarkdownSelectionController();
+    'triple click inside a list item code block selects the code block only',
+    (tester) async {
+      final selectionController = MarkdownSelectionController();
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: MarkdownWidget(
-            data: '''
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MarkdownWidget(
+              data: '''
 * Parent item
 
       const child = 42;
 ''',
-            selectionController: selectionController,
-          ),
-        ),
-      ),
-    );
-
-    final target = tester.getCenter(find.textContaining('const child'));
-
-    await tester.tapAt(target);
-    await tester.pump();
-    await tester.tapAt(target);
-    await tester.pump();
-    await tester.tapAt(target);
-    await tester.pump();
-
-    expect(selectionController.hasSelection, isTrue);
-    expect(selectionController.selectedPlainText, 'const child = 42;');
-  });
-
-  testWidgets(
-      'triple click on ordered list lead line selects the current visual line with marker',
-      (tester) async {
-    final selectionController = MarkdownSelectionController();
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: Align(
-            alignment: Alignment.topLeft,
-            child: SizedBox(
-              width: 500,
-              child: MarkdownWidget(
-                data: r'''
-### Lists containing advanced blocks
-
-1.  **Code implementation:**
-    Here is a quick way to compute a sum in JavaScript:
-    
-    ```javascript
-    function sum(a, b) {
-      return a + b;
-    }
-    console.log(sum(5, 10)); // 15
-    ```
-
-2.  **Mathematical definitions:**
-    And here is the sum expressed mathematically:
-    
-    $$
-    \sum_{i=1}^{n} i = \frac{n(n+1)}{2}
-    $$
-    
-    > Blockquotes can also live gracefully inside list items. The selection background will adapt to the indentation perfectly.
-''',
-                selectionController: selectionController,
-              ),
+              selectionController: selectionController,
             ),
           ),
         ),
-      ),
-    );
-
-    final blockFinder = find.byWidgetPredicate(
-      (widget) =>
-          widget is SelectableMarkdownBlock &&
-          widget.spec.plainText.contains('Code implementation:') &&
-          widget.spec.plainText.contains('Mathematical definitions:'),
-    );
-    final block = tester.widget<SelectableMarkdownBlock>(blockFinder);
-    final leadStart = block.spec.plainText.indexOf('Code implementation:');
-    final leadRect = _mergedRect(
-      _globalSelectionRectsForBlock(
-        tester,
-        blockFinder,
-        start: leadStart,
-        end: leadStart + 'Code implementation:'.length,
-      ),
-    );
-    final target = leadRect.center;
-
-    await _tripleTapAt(tester, target);
-
-    expect(selectionController.hasSelection, isTrue);
-    final selectionRange = selectionController.normalizedRange!;
-    expect(selectionRange.start.path.segments, const <int>[0, 0]);
-    expect(selectionRange.end.path.segments, const <int>[0, 1]);
-    expect(selectionController.selectedPlainText, '1. Code implementation:');
-  });
-
-  testWidgets(
-      'triple click on ordered list continuation sentence selects that full line',
-      (tester) async {
-    final selectionController = MarkdownSelectionController();
-    tester.view.devicePixelRatio = 1.0;
-    tester.view.physicalSize = const Size(1800, 1200);
-    addTearDown(() {
-      tester.view.resetPhysicalSize();
-      tester.view.resetDevicePixelRatio();
-    });
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: Align(
-            alignment: Alignment.topLeft,
-            child: SizedBox(
-              width: 1500,
-              child: MarkdownWidget(
-                data: r'''
-### Lists containing advanced blocks
-
-1.  **Code implementation:**
-    Here is a quick way to compute a sum in JavaScript:
-    
-    ```javascript
-    function sum(a, b) {
-      return a + b;
-    }
-    console.log(sum(5, 10)); // 15
-    ```
-
-2.  **Mathematical definitions:**
-    And here is the sum expressed mathematically:
-    
-    $$
-    \sum_{i=1}^{n} i = \frac{n(n+1)}{2}
-    $$
-    
-    > Blockquotes can also live gracefully inside list items. The selection background will adapt to the indentation perfectly.
-''',
-                selectionController: selectionController,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-
-    final blockFinder = find.byWidgetPredicate(
-      (widget) =>
-          widget is SelectableMarkdownBlock &&
-          widget.spec.plainText.contains('Code implementation:') &&
-          widget.spec.plainText.contains(
-            'Here is a quick way to compute a sum in JavaScript:',
-          ),
-    );
-    final block = tester.widget<SelectableMarkdownBlock>(blockFinder);
-    final start = block.spec.plainText.indexOf(
-      'Here is a quick way to compute a sum in JavaScript:',
-    );
-    final sentenceRect = _mergedRect(
-      _globalSelectionRectsForBlock(
-        tester,
-        blockFinder,
-        start: start,
-        end: start +
-            'Here is a quick way to compute a sum in JavaScript:'.length,
-      ),
-    );
-    final target = sentenceRect.center;
-
-    await _tripleTapAt(tester, target);
-
-    expect(selectionController.hasSelection, isTrue);
-    final selectionRange = selectionController.normalizedRange!;
-    expect(selectionRange.start.path.segments, const <int>[0, 1]);
-    expect(selectionRange.end.path.segments, const <int>[0, 1]);
-    expect(
-      selectionController.selectedPlainText,
-      'Here is a quick way to compute a sum in JavaScript:',
-    );
-  });
-
-  testWidgets(
-      'double click on ordered list continuation text selects the tapped word',
-      (tester) async {
-    final selectionController = MarkdownSelectionController();
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: Align(
-            alignment: Alignment.topLeft,
-            child: SizedBox(
-              width: 900,
-              child: MarkdownWidget(
-                data: '''
-1. **Code implementation:**
-    Here is a quick way to compute a sum in JavaScript:
-
-    ```javascript
-    function sum(a, b) {
-      return a + b;
-    }
-    console.log(sum(5, 10)); // 15
-    ```
-''',
-                selectionController: selectionController,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-
-    final sentenceFinder =
-        find.textContaining('Here is a quick way', findRichText: true);
-    final richText = tester.widget<RichText>(sentenceFinder.first);
-    final renderBox = tester.renderObject<RenderBox>(sentenceFinder.first);
-    final painter = TextPainter(
-      text: richText.text,
-      textDirection: TextDirection.ltr,
-    )..layout(maxWidth: renderBox.size.width);
-    final sentenceText = richText.text.toPlainText();
-    final quickStart = sentenceText.indexOf('quick');
-    final quickEnd = quickStart + 'quick'.length;
-    final quickStartOffset = painter.getOffsetForCaret(
-      TextPosition(offset: quickStart),
-      Rect.zero,
-    );
-    final quickEndOffset = painter.getOffsetForCaret(
-      TextPosition(offset: quickEnd),
-      Rect.zero,
-    );
-    final target = renderBox.localToGlobal(
-      Offset(
-        (quickStartOffset.dx + quickEndOffset.dx) / 2,
-        quickStartOffset.dy + painter.preferredLineHeight / 2,
-      ),
-    );
-
-    await tester.tapAt(target);
-    await tester.pump();
-    await tester.tapAt(target);
-    await tester.pump();
-
-    expect(selectionController.hasSelection, isTrue);
-    final selectionRange = selectionController.normalizedRange!;
-    expect(selectionRange.start.path.segments, const <int>[0, 1]);
-    expect(selectionRange.end.path.segments, const <int>[0, 1]);
-    expect(selectionController.selectedPlainText, 'quick');
-  });
-
-  testWidgets(
-      'triple click on ordered list continuation text selects the current visual line',
-      (tester) async {
-    final selectionController = MarkdownSelectionController();
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: Align(
-            alignment: Alignment.topLeft,
-            child: SizedBox(
-              width: 900,
-              child: MarkdownWidget(
-                data: '''
-1. **Code implementation:**
-    Here is a quick way to compute a sum in JavaScript:
-
-    ```javascript
-    function sum(a, b) {
-      return a + b;
-    }
-    console.log(sum(5, 10)); // 15
-    ```
-''',
-                selectionController: selectionController,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-
-    final sentenceFinder =
-        find.textContaining('Here is a quick way', findRichText: true);
-    final richText = tester.widget<RichText>(sentenceFinder.first);
-    final renderBox = tester.renderObject<RenderBox>(sentenceFinder.first);
-    final painter = TextPainter(
-      text: richText.text,
-      textDirection: TextDirection.ltr,
-    )..layout(maxWidth: renderBox.size.width);
-    final sentenceText = richText.text.toPlainText();
-    final quickStart = sentenceText.indexOf('quick');
-    final quickEnd = quickStart + 'quick'.length;
-    final expectedLineBoundary = painter.getLineBoundary(
-      TextPosition(offset: quickStart),
-    );
-    final expectedLine = sentenceText.substring(
-      expectedLineBoundary.start,
-      expectedLineBoundary.end,
-    );
-    final quickStartOffset = painter.getOffsetForCaret(
-      TextPosition(offset: quickStart),
-      Rect.zero,
-    );
-    final quickEndOffset = painter.getOffsetForCaret(
-      TextPosition(offset: quickEnd),
-      Rect.zero,
-    );
-    final target = renderBox.localToGlobal(
-      Offset(
-        (quickStartOffset.dx + quickEndOffset.dx) / 2,
-        quickStartOffset.dy + painter.preferredLineHeight / 2,
-      ),
-    );
-
-    await tester.tapAt(target);
-    await tester.pump();
-    await tester.tapAt(target);
-    await tester.pump();
-    await tester.tapAt(target);
-    await tester.pump();
-
-    expect(selectionController.hasSelection, isTrue);
-    final selectionRange = selectionController.normalizedRange!;
-    expect(selectionRange.start.path.segments, const <int>[0, 1]);
-    expect(selectionRange.end.path.segments, const <int>[0, 1]);
-    expect(selectionController.selectedPlainText, expectedLine);
-  });
-
-  testWidgets(
-      'triple click on fenced code inside ordered list selects the current code line',
-      (tester) async {
-    final selectionController = MarkdownSelectionController();
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: Align(
-            alignment: Alignment.topLeft,
-            child: SizedBox(
-              width: 900,
-              child: MarkdownWidget(
-                data: '''
-1. **Code implementation:**
-    Here is a quick way to compute a sum in JavaScript:
-
-    ```javascript
-    function sum(a, b) {
-      return a + b;
-    }
-    console.log(sum(5, 10)); // 15
-    ```
-''',
-                selectionController: selectionController,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-
-    final codeFinder = find.textContaining('function sum', findRichText: true);
-    final codeRect = tester.getRect(codeFinder);
-    final target = Offset(
-      codeRect.left + 120,
-      codeRect.top + codeRect.height * 0.42,
-    );
-
-    await tester.tapAt(target);
-    await tester.pump();
-    await tester.tapAt(target);
-    await tester.pump();
-    await tester.tapAt(target);
-    await tester.pump();
-
-    expect(selectionController.hasSelection, isTrue);
-    expect(selectionController.selectedPlainText, '  return a + b;');
-
-    // Verify selection background rects are within the selected code line.
-    final listFinder = find.byWidgetPredicate(
-      (widget) =>
-          widget is SelectableMarkdownBlock &&
-          widget.spec.plainText.contains('Code implementation'),
-    );
-    final listWidget = tester.widget<SelectableMarkdownBlock>(listFinder);
-    final listElement = tester.element(listFinder);
-    final listRenderBox = tester.renderObject<RenderBox>(listFinder);
-    final selectionRange = selectionController.normalizedRange!;
-    final selectionRects = listWidget.spec.selectionRectResolver!.call(
-      listElement,
-      listRenderBox.size,
-      selectionRange,
-    );
-    expect(selectionRects, isNotEmpty);
-
-    final listOrigin = listRenderBox.localToGlobal(Offset.zero);
-    final globalSelectionRects = selectionRects
-        .map((rect) => rect.shift(listOrigin))
-        .toList(growable: false);
-
-    // The selection rects must overlap the "return a + b" line vertically.
-    final codeRenderBox = tester.renderObject<RenderBox>(codeFinder);
-    final codeTextRect =
-        codeRenderBox.localToGlobal(Offset.zero) & codeRenderBox.size;
-
-    // Compute the vertical band of the "return a + b;" line by using
-    // proportional line height within the code block text widget.
-    // The code block has 4 lines; "return a + b;" is the second line.
-    final lineHeight = codeTextRect.height / 4;
-    final returnLineTop = codeTextRect.top + lineHeight;
-    final returnLineBottom = codeTextRect.top + lineHeight * 2;
-
-    for (final rect in globalSelectionRects) {
-      expect(
-        rect.top >= returnLineTop - 2 && rect.bottom <= returnLineBottom + 2,
-        isTrue,
-        reason: 'Selection rect $rect should be within the "return a + b;" '
-            'line band ($returnLineTop..$returnLineBottom), '
-            'but extends outside it.',
       );
+
+      final target = tester.getCenter(find.textContaining('const child'));
+
+      await tester.tapAt(target);
+      await tester.pump();
+      await tester.tapAt(target);
+      await tester.pump();
+      await tester.tapAt(target);
+      await tester.pump();
+
+      expect(selectionController.hasSelection, isTrue);
+      expect(selectionController.selectedPlainText, 'const child = 42;');
+    },
+  );
+
+  testWidgets(
+    'triple click on ordered list lead line selects the current visual line with marker',
+    (tester) async {
+      final selectionController = MarkdownSelectionController();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Align(
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: 500,
+                child: MarkdownWidget(
+                  data: r'''
+### Lists containing advanced blocks
+
+1.  **Code implementation:**
+    Here is a quick way to compute a sum in JavaScript:
+    
+    ```javascript
+    function sum(a, b) {
+      return a + b;
     }
-  });
+    console.log(sum(5, 10)); // 15
+    ```
+
+2.  **Mathematical definitions:**
+    And here is the sum expressed mathematically:
+    
+    $$
+    \sum_{i=1}^{n} i = \frac{n(n+1)}{2}
+    $$
+    
+    > Blockquotes can also live gracefully inside list items. The selection background will adapt to the indentation perfectly.
+''',
+                  selectionController: selectionController,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final blockFinder = find.byWidgetPredicate(
+        (widget) =>
+            widget is SelectableMarkdownBlock &&
+            widget.spec.plainText.contains('Code implementation:') &&
+            widget.spec.plainText.contains('Mathematical definitions:'),
+      );
+      final block = tester.widget<SelectableMarkdownBlock>(blockFinder);
+      final leadStart = block.spec.plainText.indexOf('Code implementation:');
+      final leadRect = _mergedRect(
+        _globalSelectionRectsForBlock(
+          tester,
+          blockFinder,
+          start: leadStart,
+          end: leadStart + 'Code implementation:'.length,
+        ),
+      );
+      final target = leadRect.center;
+
+      await _tripleTapAt(tester, target);
+
+      expect(selectionController.hasSelection, isTrue);
+      final selectionRange = selectionController.normalizedRange!;
+      expect(selectionRange.start.path.segments, const <int>[0, 0]);
+      expect(selectionRange.end.path.segments, const <int>[0, 1]);
+      expect(selectionController.selectedPlainText, '1. Code implementation:');
+    },
+  );
+
+  testWidgets(
+    'triple click on ordered list continuation sentence selects that full line',
+    (tester) async {
+      final selectionController = MarkdownSelectionController();
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.physicalSize = const Size(1800, 1200);
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Align(
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: 1500,
+                child: MarkdownWidget(
+                  data: r'''
+### Lists containing advanced blocks
+
+1.  **Code implementation:**
+    Here is a quick way to compute a sum in JavaScript:
+    
+    ```javascript
+    function sum(a, b) {
+      return a + b;
+    }
+    console.log(sum(5, 10)); // 15
+    ```
+
+2.  **Mathematical definitions:**
+    And here is the sum expressed mathematically:
+    
+    $$
+    \sum_{i=1}^{n} i = \frac{n(n+1)}{2}
+    $$
+    
+    > Blockquotes can also live gracefully inside list items. The selection background will adapt to the indentation perfectly.
+''',
+                  selectionController: selectionController,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final blockFinder = find.byWidgetPredicate(
+        (widget) =>
+            widget is SelectableMarkdownBlock &&
+            widget.spec.plainText.contains('Code implementation:') &&
+            widget.spec.plainText.contains(
+              'Here is a quick way to compute a sum in JavaScript:',
+            ),
+      );
+      final block = tester.widget<SelectableMarkdownBlock>(blockFinder);
+      final start = block.spec.plainText.indexOf(
+        'Here is a quick way to compute a sum in JavaScript:',
+      );
+      final sentenceRect = _mergedRect(
+        _globalSelectionRectsForBlock(
+          tester,
+          blockFinder,
+          start: start,
+          end:
+              start +
+              'Here is a quick way to compute a sum in JavaScript:'.length,
+        ),
+      );
+      final target = sentenceRect.center;
+
+      await _tripleTapAt(tester, target);
+
+      expect(selectionController.hasSelection, isTrue);
+      final selectionRange = selectionController.normalizedRange!;
+      expect(selectionRange.start.path.segments, const <int>[0, 1]);
+      expect(selectionRange.end.path.segments, const <int>[0, 1]);
+      expect(
+        selectionController.selectedPlainText,
+        'Here is a quick way to compute a sum in JavaScript:',
+      );
+    },
+  );
+
+  testWidgets(
+    'double click on ordered list continuation text selects the tapped word',
+    (tester) async {
+      final selectionController = MarkdownSelectionController();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Align(
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: 900,
+                child: MarkdownWidget(
+                  data: '''
+1. **Code implementation:**
+    Here is a quick way to compute a sum in JavaScript:
+
+    ```javascript
+    function sum(a, b) {
+      return a + b;
+    }
+    console.log(sum(5, 10)); // 15
+    ```
+''',
+                  selectionController: selectionController,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final sentenceFinder = find.textContaining(
+        'Here is a quick way',
+        findRichText: true,
+      );
+      final richText = tester.widget<RichText>(sentenceFinder.first);
+      final renderBox = tester.renderObject<RenderBox>(sentenceFinder.first);
+      final painter = TextPainter(
+        text: richText.text,
+        textDirection: TextDirection.ltr,
+      )..layout(maxWidth: renderBox.size.width);
+      final sentenceText = richText.text.toPlainText();
+      final quickStart = sentenceText.indexOf('quick');
+      final quickEnd = quickStart + 'quick'.length;
+      final quickStartOffset = painter.getOffsetForCaret(
+        TextPosition(offset: quickStart),
+        Rect.zero,
+      );
+      final quickEndOffset = painter.getOffsetForCaret(
+        TextPosition(offset: quickEnd),
+        Rect.zero,
+      );
+      final target = renderBox.localToGlobal(
+        Offset(
+          (quickStartOffset.dx + quickEndOffset.dx) / 2,
+          quickStartOffset.dy + painter.preferredLineHeight / 2,
+        ),
+      );
+
+      await tester.tapAt(target);
+      await tester.pump();
+      await tester.tapAt(target);
+      await tester.pump();
+
+      expect(selectionController.hasSelection, isTrue);
+      final selectionRange = selectionController.normalizedRange!;
+      expect(selectionRange.start.path.segments, const <int>[0, 1]);
+      expect(selectionRange.end.path.segments, const <int>[0, 1]);
+      expect(selectionController.selectedPlainText, 'quick');
+    },
+  );
+
+  testWidgets(
+    'triple click on ordered list continuation text selects the current visual line',
+    (tester) async {
+      final selectionController = MarkdownSelectionController();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Align(
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: 900,
+                child: MarkdownWidget(
+                  data: '''
+1. **Code implementation:**
+    Here is a quick way to compute a sum in JavaScript:
+
+    ```javascript
+    function sum(a, b) {
+      return a + b;
+    }
+    console.log(sum(5, 10)); // 15
+    ```
+''',
+                  selectionController: selectionController,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final sentenceFinder = find.textContaining(
+        'Here is a quick way',
+        findRichText: true,
+      );
+      final richText = tester.widget<RichText>(sentenceFinder.first);
+      final renderBox = tester.renderObject<RenderBox>(sentenceFinder.first);
+      final painter = TextPainter(
+        text: richText.text,
+        textDirection: TextDirection.ltr,
+      )..layout(maxWidth: renderBox.size.width);
+      final sentenceText = richText.text.toPlainText();
+      final quickStart = sentenceText.indexOf('quick');
+      final quickEnd = quickStart + 'quick'.length;
+      final expectedLineBoundary = painter.getLineBoundary(
+        TextPosition(offset: quickStart),
+      );
+      final expectedLine = sentenceText.substring(
+        expectedLineBoundary.start,
+        expectedLineBoundary.end,
+      );
+      final quickStartOffset = painter.getOffsetForCaret(
+        TextPosition(offset: quickStart),
+        Rect.zero,
+      );
+      final quickEndOffset = painter.getOffsetForCaret(
+        TextPosition(offset: quickEnd),
+        Rect.zero,
+      );
+      final target = renderBox.localToGlobal(
+        Offset(
+          (quickStartOffset.dx + quickEndOffset.dx) / 2,
+          quickStartOffset.dy + painter.preferredLineHeight / 2,
+        ),
+      );
+
+      await tester.tapAt(target);
+      await tester.pump();
+      await tester.tapAt(target);
+      await tester.pump();
+      await tester.tapAt(target);
+      await tester.pump();
+
+      expect(selectionController.hasSelection, isTrue);
+      final selectionRange = selectionController.normalizedRange!;
+      expect(selectionRange.start.path.segments, const <int>[0, 1]);
+      expect(selectionRange.end.path.segments, const <int>[0, 1]);
+      expect(selectionController.selectedPlainText, expectedLine);
+    },
+  );
+
+  testWidgets(
+    'triple click on fenced code inside ordered list selects the current code line',
+    (tester) async {
+      final selectionController = MarkdownSelectionController();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Align(
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: 900,
+                child: MarkdownWidget(
+                  data: '''
+1. **Code implementation:**
+    Here is a quick way to compute a sum in JavaScript:
+
+    ```javascript
+    function sum(a, b) {
+      return a + b;
+    }
+    console.log(sum(5, 10)); // 15
+    ```
+''',
+                  selectionController: selectionController,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final codeFinder = find.textContaining(
+        'function sum',
+        findRichText: true,
+      );
+      final codeRect = tester.getRect(codeFinder);
+      final target = Offset(
+        codeRect.left + 120,
+        codeRect.top + codeRect.height * 0.42,
+      );
+
+      await tester.tapAt(target);
+      await tester.pump();
+      await tester.tapAt(target);
+      await tester.pump();
+      await tester.tapAt(target);
+      await tester.pump();
+
+      expect(selectionController.hasSelection, isTrue);
+      expect(selectionController.selectedPlainText, '  return a + b;');
+
+      // Verify selection background rects are within the selected code line.
+      final listFinder = find.byWidgetPredicate(
+        (widget) =>
+            widget is SelectableMarkdownBlock &&
+            widget.spec.plainText.contains('Code implementation'),
+      );
+      final listWidget = tester.widget<SelectableMarkdownBlock>(listFinder);
+      final listElement = tester.element(listFinder);
+      final listRenderBox = tester.renderObject<RenderBox>(listFinder);
+      final selectionRange = selectionController.normalizedRange!;
+      final selectionRects = listWidget.spec.selectionRectResolver!.call(
+        listElement,
+        listRenderBox.size,
+        selectionRange,
+      );
+      expect(selectionRects, isNotEmpty);
+
+      final listOrigin = listRenderBox.localToGlobal(Offset.zero);
+      final globalSelectionRects = selectionRects
+          .map((rect) => rect.shift(listOrigin))
+          .toList(growable: false);
+
+      // The selection rects must overlap the "return a + b" line vertically.
+      final codeRenderBox = tester.renderObject<RenderBox>(codeFinder);
+      final codeTextRect =
+          codeRenderBox.localToGlobal(Offset.zero) & codeRenderBox.size;
+
+      // Compute the vertical band of the "return a + b;" line by using
+      // proportional line height within the code block text widget.
+      // The code block has 4 lines; "return a + b;" is the second line.
+      final lineHeight = codeTextRect.height / 4;
+      final returnLineTop = codeTextRect.top + lineHeight;
+      final returnLineBottom = codeTextRect.top + lineHeight * 2;
+
+      for (final rect in globalSelectionRects) {
+        expect(
+          rect.top >= returnLineTop - 2 && rect.bottom <= returnLineBottom + 2,
+          isTrue,
+          reason:
+              'Selection rect $rect should be within the "return a + b;" '
+              'line band ($returnLineTop..$returnLineBottom), '
+              'but extends outside it.',
+        );
+      }
+    },
+  );
 
   testWidgets('triple click inside a quote selects the current quoted block', (
     tester,
@@ -7391,8 +7418,10 @@ return value;
       ),
     );
     final bananaTextTarget = bananaRect.center;
-    final bananaBlankTarget =
-        Offset(bananaRect.right + 2, bananaRect.center.dy);
+    final bananaBlankTarget = Offset(
+      bananaRect.right + 2,
+      bananaRect.center.dy,
+    );
 
     await _tripleTapAt(tester, bananaTextTarget);
 
@@ -7416,47 +7445,48 @@ return value;
     expect(selectionController.selectedPlainText, '  - Banana');
   });
 
-  testWidgets('triple click inside a nested quote selects the innermost quote',
-      (
-    tester,
-  ) async {
-    final selectionController = MarkdownSelectionController();
+  testWidgets(
+    'triple click inside a nested quote selects the innermost quote',
+    (tester) async {
+      final selectionController = MarkdownSelectionController();
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: MarkdownWidget(
-            data: '''
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MarkdownWidget(
+              data: '''
 > Outer quote
 > > Inner quote
 ''',
-            selectionController: selectionController,
+              selectionController: selectionController,
+            ),
           ),
         ),
-      ),
-    );
+      );
 
-    final target = tester.getCenter(find.text('Inner quote'));
+      final target = tester.getCenter(find.text('Inner quote'));
 
-    await tester.tapAt(target);
-    await tester.pump();
-    await tester.tapAt(target);
-    await tester.pump();
-    await tester.tapAt(target);
-    await tester.pump();
+      await tester.tapAt(target);
+      await tester.pump();
+      await tester.tapAt(target);
+      await tester.pump();
+      await tester.tapAt(target);
+      await tester.pump();
 
-    expect(selectionController.hasSelection, isTrue);
-    expect(selectionController.selectedPlainText, 'Inner quote');
-  });
+      expect(selectionController.hasSelection, isTrue);
+      expect(selectionController.selectedPlainText, 'Inner quote');
+    },
+  );
 
   testWidgets(
-      'selection auto-scroll falls back to ancestor scrollables for shrink-wrapped markdown widgets',
-      (tester) async {
-    final selectionController = MarkdownSelectionController();
-    final outerScrollController = ScrollController();
-    const targetLabel = 'Target message paragraph 1';
+    'selection auto-scroll falls back to ancestor scrollables for shrink-wrapped markdown widgets',
+    (tester) async {
+      final selectionController = MarkdownSelectionController();
+      final outerScrollController = ScrollController();
+      const targetLabel = 'Target message paragraph 1';
 
-    String buildMessage(String label) => '''
+      String buildMessage(String label) =>
+          '''
 $label
 
 $label continued with more content for drag selection.
@@ -7465,216 +7495,231 @@ $label continued with more content for drag selection.
 - bullet b
 ''';
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SizedBox(
-            height: 320,
-            child: ListView(
-              controller: outerScrollController,
-              children: List<Widget>.generate(6, (index) {
-                final label = index == 1 ? targetLabel : 'Message ${index + 1}';
-                return Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                  child: MarkdownWidget(
-                    data: buildMessage(label),
-                    selectionController:
-                        index == 1 ? selectionController : null,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                  ),
-                );
-              }),
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              height: 320,
+              child: ListView(
+                controller: outerScrollController,
+                children: List<Widget>.generate(6, (index) {
+                  final label = index == 1
+                      ? targetLabel
+                      : 'Message ${index + 1}';
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    child: MarkdownWidget(
+                      data: buildMessage(label),
+                      selectionController: index == 1
+                          ? selectionController
+                          : null,
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                    ),
+                  );
+                }),
+              ),
             ),
           ),
         ),
-      ),
-    );
+      );
 
-    final outerListFinder = find.byWidgetPredicate(
-      (widget) =>
-          widget is ListView && widget.controller == outerScrollController,
-    );
-    final start = tester.getCenter(find.text(targetLabel));
-    final viewport = tester.getRect(outerListFinder);
-    final end = Offset(start.dx, viewport.bottom + 80);
+      final outerListFinder = find.byWidgetPredicate(
+        (widget) =>
+            widget is ListView && widget.controller == outerScrollController,
+      );
+      final start = tester.getCenter(find.text(targetLabel));
+      final viewport = tester.getRect(outerListFinder);
+      final end = Offset(start.dx, viewport.bottom + 80);
 
-    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
-    await gesture.addPointer(location: start);
-    await gesture.down(start);
-    await tester.pump();
-    await gesture.moveTo(end);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 250));
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await gesture.addPointer(location: start);
+      await gesture.down(start);
+      await tester.pump();
+      await gesture.moveTo(end);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
 
-    expect(outerScrollController.offset, greaterThan(0));
-    expect(selectionController.hasSelection, isTrue);
-    expect(selectionController.selectedPlainText, contains(targetLabel));
+      expect(outerScrollController.offset, greaterThan(0));
+      expect(selectionController.hasSelection, isTrue);
+      expect(selectionController.selectedPlainText, contains(targetLabel));
 
-    await gesture.up();
-    await tester.pump();
-  });
+      await gesture.up();
+      await tester.pump();
+    },
+  );
 
   testWidgets(
-      'ancestor auto-scroll stops when the current shrink-wrapped markdown is already fully visible',
-      (tester) async {
-    final selectionController = MarkdownSelectionController();
-    final outerScrollController = ScrollController();
-    const targetLabel = 'Fully visible target';
+    'ancestor auto-scroll stops when the current shrink-wrapped markdown is already fully visible',
+    (tester) async {
+      final selectionController = MarkdownSelectionController();
+      final outerScrollController = ScrollController();
+      const targetLabel = 'Fully visible target';
 
-    String buildMessage(String label) => '''
+      String buildMessage(String label) =>
+          '''
 $label
 
 $label continued.
 ''';
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SizedBox(
-            height: 320,
-            child: ListView(
-              controller: outerScrollController,
-              children: List<Widget>.generate(10, (index) {
-                final label = index == 1 ? targetLabel : 'Message ${index + 1}';
-                return Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              height: 320,
+              child: ListView(
+                controller: outerScrollController,
+                children: List<Widget>.generate(10, (index) {
+                  final label = index == 1
+                      ? targetLabel
+                      : 'Message ${index + 1}';
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    child: MarkdownWidget(
+                      data: buildMessage(label),
+                      selectionController: index == 1
+                          ? selectionController
+                          : null,
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                    ),
+                  );
+                }),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      final markdownFinder = find.ancestor(
+        of: find.text(targetLabel),
+        matching: find.byType(MarkdownWidget),
+      );
+      final markdownRect = tester.getRect(markdownFinder);
+      final outerListFinder = find.byWidgetPredicate(
+        (widget) =>
+            widget is ListView && widget.controller == outerScrollController,
+      );
+      final viewport = tester.getRect(outerListFinder);
+      expect(markdownRect.bottom, lessThan(viewport.bottom));
+
+      final start = tester.getCenter(find.text(targetLabel));
+      final end = Offset(start.dx, viewport.bottom - 8);
+
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await gesture.addPointer(location: start);
+      await gesture.down(start);
+      await tester.pump();
+      await gesture.moveTo(end);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
+
+      expect(outerScrollController.offset, 0);
+      expect(selectionController.hasSelection, isTrue);
+      expect(selectionController.selectedPlainText, contains(targetLabel));
+
+      await gesture.up();
+      await tester.pump();
+    },
+  );
+
+  testWidgets(
+    'ancestor auto-scroll stays idle for a fully visible chat-style markdown bubble',
+    (tester) async {
+      final outerScrollController = ScrollController();
+      final selectionController = MarkdownSelectionController();
+
+      Widget buildAssistantBubble(
+        String text, {
+        MarkdownSelectionController? controller,
+      }) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const CircleAvatar(child: Icon(Icons.terminal_rounded)),
+              const SizedBox(width: 12),
+              Flexible(
+                child: Container(
+                  padding: const EdgeInsets.all(16),
                   child: MarkdownWidget(
-                    data: buildMessage(label),
-                    selectionController:
-                        index == 1 ? selectionController : null,
+                    data: text,
+                    selectionController: controller,
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                   ),
-                );
-              }),
-            ),
-          ),
-        ),
-      ),
-    );
-
-    final markdownFinder = find.ancestor(
-      of: find.text(targetLabel),
-      matching: find.byType(MarkdownWidget),
-    );
-    final markdownRect = tester.getRect(markdownFinder);
-    final outerListFinder = find.byWidgetPredicate(
-      (widget) =>
-          widget is ListView && widget.controller == outerScrollController,
-    );
-    final viewport = tester.getRect(outerListFinder);
-    expect(markdownRect.bottom, lessThan(viewport.bottom));
-
-    final start = tester.getCenter(find.text(targetLabel));
-    final end = Offset(start.dx, viewport.bottom - 8);
-
-    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
-    await gesture.addPointer(location: start);
-    await gesture.down(start);
-    await tester.pump();
-    await gesture.moveTo(end);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 250));
-
-    expect(outerScrollController.offset, 0);
-    expect(selectionController.hasSelection, isTrue);
-    expect(selectionController.selectedPlainText, contains(targetLabel));
-
-    await gesture.up();
-    await tester.pump();
-  });
-
-  testWidgets(
-      'ancestor auto-scroll stays idle for a fully visible chat-style markdown bubble',
-      (tester) async {
-    final outerScrollController = ScrollController();
-    final selectionController = MarkdownSelectionController();
-
-    Widget buildAssistantBubble(String text,
-        {MarkdownSelectionController? controller}) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const CircleAvatar(child: Icon(Icons.terminal_rounded)),
-            const SizedBox(width: 12),
-            Flexible(
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                child: MarkdownWidget(
-                  data: text,
-                  selectionController: controller,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
                 ),
               ),
-            ),
-          ],
-        ),
-      );
-    }
+            ],
+          ),
+        );
+      }
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SizedBox(
-            height: 420,
-            child: ListView.builder(
-              controller: outerScrollController,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-              itemCount: 8,
-              itemBuilder: (context, index) {
-                if (index == 1) {
-                  return buildAssistantBubble(
-                    'Visible bubble\n\nSecond paragraph.\n\n- bullet a\n- bullet b',
-                    controller: selectionController,
-                  );
-                }
-                return buildAssistantBubble('Message ${index + 1}');
-              },
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              height: 420,
+              child: ListView.builder(
+                controller: outerScrollController,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 20,
+                ),
+                itemCount: 8,
+                itemBuilder: (context, index) {
+                  if (index == 1) {
+                    return buildAssistantBubble(
+                      'Visible bubble\n\nSecond paragraph.\n\n- bullet a\n- bullet b',
+                      controller: selectionController,
+                    );
+                  }
+                  return buildAssistantBubble('Message ${index + 1}');
+                },
+              ),
             ),
           ),
         ),
-      ),
-    );
+      );
 
-    final outerListFinder = find.byWidgetPredicate(
-      (widget) =>
-          widget is ListView && widget.controller == outerScrollController,
-    );
-    final markdownFinder = find.ancestor(
-      of: find.text('Visible bubble'),
-      matching: find.byType(MarkdownWidget),
-    );
-    final markdownRect = tester.getRect(markdownFinder);
-    final viewportRect = tester.getRect(outerListFinder);
-    expect(markdownRect.bottom, lessThan(viewportRect.bottom));
+      final outerListFinder = find.byWidgetPredicate(
+        (widget) =>
+            widget is ListView && widget.controller == outerScrollController,
+      );
+      final markdownFinder = find.ancestor(
+        of: find.text('Visible bubble'),
+        matching: find.byType(MarkdownWidget),
+      );
+      final markdownRect = tester.getRect(markdownFinder);
+      final viewportRect = tester.getRect(outerListFinder);
+      expect(markdownRect.bottom, lessThan(viewportRect.bottom));
 
-    final start = tester.getCenter(find.text('Visible bubble'));
-    final end = Offset(start.dx, viewportRect.bottom - 6);
+      final start = tester.getCenter(find.text('Visible bubble'));
+      final end = Offset(start.dx, viewportRect.bottom - 6);
 
-    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
-    await gesture.addPointer(location: start);
-    await gesture.down(start);
-    await tester.pump();
-    await gesture.moveTo(end);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 250));
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await gesture.addPointer(location: start);
+      await gesture.down(start);
+      await tester.pump();
+      await gesture.moveTo(end);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
 
-    expect(outerScrollController.offset, 0);
-    expect(selectionController.hasSelection, isTrue);
+      expect(outerScrollController.offset, 0);
+      expect(selectionController.hasSelection, isTrue);
 
-    await gesture.up();
-    await tester.pump();
-  });
+      await gesture.up();
+      await tester.pump();
+    },
+  );
 
   testWidgets('selection auto-scroll ignores pointer moves after unmount', (
     tester,
@@ -7792,15 +7837,15 @@ Intro
   });
 
   testWidgets(
-      'reverse dragging from following heading into a table keeps table selection rects visible',
-      (tester) async {
-    final selectionController = MarkdownSelectionController();
+    'reverse dragging from following heading into a table keeps table selection rects visible',
+    (tester) async {
+      final selectionController = MarkdownSelectionController();
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: MarkdownWidget(
-            data: r'''
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MarkdownWidget(
+              data: r'''
 ## 4. Complex Tables
 
 Tables support varying alignments, complex cell contents, and inline styles.
@@ -7814,69 +7859,73 @@ Tables support varying alignments, complex cell contents, and inline styles.
 
 ## 5. Media & Links
 ''',
-            selectionController: selectionController,
+              selectionController: selectionController,
+            ),
           ),
         ),
-      ),
-    );
+      );
 
-    final start = tester.getCenter(find.textContaining('Media & Links')) +
-        const Offset(0, 4);
-    final end = tester.getCenter(find.text('Feature'));
-    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
-    await gesture.addPointer(location: start);
-    await gesture.down(start);
-    await tester.pump();
-    await gesture.moveTo(end);
-    await tester.pump();
-    await gesture.up();
-    await tester.pump();
+      final start =
+          tester.getCenter(find.textContaining('Media & Links')) +
+          const Offset(0, 4);
+      final end = tester.getCenter(find.text('Feature'));
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await gesture.addPointer(location: start);
+      await gesture.down(start);
+      await tester.pump();
+      await gesture.moveTo(end);
+      await tester.pump();
+      await gesture.up();
+      await tester.pump();
 
-    expect(selectionController.hasSelection, isTrue);
-    expect(
-      selectionController.selectedPlainText,
-      contains('Description\tStatus'),
-    );
-    expect(
-      selectionController.selectedPlainText,
-      contains('Code\tSyntax highlighting with re_highlight\t🚀 Built'),
-    );
+      expect(selectionController.hasSelection, isTrue);
+      expect(
+        selectionController.selectedPlainText,
+        contains('Description\tStatus'),
+      );
+      expect(
+        selectionController.selectedPlainText,
+        contains('Code\tSyntax highlighting with re_highlight\t🚀 Built'),
+      );
 
-    final tableBlockFinder = find.byWidgetPredicate(
-      (widget) =>
-          widget is SelectableMarkdownBlock &&
-          widget.spec.plainText.contains('Feature\tDescription\tStatus'),
-    );
-    expect(tableBlockFinder, findsOneWidget);
+      final tableBlockFinder = find.byWidgetPredicate(
+        (widget) =>
+            widget is SelectableMarkdownBlock &&
+            widget.spec.plainText.contains('Feature\tDescription\tStatus'),
+      );
+      expect(tableBlockFinder, findsOneWidget);
 
-    final tableBlock = tester.widget<SelectableMarkdownBlock>(tableBlockFinder);
-    final selectionRange = selectionController.normalizedRange!;
-    final blockRange = DocumentRange(
-      start: DocumentPosition(
-        blockIndex: tableBlock.blockIndex,
-        path: const PathInBlock(<int>[0]),
-        textOffset: selectionRange.start.blockIndex == tableBlock.blockIndex
-            ? selectionRange.start.textOffset
-            : 0,
-      ),
-      end: DocumentPosition(
-        blockIndex: tableBlock.blockIndex,
-        path: const PathInBlock(<int>[0]),
-        textOffset: selectionRange.end.blockIndex == tableBlock.blockIndex
-            ? selectionRange.end.textOffset
-            : tableBlock.spec.plainText.length,
-      ),
-    );
+      final tableBlock = tester.widget<SelectableMarkdownBlock>(
+        tableBlockFinder,
+      );
+      final selectionRange = selectionController.normalizedRange!;
+      final blockRange = DocumentRange(
+        start: DocumentPosition(
+          blockIndex: tableBlock.blockIndex,
+          path: const PathInBlock(<int>[0]),
+          textOffset: selectionRange.start.blockIndex == tableBlock.blockIndex
+              ? selectionRange.start.textOffset
+              : 0,
+        ),
+        end: DocumentPosition(
+          blockIndex: tableBlock.blockIndex,
+          path: const PathInBlock(<int>[0]),
+          textOffset: selectionRange.end.blockIndex == tableBlock.blockIndex
+              ? selectionRange.end.textOffset
+              : tableBlock.spec.plainText.length,
+        ),
+      );
 
-    final renderBox = tester.renderObject<RenderBox>(tableBlockFinder);
-    final element = tester.element(tableBlockFinder);
-    final selectionRects = tableBlock.spec.selectionRectResolver!(
-      element,
-      renderBox.size,
-      blockRange,
-    );
-    expect(selectionRects, isNotEmpty);
-  });
+      final renderBox = tester.renderObject<RenderBox>(tableBlockFinder);
+      final element = tester.element(tableBlockFinder);
+      final selectionRects = tableBlock.spec.selectionRectResolver!(
+        element,
+        renderBox.size,
+        blockRange,
+      );
+      expect(selectionRects, isNotEmpty);
+    },
+  );
 
   testWidgets('MixinSelectionArea with MarkdownWidget settles', (tester) async {
     final selectionController = MarkdownSelectionController();
@@ -7908,8 +7957,9 @@ Tables support varying alignments, complex cell contents, and inline styles.
     expect(selectionController.selectedPlainText, 'Hello new world');
   });
 
-  testWidgets('MixinSelectionArea exposes public selectable widgets',
-      (tester) async {
+  testWidgets('MixinSelectionArea exposes public selectable widgets', (
+    tester,
+  ) async {
     final selectionController = MarkdownSelectionController();
     addTearDown(selectionController.dispose);
 
@@ -7948,64 +7998,66 @@ Tables support varying alignments, complex cell contents, and inline styles.
   });
 
   testWidgets(
-      'MixinSelectionArea drags selection across selectable text widgets',
-      (tester) async {
-    final selectionController = MarkdownSelectionController();
-    addTearDown(selectionController.dispose);
+    'MixinSelectionArea drags selection across selectable text widgets',
+    (tester) async {
+      final selectionController = MarkdownSelectionController();
+      addTearDown(selectionController.dispose);
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SizedBox(
-            width: 320,
-            child: MixinSelectionArea(
-              controller: selectionController,
-              child: const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  MixinSelectableText('Alpha bravo'),
-                  SizedBox(height: 8),
-                  MixinSelectableText('Charlie delta'),
-                ],
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 320,
+              child: MixinSelectionArea(
+                controller: selectionController,
+                child: const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    MixinSelectableText('Alpha bravo'),
+                    SizedBox(height: 8),
+                    MixinSelectableText('Charlie delta'),
+                  ],
+                ),
               ),
             ),
           ),
         ),
-      ),
-    );
-    await tester.pump();
+      );
+      await tester.pump();
 
-    final firstBlockFinder = find.byWidgetPredicate(
-      (widget) =>
-          widget is MixinSelectable && widget.plainText == 'Alpha bravo',
-    );
-    final secondBlockFinder = find.byWidgetPredicate(
-      (widget) =>
-          widget is MixinSelectable && widget.plainText == 'Charlie delta',
-    );
-    expect(firstBlockFinder, findsOneWidget);
-    expect(secondBlockFinder, findsOneWidget);
+      final firstBlockFinder = find.byWidgetPredicate(
+        (widget) =>
+            widget is MixinSelectable && widget.plainText == 'Alpha bravo',
+      );
+      final secondBlockFinder = find.byWidgetPredicate(
+        (widget) =>
+            widget is MixinSelectable && widget.plainText == 'Charlie delta',
+      );
+      expect(firstBlockFinder, findsOneWidget);
+      expect(secondBlockFinder, findsOneWidget);
 
-    final start =
-        tester.getRect(firstBlockFinder).centerLeft + const Offset(1, 0);
-    final end =
-        tester.getRect(secondBlockFinder).centerRight - const Offset(1, 0);
-    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
-    await gesture.addPointer(location: start);
-    await gesture.down(start);
-    await tester.pump();
-    await gesture.moveTo(end);
-    await tester.pump();
-    await gesture.up();
-    await tester.pump();
+      final start =
+          tester.getRect(firstBlockFinder).centerLeft + const Offset(1, 0);
+      final end =
+          tester.getRect(secondBlockFinder).centerRight - const Offset(1, 0);
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await gesture.addPointer(location: start);
+      await gesture.down(start);
+      await tester.pump();
+      await gesture.moveTo(end);
+      await tester.pump();
+      await gesture.up();
+      await tester.pump();
 
-    expect(selectionController.hasSelection, isTrue);
-    expect(selectionController.selectedPlainText, contains('Alpha bravo'));
-    expect(selectionController.selectedPlainText, contains('Charlie delta'));
-  });
+      expect(selectionController.hasSelection, isTrue);
+      expect(selectionController.selectedPlainText, contains('Alpha bravo'));
+      expect(selectionController.selectedPlainText, contains('Charlie delta'));
+    },
+  );
 
-  testWidgets('MixinSelectableRow copies direct selectable text inline',
-      (tester) async {
+  testWidgets('MixinSelectableRow copies direct selectable text inline', (
+    tester,
+  ) async {
     final selectionController = MarkdownSelectionController();
     addTearDown(selectionController.dispose);
 
@@ -8062,13 +8114,15 @@ Tables support varying alignments, complex cell contents, and inline styles.
     );
     final origin = renderBox.localToGlobal(Offset.zero);
     final globalRects = rects.map((rect) => rect.shift(origin));
-    final iconRect =
-        tester.getRect(find.byIcon(Icons.arrow_forward_rounded)).deflate(1);
+    final iconRect = tester
+        .getRect(find.byIcon(Icons.arrow_forward_rounded))
+        .deflate(1);
     expect(globalRects.any((rect) => rect.overlaps(iconRect)), isFalse);
   });
 
-  testWidgets('MixinSelectableRow drags across text split by an icon',
-      (tester) async {
+  testWidgets('MixinSelectableRow drags across text split by an icon', (
+    tester,
+  ) async {
     final selectionController = MarkdownSelectionController();
     addTearDown(selectionController.dispose);
 
@@ -8111,8 +8165,47 @@ Tables support varying alignments, complex cell contents, and inline styles.
     expect(selectionController.selectedPlainText, 'left right');
   });
 
-  testWidgets('MixinSelectionArea selects across markdown and toolcall widgets',
-      (tester) async {
+  testWidgets(
+    'MixinSelectionArea selects across markdown and toolcall widgets',
+    (tester) async {
+      final selectionController = MarkdownSelectionController();
+      addTearDown(selectionController.dispose);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 360,
+              child: MixinSelectionArea(
+                controller: selectionController,
+                child: const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    MarkdownWidget(data: 'First markdown', useColumn: true),
+                    MixinSelectableText('Tool call output'),
+                    MarkdownWidget(data: 'Second markdown', useColumn: true),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      selectionController.selectAll();
+
+      expect(
+        selectionController.selectedPlainText,
+        'First markdown\n\nTool call output\n\nSecond markdown',
+      );
+    },
+  );
+
+  testWidgets('MixinSelectionArea drags across markdown and toolcall widgets', (
+    tester,
+  ) async {
     final selectionController = MarkdownSelectionController();
     addTearDown(selectionController.dispose);
 
@@ -8126,15 +8219,9 @@ Tables support varying alignments, complex cell contents, and inline styles.
               child: const Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  MarkdownWidget(
-                    data: 'First markdown',
-                    useColumn: true,
-                  ),
+                  MarkdownWidget(data: 'First markdown', useColumn: true),
                   MixinSelectableText('Tool call output'),
-                  MarkdownWidget(
-                    data: 'Second markdown',
-                    useColumn: true,
-                  ),
+                  MarkdownWidget(data: 'Second markdown', useColumn: true),
                 ],
               ),
             ),
@@ -8145,51 +8232,11 @@ Tables support varying alignments, complex cell contents, and inline styles.
     await tester.pump();
     await tester.pump();
 
-    selectionController.selectAll();
-
-    expect(
-      selectionController.selectedPlainText,
-      'First markdown\n\nTool call output\n\nSecond markdown',
-    );
-  });
-
-  testWidgets('MixinSelectionArea drags across markdown and toolcall widgets',
-      (tester) async {
-    final selectionController = MarkdownSelectionController();
-    addTearDown(selectionController.dispose);
-
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SizedBox(
-            width: 360,
-            child: MixinSelectionArea(
-              controller: selectionController,
-              child: const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  MarkdownWidget(
-                    data: 'First markdown',
-                    useColumn: true,
-                  ),
-                  MixinSelectableText('Tool call output'),
-                  MarkdownWidget(
-                    data: 'Second markdown',
-                    useColumn: true,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-    await tester.pump();
-    await tester.pump();
-
-    final start = tester.getRect(find.text('First markdown')).centerLeft +
+    final start =
+        tester.getRect(find.text('First markdown')).centerLeft +
         const Offset(1, 0);
-    final end = tester.getRect(find.text('Second markdown')).centerRight -
+    final end =
+        tester.getRect(find.text('Second markdown')).centerRight -
         const Offset(1, 0);
     final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
     await gesture.addPointer(location: start);
@@ -8207,80 +8254,83 @@ Tables support varying alignments, complex cell contents, and inline styles.
   });
 
   testWidgets(
-      'MixinSelectionArea auto-scrolls nested scrollable markdown participants',
-      (tester) async {
-    final selectionController = MarkdownSelectionController();
-    final nestedScrollController = ScrollController();
-    addTearDown(selectionController.dispose);
-    addTearDown(nestedScrollController.dispose);
+    'MixinSelectionArea auto-scrolls nested scrollable markdown participants',
+    (tester) async {
+      final selectionController = MarkdownSelectionController();
+      final nestedScrollController = ScrollController();
+      addTearDown(selectionController.dispose);
+      addTearDown(nestedScrollController.dispose);
 
-    final buffer = StringBuffer();
-    for (var index = 0; index < 40; index++) {
-      if (index > 0) {
-        buffer.writeln();
-        buffer.writeln();
+      final buffer = StringBuffer();
+      for (var index = 0; index < 40; index++) {
+        if (index > 0) {
+          buffer.writeln();
+          buffer.writeln();
+        }
+        buffer.write('Nested paragraph $index');
       }
-      buffer.write('Nested paragraph $index');
-    }
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SizedBox(
-            width: 360,
-            child: MixinSelectionArea(
-              controller: selectionController,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  const MixinSelectableText('Before nested markdown'),
-                  SizedBox(
-                    height: 100,
-                    child: MarkdownWidget(
-                      data: buffer.toString(),
-                      scrollController: nestedScrollController,
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 360,
+              child: MixinSelectionArea(
+                controller: selectionController,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    const MixinSelectableText('Before nested markdown'),
+                    SizedBox(
+                      height: 100,
+                      child: MarkdownWidget(
+                        data: buffer.toString(),
+                        scrollController: nestedScrollController,
+                      ),
                     ),
-                  ),
-                  const MixinSelectableText('After nested markdown'),
-                ],
+                    const MixinSelectableText('After nested markdown'),
+                  ],
+                ),
               ),
             ),
           ),
         ),
-      ),
-    );
-    await tester.pump();
+      );
+      await tester.pump();
 
-    final nestedListFinder = find.byWidgetPredicate(
-      (widget) =>
-          widget is ListView && widget.controller == nestedScrollController,
-    );
-    final start =
-        tester.getTopLeft(find.text('Nested paragraph 0')) + const Offset(2, 8);
-    final edgeTarget =
-        tester.getBottomLeft(nestedListFinder) - const Offset(-4, 6);
+      final nestedListFinder = find.byWidgetPredicate(
+        (widget) =>
+            widget is ListView && widget.controller == nestedScrollController,
+      );
+      final start =
+          tester.getTopLeft(find.text('Nested paragraph 0')) +
+          const Offset(2, 8);
+      final edgeTarget =
+          tester.getBottomLeft(nestedListFinder) - const Offset(-4, 6);
 
-    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
-    await gesture.addPointer(location: start);
-    await gesture.down(start);
-    await tester.pump();
-    await gesture.moveTo(edgeTarget);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 250));
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await gesture.addPointer(location: start);
+      await gesture.down(start);
+      await tester.pump();
+      await gesture.moveTo(edgeTarget);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 250));
 
-    expect(nestedScrollController.offset, greaterThan(0));
-    expect(selectionController.hasSelection, isTrue);
-    expect(
-      selectionController.selectedPlainText,
-      contains('Nested paragraph 0'),
-    );
+      expect(nestedScrollController.offset, greaterThan(0));
+      expect(selectionController.hasSelection, isTrue);
+      expect(
+        selectionController.selectedPlainText,
+        contains('Nested paragraph 0'),
+      );
 
-    await gesture.up();
-    await tester.pump();
-  });
+      await gesture.up();
+      await tester.pump();
+    },
+  );
 
-  testWidgets('footnote backreference markers are not rendered',
-      (tester) async {
+  testWidgets('footnote backreference markers are not rendered', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       const MaterialApp(
         home: Scaffold(

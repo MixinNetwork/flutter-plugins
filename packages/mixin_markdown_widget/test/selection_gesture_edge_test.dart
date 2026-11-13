@@ -5,7 +5,7 @@
 // `block[path]@displayedOffset`.
 
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -131,12 +131,12 @@ String? Function() _captureClipboard() {
   String? copiedText;
   TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
       .setMockMethodCallHandler(SystemChannels.platform, (methodCall) async {
-    if (methodCall.method == 'Clipboard.setData') {
-      final arguments = methodCall.arguments as Map<Object?, Object?>;
-      copiedText = arguments['text'] as String?;
-    }
-    return null;
-  });
+        if (methodCall.method == 'Clipboard.setData') {
+          final arguments = methodCall.arguments as Map<Object?, Object?>;
+          copiedText = arguments['text'] as String?;
+        }
+        return null;
+      });
   addTearDown(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(SystemChannels.platform, null);
@@ -192,10 +192,7 @@ String _describe(MarkdownSelectionController controller) {
       '${_describePosition(selection.extent)} | "$text"';
 }
 
-void _expectSelection(
-  MarkdownSelectionController controller,
-  String expected,
-) {
+void _expectSelection(MarkdownSelectionController controller, String expected) {
   expect(_describe(controller), expected);
 }
 
@@ -208,12 +205,12 @@ void main() {
       quote: <String>[
         '0[0]@0 -> 0[0]@8 | "First pa"',
         '0[0]@0 -> 0[0]@8 | "First pa"',
-        '0[0]@0 -> 0[1]@25 | "First paragraph\\n\\nSecond p"'
+        '0[0]@0 -> 0[1]@25 | "First paragraph\\n\\nSecond p"',
       ],
       list: <String>[
         '0[0, 1]@2 -> 0[0, 1]@7 | "First"',
         '0[0, 1]@2 -> 0[0, 1]@7 | "First"',
-        '0[0, 1]@2 -> 0[0, 2]@20 | "First item\\n  Secon"'
+        '0[0, 1]@2 -> 0[0, 2]@20 | "First item\\n  Secon"',
       ],
     }.entries) {
       final label = entry.key == quote ? 'quote' : 'list';
@@ -310,24 +307,18 @@ void main() {
       final block = _blockRect(tester, 0);
       final start = _charCenter(tester, 'The quick', 0);
       // The second rendered line spans y = 21..42 inside the block.
-      await _drag(
-        tester,
-        start,
-        () => Offset(block.right - 2, block.top + 31),
+      await _drag(tester, start, () => Offset(block.right - 2, block.top + 31));
+      _expectSelection(
+        controller,
+        '0[0]@1 -> 0[0]@40 | "he quick brown fox jumps over the lazy "',
       );
-      _expectSelection(controller,
-          '0[0]@1 -> 0[0]@40 | "he quick brown fox jumps over the lazy "');
     });
 
     testWidgets('short list item', (tester) async {
       final controller = await _pump(tester, '- short\n- other item');
       final block = _blockRect(tester, 0);
       final start = _charCenter(tester, 'short', 0);
-      await _drag(
-        tester,
-        start,
-        () => Offset(block.right - 2, start.dy),
-      );
+      await _drag(tester, start, () => Offset(block.right - 2, start.dy));
       _expectSelection(controller, '0[0, 1]@3 -> 0[1, 0]@7 | "hort"');
     });
 
@@ -338,18 +329,17 @@ void main() {
       );
       final start = _charCenter(tester, 'Name', 0);
       final cell = _textRect(tester, 'ab');
-      await _drag(
-        tester,
-        start,
-        () => Offset(cell.right + 8, cell.center.dy),
-      );
+      await _drag(tester, start, () => Offset(cell.right + 8, cell.center.dy));
       _expectSelection(
-          controller, '0[0, 0]@1 -> 0[1, 1]@13 | "ame\tValue\\nab"');
+        controller,
+        '0[0, 0]@1 -> 0[1, 1]@13 | "ame\tValue\\nab"',
+      );
     });
   });
 
   group('drag across top-level blocks', () {
-    const data = 'Intro paragraph\n\n'
+    const data =
+        'Intro paragraph\n\n'
         '- one\n- two three\n\n'
         '> quoted text\n\n'
         '| alpha | beta |\n| - | - |\n| gamma | delta |';
@@ -361,8 +351,10 @@ void main() {
         _charCenter(tester, 'Intro', 1),
         () => _charCenter(tester, 'two three', 5),
       );
-      _expectSelection(controller,
-          '0[0]@2 -> 1[1, 1]@14 | "tro paragraph\\n\\n- one\\n- two th"');
+      _expectSelection(
+        controller,
+        '0[0]@2 -> 1[1, 1]@14 | "tro paragraph\\n\\n- one\\n- two th"',
+      );
     });
 
     testWidgets('from a quote into a table cell', (tester) async {
@@ -372,21 +364,23 @@ void main() {
         _charCenter(tester, 'quoted', 2),
         () => _textRect(tester, 'delta').center,
       );
-      _expectSelection(controller,
-          '2[0]@3 -> 3[1, 1]@20 | "ted text\\n\\nalpha\tbeta\\ngamma\tdel"');
+      _expectSelection(
+        controller,
+        '2[0]@3 -> 3[1, 1]@20 | "ted text\\n\\nalpha\tbeta\\ngamma\tdel"',
+      );
     });
 
-    testWidgets('backwards from a table cell into a list item', (
-      tester,
-    ) async {
+    testWidgets('backwards from a table cell into a list item', (tester) async {
       final controller = await _pump(tester, data);
       await _drag(
         tester,
         _textRect(tester, 'gamma').center,
         () => _charCenter(tester, 'one', 1),
       );
-      _expectSelection(controller,
-          '3[1, 0]@14 -> 1[0, 1]@4 | "e\\n- two three\\n\\nquoted text\\n\\nalpha\tbeta\\ngam"');
+      _expectSelection(
+        controller,
+        '3[1, 0]@14 -> 1[0, 1]@4 | "e\\n- two three\\n\\nquoted text\\n\\nalpha\tbeta\\ngam"',
+      );
     });
 
     testWidgets('ending in blank space below the document', (tester) async {
@@ -396,8 +390,10 @@ void main() {
         _charCenter(tester, 'Intro', 0),
         () => const Offset(120, 560),
       );
-      _expectSelection(controller,
-          '0[0]@1 -> 3[1, 1]@22 | "ntro paragraph\\n\\n- one\\n- two three\\n\\nquoted text\\n\\nalpha\tbeta\\ngamma\tdelta"');
+      _expectSelection(
+        controller,
+        '0[0]@1 -> 3[1, 1]@22 | "ntro paragraph\\n\\n- one\\n- two three\\n\\nquoted text\\n\\nalpha\tbeta\\ngamma\tdelta"',
+      );
     });
   });
 
@@ -416,23 +412,23 @@ void main() {
     final expected = <String, (String, String)>{
       'nested list': (
         '0[0, 2, 0, 1]@20 -> 0[0, 2, 0, 1]@23 | "pie"',
-        '0[0, 2, 0, 0]@10 -> 0[0, 2, 0, 1]@23 | "  - Apple pie"'
+        '0[0, 2, 0, 0]@10 -> 0[0, 2, 0, 1]@23 | "  - Apple pie"',
       ),
       'deep nested list': (
         '0[0, 2, 0, 2, 0, 1]@36 -> 0[0, 2, 0, 2, 0, 1]@41 | "Green"',
-        '0[0, 2, 0, 2, 0, 0]@30 -> 0[0, 2, 0, 2, 0, 1]@47 | "    - Green apple"'
+        '0[0, 2, 0, 2, 0, 0]@30 -> 0[0, 2, 0, 2, 0, 1]@47 | "    - Green apple"',
       ),
       'nested quote': (
         '0[1, 0]@13 -> 0[1, 0]@18 | "quote"',
-        '0[1, 0]@7 -> 0[1, 0]@25 | "inner quote words "'
+        '0[1, 0]@7 -> 0[1, 0]@25 | "inner quote words "',
       ),
       'quote heading': (
         '0[0]@0 -> 0[0]@5 | "Title"',
-        '0[0]@0 -> 0[0]@5 | "Title"'
+        '0[0]@0 -> 0[0]@5 | "Title"',
       ),
       'table cell': (
         '0[1, 0]@15 -> 0[1, 0]@18 | "one"',
-        '0[1, 0]@11 -> 0[1, 0]@18 | "row one"'
+        '0[1, 0]@11 -> 0[1, 0]@18 | "row one"',
       ),
     };
 
@@ -455,7 +451,8 @@ void main() {
   group('double click on the right half of the last character of a leaf', () {
     // The end offset of a leaf is also the start of the next one; the click
     // must select the word under the pointer, not the next leaf's word.
-    const sparseTable = '| Alpha |       | Charlie |\n'
+    const sparseTable =
+        '| Alpha |       | Charlie |\n'
         '| ----- | ----- | ------- |\n'
         '|       | Bravo | z       |';
 
@@ -495,12 +492,7 @@ void main() {
         4,
         '0[0]@0 -> 0[0]@5 | "First"',
       ),
-      'list item': (
-        '- one\n- two',
-        'one',
-        2,
-        '0[0, 1]@2 -> 0[0, 1]@5 | "one"',
-      ),
+      'list item': ('- one\n- two', 'one', 2, '0[0, 1]@2 -> 0[0, 1]@5 | "one"'),
       'list item before a nested list': (
         '- one\n  - two',
         'one',
@@ -518,11 +510,7 @@ void main() {
       final (data, text, charIndex, expected) = entry.value;
       testWidgets(entry.key, (tester) async {
         final controller = await _pump(tester, data);
-        await _click(
-          tester,
-          _charRightHalf(tester, text, charIndex),
-          count: 2,
-        );
+        await _click(tester, _charRightHalf(tester, text, charIndex), count: 2);
         _expectSelection(controller, expected);
       });
     }
@@ -532,8 +520,11 @@ void main() {
     ) async {
       final controller = await _pump(tester, sparseTable);
       final charlie = _textRect(tester, 'Charlie');
-      await _click(tester, Offset(charlie.left + 1, charlie.center.dy),
-          count: 2);
+      await _click(
+        tester,
+        Offset(charlie.left + 1, charlie.center.dy),
+        count: 2,
+      );
       _expectSelection(controller, '0[0, 2]@6 -> 0[0, 2]@13 | "Charlie"');
     });
   });
@@ -560,38 +551,44 @@ void main() {
   });
 
   testWidgets(
-      'copying a drag selection that spans a block scrolled out of a ListView',
-      (tester) async {
-    final copiedText = _captureClipboard();
-    final paragraphs = List<String>.generate(30, (index) => 'Paragraph $index');
-    final expectedCopiedText = <String>[
-      paragraphs.first.substring(3),
-      ...paragraphs.sublist(1, 24),
-      paragraphs[24].substring(0, 7),
-    ].join('\n\n');
-    final scrollController = ScrollController();
-    addTearDown(scrollController.dispose);
-    final controller = await _pump(
-      tester,
-      paragraphs.join('\n\n'),
-      height: 240,
-      scrollController: scrollController,
-    );
+    'copying a drag selection that spans a block scrolled out of a ListView',
+    (tester) async {
+      final copiedText = _captureClipboard();
+      final paragraphs = List<String>.generate(
+        30,
+        (index) => 'Paragraph $index',
+      );
+      final expectedCopiedText = <String>[
+        paragraphs.first.substring(3),
+        ...paragraphs.sublist(1, 24),
+        paragraphs[24].substring(0, 7),
+      ].join('\n\n');
+      final scrollController = ScrollController();
+      addTearDown(scrollController.dispose);
+      final controller = await _pump(
+        tester,
+        paragraphs.join('\n\n'),
+        height: 240,
+        scrollController: scrollController,
+      );
 
-    await _drag(
-      tester,
-      _charCenter(tester, 'Paragraph 0', 2),
-      () => _charCenter(tester, 'Paragraph 24', 6),
-      beforeEnd: () async {
-        scrollController.jumpTo(scrollController.position.maxScrollExtent);
-        await tester.pump();
-        expect(_richTextContaining('Paragraph 0'), findsNothing);
-      },
-    );
-    _expectSelection(controller,
-        '0[0]@3 -> 24[0]@7 | "${expectedCopiedText.replaceAll('\n', r'\n')}"');
+      await _drag(
+        tester,
+        _charCenter(tester, 'Paragraph 0', 2),
+        () => _charCenter(tester, 'Paragraph 24', 6),
+        beforeEnd: () async {
+          scrollController.jumpTo(scrollController.position.maxScrollExtent);
+          await tester.pump();
+          expect(_richTextContaining('Paragraph 0'), findsNothing);
+        },
+      );
+      _expectSelection(
+        controller,
+        '0[0]@3 -> 24[0]@7 | "${expectedCopiedText.replaceAll('\n', r'\n')}"',
+      );
 
-    await _copy(tester);
-    expect(copiedText(), expectedCopiedText);
-  });
+      await _copy(tester);
+      expect(copiedText(), expectedCopiedText);
+    },
+  );
 }

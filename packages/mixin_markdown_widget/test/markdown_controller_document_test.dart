@@ -4,7 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mixin_markdown_widget/mixin_markdown_widget.dart';
 
 void main() {
-  const data = '# Title\n\nSome **bold** text with `code`.\n\n> quote\n\n'
+  const data =
+      '# Title\n\nSome **bold** text with `code`.\n\n> quote\n\n'
       '| a | b |\n| - | - |\n| 1 | 2 |\n';
 
   test('a document parsed in an isolate matches a controller parse', () async {

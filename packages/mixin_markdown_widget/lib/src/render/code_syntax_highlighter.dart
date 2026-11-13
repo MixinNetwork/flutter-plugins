@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:re_highlight/languages/all.dart';
 import 'package:re_highlight/re_highlight.dart';
 
@@ -14,11 +14,17 @@ class MarkdownCodeSyntaxHighlighter {
 
   static const int _autoDetectMaxChars = 4000;
   static const int _maxSegmentCacheEntries = 128;
-  static final Map<_MarkdownHighlightRequestKey,
-          List<_MarkdownHighlightSegment>> _segmentCache =
+  static final Map<
+    _MarkdownHighlightRequestKey,
+    List<_MarkdownHighlightSegment>
+  >
+  _segmentCache =
       <_MarkdownHighlightRequestKey, List<_MarkdownHighlightSegment>>{};
-  static final Map<_MarkdownHighlightRequestKey,
-          Future<List<_MarkdownHighlightSegment>>> _pendingSegmentRequests =
+  static final Map<
+    _MarkdownHighlightRequestKey,
+    Future<List<_MarkdownHighlightSegment>>
+  >
+  _pendingSegmentRequests =
       <_MarkdownHighlightRequestKey, Future<List<_MarkdownHighlightSegment>>>{};
 
   MarkdownCodeHighlightPresentation buildPlainTextPresentation({
@@ -87,10 +93,11 @@ class MarkdownCodeSyntaxHighlighter {
         shouldDegradeHighlight(source: source, theme: theme)) {
       return null;
     }
-    final segments = _segmentCache[_MarkdownHighlightRequestKey(
-      source: source,
-      language: _normalizeLanguage(language),
-    )];
+    final segments =
+        _segmentCache[_MarkdownHighlightRequestKey(
+          source: source,
+          language: _normalizeLanguage(language),
+        )];
     if (segments == null) {
       return null;
     }
@@ -109,8 +116,10 @@ class MarkdownCodeSyntaxHighlighter {
     required MarkdownThemeData theme,
     String? language,
   }) {
-    return buildPlainTextPresentation(source: source, baseStyle: baseStyle)
-        .span;
+    return buildPlainTextPresentation(
+      source: source,
+      baseStyle: baseStyle,
+    ).span;
   }
 
   MarkdownCodeHighlightPresentation buildPresentation({
@@ -128,8 +137,10 @@ class MarkdownCodeSyntaxHighlighter {
     required MarkdownThemeData theme,
     String? language,
   }) {
-    return buildPlainTextPresentation(source: source, baseStyle: baseStyle)
-        .runs;
+    return buildPlainTextPresentation(
+      source: source,
+      baseStyle: baseStyle,
+    ).runs;
   }
 
   int lineCountOf(String source) {
@@ -156,24 +167,24 @@ class MarkdownCodeSyntaxHighlighter {
       return pending;
     }
 
-    final request = compute<Map<String, Object?>, List<Map<String, Object?>>>(
-      _highlightSegmentsInBackground,
-      <String, Object?>{
-        'source': source,
-        'language': language,
-      },
-    ).then((response) {
-      final segments = response
-          .map(_MarkdownHighlightSegment.fromMessage)
-          .toList(growable: false);
-      if (_segmentCache.length >= _maxSegmentCacheEntries) {
-        _segmentCache.remove(_segmentCache.keys.first);
-      }
-      _segmentCache[cacheKey] = segments;
-      return segments;
-    }).whenComplete(() {
-      _pendingSegmentRequests.remove(cacheKey);
-    });
+    final request =
+        compute<Map<String, Object?>, List<Map<String, Object?>>>(
+              _highlightSegmentsInBackground,
+              <String, Object?>{'source': source, 'language': language},
+            )
+            .then((response) {
+              final segments = response
+                  .map(_MarkdownHighlightSegment.fromMessage)
+                  .toList(growable: false);
+              if (_segmentCache.length >= _maxSegmentCacheEntries) {
+                _segmentCache.remove(_segmentCache.keys.first);
+              }
+              _segmentCache[cacheKey] = segments;
+              return segments;
+            })
+            .whenComplete(() {
+              _pendingSegmentRequests.remove(cacheKey);
+            });
     _pendingSegmentRequests[cacheKey] = request;
     return request;
   }
@@ -206,15 +217,17 @@ class MarkdownCodeSyntaxHighlighter {
       }
       var effectiveStyle = baseStyle;
       for (final scope in segment.scopes) {
-        effectiveStyle = effectiveStyle
-            .merge(_styleFor(scope, baseStyle: effectiveStyle, theme: theme));
+        effectiveStyle = effectiveStyle.merge(
+          _styleFor(scope, baseStyle: effectiveStyle, theme: theme),
+        );
       }
       if (runs.isNotEmpty && runs.last.style == effectiveStyle) {
         final last = runs.removeLast();
         runs.add(last.copyWithText(last.text + segment.text));
       } else {
-        runs.add(MarkdownPretextInlineRun(
-            text: segment.text, style: effectiveStyle));
+        runs.add(
+          MarkdownPretextInlineRun(text: segment.text, style: effectiveStyle),
+        );
       }
 
       if (children.isNotEmpty) {
@@ -254,8 +267,9 @@ class MarkdownCodeSyntaxHighlighter {
     final classes = className.split(RegExp(r'\s+'));
     var style = baseStyle;
     for (final token in classes) {
-      style =
-          style.merge(_tokenStyle(token, baseStyle: baseStyle, theme: theme));
+      style = style.merge(
+        _tokenStyle(token, baseStyle: baseStyle, theme: theme),
+      );
     }
     return style;
   }
@@ -342,9 +356,7 @@ class MarkdownCodeHighlightPresentation {
 }
 
 class MarkdownCodeHighlightCache extends ChangeNotifier {
-  MarkdownCodeHighlightCache({
-    required MarkdownCodeSyntaxHighlighter highlighter,
-  }) : _highlighter = highlighter;
+  MarkdownCodeHighlightCache({required this._highlighter});
 
   final MarkdownCodeSyntaxHighlighter _highlighter;
   final Map<String, _MarkdownCodeHighlightCacheEntry> _entries =
@@ -361,8 +373,11 @@ class MarkdownCodeHighlightCache extends ChangeNotifier {
     String? language,
   }) {
     final contentSignature = Object.hash(source, language);
-    final presentationSignature =
-        Object.hash(contentSignature, baseStyle, theme);
+    final presentationSignature = Object.hash(
+      contentSignature,
+      baseStyle,
+      theme,
+    );
     final existing = _entries[blockId];
     if (existing != null &&
         existing.presentationSignature == presentationSignature) {
@@ -424,16 +439,17 @@ class MarkdownCodeHighlightCache extends ChangeNotifier {
     // While a streamed block grows, show its last highlight with the new tail
     // in plain text instead of flashing the whole block back to plain.
     final highlightedPrefix = existing?.highlightedPrefix;
-    final placeholderPresentation = existing != null &&
+    final placeholderPresentation =
+        existing != null &&
             existing.contentSignature == contentSignature &&
             existing.presentation.isHighlighted
         ? existing.presentation
         : highlightedPrefix?.extendTo(
-              source,
-              styleSignature: request.styleSignature,
-              baseStyle: baseStyle,
-            ) ??
-            plainPresentation;
+                source,
+                styleSignature: request.styleSignature,
+                baseStyle: baseStyle,
+              ) ??
+              plainPresentation;
     _entries[blockId] = _MarkdownCodeHighlightCacheEntry(
       request: request,
       contentSignature: contentSignature,
@@ -661,10 +677,7 @@ class _MarkdownHighlightRequestKey {
 
 @immutable
 class _MarkdownHighlightSegment {
-  const _MarkdownHighlightSegment({
-    required this.text,
-    required this.scopes,
-  });
+  const _MarkdownHighlightSegment({required this.text, required this.scopes});
 
   factory _MarkdownHighlightSegment.fromMessage(Map<String, Object?> message) {
     final scopes = (message['scopes'] as List<Object?>)
@@ -680,9 +693,9 @@ class _MarkdownHighlightSegment {
   final List<String> scopes;
 
   Map<String, Object?> toMessage() => <String, Object?>{
-        'text': text,
-        'scopes': scopes,
-      };
+    'text': text,
+    'scopes': scopes,
+  };
 }
 
 class _MarkdownHighlightSegmentRenderer implements HighlightRenderer {
@@ -791,9 +804,11 @@ void cacheCodeHighlights(List<Map<String, Object?>> highlights) {
       source: highlight['source']! as String,
       language: highlight['language'] as String?,
     )] = (highlight['segments']! as List<Object?>)
-        .map((segment) => _MarkdownHighlightSegment.fromMessage(
-              segment! as Map<String, Object?>,
-            ))
+        .map(
+          (segment) => _MarkdownHighlightSegment.fromMessage(
+            segment! as Map<String, Object?>,
+          ),
+        )
         .toList(growable: false);
   }
 }
