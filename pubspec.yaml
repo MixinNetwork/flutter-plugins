@@ -43,7 +43,7 @@ workspace:
   - packages/word_segmenter/example
 
 dev_dependencies:
-  melos: ^8.9.0
+  melos: ^8.10.1
 
 melos:
   scripts:
