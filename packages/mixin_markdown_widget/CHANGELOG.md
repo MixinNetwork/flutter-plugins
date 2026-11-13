@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.0
+
+### Breaking changes
+
+- Require Flutter 3.47.0 / Dart 3.13.0 or later, and move from the deprecated `package:flutter/material.dart` to [`material_ui`](https://pub.dev/packages/material_ui).
+- `MarkdownThemeData` now extends the `material_ui` `ThemeExtension`, and the package reads `Theme`, `TextSelectionTheme`, and other Material ancestors from `material_ui`. Flutter's legacy Material types are separate types, so register the theme in a `material_ui` `ThemeData(extensions: [...])` and build the surrounding `MaterialApp`, `Theme`, and `Material` ancestors with `package:material_ui/material_ui.dart`. See the README.
+
 ## 0.4.0
 
 ### Breaking changes
