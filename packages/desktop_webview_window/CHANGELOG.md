@@ -1,3 +1,7 @@
+## 0.4.3
+
+- Windows: Fix a crash when closing the application, even if no WebView window was opened. ([#557](https://github.com/MixinNetwork/flutter-plugins/pull/557); thanks [mtallenca](https://github.com/mtallenca))
+
 ## 0.4.2
 
 - Linux: Fix `getAllCookies` never completing when called before a page has loaded. It now returns an empty list. ([#555](https://github.com/MixinNetwork/flutter-plugins/pull/555))
