@@ -3,6 +3,10 @@ import UIKit
 
 @objc(PasteboardPlugin)
 public class PasteboardPlugin: NSObject, FlutterPlugin {
+  // Pasteboard access can block, e.g. while another app still provides the
+  // data, so image and writeImage run off the main thread, in call order.
+  private static let queue = DispatchQueue(label: "one.mixin.pasteboard", qos: .userInitiated)
+
   public static func register(with registrar: FlutterPluginRegistrar) {
     let channel = FlutterMethodChannel(name: "pasteboard", binaryMessenger: registrar.messenger())
     let instance = PasteboardPlugin()
@@ -32,10 +36,11 @@ public class PasteboardPlugin: NSObject, FlutterPlugin {
     }
   }
 
-  private func image(result: FlutterResult) {
-    let image = UIPasteboard.general.image
-    let data =  image?.pngData()
-    result(data)
+  private func image(result: @escaping FlutterResult) {
+    Self.queue.async {
+      let data = UIPasteboard.general.image?.pngData()
+      DispatchQueue.main.async { result(data) }
+    }
   }
 
   private func files(result: FlutterResult) {
@@ -46,10 +51,11 @@ public class PasteboardPlugin: NSObject, FlutterPlugin {
     result(nil)
   }
   
-  private func writeImageToPasteboard(_ data: Data, result: FlutterResult) {
-    let image = UIImage(data: data)
-    UIPasteboard.general.image = image
-    result(nil)
+  private func writeImageToPasteboard(_ data: Data, result: @escaping FlutterResult) {
+    Self.queue.async {
+      UIPasteboard.general.image = UIImage(data: data)
+      DispatchQueue.main.async { result(nil) }
+    }
   }
 }
 

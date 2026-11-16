@@ -8,6 +8,10 @@ class Pasteboard {
   /// Returns the image data of the pasteboard.
   ///
   /// available on iOS, Desktop, Web, Android
+  ///
+  /// iOS: runs off the main thread, in order with [writeImage]. Await it
+  /// before calling [text], [writeText] or Flutter's `Clipboard` if the
+  /// order matters.
   static Future<Uint8List?> get image => pasteboard.image;
 
   /// only available on Windows and the web.
@@ -18,6 +22,10 @@ class Pasteboard {
   /// available on iOS, Android, Web
   ///
   /// set image data to system pasteboard.
+  ///
+  /// iOS: runs off the main thread, in order with [image]. Await it before
+  /// calling [text], [writeText] or Flutter's `Clipboard` if the order
+  /// matters.
   static Future<void> writeImage(Uint8List? image) =>
       pasteboard.writeImage(image);
 
