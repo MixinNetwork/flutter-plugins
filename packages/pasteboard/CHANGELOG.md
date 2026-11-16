@@ -1,3 +1,9 @@
+## 0.6.1
+
+- macOS: Ignore non-file URLs in `Pasteboard.files` so web links are not returned as local file paths. ([#560](https://github.com/MixinNetwork/flutter-plugins/pull/560))
+- iOS: Read and write pasteboard images off the main thread in call order to avoid blocking the UI thread. ([#559](https://github.com/MixinNetwork/flutter-plugins/pull/559); thanks [stanbav](https://github.com/stanbav))
+- Linux: Free native memory in the clipboard implementation. ([#538](https://github.com/MixinNetwork/flutter-plugins/pull/538); thanks [YeungKC](https://github.com/YeungKC))
+
 ## 0.6.0
 
 - Android: Migrate to built-in Kotlin to resolve Flutter's Kotlin Gradle Plugin migration warning. ([#536](https://github.com/MixinNetwork/flutter-plugins/pull/536); thanks [bsutton](https://github.com/bsutton))
