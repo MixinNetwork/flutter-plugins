@@ -47,8 +47,10 @@ public class PasteboardPlugin: NSObject, FlutterPlugin {
     result(image.png)
   }
 
-  private func files(result: FlutterResult) {
-    guard let urlList = NSPasteboard.general.readObjects(forClasses: [NSURL.self], options: nil) else {
+  func files(result: FlutterResult, pasteboard: NSPasteboard = .general) {
+    guard let urlList = pasteboard.readObjects(
+      forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]
+    ) else {
       result(nil)
       return
     }
@@ -56,7 +58,7 @@ public class PasteboardPlugin: NSObject, FlutterPlugin {
     var resultFiles: [String] = []
 
     urlList.forEach { url in
-      if let path = (url as? NSURL)?.path {
+      if let url = url as? NSURL, url.isFileURL, let path = url.path {
         resultFiles.append(path)
       }
     }
