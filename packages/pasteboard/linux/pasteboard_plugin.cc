@@ -18,22 +18,109 @@ struct _PasteboardPlugin {
 
 G_DEFINE_TYPE(PasteboardPlugin, pasteboard_plugin, g_object_get_type())
 
-static void gtk_clipboard_request_uris_callback(
-    GtkClipboard *clipboard,
-    gchar **uris,
-    gpointer user_data
-) {
-  g_autoptr(FlMethodCall) method_call = static_cast<FlMethodCall *>(user_data);
-
-  g_autoptr(FlValue) result = fl_value_new_list();
+// Collects the local paths of the given URIs, skipping any without one.
+static FlValue *paths_from_uris(gchar **uris) {
+  FlValue *paths = fl_value_new_list();
   for (auto uri = uris; uri != nullptr && *uri != nullptr; uri++) {
     g_autoptr(GFile) file = g_file_new_for_uri(*uri);
     g_autofree gchar *file_path = g_file_get_path(file);
     if (file_path) {
-      fl_value_append_take(result, fl_value_new_string(file_path));
+      fl_value_append_take(paths, fl_value_new_string(file_path));
     }
   }
-  fl_method_call_respond_success(method_call, result, nullptr);
+  return paths;
+}
+
+// State for a files() request, which tries each advertised target in order of
+// preference until one of them yields usable file paths.
+struct FilesRequest {
+  FlMethodCall *method_call;
+  std::vector<GdkAtom> targets;
+  size_t next_target = 0;
+};
+
+static void files_request_free(FilesRequest *request) {
+  g_object_unref(request->method_call);
+  delete request;
+}
+
+static void files_request_try_next_target(GtkClipboard *clipboard,
+                                          FilesRequest *request);
+
+static void gtk_clipboard_files_received_callback(
+    GtkClipboard *clipboard,
+    GtkSelectionData *selection_data,
+    gpointer user_data
+) {
+  auto *request = static_cast<FilesRequest *>(user_data);
+
+  // For the FileTransfer portal's targets, this retrieves the files from the
+  // portal, which makes them accessible inside the sandbox. It returns nullptr
+  // when GTK cannot decode the target or the portal fails to retrieve the
+  // files, in which case the next advertised target is tried instead.
+  g_auto(GStrv) uris = gtk_selection_data_get_uris(selection_data);
+  g_autoptr(FlValue) paths = paths_from_uris(uris);
+  if (fl_value_get_length(paths) > 0) {
+    fl_method_call_respond_success(request->method_call, paths, nullptr);
+    files_request_free(request);
+    return;
+  }
+
+  files_request_try_next_target(clipboard, request);
+}
+
+static void files_request_try_next_target(GtkClipboard *clipboard,
+                                          FilesRequest *request) {
+  if (request->next_target >= request->targets.size()) {
+    g_autoptr(FlValue) paths = fl_value_new_list();
+    fl_method_call_respond_success(request->method_call, paths, nullptr);
+    files_request_free(request);
+    return;
+  }
+
+  auto target = request->targets[request->next_target++];
+  gtk_clipboard_request_contents(clipboard, target,
+                                 gtk_clipboard_files_received_callback,
+                                 request);
+}
+
+// Inside a Flatpak, the paths in text/uri-list are usually not accessible, so
+// files are received through the FileTransfer portal when the source offers it.
+// Outside of one, retrieving files from the portal fails, but some sources
+// (like Dolphin) offer it anyway, so text/uri-list is used there instead.
+static void gtk_clipboard_request_files_targets_callback(
+    GtkClipboard *clipboard,
+    GdkAtom *targets,
+    gint n_targets,
+    gpointer user_data
+) {
+  static const gchar *sandboxed_targets[] = {
+      "application/vnd.portal.filetransfer",
+      "application/vnd.portal.files",
+      "text/uri-list",
+      nullptr,
+  };
+  static const gchar *unsandboxed_targets[] = {
+      "text/uri-list",
+      nullptr,
+  };
+
+  auto *request = new FilesRequest();
+  request->method_call = static_cast<FlMethodCall *>(user_data);
+
+  const gboolean sandboxed = g_file_test("/.flatpak-info", G_FILE_TEST_EXISTS);
+  for (auto name = sandboxed ? sandboxed_targets : unsandboxed_targets;
+       *name != nullptr; name++) {
+    auto target = gdk_atom_intern_static_string(*name);
+    for (gint i = 0; i < n_targets; i++) {
+      if (targets[i] == target) {
+        request->targets.push_back(target);
+        break;
+      }
+    }
+  }
+
+  files_request_try_next_target(clipboard, request);
 }
 
 static void gtk_clipboard_get_file_uri(GtkClipboard *clipboard,
@@ -112,7 +199,8 @@ static void pasteboard_plugin_handle_method_call(
   const gchar *method = fl_method_call_get_name(method_call);
   if (strcmp(method, "files") == 0) {
     auto *clipboard = gtk_clipboard_get_default(gdk_display_get_default());
-    gtk_clipboard_request_uris(clipboard, gtk_clipboard_request_uris_callback, g_object_ref(method_call));
+    gtk_clipboard_request_targets(clipboard, gtk_clipboard_request_files_targets_callback,
+                                  g_object_ref(method_call));
   } else if (strcmp(method, "writeFiles") == 0) {
     auto *clipboard = gtk_clipboard_get_default(gdk_display_get_default());
 
