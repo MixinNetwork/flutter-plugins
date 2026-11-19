@@ -1,3 +1,7 @@
+## 0.6.2
+
+- Linux: Read pasted files through the FileTransfer portal inside Flatpak sandboxes, so `Pasteboard.files` returns accessible paths for files the app has no direct permission to. Falls back to `text/uri-list` when the portal cannot provide them. ([#561](https://github.com/MixinNetwork/flutter-plugins/pull/561); thanks [Henry-Hiles](https://github.com/Henry-Hiles))
+
 ## 0.6.1
 
 - macOS: Ignore non-file URLs in `Pasteboard.files` so web links are not returned as local file paths. ([#560](https://github.com/MixinNetwork/flutter-plugins/pull/560))
